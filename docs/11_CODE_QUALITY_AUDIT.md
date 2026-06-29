@@ -1,6 +1,6 @@
 # 11. Code Quality Audit
 
-This audit records the current engineering posture for SAP MCP Server `0.1.0`.
+This audit records the current engineering posture for SAP MCP Server `0.1.1`.
 
 ## 11.1 Result
 

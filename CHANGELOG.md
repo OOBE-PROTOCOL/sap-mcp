@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.1.1 - 2026-06-29
+
+### Fixed
+
+- Fixed `npx`/`npm exec` startup for the default `sap-mcp-server` and `sap-mcp-remote` binaries by adding resolver-safe bootstrap entrypoints.
+- Fixed hosted package execution when the SAP SDK resolves its bundled IDL assets from outside the package working directory.
+
 ## 0.1.0 - 2026-06-29
 
 ### Added

@@ -1,19 +1,19 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "sap-mcp-server": "./dist/cli.js",
-    "sap-mcp-config": "./dist/config-cli.js",
-    "sap-mcp-wizard": "./dist/tui/config-wizard.js",
-    "sap-signing-proxy": "./dist/signer/signing-proxy.js",
-    "sap-mcp-remote": "./dist/remote/server.js",
-    "sap-mcp-facilitator": "./dist/payments/oobe-facilitator-server.js",
-    "sap-mcp-pay-sh-spec": "./dist/payments/pay-sh-spec.js"
+    "sap-mcp-server": "dist/bin/sap-mcp-server.js",
+    "sap-mcp-config": "dist/config-cli.js",
+    "sap-mcp-wizard": "dist/tui/config-wizard.js",
+    "sap-signing-proxy": "dist/signer/signing-proxy.js",
+    "sap-mcp-remote": "dist/bin/sap-mcp-remote.js",
+    "sap-mcp-facilitator": "dist/payments/oobe-facilitator-server.js",
+    "sap-mcp-pay-sh-spec": "dist/payments/pay-sh-spec.js"
   },
   "files": [
     "dist",

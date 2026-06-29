@@ -16,11 +16,12 @@ describe('release readiness documentation and package surface', () => {
       scripts: Record<string, string>;
     };
 
-    expect(packageJson.bin['sap-mcp-config']).toBe('./dist/config-cli.js');
-    expect(packageJson.bin['sap-mcp-wizard']).toBe('./dist/tui/config-wizard.js');
-    expect(packageJson.bin['sap-mcp-remote']).toBe('./dist/remote/server.js');
-    expect(packageJson.bin['sap-mcp-facilitator']).toBe('./dist/payments/oobe-facilitator-server.js');
-    expect(packageJson.bin['sap-mcp-pay-sh-spec']).toBe('./dist/payments/pay-sh-spec.js');
+    expect(packageJson.bin['sap-mcp-server']).toBe('dist/bin/sap-mcp-server.js');
+    expect(packageJson.bin['sap-mcp-config']).toBe('dist/config-cli.js');
+    expect(packageJson.bin['sap-mcp-wizard']).toBe('dist/tui/config-wizard.js');
+    expect(packageJson.bin['sap-mcp-remote']).toBe('dist/bin/sap-mcp-remote.js');
+    expect(packageJson.bin['sap-mcp-facilitator']).toBe('dist/payments/oobe-facilitator-server.js');
+    expect(packageJson.bin['sap-mcp-pay-sh-spec']).toBe('dist/payments/pay-sh-spec.js');
     expect(packageJson.files).toEqual(expect.arrayContaining([
       'dist',
       'docs',

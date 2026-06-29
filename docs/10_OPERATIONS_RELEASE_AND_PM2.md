@@ -76,7 +76,7 @@ Each release should document:
 
 ## 10.7 Current Release Notes
 
-Version `0.1.0` includes:
+Version `0.1.1` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.

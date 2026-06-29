@@ -13,7 +13,7 @@ It also includes a professional setup wizard, profile-managed config under `~/.c
 
 | Area | Current behavior |
 | --- | --- |
-| Package version | `0.1.0` |
+| Package version | `0.1.1` |
 | MCP transport | stdio locally, Streamable HTTP remotely |
 | Remote access | Bearerless public mode for hosted agents; API key or JWT for private modes |
 | Config directory | `~/.config/mcp-sap` only |

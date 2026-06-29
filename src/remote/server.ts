@@ -213,7 +213,7 @@ export function buildA2AAgentCard(
       ? 'Authenticated SAP Protocol and Solana agent gateway exposed through native MCP Streamable HTTP.'
       : 'Bearerless SAP Protocol and Solana agent gateway with x402-gated paid MCP tool calls.',
     url: `${baseUrl}/mcp`,
-    version: '0.1.0',
+    version: '0.1.1',
     protocol: {
       primary: 'mcp',
       transport: 'streamable-http',
@@ -287,7 +287,7 @@ export function buildWizardInstallDescriptor(
   const baseUrl = buildPublicBaseUrl(req, config);
   return {
     name: 'SAP MCP Wizard',
-    version: '0.1.0',
+    version: '0.1.1',
     packageName: '@oobe-protocol-labs/sap-mcp-server',
     hostedMcpUrl: `${baseUrl}/mcp`,
     configDirectory: '~/.config/mcp-sap',
