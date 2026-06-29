@@ -1,0 +1,449 @@
+#!/bin/bash
+# SAP MCP Server — User Setup Script
+# 
+# Questo script configura automaticamente l'ambiente locale per usare SAP MCP Server
+# 
+# Usage: curl -sSL https://raw.githubusercontent.com/OOBE-PROTOCOL/sap-mcp-server/main/scripts/setup-user.sh | bash
+#
+# Oppure:
+#   wget -qO- https://raw.githubusercontent.com/OOBE-PROTOCOL/sap-mcp-server/main/scripts/setup-user.sh | bash
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+CONFIG_DIR="$HOME/.config/sap-mcp"
+KEYPAIRS_DIR="$CONFIG_DIR/keypairs"
+SCRIPTS_DIR="$CONFIG_DIR/scripts"
+LOGS_DIR="$CONFIG_DIR/agent/logs"
+CACHE_DIR="$CONFIG_DIR/agent/cache"
+SESSIONS_DIR="$CONFIG_DIR/sessions"
+
+echo ""
+echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║     SAP MCP Server — User Setup Script                   ║${NC}"
+echo -e "${BLUE}║     OOBE Protocol — Synapse Agent Protocol               ║${NC}"
+echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Check OS
+check_os() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        OS="macos"
+        echo -e "${GREEN}✓${NC} Detected macOS"
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        OS="linux"
+        echo -e "${GREEN}✓${NC} Detected Linux"
+    else
+        echo -e "${RED}✗${NC} Unsupported OS: $OSTYPE"
+        exit 1
+    fi
+}
+
+# Check prerequisites
+check_prerequisites() {
+    echo ""
+    echo -e "${YELLOW}Checking prerequisites...${NC}"
+    
+    # Node.js
+    if ! command -v node &> /dev/null; then
+        echo -e "${RED}✗${NC} Node.js not found"
+        echo "   Please install Node.js 18+ from https://nodejs.org/"
+        exit 1
+    fi
+    NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+    if [ "$NODE_VERSION" -lt 18 ]; then
+        echo -e "${RED}✗${NC} Node.js version must be 18 or higher (found: $(node -v))"
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} Node.js $(node -v)"
+    
+    # npm
+    if ! command -v npm &> /dev/null; then
+        echo -e "${RED}✗${NC} npm not found"
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} npm $(npm -v)"
+    
+    # npx
+    if ! command -v npx &> /dev/null; then
+        echo -e "${RED}✗${NC} npx not found"
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} npx available"
+    
+    # Solana CLI (optional but recommended)
+    if command -v solana &> /dev/null; then
+        echo -e "${GREEN}✓${NC} Solana CLI $(solana --version | head -1)"
+    else
+        echo -e "${YELLOW}⚠${NC} Solana CLI not found (optional, will skip keypair generation)"
+    fi
+    
+    # git (optional)
+    if command -v git &> /dev/null; then
+        echo -e "${GREEN}✓${NC} git $(git --version | cut -d' ' -f3)"
+    else
+        echo -e "${YELLOW}⚠${NC} git not found (optional)"
+    fi
+}
+
+# Create directory structure
+create_directories() {
+    echo ""
+    echo -e "${YELLOW}Creating directory structure...${NC}"
+    
+    mkdir -p "$CONFIG_DIR"
+    mkdir -p "$KEYPAIRS_DIR"
+    mkdir -p "$SCRIPTS_DIR"
+    mkdir -p "$LOGS_DIR"
+    mkdir -p "$CACHE_DIR"
+    mkdir -p "$SESSIONS_DIR"
+    
+    echo -e "${GREEN}✓${NC} Created: $CONFIG_DIR"
+    echo -e "${GREEN}✓${NC} Created: $KEYPAIRS_DIR"
+    echo -e "${GREEN}✓${NC} Created: $SCRIPTS_DIR"
+    echo -e "${GREEN}✓${NC} Created: $LOGS_DIR"
+    echo -e "${GREEN}✓${NC} Created: $CACHE_DIR"
+    echo -e "${GREEN}✓${NC} Created: $SESSIONS_DIR"
+}
+
+# Generate keypair
+generate_keypair() {
+    echo ""
+    echo -e "${YELLOW}Generating isolated keypair...${NC}"
+    
+    if ! command -v solana-keygen &> /dev/null; then
+        echo -e "${YELLOW}⚠${NC} Solana CLI not available, skipping keypair generation"
+        echo "   You can generate one manually later with:"
+        echo "   solana-keygen new --outfile $KEYPAIRS_DIR/citizen-keypair.json"
+        return 0
+    fi
+    
+    KEYPATH="$KEYPAIRS_DIR/citizen-keypair.json"
+    
+    if [ -f "$KEYPATH" ]; then
+        echo -e "${YELLOW}⚠${NC} Keypair already exists: $KEYPATH"
+        read -p "   Overwrite? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${GREEN}✓${NC} Keeping existing keypair"
+            return 0
+        fi
+    fi
+    
+    # Generate new keypair
+    solana-keygen new --outfile "$KEYPATH" --no-bip39-passphrase
+    
+    # Set permissions
+    chmod 600 "$KEYPATH"
+    
+    PUBKEY=$(solana-keygen pubkey "$KEYPATH")
+    
+    echo ""
+    echo -e "${GREEN}✓${NC} Keypair generated successfully"
+    echo "   Path: $KEYPATH"
+    echo "   Public Key: ${BLUE}$PUBKEY${NC}"
+    echo ""
+    echo -e "${YELLOW}⚠️  IMPORTANT: Backup this keypair!${NC}"
+    echo "   If you lose it, you lose access to your SAP agent identity."
+}
+
+# Create config file
+create_config() {
+    echo ""
+    echo -e "${YELLOW}Creating configuration file...${NC}"
+    
+    cat > "$CONFIG_DIR/config.yaml" << 'EOF'
+# SAP MCP Server — User Configuration
+# Generated by setup-user.sh
+
+# Server Configuration
+server:
+  # OOBE Protocol production endpoint
+  endpoint: "https://sap-mcp.oobeprotocol.ai/mcp/sse"
+  
+  # Alternative: local server
+  # endpoint: "http://localhost:3000/mcp/sse"
+  
+  # Timeout for API calls (ms)
+  timeout: 30000
+  
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    backoff_ms: 1000
+
+# Solana Configuration
+solana:
+  # RPC endpoint
+  rpc_url: "https://api.mainnet-beta.solana.com"
+  
+  # WebSocket endpoint
+  ws_url: "wss://api.mainnet-beta.solana.com"
+  
+  # Network: mainnet-beta, devnet, testnet
+  network: "mainnet-beta"
+  
+  # Commitment: processed, confirmed, finalized
+  commitment: "confirmed"
+
+# Agent Configuration
+agent:
+  # Signing mode: "delegated" (user signs) or "managed" (server signs)
+  signer_mode: "delegated"
+  
+  # Keypair path (isolated from main wallet)
+  keypair_path: "~/.config/sap-mcp/keypairs/citizen-keypair.json"
+  
+  # Auto-register agent on first use
+  auto_register: false
+  
+  # Agent metadata
+  metadata:
+    display_name: "My SAP Agent"
+    role: "citizen"  # or "merchant", "hybrid"
+    capabilities:
+      - "swap"
+      - "bridge"
+      - "stake"
+    pricing:
+      swap: "0.1%"
+      bridge: "0.5%"
+
+# Security
+security:
+  # Use isolated keypairs (never expose main wallet)
+  isolated_keypairs: true
+  
+  # Keypairs directory
+  keypairs_dir: "~/.config/sap-mcp/keypairs"
+  
+  # Protect main wallet
+  protect_main_wallet: true
+
+# Logging
+logging:
+  level: "info"  # debug, info, warn, error
+  file: "~/.config/sap-mcp/agent/logs/sap-mcp.log"
+  max_size_mb: 10
+  max_files: 5
+
+# Cache
+cache:
+  enabled: true
+  dir: "~/.config/sap-mcp/agent/cache"
+  ttl_seconds: 3600
+EOF
+
+    echo -e "${GREEN}✓${NC} Created: $CONFIG_DIR/config.yaml"
+}
+
+# Create utility scripts
+create_scripts() {
+    echo ""
+    echo -e "${YELLOW}Creating utility scripts...${NC}"
+    
+    # Health check script
+    cat > "$SCRIPTS_DIR/health-check.sh" << 'EOF'
+#!/bin/bash
+ENDPOINT="https://sap-mcp.oobeprotocol.ai"
+echo "🏥 SAP MCP Server Health Check"
+curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" "$ENDPOINT/health"
+curl -s -o /dev/null -w "Latency: %{time_total}s\n" "$ENDPOINT/health"
+EOF
+    chmod +x "$SCRIPTS_DIR/health-check.sh"
+    echo -e "${GREEN}✓${NC} Created: health-check.sh"
+    
+    # Register agent script
+    cat > "$SCRIPTS_DIR/register-agent.sh" << 'EOF'
+#!/bin/bash
+set -e
+KEYPATH="$HOME/.config/sap-mcp/keypairs/citizen-keypair.json"
+if [ ! -f "$KEYPATH" ]; then
+    echo "Error: Keypair not found at $KEYPATH"
+    exit 1
+fi
+PUBKEY=$(solana-keygen pubkey "$KEYPATH")
+echo "📝 Registering SAP agent for: $PUBKEY"
+npx -y @oobe-protocol-labs/sap-mcp-server@latest register \
+  --keypair "$KEYPATH" \
+  --role citizen \
+  --capabilities swap,bridge,stake
+echo "✅ Agent registered!"
+EOF
+    chmod +x "$SCRIPTS_DIR/register-agent.sh"
+    echo -e "${GREEN}✓${NC} Created: register-agent.sh"
+    
+    # Close agent script
+    cat > "$SCRIPTS_DIR/close-agent.sh" << 'EOF'
+#!/bin/bash
+set -e
+KEYPATH="$HOME/.config/sap-mcp/keypairs/citizen-keypair.json"
+echo "⚠️  Closing SAP agent..."
+read -p "Are you sure? (y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Cancelled"
+    exit 1
+fi
+npx -y @oobe-protocol-labs/sap-mcp-server@latest close \
+  --keypair "$KEYPATH"
+echo "✅ Agent closed"
+EOF
+    chmod +x "$SCRIPTS_DIR/close-agent.sh"
+    echo -e "${GREEN}✓${NC} Created: close-agent.sh"
+    
+    # View logs script
+    cat > "$SCRIPTS_DIR/view-logs.sh" << 'EOF'
+#!/bin/bash
+tail -f "$HOME/.config/sap-mcp/agent/logs/sap-mcp.log"
+EOF
+    chmod +x "$SCRIPTS_DIR/view-logs.sh"
+    echo -e "${GREEN}✓${NC} Created: view-logs.sh"
+}
+
+# Configure MCP clients
+configure_mcp_clients() {
+    echo ""
+    echo -e "${YELLOW}Configuring MCP clients...${NC}"
+    
+    # Claude Desktop
+    if [[ "$OS" == "macos" ]]; then
+        CLAUDE_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+    else
+        CLAUDE_CONFIG="$HOME/.config/Claude/claude_desktop_config.json"
+    fi
+    
+    if [ -f "$CLAUDE_CONFIG" ]; then
+        echo -e "${YELLOW}⚠${NC} Claude Desktop config already exists: $CLAUDE_CONFIG"
+        echo "   Backing up..."
+        cp "$CLAUDE_CONFIG" "${CLAUDE_CONFIG}.backup.$(date +%Y%m%d%H%M%S)"
+    fi
+    
+    mkdir -p "$(dirname "$CLAUDE_CONFIG")"
+    
+    cat > "$CLAUDE_CONFIG" << EOF
+{
+  "mcpServers": {
+    "sap-mcp": {
+      "command": "npx",
+      "args": ["-y", "@oobe-protocol-labs/sap-mcp-server@latest"],
+      "env": {
+        "RPC_URL": "https://api.mainnet-beta.solana.com",
+        "SIGNER_MODE": "delegated",
+        "KEYPAIR_PATH": "$HOME/.config/sap-mcp/keypairs/citizen-keypair.json"
+      }
+    }
+  }
+}
+EOF
+    
+    echo -e "${GREEN}✓${NC} Configured Claude Desktop: $CLAUDE_CONFIG"
+    
+    # Cursor (project-level)
+    if [ -d ".cursor" ] || [ -d "$HOME/.cursor" ]; then
+        CURSOR_CONFIG=".cursor/mcp.json"
+        if [ ! -d ".cursor" ]; then
+            CURSOR_CONFIG="$HOME/.cursor/mcp.json"
+        fi
+        
+        mkdir -p "$(dirname "$CURSOR_CONFIG")"
+        
+        cat > "$CURSOR_CONFIG" << EOF
+{
+  "mcpServers": {
+    "sap-mcp": {
+      "command": "npx",
+      "args": ["-y", "@oobe-protocol-labs/sap-mcp-server@latest"],
+      "env": {
+        "RPC_URL": "https://api.mainnet-beta.solana.com",
+        "SIGNER_MODE": "delegated"
+      }
+    }
+  }
+}
+EOF
+        
+        echo -e "${GREEN}✓${NC} Configured Cursor: $CURSOR_CONFIG"
+    else
+        echo -e "${YELLOW}⚠${NC} Cursor not found, skipping configuration"
+    fi
+}
+
+# Print summary
+print_summary() {
+    echo ""
+    echo -e "${BLUE}╔═══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║              Setup Complete!                              ║${NC}"
+    echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${GREEN}✓${NC} Directory structure created"
+    echo -e "${GREEN}✓${NC} Configuration file created"
+    echo -e "${GREEN}✓${NC} Utility scripts created"
+    
+    if command -v solana-keygen &> /dev/null && [ -f "$KEYPAIRS_DIR/citizen-keypair.json" ]; then
+        echo -e "${GREEN}✓${NC} Keypair generated"
+        PUBKEY=$(solana-keygen pubkey "$KEYPAIRS_DIR/citizen-keypair.json")
+        echo "   Public Key: ${BLUE}$PUBKEY${NC}"
+    fi
+    
+    echo -e "${GREEN}✓${NC} MCP clients configured"
+    
+    echo ""
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo ""
+    echo "1. ${BLUE}Restart Claude Desktop / Cursor${NC}"
+    echo "   (Close and reopen the application)"
+    echo ""
+    echo "2. ${BLUE}Test the connection${NC}"
+    echo "   Ask Claude: \"List available SAP MCP tools\""
+    echo "   You should see 162 tools available"
+    echo ""
+    echo "3. ${BLUE}Register your agent (optional)${NC}"
+    echo "   Run: $SCRIPTS_DIR/register-agent.sh"
+    echo "   Or ask Claude: \"Register me as a SAP citizen agent\""
+    echo ""
+    echo "4. ${BLUE}Start using SAP tools${NC}"
+    echo "   Examples:"
+    echo '   - "Swap 1 SOL to USDC on Orca"'
+    echo '   - "Stake 5 SOL to Marinade"'
+    echo '   - "Bridge 10 USDC to Arbitrum"'
+    echo '   - "Get my agent identity"'
+    echo ""
+    echo -e "${YELLOW}Configuration Files:${NC}"
+    echo "   Config:   $CONFIG_DIR/config.yaml"
+    echo "   Keypairs: $KEYPAIRS_DIR/"
+    echo "   Logs:     $LOGS_DIR/"
+    echo "   Scripts:  $SCRIPTS_DIR/"
+    echo ""
+    echo -e "${YELLOW}Documentation:${NC}"
+    echo "   https://docs.oobeprotocol.ai/sap-mcp"
+    echo ""
+    echo -e "${YELLOW}Support:${NC}"
+    echo "   Discord: https://discord.gg/oobeprotocol"
+    echo "   GitHub:  https://github.com/OOBE-PROTOCOL/sap-mcp-server"
+    echo ""
+}
+
+# Main execution
+main() {
+    check_os
+    check_prerequisites
+    create_directories
+    generate_keypair
+    create_config
+    create_scripts
+    configure_mcp_clients
+    print_summary
+    
+    echo -e "${GREEN}✅ Setup complete!${NC}"
+}
+
+# Run main
+main

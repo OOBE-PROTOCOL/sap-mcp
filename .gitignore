@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm-cache/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Secrets and key material
+*.pem
+*.key
+*.p8
+*.p12
+*.secret
+*keypair*.json
+*wallet*.json
+id.json
+keypairs/
+wallets/
+agents/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+
+# Temporary files
+tmp/
+temp/
+tmp_sdk_docs/
+.history/
+.venv/
+.superstack/

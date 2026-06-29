@@ -1,0 +1,201 @@
+/**
+ * Explain x402 Settlement Prompt
+ * 
+ * Explains x402 payment protocol and settlement flows.
+ * REAL IMPLEMENTATION — Comprehensive technical documentation
+ */
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { registerPrompt } from '../../adapters/mcp/sdk-compat.js';
+import { logger } from '../../core/logger.js';
+import type { SapMcpContext } from '../../core/types.js';
+
+/**
+ * Executes the explain x402 settlement prompt operation.
+ */
+export function explainX402SettlementPrompt(server: Server, _context: SapMcpContext) {
+  registerPrompt(server, 'explain-x402-settlement', {}, {
+    description: 'Explain x402 payment protocol, settlement flows, and escrow mechanics for AI agent payments',
+    arguments: [
+      {
+        name: 'includeCode',
+        description: 'Include code examples: "rust", "typescript", "both" (default: "typescript")',
+        required: false,
+      },
+      {
+        name: 'detailed',
+        description: 'Include detailed cryptographic proofs: "yes", "no" (default: "no")',
+        required: false,
+      },
+    ],
+  }, async (args) => {
+    const includeCode = (args.includeCode as string) || 'typescript';
+    const detailed = (args.detailed as string) === 'yes';
+    
+    logger.info('Explaining x402 settlement', { includeCode, detailed });
+    
+    const content = [
+      '# x402 Payment Protocol - Technical Deep Dive',
+      '',
+      '## Overview',
+      '',
+      'x402 is a micropayment protocol for AI agent services on Solana. It enables:',
+      '- **Pay-per-call**: Pay for each AI agent tool execution',
+      '- **Escrow settlement**: Funds held in escrow until execution proof',
+      '- **Dispute resolution**: On-chain arbitration for failed executions',
+      '- **Reputation tracking**: Payment history affects agent reputation',
+      '',
+      '## Payment Flow',
+      '',
+      '1. **Client** creates escrow with payment amount',
+      '2. **Agent** executes requested tool/function',
+      '3. **Agent** submits proof of execution on-chain',
+      '4. **Protocol** verifies proof and releases funds',
+      '5. **Dispute window** (optional): Client can challenge execution',
+      '',
+      '## Escrow Structure',
+      '',
+      '```',
+      'Escrow Account:',
+      '  - payer: Client wallet',
+      '  - payee: Agent wallet',
+      '  - amount: Payment in SOL/SPL tokens',
+      '  - state: pending | executed | disputed | settled',
+      '  - execution_hash: Hash of tool execution',
+      '  - created_at: Timestamp',
+      '  - expires_at: Timeout for execution',
+      '```',
+      '',
+    ];
+    
+    if (includeCode === 'typescript' || includeCode === 'both') {
+      content.push(
+        '## TypeScript Implementation',
+        '',
+        '```typescript',
+        "import { Connection, PublicKey, Transaction } from '@solana/web3.js';",
+        '',
+        '// Create escrow for payment',
+        'async function createEscrow(',
+        '  connection: Connection,',
+        '  payer: PublicKey,',
+        '  agent: PublicKey,',
+        '  amount: number,',
+        '  toolName: string,',
+        '  toolInput: unknown',
+        '): Promise<PublicKey> {',
+        '  // Derive escrow PDA',
+        '  const [escrowPda] = PublicKey.findProgramAddressSync(',
+        "    [Buffer.from('x402_escrow'), payer.toBuffer(), Buffer.from(Date.now().toString())],",
+        '    programId',
+        '  );',
+        '',
+        '  // Create escrow account',
+        '  const instruction = program.instruction.createEscrow(',
+        '    amount,',
+        '    toolName,',
+        '    toolInput,',
+        '    {',
+        '      accounts: {',
+        '        escrow: escrowPda,',
+        '        payer,',
+        '        agent,',
+        '        systemProgram: SystemProgram.programId,',
+        '      },',
+        '    }',
+        '  );',
+        '',
+        '  const tx = new Transaction().add(instruction);',
+        '  await connection.sendTransaction(tx, [payer]);',
+        '',
+        '  return escrowPda;',
+        '}',
+        '',
+        '// Submit proof of execution',
+        'async function submitExecutionProof(',
+        '  connection: Connection,',
+        '  agent: PublicKey,',
+        '  escrowPda: PublicKey,',
+        '  executionHash: string',
+        '): Promise<void> {',
+        '  const instruction = program.instruction.submitProof(',
+        '    executionHash,',
+        '    {',
+        '      accounts: {',
+        '        escrow: escrowPda,',
+        '        agent,',
+        '      },',
+        '    }',
+        '  );',
+        '',
+        '  const tx = new Transaction().add(instruction);',
+        '  await connection.sendTransaction(tx, [agent]);',
+        '}',
+        '```',
+        '',
+      );
+    }
+    
+    if (detailed) {
+      content.push(
+        '## Cryptographic Proofs',
+        '',
+        'Execution proof uses hash chains:',
+        '',
+        '```',
+        'execution_hash = SHA256(',
+        '  agent_wallet ||',
+        '  tool_name ||',
+        '  input_hash ||',
+        '  output_hash ||',
+        '  timestamp ||',
+        '  escrow_pda',
+        ')',
+        '```',
+        '',
+        'This ensures:',
+        '- **Integrity**: Execution cannot be altered',
+        '- **Non-repudiation**: Agent cannot deny execution',
+        '- **Linkability**: Proof linked to specific escrow',
+        '',
+      );
+    }
+    
+    content.push(
+      '## Settlement Mechanics',
+      '',
+      '### Automatic Settlement',
+      '',
+      'If no dispute within 24 hours:',
+      '1. Protocol verifies execution_hash matches escrow',
+      '2. Funds transferred from escrow to agent',
+      '3. Escrow account closed',
+      '',
+      '### Dispute Resolution',
+      '',
+      'If client disputes:',
+      '1. Funds frozen in escrow',
+      '2. Arbitrator reviews execution proof',
+      '3. Decision: refund client OR pay agent',
+      '4. Reputation updated based on outcome',
+      '',
+      '## Resources',
+      '',
+      '- x402 Spec: https://github.com/OOBE-PROTOCOL/x402',
+      '- SAP SDK: https://github.com/OOBE-PROTOCOL/synapse-sap-sdk',
+      '- Solana Payments: https://solanacookbook.com/references/token',
+    );
+    
+    return {
+      messages: [{
+        role: 'assistant',
+        content: {
+          type: 'text',
+          text: content.join('\n'),
+        },
+      }],
+    };
+  });
+  
+  logger.info('Explain x402 Settlement prompt registered');
+}
