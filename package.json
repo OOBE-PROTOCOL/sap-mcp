@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint src/",
     "test": "vitest",
-    "verify:release": "pnpm run typecheck && pnpm run lint && pnpm test -- --run && pnpm run build && npm pack --dry-run --cache ./.npm-cache",
+    "test:run": "vitest run",
+    "verify:release": "pnpm run typecheck && pnpm run lint && pnpm run test:run && pnpm run build && npm pack --dry-run --cache ./.npm-cache",
     "clean": "rm -rf dist"
   },
   "keywords": [

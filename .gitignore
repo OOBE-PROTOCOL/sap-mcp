@@ -5,6 +5,8 @@ node_modules/
 
 # Build output
 dist/
+!vendor/bigint-buffer/dist/
+!vendor/bigint-buffer/dist/**
 
 # Environment files
 .env
