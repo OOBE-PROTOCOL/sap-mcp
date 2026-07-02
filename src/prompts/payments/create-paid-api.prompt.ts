@@ -145,5 +145,5 @@ export function createPaidApiPrompt(server: Server, _context: SapMcpContext) {
     };
   });
   
-  logger.info('Create Paid API prompt registered');
+  logger.debug('Create Paid API prompt registered');
 }

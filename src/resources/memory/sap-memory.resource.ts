@@ -91,5 +91,5 @@ export function sapMemoryResource(server: Server, context: SapMcpContext) {
     }
   );
   
-  logger.info('SAP Memory resource registered');
+  logger.debug('SAP Memory resource registered');
 }

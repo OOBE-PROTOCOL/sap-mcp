@@ -53,14 +53,14 @@ export class SapClientManager {
     }
 
     if (this.client) {
-      logger.info('SAP client configuration changed, recreating client');
+      logger.debug('SAP client configuration changed, recreating client');
       this.client = null;
     }
 
     this.config = config;
 
     try {
-      logger.info('Initializing SAP client', {
+      logger.debug('Initializing SAP client', {
         rpcUrl: config.rpcUrl,
         programId: config.programId,
         mode: config.mode,
@@ -74,18 +74,18 @@ export class SapClientManager {
         const { loadKeypairFromFile } = await import('../signer/load-keypair.js');
         const keypair = loadKeypairFromFile(config.walletPath);
         wallet = new Wallet(keypair);
-        logger.info('Loaded wallet from file', {
+        logger.debug('Loaded wallet from file', {
           publicKey: keypair.publicKey.toBase58(),
         });
       } else if (config.mode === 'delegated-session') {
         // Delegated signing — wallet provided by session
-        logger.info('Delegated mode — wallet will be provided by session');
+        logger.debug('Delegated mode — wallet will be provided by session');
       }
 
       // Create SAP client using factory function
       this.client = createSdkClient(config.rpcUrl, wallet);
 
-      logger.info('SAP client initialized successfully', {
+      logger.debug('SAP client initialized successfully', {
         programId: this.client.programId.toBase58(),
       });
 

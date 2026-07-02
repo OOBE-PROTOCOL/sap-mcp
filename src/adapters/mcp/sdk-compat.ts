@@ -490,7 +490,7 @@ export function registerTool<TInput = unknown>(
     });
     
     registry.tools = true;
-    logger.info('JSON-RPC handlers registered for tools');
+    logger.debug('JSON-RPC handlers registered for tools');
   }
   
   return tool;
@@ -564,7 +564,7 @@ export function registerResource(
     });
     
     registry.resources = true;
-    logger.info('JSON-RPC handlers registered for resources');
+    logger.debug('JSON-RPC handlers registered for resources');
   }
   
   return resource;
@@ -679,7 +679,7 @@ export function registerResourceTemplate(
     });
     
     registry.resources = true;
-    logger.info('JSON-RPC handlers registered for resource templates');
+    logger.debug('JSON-RPC handlers registered for resource templates');
   }
   
   return template;
@@ -765,7 +765,7 @@ export function registerPrompt(
     });
     
     registry.prompts = true;
-    logger.info('JSON-RPC handlers registered for prompts');
+    logger.debug('JSON-RPC handlers registered for prompts');
   }
   
   return prompt;

@@ -38,7 +38,7 @@ export function registerSapAgentPrompt(server: Server, _context: SapMcpContext) 
     const network = (args.network as string) || 'devnet';
     const includeSNS = (args.includeSNS as string) === 'yes';
     
-    logger.info('Registering SAP agent', { agentType, network, includeSNS });
+    logger.debug('Registering SAP agent', { agentType, network, includeSNS });
     
     const rpcUrl = network === 'mainnet' 
       ? 'https://api.mainnet-beta.solana.com'
@@ -213,5 +213,5 @@ export function registerSapAgentPrompt(server: Server, _context: SapMcpContext) 
     };
   });
   
-  logger.info('Register SAP Agent prompt registered');
+  logger.debug('Register SAP Agent prompt registered');
 }

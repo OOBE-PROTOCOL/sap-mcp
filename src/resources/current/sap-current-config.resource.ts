@@ -299,5 +299,5 @@ export function sapCurrentConfigResource(server: Server, context: SapMcpContext)
     }
   );
   
-  logger.info('Current config resource registered');
+  logger.debug('Current config resource registered');
 }

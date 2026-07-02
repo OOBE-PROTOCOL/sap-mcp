@@ -197,5 +197,5 @@ export function sapActiveProfileResource(server: Server, _context: SapMcpContext
     }
   );
   
-  logger.info('Active profile resource registered');
+  logger.debug('Active profile resource registered');
 }

@@ -29,7 +29,7 @@ import { sapAgentContextPrompt } from './context/sap-agent-context.prompt.js';
  * Register all prompts with the MCP server
  */
 export async function registerPrompts(server: Server, context: SapMcpContext): Promise<void> {
-  logger.info('Registering prompts');
+  logger.debug('Registering prompts');
   
   // Register all SAP prompts
   registerSapAgentPrompt(server, context);
@@ -50,5 +50,5 @@ export async function registerPrompts(server: Server, context: SapMcpContext): P
   // Register context prompts
   sapAgentContextPrompt(server, context);
   
-  logger.info('Prompts registered', { count: 9 });
+  logger.debug('Prompts registered', { count: 9 });
 }

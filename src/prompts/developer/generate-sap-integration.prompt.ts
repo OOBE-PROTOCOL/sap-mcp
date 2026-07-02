@@ -124,7 +124,7 @@ export function generateSapIntegrationPrompt(server: Server, _context: SapMcpCon
     };
   });
   
-  logger.info('Generate SAP Integration prompt registered');
+  logger.debug('Generate SAP Integration prompt registered');
 }
 
 /**

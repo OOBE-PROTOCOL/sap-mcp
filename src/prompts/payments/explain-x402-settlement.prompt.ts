@@ -197,5 +197,5 @@ export function explainX402SettlementPrompt(server: Server, _context: SapMcpCont
     };
   });
   
-  logger.info('Explain x402 Settlement prompt registered');
+  logger.debug('Explain x402 Settlement prompt registered');
 }

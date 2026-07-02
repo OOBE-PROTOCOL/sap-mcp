@@ -20,7 +20,7 @@ import { sapNetworkStatsResource } from './stats/sap-network-stats.resource.js';
  * Register all resources with the MCP server
  */
 export async function registerResources(server: Server, context: SapMcpContext): Promise<void> {
-  logger.info('Registering resources');
+  logger.debug('Registering resources');
   
   // Register all SAP domain resources
   sapAgentResource(server, context);
@@ -37,5 +37,5 @@ export async function registerResources(server: Server, context: SapMcpContext):
   // Register network stats resource
   sapNetworkStatsResource(server, context);
   
-  logger.info('Resources registered', { count: 9 });
+  logger.debug('Resources registered', { count: 9 });
 }

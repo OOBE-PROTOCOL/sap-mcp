@@ -159,7 +159,7 @@ export function debugSapErrorPrompt(server: Server, _context: SapMcpContext) {
     };
   });
   
-  logger.info('Debug SAP Error prompt registered');
+  logger.debug('Debug SAP Error prompt registered');
 }
 
 /**

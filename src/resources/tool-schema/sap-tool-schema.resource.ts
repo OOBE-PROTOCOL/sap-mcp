@@ -89,5 +89,5 @@ export function sapToolSchemaResource(server: Server, context: SapMcpContext) {
     }
   );
   
-  logger.info('SAP Tool Schema resource registered');
+  logger.debug('SAP Tool Schema resource registered');
 }

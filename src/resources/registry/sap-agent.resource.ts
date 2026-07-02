@@ -89,5 +89,5 @@ export function sapAgentResource(server: Server, context: SapMcpContext) {
     }
   );
   
-  logger.info('SAP Agent resource registered');
+  logger.debug('SAP Agent resource registered');
 }

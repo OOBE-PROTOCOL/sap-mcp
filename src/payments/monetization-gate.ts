@@ -163,6 +163,12 @@ export class McpMonetizationGate {
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
     await this.usageLedger.recordDecision(metadata, decision);
+    logger.info('Payment required', {
+      toolNames: decision.toolNames,
+      price: decision.price,
+      callerIp: metadata.remoteAddress,
+      requestHash: requestHash.slice(0, 12),
+    });
 
     const context = this.buildRequestContext(request, parsedBody, virtualPath);
     const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
@@ -182,6 +188,11 @@ export class McpMonetizationGate {
     }
 
     await this.usageLedger.recordVerified(metadata, decision);
+    logger.info('Payment verified', {
+      toolNames: decision.toolNames,
+      price: decision.price,
+      requestHash: metadata.requestHash.slice(0, 12),
+    });
     await this.forwardAndSettle({
       request,
       response,
@@ -295,11 +306,28 @@ export class McpMonetizationGate {
 
     await this.usageLedger.recordSettlement(options.metadata, options.decision, settlement);
 
+    const decision = options.decision as Extract<PaymentDecision, { required: true }>;
+
     if (!settlement.success) {
+      logger.warn('Settlement failed', {
+        toolNames: decision.toolNames,
+        price: decision.price,
+        requestHash: options.metadata.requestHash.slice(0, 12),
+        errorReason: settlement.errorReason,
+      });
       options.buffered.restore();
       writePaymentInstructions(options.response, settlement.response);
       return;
     }
+
+    logger.info('Settlement success', {
+      toolNames: decision.toolNames,
+      price: decision.price,
+      tx: settlement.transaction,
+      amount: settlement.amount,
+      payer: settlement.payer,
+      requestHash: options.metadata.requestHash.slice(0, 12),
+    });
 
     for (const [name, value] of Object.entries(settlement.headers)) {
       options.response.setHeader(name, value);

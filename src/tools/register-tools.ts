@@ -22,7 +22,7 @@ import { registerChatTools } from './chat-tools.js';
  * @param context - Shared runtime context with SAP client, signer, policy, and configuration.
  */
 export async function registerTools(server: Server, context: SapMcpContext): Promise<void> {
-  logger.info('Registering tools');
+  logger.debug('Registering tools');
   
   // Register SAP SDK tools backed by @oobe-protocol-labs/synapse-sap-sdk.
   registerSapSdkTools(server, context);
@@ -48,5 +48,5 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);
   
-  logger.info('Tools registered', { count: getRegisteredTools(server).length });
+  logger.debug('Tools registered', { count: getRegisteredTools(server).length });
 }

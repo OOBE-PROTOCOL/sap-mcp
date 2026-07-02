@@ -1789,7 +1789,7 @@ const sapToolGroups: ToolRegistration[][] = [
  * @description Registers production SAP SDK-backed tools using the public SDK v0.20 client surface.
  */
 export function registerSapSdkTools(server: Server, _context: SapMcpContext): void {
-  logger.info('Registering SAP SDK tools');
+  logger.debug('Registering SAP SDK tools');
 
   if (!isSapClientInitialized()) {
     logger.warn('SAP client not initialized - skipping SDK tools');
@@ -1805,5 +1805,5 @@ export function registerSapSdkTools(server: Server, _context: SapMcpContext): vo
     }
   }
 
-  logger.info('SAP SDK tools registered', { count });
+  logger.debug('SAP SDK tools registered', { count });
 }

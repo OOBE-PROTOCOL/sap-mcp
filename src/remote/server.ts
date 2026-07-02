@@ -207,7 +207,7 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
     port,
     host,
     corsOrigins: appConfig.httpCorsOrigins,
-    stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, appConfig.mode === 'hosted-api'),
+    stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, false),
     rateLimit: buildRemoteRateLimitConfigFromEnv(appConfig.rateLimitPerMinute),
   };
 
@@ -918,6 +918,44 @@ export function buildWizardInstallScript(
 }
 
 /**
+ * @name extractToolNamesFromJsonRpc
+ * @description Extracts tool names from a parsed JSON-RPC 2.0 request body for request logging.
+ */
+function extractToolNamesFromJsonRpc(body: unknown): string[] | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const record = body as Record<string, unknown>;
+
+  // tools/call request: { method: "tools/call", params: { name: "tool_name", ... } }
+  if (record.method === 'tools/call' && record.params && typeof record.params === 'object') {
+    const params = record.params as Record<string, unknown>;
+    if (typeof params.name === 'string') return [params.name];
+  }
+
+  // Batch request: array of requests
+  if (Array.isArray(body)) {
+    const names: string[] = [];
+    for (const item of body) {
+      const extracted = extractToolNamesFromJsonRpc(item);
+      if (extracted) names.push(...extracted);
+    }
+    return names.length > 0 ? names : undefined;
+  }
+
+  return undefined;
+}
+
+/**
+ * @name extractJsonRpcMethod
+ * @description Extracts the JSON-RPC method name from a parsed request body for request logging.
+ */
+function extractJsonRpcMethod(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const record = body as Record<string, unknown>;
+  if (typeof record.method === 'string') return record.method;
+  return undefined;
+}
+
+/**
  * @name RemoteMCPServer
  * @description Remote MCP server backed by the official Streamable HTTP transport.
  */
@@ -1049,6 +1087,38 @@ export class RemoteMCPServer {
         return;
       }
 
+      // ── Request logging ─────────────────────────────────────────────
+      const reqStart = Date.now();
+      const callerIp = getRateLimitKey(req);
+      const originalEnd = res.end.bind(res) as typeof res.end;
+      let loggedMethod: string | undefined;
+      let loggedToolNames: string[] | undefined;
+
+      // Try to extract JSON-RPC method and tool name from body for logging
+      if (req.method === 'POST') {
+        const chunks: Buffer[] = [];
+        const originalOn = req.on.bind(req);
+        // We can't consume the body here without breaking the handler,
+        // so we'll log what we can from the response status code.
+        // The monetization gate already parses the body for paid tools.
+        // For free tools, we'll log the method/path/status/latency.
+      }
+
+      (res as http.ServerResponse).end = ((...args: Parameters<typeof res.end>) => {
+        const latencyMs = Date.now() - reqStart;
+        const statusCode = res.statusCode;
+        logger.info('MCP request', {
+          method: req.method,
+          path: url.pathname,
+          status: statusCode,
+          latencyMs,
+          callerIp,
+          toolNames: loggedToolNames,
+          rpcMethod: loggedMethod,
+        });
+        return originalEnd(...args);
+      }) as typeof res.end;
+
       try {
         if (this.config.stateless) {
           // Stateless mode: create a fresh transport + server per request.
@@ -1061,15 +1131,23 @@ export class RemoteMCPServer {
 
           if (monetizationGate) {
             await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+              // Extract tool names from parsed JSON-RPC body for logging
+              loggedToolNames = extractToolNamesFromJsonRpc(parsedBody);
+              loggedMethod = extractJsonRpcMethod(parsedBody);
               await perRequestTransport.handleRequest(mcpReq, mcpRes, parsedBody);
             });
           } else {
+            // Parse body for logging before passing to transport
+            // The transport will re-read it from the stream
+            loggedToolNames = undefined; // Will be logged without tool names in free mode
             await perRequestTransport.handleRequest(req, res);
           }
         } else {
           // Stateful mode: reuse the long-lived transport.
           if (monetizationGate) {
             await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+              loggedToolNames = extractToolNamesFromJsonRpc(parsedBody);
+              loggedMethod = extractJsonRpcMethod(parsedBody);
               await this.transport?.handleRequest(mcpReq, mcpRes, parsedBody);
             });
           } else {

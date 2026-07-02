@@ -92,5 +92,5 @@ export function sapNetworkStatsResource(server: Server, context: SapMcpContext):
     }
   );
 
-  logger.info('SAP Network Stats resource registered');
+  logger.debug('SAP Network Stats resource registered');
 }

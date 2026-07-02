@@ -252,5 +252,5 @@ export function verifyExecutionProofPrompt(server: Server, _context: SapMcpConte
     };
   });
   
-  logger.info('Verify Execution Proof prompt registered');
+  logger.debug('Verify Execution Proof prompt registered');
 }

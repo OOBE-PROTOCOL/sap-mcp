@@ -264,7 +264,7 @@ async function initializeClientSdk(rpcUrl: string): Promise<void> {
     return;
   }
 
-  logger.info('Initializing Client SDK with all plugins', { rpcUrl });
+  logger.debug('Initializing Client SDK with all plugins', { rpcUrl });
 
   try {
     const sdk = await import('@oobe-protocol-labs/synapse-client-sdk/ai/plugins');
@@ -298,11 +298,11 @@ async function initializeClientSdk(rpcUrl: string): Promise<void> {
     }));
     assertRequiredAgentKitTools(pluginTools.map(({ name }) => name));
 
-    logger.info('Client SDK tools cached', { count: pluginTools?.length || 0 });
+    logger.debug('Client SDK tools cached', { count: pluginTools?.length || 0 });
     
     // Log summary
     const summary = agentKit.summary();
-    logger.info('AgentKit summary', {
+    logger.debug('AgentKit summary', {
       plugins: Array.isArray(summary.plugins) ? summary.plugins.length : 0,
       totalTools: summary.totalTools || 0,
       totalProtocols: summary.totalProtocols || 0,
@@ -316,7 +316,7 @@ async function initializeClientSdk(rpcUrl: string): Promise<void> {
       name: tool.name,
       tool,
     }));
-    logger.info('Jupiter protocol tools cached', {
+    logger.debug('Jupiter protocol tools cached', {
       count: jupiterProtocolTools.length,
       methods: jupiterToolkit.methodNames.length,
     });
@@ -337,7 +337,7 @@ async function initializeClientSdk(rpcUrl: string): Promise<void> {
  * @param context - Runtime context containing RPC configuration and connection state.
  */
 export async function registerClientSdkTools(server: Server, context: SapMcpContext): Promise<void> {
-  logger.info('Registering Client SDK tools via SynapseAgentKit');
+  logger.debug('Registering Client SDK tools via SynapseAgentKit');
 
   registerLegacySolanaRpcTools(server, context);
 
@@ -445,7 +445,7 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
     }
   }
 
-  logger.info('Client SDK tools registered', {
+  logger.debug('Client SDK tools registered', {
     registered: registeredCount,
     failed: failedCount,
     skipped: skippedCount,

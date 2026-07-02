@@ -169,5 +169,5 @@ export function analyzeSapAgentPrompt(server: Server, _context: SapMcpContext) {
     };
   });
   
-  logger.info('Analyze SAP Agent prompt registered');
+  logger.debug('Analyze SAP Agent prompt registered');
 }

@@ -89,5 +89,5 @@ export function sapReputationResource(server: Server, context: SapMcpContext) {
     }
   );
   
-  logger.info('SAP Reputation resource registered');
+  logger.debug('SAP Reputation resource registered');
 }

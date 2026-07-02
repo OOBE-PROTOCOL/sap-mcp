@@ -89,5 +89,5 @@ export function sapExecutionRecordResource(server: Server, context: SapMcpContex
     }
   );
   
-  logger.info('SAP Execution Record resource registered');
+  logger.debug('SAP Execution Record resource registered');
 }

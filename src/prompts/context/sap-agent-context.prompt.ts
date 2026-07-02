@@ -185,7 +185,7 @@ export function sapAgentContextPrompt(server: Server, _context: SapMcpContext): 
     }
   );
   
-  logger.info('Agent context prompt registered');
+  logger.debug('Agent context prompt registered');
 }
 
 /**

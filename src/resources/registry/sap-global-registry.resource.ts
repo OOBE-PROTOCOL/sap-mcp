@@ -85,5 +85,5 @@ export function sapGlobalRegistryResource(server: Server, context: SapMcpContext
     }
   );
   
-  logger.info('SAP Global Registry resource registered');
+  logger.debug('SAP Global Registry resource registered');
 }

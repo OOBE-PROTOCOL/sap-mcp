@@ -16,17 +16,17 @@ export async function registerCapabilities(
   server: Server,
   context: SapMcpContext
 ): Promise<void> {
-  logger.info('Registering server capabilities');
-  
+  logger.debug('Registering server capabilities');
+
   // Register SAP Protocol, Synapse AgentKit, network, and transaction tools.
   await registerTools(server, context);
-  logger.info('SAP Protocol tools registered');
-  
+  logger.debug('SAP Protocol tools registered');
+
   // Register resources
   await registerResources(server, context);
-  logger.info('Resources registered');
-  
+  logger.debug('Resources registered');
+
   // Register prompts
   await registerPrompts(server, context);
-  logger.info('Prompts registered');
+  logger.debug('Prompts registered');
 }

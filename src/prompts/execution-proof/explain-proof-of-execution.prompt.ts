@@ -249,5 +249,5 @@ export function explainProofOfExecutionPrompt(server: Server, _context: SapMcpCo
     };
   });
   
-  logger.info('Explain Proof of Execution prompt registered');
+  logger.debug('Explain Proof of Execution prompt registered');
 }

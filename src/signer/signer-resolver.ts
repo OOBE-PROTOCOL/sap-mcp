@@ -15,7 +15,7 @@ import { createExternalSigner } from './external-signer.js';
 export async function resolveSigner(config: SapMcpConfig): Promise<SignerResult> {
   const mode = getSignerModeFromConfig(config);
   
-  logger.info('Resolving signer', { mcpMode: config.mode, signerMode: mode });
+  logger.debug('Resolving signer', { mcpMode: config.mode, signerMode: mode });
   
   switch (mode) {
     case 'none':

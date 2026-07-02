@@ -734,7 +734,7 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
  * sns-standalone (SnsSdk) is deprecated and removed.
  */
 export function registerSapSnsTools(server: Server, context: SapMcpContext): void {
-  logger.info('Registering SAP SNS tools');
+  logger.debug('Registering SAP SNS tools');
 
   let count = 0;
   for (const tool of createSnsTools(context)) {
@@ -742,5 +742,5 @@ export function registerSapSnsTools(server: Server, context: SapMcpContext): voi
     count++;
   }
 
-  logger.info('SAP SNS tools registered', { count });
+  logger.debug('SAP SNS tools registered', { count });
 }

@@ -18,7 +18,7 @@ import { setToolExecutionContext } from '../adapters/mcp/sdk-compat.js';
  * Create and configure the MCP server instance
  */
 export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> {
-  logger.info('Creating SAP MCP Server', { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION });
+  logger.debug('Creating SAP MCP Server', { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION });
   
   // Create MCP server with ALL capabilities declared upfront
   // This is REQUIRED for MCP SDK v1.0.0 - capabilities must be declared in constructor
@@ -39,15 +39,15 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
   
   // Create SAP client
   const sapClient = await createSapClient(config);
-  logger.info('SAP client created', { programId: config.programId });
+  logger.debug('SAP client created', { programId: config.programId });
 
   // Resolve signer based on mode
   const signer = await resolveSigner(config);
-  logger.info('Signer resolved', { mode: signer?.mode ?? 'none' });
+  logger.debug('Signer resolved', { mode: signer?.mode ?? 'none' });
   
   // Create policy engine
   const policyEngine = new PolicyEngine(config);
-  logger.info('Policy engine initialized');
+  logger.debug('Policy engine initialized');
   
   // Create shared context
   const context: SapMcpContext = {
@@ -64,7 +64,7 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
 
   // Register all capabilities (tools, resources, prompts)
   await registerCapabilities(server, context);
-  logger.info('Server capabilities registered');
+  logger.debug('Server capabilities registered');
   
   return server;
 }
