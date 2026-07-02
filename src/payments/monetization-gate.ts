@@ -182,7 +182,34 @@ export class McpMonetizationGate {
       // V2 resource server only emits amount. Patch the 402 response body to add
       // maxAmountRequired so V1-only clients and facilitators can verify payments.
       patchV1Compatibility(paymentResult.response);
-      writePaymentInstructions(response, paymentResult.response);
+
+      // Instead of returning HTTP 402 (which the MCP SDK can't handle and hangs),
+      // return HTTP 200 with a JSON-RPC error response containing the payment
+      // requirements. The agent will see this as a normal (errorful) tool result
+      // and can use x402_parse_payment → x402_create_payment → x402_paid_call
+      // to self-pay and retry.
+      const responseBody = paymentResult.response.body as Record<string, unknown> | undefined;
+      const jsonRpcId = extractJsonRpcId(parsedBody);
+      writeJson(response, 200, {
+        jsonrpc: '2.0',
+        id: jsonRpcId,
+        error: {
+          code: -32001,
+          message: 'payment_required',
+          data: {
+            protocol: 'x402',
+            paymentRequirements: responseBody?.accepts ?? responseBody?.paymentRequirements ?? responseBody,
+            instructions: {
+              header: 'Payment-Signature',
+              steps: [
+                'Call x402_parse_payment with this response body',
+                'Call x402_create_payment with the parsed requirements',
+                'Call x402_paid_call with the payment header to retry',
+              ],
+            },
+          },
+        },
+      });
       return;
     }
 
@@ -614,6 +641,20 @@ function replayBufferedCall(
       flushHeaders();
       return;
   }
+}
+
+/**
+ * @name extractJsonRpcId
+ * @description Extracts the JSON-RPC id from a parsed request body for response correlation.
+ */
+function extractJsonRpcId(body: unknown): string | number | null {
+  if (!body || typeof body !== 'object') return null;
+  const record = body as Record<string, unknown>;
+  if (typeof record.id === 'string' || typeof record.id === 'number') return record.id;
+  if (Array.isArray(body) && body.length > 0) {
+    return extractJsonRpcId(body[0]);
+  }
+  return null;
 }
 
 /**
