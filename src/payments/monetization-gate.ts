@@ -159,6 +159,23 @@ export class McpMonetizationGate {
       return;
     }
 
+    // ── Fast path: Payment-Signature header present ────────────────────────
+    // When the client sends a Payment-Signature header, it means it has
+    // already built a payment transaction. Skip the 402 response and go
+    // directly to facilitator verification + settlement.
+    const paymentHeader =
+      (request.headers['payment-signature'] as string | undefined) ??
+      (request.headers['x-payment'] as string | undefined);
+
+    if (paymentHeader && decision.required) {
+      logger.info('Payment-Signature header detected — verifying with facilitator', {
+        toolNames: (decision as Extract<PaymentDecision, { required: true }>).toolNames,
+        price: (decision as Extract<PaymentDecision, { required: true }>).price,
+      });
+      await this.handlePaidRequest(request, response, next, parsedBody, decision, rawBody);
+      return;
+    }
+
     const requestHash = hashRequestBody(rawBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
@@ -234,6 +251,203 @@ export class McpMonetizationGate {
       paymentResult,
       parsedBody,
     });
+  }
+
+  /**
+   * @name handlePaidRequest
+   * @description Fast path for requests that already include a Payment-Signature header.
+   * Verifies the payment with the facilitator, executes the MCP handler, then settles.
+   */
+  private async handlePaidRequest(
+    request: http.IncomingMessage,
+    response: http.ServerResponse,
+    next: McpRequestHandler,
+    parsedBody: unknown,
+    decision: PaymentDecision,
+    rawBody: Buffer,
+  ): Promise<void> {
+    const paymentHeader =
+      (request.headers['payment-signature'] as string | undefined) ??
+      (request.headers['x-payment'] as string | undefined);
+
+    if (!paymentHeader) {
+      writeJson(response, 402, { error: 'payment_required', message: 'Payment-Signature header missing' });
+      return;
+    }
+
+    // Parse the payment header → { x402Version, payload }
+    let paymentPayload: PaymentPayload;
+    let x402Version: number;
+    try {
+      const parsed = JSON.parse(paymentHeader) as { x402Version?: number; payload?: unknown };
+      x402Version = parsed.x402Version ?? 2;
+      paymentPayload = { x402Version, payload: parsed.payload } as PaymentPayload;
+    } catch {
+      writeJson(response, 400, { error: 'Invalid Payment-Signature header format' });
+      return;
+    }
+
+    // Build payment requirements from the decision + monetization config
+    const paidDecision = decision as Extract<PaymentDecision, { required: true }>;
+    const requestHash = hashRequestBody(rawBody);
+    const virtualPath = buildPaidVirtualPath(paidDecision, requestHash);
+    const metadata = buildRequestMetadata(request, requestHash, virtualPath);
+
+    // Build payment requirements that the facilitator expects
+    const paymentRequirements: PaymentRequirements = {
+      scheme: 'exact',
+      network: resolvePaymentNetwork(this.appConfig),
+      amount: paidDecision.priceUsd.toString(),
+      maxAmountRequired: paidDecision.priceUsd.toString(),
+      asset: '', // Will be filled by facilitator during verify
+      payTo: this.monetization.payTo ?? '',
+      maxTimeoutSeconds: this.monetization.maxTimeoutSeconds,
+      extra: {},
+    } as PaymentRequirements;
+
+    // First: fetch /supported to get the facilitator's feePayer and asset
+    try {
+      const supportedResponse = await fetch(
+        `${this.appConfig.monetization.facilitatorUrl}/supported`,
+        { method: 'GET' },
+      );
+      const supported = await supportedResponse.json() as {
+        kinds?: Array<{
+          x402Version: number;
+          scheme: string;
+          network: string;
+          extra?: { feePayer?: string };
+        }>;
+      };
+      const kind = supported.kinds?.find(
+        k => k.scheme === 'exact' && k.network === resolvePaymentNetwork(this.appConfig),
+      );
+      if (kind?.extra?.feePayer) {
+        (paymentRequirements.extra as Record<string, unknown>).feePayer = kind.extra.feePayer;
+      }
+    } catch (error) {
+      logger.warn('Failed to fetch /supported from facilitator', { error });
+    }
+
+    // Determine the USDC asset address for the network
+    const network = resolvePaymentNetwork(this.appConfig);
+    const USDC_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    const USDC_DEVNET = '8wUum6Vd2G2z4VFY3CMx5iJz2m6Lz3j4z3m5WZ2t3Kp';
+    paymentRequirements.asset = network === SOLANA_MAINNET_CAIP2 ? USDC_MAINNET : USDC_DEVNET;
+
+    // Verify the payment with the facilitator
+    try {
+      const verifyResponse = await fetch(
+        `${this.appConfig.monetization.facilitatorUrl}/verify`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            x402Version,
+            paymentPayload,
+            paymentRequirements,
+          }),
+        },
+      );
+      const verifyResult = await verifyResponse.json() as { isValid: boolean; invalidReason?: string; payer?: string };
+
+      if (!verifyResult.isValid) {
+        logger.warn('Payment verification failed', {
+          reason: verifyResult.invalidReason,
+          requestHash: requestHash.slice(0, 12),
+        });
+        writeJson(response, 402, {
+          error: 'payment_verification_failed',
+          reason: verifyResult.invalidReason,
+          message: 'The facilitator rejected the payment. Check your USDC balance and keypair.',
+        });
+        return;
+      }
+
+      logger.info('Payment verified', {
+        toolNames: paidDecision.toolNames,
+        price: paidDecision.price,
+        payer: verifyResult.payer,
+        requestHash: requestHash.slice(0, 12),
+      });
+    } catch (error) {
+      logger.error('Facilitator verify request failed', { error });
+      writeJson(response, 502, {
+        error: 'facilitator_unreachable',
+        message: 'Could not reach the x402 facilitator for payment verification.',
+      });
+      return;
+    }
+
+    await this.usageLedger.recordVerified(metadata, paidDecision);
+
+    // Execute the MCP handler and buffer the response for settlement
+    const buffered = bufferResponse(response);
+
+    try {
+      await next(request, response, parsedBody);
+      await buffered.waitForEnd();
+    } catch (error) {
+      logger.error('MCP handler threw during paid request', { error });
+      buffered.restore();
+      writeJson(response, 500, { error: 'MCP handler error after payment' });
+      return;
+    }
+
+    if (response.statusCode >= 400) {
+      logger.warn('MCP handler returned error after payment', { status: response.statusCode });
+      buffered.restore();
+      return;
+    }
+
+    // Settle the payment with the facilitator
+    try {
+      const responseBody = buffered.getBody();
+      const responseHeaders = getResponseHeaders(response);
+      const settleResponse = await fetch(
+        `${this.appConfig.monetization.facilitatorUrl}/settle`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            x402Version,
+            paymentPayload,
+            paymentRequirements,
+          }),
+        },
+      );
+      const settlement = await settleResponse.json() as {
+        success: boolean;
+        transaction?: string;
+        network?: string;
+        amount?: string;
+        payer?: string;
+        errorReason?: string;
+      };
+
+      await this.usageLedger.recordSettlement(metadata, paidDecision, settlement as never);
+
+      if (settlement.success) {
+        logger.info('Settlement success', {
+          toolNames: paidDecision.toolNames,
+          price: paidDecision.price,
+          tx: settlement.transaction,
+          amount: settlement.amount,
+          payer: settlement.payer,
+          requestHash: requestHash.slice(0, 12),
+        });
+      } else {
+        logger.warn('Settlement failed', {
+          toolNames: paidDecision.toolNames,
+          errorReason: settlement.errorReason,
+          requestHash: requestHash.slice(0, 12),
+        });
+      }
+    } catch (error) {
+      logger.error('Facilitator settle request failed', { error });
+    }
+
+    buffered.restoreAndReplay();
   }
 
   private buildRequestContext(
