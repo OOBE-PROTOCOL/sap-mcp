@@ -179,6 +179,7 @@ export class McpMonetizationGate {
       logger.info('Payment-Signature header present in request', {
         headerLength: psHeader.length,
         requestHash: requestHash.slice(0, 12),
+        isBase64: /^[A-Za-z0-9+/]+=*$/.test(psHeader),
       });
     }
 
@@ -186,6 +187,12 @@ export class McpMonetizationGate {
       appName: 'SAP MCP Server',
       currentUrl: context.adapter.getUrl(),
       testnet: resolvePaymentNetwork(this.appConfig) !== SOLANA_MAINNET_CAIP2,
+    });
+
+    // Debug: log the payment result type
+    logger.info('x402 processHTTPRequest result', {
+      type: paymentResult.type,
+      hasPaymentHeader: Boolean(psHeader),
     });
 
     if (paymentResult.type === 'payment-error') {
