@@ -11,7 +11,7 @@ import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { getSapClient } from '../sap/sap-client-manager.js';
-import { logger } from '../core/logger.js';
+import { logger, redactSensitiveString } from '../core/logger.js';
 
 const SapNetworkStatsInputSchema = z.object({
   detailed: z.boolean().optional().default(false),
@@ -80,7 +80,7 @@ export function sapNetworkStatsTool(server: Server, context: SapMcpContext): voi
         const response = parsedInput.detailed
           ? {
             network,
-            rpcUrl: context.config.rpcUrl,
+            rpcUrl: redactSensitiveString(context.config.rpcUrl),
             programId: context.config.programId,
             timestamp: new Date().toISOString(),
             fetchTimeMs,

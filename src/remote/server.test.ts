@@ -11,6 +11,8 @@ import {
 const originalAuthType = process.env.SAP_MCP_AUTH_TYPE;
 const originalApiKeys = process.env.SAP_MCP_API_KEYS;
 const originalAuthSecret = process.env.SAP_MCP_AUTH_SECRET;
+const originalStateless = process.env.SAP_MCP_HTTP_STATELESS;
+const originalRemoteRateLimit = process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE;
 
 const appConfig: SapMcpConfig = {
   mode: 'hosted-api',
@@ -69,6 +71,16 @@ function restoreEnv(): void {
   } else {
     process.env.SAP_MCP_AUTH_SECRET = originalAuthSecret;
   }
+  if (originalStateless === undefined) {
+    delete process.env.SAP_MCP_HTTP_STATELESS;
+  } else {
+    process.env.SAP_MCP_HTTP_STATELESS = originalStateless;
+  }
+  if (originalRemoteRateLimit === undefined) {
+    delete process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE;
+  } else {
+    process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE = originalRemoteRateLimit;
+  }
 }
 
 afterEach(() => {
@@ -84,6 +96,19 @@ describe('remote MCP server config', () => {
     const config = defaultRemoteConfig(appConfig);
 
     expect(config.auth).toEqual({ type: 'none' });
+    expect(config.stateless).toBe(true);
+    expect(config.rateLimit.requestsPerMinute).toBe(60);
+  });
+
+  it('allows stateful remote sessions and custom remote rate limits when explicitly requested', () => {
+    process.env.SAP_MCP_AUTH_TYPE = 'none';
+    process.env.SAP_MCP_HTTP_STATELESS = 'false';
+    process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE = '500';
+
+    const config = defaultRemoteConfig(appConfig);
+
+    expect(config.stateless).toBe(false);
+    expect(config.rateLimit.requestsPerMinute).toBe(500);
   });
 
   it('advertises no bearer requirement in the public agent card when auth is none', () => {
@@ -93,6 +118,12 @@ describe('remote MCP server config', () => {
         port: 8787,
         host: '127.0.0.1',
         auth: { type: 'none' },
+        stateless: true,
+        rateLimit: {
+          enabled: true,
+          requestsPerMinute: 60,
+          keyPrefix: 'test:',
+        },
       },
     );
 
@@ -111,6 +142,12 @@ describe('remote MCP server config', () => {
         port: 8787,
         host: '127.0.0.1',
         auth: { type: 'none' },
+        stateless: true,
+        rateLimit: {
+          enabled: true,
+          requestsPerMinute: 60,
+          keyPrefix: 'test:',
+        },
       },
     );
 
@@ -128,6 +165,12 @@ describe('remote MCP server config', () => {
         port: 8787,
         host: '127.0.0.1',
         auth: { type: 'none' },
+        stateless: true,
+        rateLimit: {
+          enabled: true,
+          requestsPerMinute: 60,
+          keyPrefix: 'test:',
+        },
       },
     );
 

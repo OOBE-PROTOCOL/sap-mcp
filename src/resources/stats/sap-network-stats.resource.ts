@@ -7,7 +7,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerResourceTemplate } from '../../adapters/mcp/sdk-compat.js';
-import { logger } from '../../core/logger.js';
+import { logger, redactSensitiveString } from '../../core/logger.js';
 import type { SapMcpContext } from '../../core/types.js';
 import { getSapClient } from '../../sap/sap-client-manager.js';
 
@@ -60,7 +60,7 @@ export function sapNetworkStatsResource(server: Server, context: SapMcpContext):
         ]);
         const payload = {
           network: getNetworkFromRpcUrl(context.config.rpcUrl),
-          rpcUrl: context.config.rpcUrl,
+          rpcUrl: redactSensitiveString(context.config.rpcUrl),
           programId: context.config.programId,
           timestamp: new Date().toISOString(),
           source: 'synapse-sap-sdk',

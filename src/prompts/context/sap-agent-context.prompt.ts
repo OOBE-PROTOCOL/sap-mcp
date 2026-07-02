@@ -12,7 +12,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerPrompt } from '../../adapters/mcp/sdk-compat.js';
-import { logger } from '../../core/logger.js';
+import { logger, redactSensitiveString } from '../../core/logger.js';
 import type { SapMcpContext } from '../../core/types.js';
 import { getActiveProfile, loadProfileConfig, getCurrentProfileInfo, listProfiles, getProfileConfigPath } from '../../config/profiles.js';
 import { getPreferredConfigDir } from '../../config/paths.js';
@@ -216,7 +216,7 @@ function buildContextMessage(options: {
 
 ### 🔐 Operating Mode
 - **Mode:** \`${config.mode}\`
-- **RPC URL:** \`${config.rpcUrl}\`
+- **RPC URL:** \`${redactSensitiveString(config.rpcUrl)}\`
 - **Commitment:** \`${config.commitment}\`
 - **Program ID:** \`${config.programId}\`
 

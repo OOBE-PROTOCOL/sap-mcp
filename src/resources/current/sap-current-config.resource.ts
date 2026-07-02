@@ -9,7 +9,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerResourceTemplate } from '../../adapters/mcp/sdk-compat.js';
-import { logger } from '../../core/logger.js';
+import { logger, redactSensitiveString } from '../../core/logger.js';
 import type { SapMcpContext } from '../../core/types.js';
 import { getActiveProfile, getProfileConfigPath, loadProfileConfig } from '../../config/profiles.js';
 import { fullConfigSchema, type FullConfig } from '../../config/secure-config.js';
@@ -193,7 +193,7 @@ export function sapCurrentConfigResource(server: Server, context: SapMcpContext)
 	              : null,
 	          },
           connection: {
-            rpcUrl: context.config.rpcUrl,
+            rpcUrl: redactSensitiveString(context.config.rpcUrl),
             commitment: context.config.commitment,
             programId: context.config.programId,
           },

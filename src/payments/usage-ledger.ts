@@ -7,7 +7,9 @@ import { createHash } from 'crypto';
 import { mkdir, appendFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import type { SettleResponse } from '@x402/core/types';
+import { Redis } from 'ioredis';
 import { getDataDir } from '../config/env.js';
+import { logger } from '../core/logger.js';
 import type { PaymentDecision } from './pricing.js';
 
 /**
@@ -63,9 +65,47 @@ export interface PaymentRequestMetadata {
  */
 export class UsageLedger {
   private readonly ledgerPath: string;
+  private readonly redis?: InstanceType<typeof Redis>;
+  private readonly redisStreamKey: string;
 
-  public constructor(ledgerPath = join(getDataDir(), 'payments', 'usage-ledger.jsonl')) {
+  public constructor(
+    ledgerPath = join(getDataDir(), 'payments', 'usage-ledger.jsonl'),
+    redis?: InstanceType<typeof Redis>,
+    redisStreamKey = 'sap-mcp:payments:ledger',
+  ) {
     this.ledgerPath = ledgerPath;
+    this.redis = redis;
+    this.redisStreamKey = redisStreamKey;
+  }
+
+  /**
+   * @name createFromEnv
+   * @description Creates the payment usage ledger and optionally attaches a Redis Stream sink for clustered hosted deployments.
+   */
+  public static async createFromEnv(): Promise<UsageLedger> {
+    const useRedis = ['true', '1', 'yes', 'on'].includes(
+      (process.env.SAP_MCP_USE_REDIS || '').trim().toLowerCase(),
+    );
+    if (!useRedis) {
+      return new UsageLedger();
+    }
+
+    const redis = new Redis(process.env.SAP_MCP_REDIS_URL || 'redis://127.0.0.1:6379', {
+      lazyConnect: true,
+      maxRetriesPerRequest: 2,
+      enableOfflineQueue: false,
+    });
+    redis.on('error', (error: Error) => {
+      logger.warn('Payment usage ledger Redis error', { error });
+    });
+    await redis.connect();
+    logger.info('Payment usage ledger using Redis stream backend');
+
+    return new UsageLedger(
+      join(getDataDir(), 'payments', 'usage-ledger.jsonl'),
+      redis,
+      process.env.SAP_MCP_PAYMENT_LEDGER_REDIS_STREAM || 'sap-mcp:payments:ledger',
+    );
   }
 
   /**
@@ -75,6 +115,19 @@ export class UsageLedger {
   public async append(event: PaymentLedgerEvent): Promise<void> {
     await mkdir(dirname(this.ledgerPath), { recursive: true });
     await appendFile(this.ledgerPath, `${JSON.stringify(event)}\n`, 'utf-8');
+    await this.redis?.xadd(
+      this.redisStreamKey,
+      'MAXLEN',
+      '~',
+      '100000',
+      '*',
+      'event',
+      event.event,
+      'requestHash',
+      event.requestHash,
+      'payload',
+      JSON.stringify(event),
+    );
   }
 
   /**

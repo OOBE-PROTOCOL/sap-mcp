@@ -13,6 +13,7 @@ import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
 import { McpMonetizationGate } from '../payments/index.js';
+import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 
 /**
  * @name RemoteMCPConfig
@@ -23,6 +24,8 @@ export interface RemoteMCPConfig {
   host: string;
   corsOrigins?: string[];
   auth: RemoteAuthConfig;
+  stateless: boolean;
+  rateLimit: RemoteRateLimitConfig;
 }
 
 /**
@@ -125,12 +128,17 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
     10,
   );
   const host = process.env.SAP_MCP_HOST ?? appConfig.httpHost ?? '0.0.0.0';
+  const baseConfig = {
+    port,
+    host,
+    corsOrigins: appConfig.httpCorsOrigins,
+    stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, appConfig.mode === 'hosted-api'),
+    rateLimit: buildRemoteRateLimitConfigFromEnv(appConfig.rateLimitPerMinute),
+  };
 
   if (authType === 'none') {
     return {
-      port,
-      host,
-      corsOrigins: appConfig.httpCorsOrigins,
+      ...baseConfig,
       auth: {
         type: 'none',
       },
@@ -139,9 +147,7 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
 
   if (authType === 'jwt') {
     return {
-      port,
-      host,
-      corsOrigins: appConfig.httpCorsOrigins,
+      ...baseConfig,
       auth: {
         type: 'jwt',
         secret,
@@ -156,14 +162,19 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
   }
 
   return {
-    port,
-    host,
-    corsOrigins: appConfig.httpCorsOrigins,
+    ...baseConfig,
     auth: {
       type: 'api_key',
       keys,
     },
   };
+}
+
+function parseRemoteBoolean(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) {
+    return fallback;
+  }
+  return ['true', '1', 'yes', 'on'].includes(raw.trim().toLowerCase());
 }
 
 /**
@@ -181,6 +192,21 @@ function writeJson(
     ...headers,
   });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * @name getRateLimitKey
+ * @description Resolves the best available caller identity for hosted MCP rate limiting behind a reverse proxy.
+ */
+function getRateLimitKey(req: http.IncomingMessage): string {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+    return forwardedFor.split(',')[0]?.trim() || 'unknown';
+  }
+  if (Array.isArray(forwardedFor) && forwardedFor[0]) {
+    return forwardedFor[0].split(',')[0]?.trim() || 'unknown';
+  }
+  return req.socket.remoteAddress || 'unknown';
 }
 
 /**
@@ -352,6 +378,7 @@ export class RemoteMCPServer {
   private readonly config: RemoteMCPConfig;
   private readonly appConfig: SapMcpConfig;
   private readonly authManager: AuthManager;
+  private readonly rateLimiter: RemoteRateLimiter;
   private transport?: StreamableHTTPServerTransport;
   private httpServer?: http.Server;
 
@@ -365,6 +392,7 @@ export class RemoteMCPServer {
 
     this.config = config ?? defaultRemoteConfig(this.appConfig);
     this.authManager = new AuthManager(this.config.auth);
+    this.rateLimiter = new RemoteRateLimiter(this.config.rateLimit);
   }
 
   /**
@@ -373,10 +401,11 @@ export class RemoteMCPServer {
    */
   public async start(): Promise<void> {
     this.validateAuthConfig();
+    await this.rateLimiter.initialize();
 
     const server = await createSapMcpServer(this.appConfig);
     this.transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
+      sessionIdGenerator: this.config.stateless ? undefined : () => randomUUID(),
     });
     await server.connect(this.transport);
     const monetizationGate = await McpMonetizationGate.create(this.appConfig);
@@ -419,6 +448,20 @@ export class RemoteMCPServer {
 
       if (url.pathname !== '/mcp') {
         writeJson(res, 404, { error: 'Not Found' });
+        return;
+      }
+
+      const rateLimit = await this.rateLimiter.check(getRateLimitKey(req));
+      res.setHeader('X-RateLimit-Limit', String(rateLimit.limit));
+      res.setHeader('X-RateLimit-Remaining', String(rateLimit.remaining));
+      res.setHeader('X-RateLimit-Reset', String(rateLimit.resetSeconds));
+      if (!rateLimit.allowed) {
+        writeJson(res, 429, {
+          error: 'rate_limited',
+          retryAfterSeconds: rateLimit.resetSeconds,
+        }, {
+          'Retry-After': String(rateLimit.resetSeconds),
+        });
         return;
       }
 
@@ -465,6 +508,9 @@ export class RemoteMCPServer {
       wizardDescriptor: `http://${this.config.host}:${this.config.port}/.well-known/sap-mcp-wizard.json`,
       transport: 'streamable-http',
       authType: this.config.auth.type,
+      stateless: this.config.stateless,
+      rateLimitPerMinute: this.config.rateLimit.enabled ? this.config.rateLimit.requestsPerMinute : 0,
+      redisRateLimit: Boolean(this.config.rateLimit.redisUrl),
     });
   }
 
@@ -485,6 +531,7 @@ export class RemoteMCPServer {
         resolve();
       }, 5_000);
     });
+    await this.rateLimiter.close();
   }
 
   /**

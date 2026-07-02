@@ -7,6 +7,7 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import type { SapMcpConfig } from '../config/env.js';
+import { redactSensitiveString } from '../core/logger.js';
 import { loadConfig } from '../config/env.js';
 import { initLogger, logger } from '../core/logger.js';
 
@@ -78,7 +79,7 @@ export function generatePayShProviderYaml(
     `  network: ${resolved.operatorNetwork}`,
     `  fee_payer: ${String(resolved.feePayer)}`,
     ...(resolved.recipient ? [`  recipient: ${quoteYaml(resolved.recipient)}`] : []),
-    ...(resolved.rpcUrl ? [`  rpc_url: ${quoteYaml(resolved.rpcUrl)}`] : []),
+    ...(resolved.rpcUrl ? [`  rpc_url: ${quoteYaml(redactSensitiveString(resolved.rpcUrl))}`] : []),
     ...(resolved.signerPath ? [`  signer: { type: file, path: ${quoteYaml(resolved.signerPath)} }`] : []),
     '',
     'endpoints:',

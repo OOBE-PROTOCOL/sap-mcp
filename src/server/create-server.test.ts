@@ -247,6 +247,19 @@ describe('createSapMcpServer', () => {
     }
   });
 
+  it('redacts RPC query secrets from profile metadata tools', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig({
+      rpcUrl: 'https://rpc.example.com/?api_key=sk_live_super_secret&region=mainnet',
+    })));
+
+    const current = await server.toolHandlers?.sap_profile_current({});
+    const text = current?.content[0]?.text ?? '';
+
+    expect(text).toContain('api_key=%5BREDACTED%5D');
+    expect(text).toContain('region=mainnet');
+    expect(text).not.toContain('sk_live_super_secret');
+  });
+
   it('exposes bundled skill tools with dry-run install by default', async () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
 

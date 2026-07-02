@@ -19,6 +19,7 @@ import { createSapClient } from '../sap/sap-client-manager.js';
 import { resolveSigner } from '../signer/signer-resolver.js';
 import { PolicyEngine } from '../policy/policy-engine.js';
 import { loadConfig } from '../config/env.js';
+import { redactSensitiveString } from '../core/logger.js';
 
 /**
  * @name ProfileToolInput
@@ -135,7 +136,7 @@ function buildProfileSummary(profileName: string, context: SapMcpContext): Profi
     isActive: profileName === getActiveProfile(),
     isLoaded: profileName === loadedProfile,
     mode: config?.mode,
-    rpcUrl: config?.rpcUrl,
+    rpcUrl: config?.rpcUrl ? redactSensitiveString(config.rpcUrl) : undefined,
     network: getNetworkFromRpcUrl(config?.rpcUrl),
     programId: config?.programId,
     agentPubkey: config?.agentPubkey,
@@ -236,7 +237,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
       activeProfile: getActiveProfile(),
       runtime: {
         mode: context.config.mode,
-        rpcUrl: context.config.rpcUrl,
+        rpcUrl: redactSensitiveString(context.config.rpcUrl),
         network: getNetworkFromRpcUrl(context.config.rpcUrl),
         programId: context.config.programId,
         signerPublicKey: context.signer?.publicKey.toBase58(),

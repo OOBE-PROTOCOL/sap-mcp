@@ -123,7 +123,7 @@ export class McpMonetizationGate {
       payShCheckoutUrl: appConfig.monetization.payShCheckoutUrl,
     });
 
-    return new McpMonetizationGate(appConfig, httpResourceServer);
+    return new McpMonetizationGate(appConfig, httpResourceServer, await UsageLedger.createFromEnv());
   }
 
   /**
