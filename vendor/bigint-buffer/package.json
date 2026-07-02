@@ -1,0 +1,20 @@
+{
+  "name": "bigint-buffer",
+  "version": "1.1.6",
+  "description": "Pure JavaScript bigint to buffer conversion compatibility package for SAP MCP",
+  "main": "dist/node.js",
+  "browser": {
+    "./dist/node.js": "./dist/browser.js"
+  },
+  "types": "dist/index.d.ts",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ]
+}

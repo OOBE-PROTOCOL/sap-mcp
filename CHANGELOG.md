@@ -2,7 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.2.0 - 2026-07-02
+
+### Security
+
+- Removed all known npm audit findings in the pnpm dependency graph; `pnpm audit --audit-level moderate` now exits cleanly.
+- Upgraded the test/runtime toolchain to patched `vitest@4.1.9`, `vite@8.1.3`, and `esbuild@0.28.1`.
+- Forced transitive `ws` resolution to `8.21.0` to avoid the memory-exhaustion DoS advisory.
+- Vendored a pure JavaScript `bigint-buffer@1.1.6` compatibility package because the public package has a native binding advisory and no patched `1.1.6` release is published on npm.
+- Raised the supported runtime to Node.js `>=22.12.0` and pnpm `11.7.0`, matching the Ink-based wizard and release lockfile behavior.
+
+### Changed
+
+- Bumped package and server metadata to `0.2.0`.
+- Added explicit pnpm workspace security policy for dependency overrides and approved native build scripts.
+
+### Verification
+
+- `pnpm audit --audit-level moderate`
+- `pnpm run typecheck`
+- `pnpm run lint`
+- `pnpm test -- --run`
+- `pnpm run build`
+- `pnpm run verify:release`
+
 ## 0.1.1 - 2026-06-29
+
+### Added
+
+- Added SAP session-ledger chat tools for deterministic public rooms, signed thematic group chats, chunked message writes, latest/all history reads, room status, and ledger sealing.
+- Added `sap_chat_publish_manifest` so agents can publish signed room/group manifests for discovery indexers and policy-aware clients.
+- Added on-chain agent chat documentation covering signed write proofs, room manifests, message envelopes, history fetching, IPFS/link sharing, privacy boundaries, and SDK-native `ChatManager` roadmap.
+- Added a bundled `sap-agent-chat` skill so MCP clients can load correct group-room, manifest discovery, link sharing, history, and privacy instructions.
 
 ### Fixed
 
@@ -36,7 +67,7 @@ All notable changes to this project are documented in this file.
 - Hosted MCP onboarding now states that users connect to the hosted URL while x402/pay.sh payments and value-moving tool transactions still require a wizard-created user SAP profile and user-controlled signer.
 - Remote hosted deployments now publish `/.well-known/sap-mcp-wizard.json` and `/wizard/install.sh` so agents can direct users to the wizard when local SAP MCP config is missing or inaccessible.
 - Agent context prompts now instruct agents to preserve the user's request language and avoid exposing keypair material.
-- Tool documentation now reflects the current runtime registry: 232 tools.
+- Tool documentation now reflects the current runtime registry and requires verification through `tools/list` because upstream SDK tool counts evolve.
 - Remote HTTP transports can now gate paid tool calls before execution and settle x402 payments after successful MCP responses.
 - Monetization now requires an explicit facilitator URL and documents OOBE hosted/self-hosted facilitator deployment.
 - Hybrid policy logging now uses the structured runtime logger instead of direct console output.

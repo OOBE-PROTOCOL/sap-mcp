@@ -11,6 +11,7 @@ import { registerClientSdkTools } from './client-sdk-tools.js';
 import { registerTransactionTools } from './transaction-tools.js';
 import { registerProfileTools } from './profile-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
+import { registerChatTools } from './chat-tools.js';
 
 /**
  * Register all tools with the MCP server.
@@ -37,6 +38,9 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   
   // Register transaction tools
   registerTransactionTools(server, context);
+
+  // Register SAP chat tools backed by on-chain session ledgers.
+  registerChatTools(server, context);
 
   // Register profile tools with redacted signer metadata and live runtime reload.
   registerProfileTools(server, context);

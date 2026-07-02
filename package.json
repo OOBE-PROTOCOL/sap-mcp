@@ -1,6 +1,6 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,8 @@
     "config.example.json",
     "config.secure-example.json",
     "config.schema.json",
-    "ecosystem.config.example.cjs"
+    "ecosystem.config.example.cjs",
+    "vendor/bigint-buffer"
   ],
   "exports": {
     ".": {
@@ -91,7 +92,7 @@
     "jsonwebtoken": "^9.0.0",
     "react": "^19.2.7",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -105,7 +106,8 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.62.0",
-    "vitest": "^2.0.0"
+    "vite": "^8.1.3",
+    "vitest": "^4.1.9"
   },
   "peerDependencies": {
     "@bentoguard/sdk": ">=0.0.0"
@@ -116,17 +118,15 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   },
-  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
+  "packageManager": "pnpm@11.7.0",
   "overrides": {
+    "bigint-buffer": "file:vendor/bigint-buffer",
+    "esbuild": "^0.28.1",
     "langsmith": "^0.6.0",
-    "uuid": "^11.1.1"
-  },
-  "pnpm": {
-    "overrides": {
-      "langsmith": "^0.6.0",
-      "uuid": "^11.1.1"
-    }
+    "uuid": "^11.1.1",
+    "vite": "^8.1.3",
+    "ws": "^8.21.0"
   }
 }

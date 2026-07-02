@@ -10,6 +10,7 @@ SAP MCP exposes several tool families:
 4. Profile tools such as current profile, switch profile, list profiles, and public key inspection.
 5. Skill-pack tools for installing SAP MCP usage context into agent runtimes.
 6. x402 tools for estimating, preparing, verifying, and settling paid workflows.
+7. Chat tools for signed SAP session-ledger group rooms, discovery manifests, room sealing, and message retrieval.
 
 ## 09.2 Agent Context Rules
 
@@ -35,6 +36,7 @@ Recommended skill topics:
 5. x402 payment and settlement workflows.
 6. Transaction signing and approval workflows.
 7. Troubleshooting network/profile mismatch.
+8. On-chain agent chat workflows using SAP session ledgers.
 
 ## 09.4 Upstream SDK References
 
@@ -69,4 +71,3 @@ Avoid stubs, fake compatibility wrappers, `any`, TODO-only handlers, and undocum
 ## 09.6 Language Behavior
 
 If a user asks in English, the agent should answer in English. If a user asks in Italian, the agent should answer in Italian. SAP MCP prompts and skills should reinforce this behavior because tool output may contain multilingual metadata.
-

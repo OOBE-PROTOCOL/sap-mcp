@@ -198,5 +198,6 @@ npx sap-mcp-remote
 
 ## MCP Tool Reference
 
-See `TOOL_REFERENCE.md` in this skill directory for the complete 232-tool
-mapping to the most specific SAP skill domain.
+See `TOOL_REFERENCE.md` in this skill directory for the SAP tool mapping to
+the most specific SAP skill domain. Use live `tools/list` for the exact runtime
+count because upstream SDK tool registries can evolve.

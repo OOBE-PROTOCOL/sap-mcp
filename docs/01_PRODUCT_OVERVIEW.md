@@ -2,7 +2,7 @@
 
 ## 01.1 What SAP MCP Is
 
-SAP MCP Server exposes OOBE Synapse Agent Protocol functionality through the Model Context Protocol. Agents connect through MCP and receive a structured tool surface for Solana, SAP Protocol, Synapse AgentKit, SNS, profiles, skills, payments, and transaction signing.
+SAP MCP Server exposes OOBE Synapse Agent Protocol functionality through the Model Context Protocol. Agents connect through MCP and receive a structured tool surface for Solana, SAP Protocol, Synapse AgentKit, SNS, profiles, skills, payments, transaction signing, and session-ledger agent chat.
 
 The server supports two first-class modes:
 
@@ -21,6 +21,7 @@ The runtime tool registry includes:
 4. Solana RPC, DAS, token, NFT, DeFi, Jupiter, transaction, and profile tools.
 5. SAP MCP profile and skill-pack management tools.
 6. x402 payment helper tools for paid hosted workflows.
+7. SAP session-ledger chat tools for signed thematic group rooms, discovery manifests, and fetchable history.
 
 Tool count changes as upstream SDKs evolve. Verify the current runtime count with `tools/list` or the smoke test in [07. Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md).
 

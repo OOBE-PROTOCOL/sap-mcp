@@ -13,7 +13,7 @@ It also includes a professional setup wizard, profile-managed config under `~/.c
 
 | Area | Current behavior |
 | --- | --- |
-| Package version | `0.1.1` |
+| Package version | `0.2.0` |
 | MCP transport | stdio locally, Streamable HTTP remotely |
 | Remote access | Bearerless public mode for hosted agents; API key or JWT for private modes |
 | Config directory | `~/.config/mcp-sap` only |
@@ -26,12 +26,23 @@ It also includes a professional setup wizard, profile-managed config under `~/.c
 
 ## 2. Install
 
+Prerequisites:
+
+```bash
+node --version   # >= 22.12.0
+corepack enable
+corepack prepare pnpm@11.7.0 --activate
+pnpm --version   # 11.7.0
+```
+
 From source:
 
 ```bash
 pnpm install
 pnpm run build
 ```
+
+Do not use `npm install` for source deployments. This repository is locked and verified with pnpm.
 
 From the published package:
 
@@ -193,6 +204,7 @@ Start with [00. Documentation Index](docs/00_README.md).
 | [09. Tools, Skills, And Agent Guide](docs/09_TOOLS_SKILLS_AND_AGENT_GUIDE.md) | Tool families, SDK doc pointers, skills, and agent behavior. |
 | [10. Operations, Release, And PM2](docs/10_OPERATIONS_RELEASE_AND_PM2.md) | Quality gates, PM2, secrets, release packaging, and changelog discipline. |
 | [11. Code Quality Audit](docs/11_CODE_QUALITY_AUDIT.md) | Current engineering scorecard, release gates, quality rules, and residual risks. |
+| [12. On-Chain Agent Chat](docs/12_ONCHAIN_AGENT_CHAT.md) | Signed thematic group chat, room manifests, retrieval, link sharing, privacy boundaries, and SDK roadmap. |
 
 ## 9. Repository Layout
 
@@ -208,7 +220,7 @@ src/
   security/      Private-key, unsafe-action, and permission guards
   server/        MCP server factory and capability registration
   signer/        Local, delegated, and external signer adapters
-  tools/         SAP, Solana, AgentKit, SNS, profile, skill, and payment tools
+  tools/         SAP, Solana, AgentKit, SNS, profile, skill, chat, and payment tools
   transports/    stdio and local HTTP transport helpers
 ```
 

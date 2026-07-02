@@ -20,9 +20,22 @@ Remote mode exposes SAP MCP over Streamable HTTP at a hosted `/mcp` endpoint. Pu
 
 ## 05.3 Build Gates
 
+Production builds require Node.js `>=22.12.0` and pnpm `11.7.0`.
+
+```bash
+node --version
+corepack enable
+corepack prepare pnpm@11.7.0 --activate
+pnpm --version
+```
+
+Do not run `npm install` from source on the VPS. The project lockfile, overrides, and supply-chain policy are pnpm-based.
+
 Run release gates before publishing or deploying:
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm audit --audit-level moderate
 pnpm run typecheck
 pnpm run lint
 pnpm test -- --run

@@ -16,6 +16,9 @@ export { registerClientSdkTools } from './client-sdk-tools.js';
 // REAL TRANSACTION TOOLS — decode, preview, sign, and submit Solana transactions
 export { registerTransactionTools } from './transaction-tools.js';
 
+// REAL CHAT TOOLS — signed group rooms, manifests, chunked messages, history, and ciphertext transport
+export { registerChatTools } from './chat-tools.js';
+
 // REAL PROFILE TOOLS — inspect and switch loaded SAP MCP profiles without exposing keypairs
 export { registerProfileTools } from './profile-tools.js';
 

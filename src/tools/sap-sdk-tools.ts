@@ -819,7 +819,7 @@ function registerSapTool(server: Server, client: SapClient, definition: ToolRegi
     definition.name,
     {
       title: definition.title,
-      description: definition.description,
+      description: buildSapSdkToolDescription(definition),
       inputSchema: definition.inputSchema,
     },
     async (rawInput: unknown) => {
@@ -834,6 +834,49 @@ function registerSapTool(server: Server, client: SapClient, definition: ToolRegi
       }
     }
   );
+}
+
+function buildSapSdkToolDescription(definition: ToolRegistration): string {
+  return [
+    definition.description,
+    getSapSdkToolContext(definition.name),
+  ].join(' ');
+}
+
+function getSapSdkToolContext(name: string): string {
+  if (name === 'sap_register_agent') {
+    return 'SAP MCP context: This is the primary on-chain SAP agent registration tool for the connected profile signer. Use agentUri or metadataUri for off-chain metadata, including a Metaplex or DAS-backed identity document when the agent also has NFT/collection metadata. After registration, use sap_publish_tool_by_name for advertised MCP capabilities and AgentKit metaplex-nft_* tools for NFT collection, badge, or metadata workflows.';
+  }
+
+  if (name === 'sap_update_agent') {
+    return 'SAP MCP context: Use this after sap_register_agent to refresh name, description, capabilities, pricing, supported protocols, x402 endpoint, or metadataUri. For NFT-backed identity changes, update the Metaplex asset first when needed, then point the SAP agent metadataUri at the current metadata document.';
+  }
+
+  if (name.startsWith('sap_publish_tool') || name.startsWith('sap_update_tool')) {
+    return 'SAP MCP context: Use tool registry writes to advertise concrete capabilities that this MCP can serve, including AgentKit bridge tools such as bridging_bridgeWormhole and Metaplex tools such as metaplex-nft_mintNFT. Publish only schemas and descriptions that match the actual MCP tool surface.';
+  }
+
+  if (name.startsWith('sap_discover') || name.startsWith('sap_list') || name.startsWith('sap_find') || name.startsWith('sap_fetch') || name.startsWith('sap_get') || name.startsWith('sap_is')) {
+    return 'SAP MCP context: Read-only SAP SDK wrapper against the configured Solana RPC and SAP program. Use these reads to inspect current chain state before mutating registry, payment, reputation, memory, or tool accounts.';
+  }
+
+  if (name.startsWith('sap_x402') || name.includes('escrow') || name.includes('settlement') || name.includes('subscription')) {
+    return 'SAP MCP context: Payment and settlement flow. Estimate or fetch state before creating escrows or settling calls; write operations require an enabled signer mode and MCP policy approval.';
+  }
+
+  if (name.includes('feedback') || name.includes('attestation') || name.includes('fairscale') || name.includes('reputation')) {
+    return 'SAP MCP context: Reputation and trust flow. Use after verifying the target agent PDA or wallet and keep hashes/attestation metadata stable and auditable.';
+  }
+
+  if (name.includes('vault') || name.includes('session') || name.includes('memory')) {
+    return 'SAP MCP context: Memory/session flow. Store only intentionally encrypted payloads or public hashes; session and vault PDAs are visible on-chain metadata.';
+  }
+
+  if (name.includes('stake')) {
+    return 'SAP MCP context: SAP protocol staking flow. Confirm agent wallet, amount, and unstake timing before writes; this is distinct from external AgentKit staking protocol tools.';
+  }
+
+  return 'SAP MCP context: Direct synapse-sap-sdk wrapper served by this MCP. Read tools return on-chain state; write tools require signer policy, configured RPC, and the active SAP profile.';
 }
 
 const agentTools: ToolRegistration[] = [

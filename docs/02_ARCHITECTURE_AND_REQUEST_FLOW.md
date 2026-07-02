@@ -28,7 +28,7 @@ Solana / SAP Protocol / SNS / AgentKit
 | `src/server/` | MCP server factory and capability registration. |
 | `src/transports/` | stdio and local HTTP transport helpers. |
 | `src/remote/` | Streamable HTTP MCP server. Supports bearerless public mode plus API key/JWT private modes. |
-| `src/tools/` | SAP, Solana, AgentKit, SNS, transaction, profile, skill, and payment tool registration. |
+| `src/tools/` | SAP, Solana, AgentKit, SNS, transaction, profile, skill, chat, and payment tool registration. |
 | `src/config/` | Runtime config, secure config manager, profile manager, wizard pipeline, and client injection. |
 | `src/policy/` | Local policy, Bento policy, hybrid policy, spending limits, and risk evaluation. |
 | `src/security/` | Private-key guard, unsafe action guard, approval requirements, and tool permission maps. |

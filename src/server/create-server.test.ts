@@ -6,10 +6,11 @@ import { Keypair, SystemProgram, Transaction } from '@solana/web3.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createSapMcpServer } from './create-server.js';
 import type { SapMcpConfig } from '../core/types.js';
-import { getPermissionMappedTools } from '../security/tool-permissions.js';
+import { getPermissionMappedTools, getRequiredPermission } from '../security/tool-permissions.js';
 
 interface ToolDefinitionForTest {
   name: string;
+  description?: string;
 }
 
 interface ToolResponseForTest {
@@ -51,7 +52,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(240);
+    expect(names).toHaveLength(248);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -59,6 +60,19 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('jupiter_swap');
     expect(names).toContain('jupiter_swapInstructions');
     expect(names).toContain('jupiter_smartSwap');
+    expect(names).toContain('bridging_bridgeWormhole');
+    expect(names).toContain('bridging_bridgeWormholeStatus');
+    expect(names).toContain('bridging_bridgeDeBridge');
+    expect(names).toContain('bridging_bridgeDeBridgeStatus');
+    expect(names).toContain('metaplex-nft_deployCollection');
+    expect(names).toContain('metaplex-nft_mintNFT');
+    expect(names).toContain('metaplex-nft_updateMetadata');
+    expect(names).toContain('metaplex-nft_verifyCreator');
+    expect(names).toContain('metaplex-nft_verifyCollection');
+    expect(names).toContain('metaplex-nft_setAndVerifyCollection');
+    expect(names).toContain('metaplex-nft_delegateAuthority');
+    expect(names).toContain('metaplex-nft_revokeAuthority');
+    expect(names).toContain('metaplex-nft_configureRoyalties');
     expect(names).toContain('sap_get_network_overview');
     expect(names).toContain('sap_discover_agents');
     expect(names).toContain('sap_list_all_agents');
@@ -81,6 +95,37 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_x402_build_headers_from_escrow');
     expect(names).toContain('sap_x402_fetch_escrow');
     expect(names).toContain('sap_x402_settle_batch');
+    expect(names).toContain('sap_chat_derive_room');
+    expect(names).toContain('sap_chat_start_room');
+    expect(names).toContain('sap_chat_send_message');
+    expect(names).toContain('sap_chat_publish_manifest');
+    expect(names).toContain('sap_chat_read_latest');
+    expect(names).toContain('sap_chat_read_all');
+    expect(names).toContain('sap_chat_status');
+    expect(names).toContain('sap_chat_seal_room');
+  });
+
+  it('adds SAP usage context to bridge, Metaplex, and agent registry tools', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+
+    expect(toolsByName.get('bridging_bridgeWormhole')?.description).toContain('SAP MCP context');
+    expect(toolsByName.get('bridging_bridgeWormhole')?.description).toContain('cross-chain asset movement');
+    expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('SAP MCP context');
+    expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('sap_register_agent');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('primary on-chain SAP agent registration');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('metaplex-nft_*');
+  });
+
+  it('maps bridge and Metaplex AgentKit writes to transaction permissions', async () => {
+    await createSapMcpServer(baseConfig());
+
+    expect(getRequiredPermission('bridging_bridgeWormholeStatus')).toBe('registry:read');
+    expect(getRequiredPermission('bridging_bridgeDeBridgeStatus')).toBe('registry:read');
+    expect(getRequiredPermission('bridging_bridgeWormhole')).toBe('transaction:submit');
+    expect(getRequiredPermission('bridging_bridgeDeBridge')).toBe('transaction:submit');
+    expect(getRequiredPermission('metaplex-nft_mintNFT')).toBe('transaction:submit');
+    expect(getRequiredPermission('metaplex-nft_updateMetadata')).toBe('transaction:submit');
   });
 
   it('keeps explicit permission mappings aligned with registered tools', async () => {

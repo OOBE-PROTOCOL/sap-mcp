@@ -34,6 +34,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | --- | --- |
 | `sap-mcp` | MCP setup, profile inspection, wizard/CLI usage, safe signing rules |
 | `sap-operations` | SAP registry, memory, reputation, x402, escrow, settlement, staking |
+| `sap-agent-chat` | Signed thematic group rooms, manifest discovery, link sharing, ledger history, sealing |
 | `sap-sns` | SNS domain checks, records, wallet resolution, agent domain registration |
 | `sap-agentkit` | Synapse AgentKit Solana, NFT, DeFi, market, staking, gaming, social tools |
 | `sap-agent-registry` | Agent registration, profile inspection, activation, global agent directory |

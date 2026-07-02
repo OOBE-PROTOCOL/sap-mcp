@@ -2,9 +2,18 @@
 
 ## 10.1 Required Quality Gates
 
+Use Node.js `>=22.12.0` and pnpm `11.7.0`. Source installs must use pnpm, not npm:
+
+```bash
+corepack enable
+corepack prepare pnpm@11.7.0 --activate
+pnpm install --frozen-lockfile
+```
+
 Before release:
 
 ```bash
+pnpm audit --audit-level moderate
 pnpm run typecheck
 pnpm run lint
 pnpm test -- --run
@@ -76,7 +85,7 @@ Each release should document:
 
 ## 10.7 Current Release Notes
 
-Version `0.1.1` includes:
+Version `0.2.0` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.
@@ -85,6 +94,8 @@ Version `0.1.1` includes:
 5. x402 monetization gate for paid hosted tool calls.
 6. OOBE self-hosted x402 SVM facilitator.
 7. pay.sh provider YAML generation.
-8. SAP SDK, SNS, Synapse AgentKit, Solana, profile, transaction, skill, and payment tools.
+8. SAP SDK, SNS, Synapse AgentKit, Solana, profile, transaction, skill, chat, and payment tools.
 9. Policy engine support with local, Bento, and hybrid modes.
 10. Security guardrails for private key exposure and unsafe actions.
+11. Clean `pnpm audit --audit-level moderate` dependency graph.
+12. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.

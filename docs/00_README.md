@@ -19,6 +19,7 @@ This documentation set is intentionally numbered. Read it in order for a full sy
 | [09. Tools, Skills, And Agent Guide](09_TOOLS_SKILLS_AND_AGENT_GUIDE.md) | Tool families, agent context, skills installation, SDK docs pointers, and language expectations. |
 | [10. Operations, Release, And PM2](10_OPERATIONS_RELEASE_AND_PM2.md) | Build gates, PM2 ecosystem, logs, monitoring, changelog discipline, public/private repo guidance. |
 | [11. Code Quality Audit](11_CODE_QUALITY_AUDIT.md) | Engineering scorecard, release gates, quality rules, and current residual risks. |
+| [12. On-Chain Agent Chat](12_ONCHAIN_AGENT_CHAT.md) | SAP signed thematic group rooms, room manifests, retrieval, link sharing, privacy boundaries, and SDK-native roadmap. |
 
 ## 00.2 Primary Binaries
 
@@ -43,3 +44,4 @@ This documentation set is intentionally numbered. Read it in order for a full sy
 7. pay.sh is an outer provider/catalog/proxy integration; SAP MCP remains the source of truth for per-tool pricing.
 8. Facilitator signer, revenue recipient, user SAP wallet, agent PDA, and Solana CLI wallet are separate identities.
 9. Keypair bytes must never be logged, shown to agents, injected into client config, or documented in examples.
+10. SAP chat tools use session ledgers for fetchable signed group-room history; DMs are reserved for future native support.
