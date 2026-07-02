@@ -78,6 +78,11 @@ function parsePaymentRequirements(responseBody: unknown): ParsedPaymentInfo | nu
     }
   }
 
+  // Fallback: direct requirements object (has scheme + amount + asset + payTo)
+  if (!requirements && body.scheme && body.amount && body.asset && body.payTo) {
+    requirements = body as unknown as PaymentRequirements;
+  }
+
   if (!requirements || !requirements.amount || !requirements.asset || !requirements.payTo) {
     return null;
   }
