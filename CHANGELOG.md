@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.2.1 - 2026-07-02
+## 0.3.0 - 2026-07-02
 
 ### Fixed
 
@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file.
 - Added a public bento-grid landing page for `/` and browser previews of `/mcp`, including aggregate facilitator volume, settlement counts, wizard install commands, endpoint guidance, and x402/pay.sh payment explanation.
 - Updated SAP MCP skills, prompts, and user docs to consistently reference the canonical hosted endpoint, public metadata routes, x402 fast path, and user-controlled signing boundary.
 - Clarified hosted non-custodial signing context so agents treat `signerConfigured: false` on the remote server as expected and do not silently fall back to local stdio to bypass x402.
+- Clarified CLI and TUI wizard mode selection so `hosted-api` is visibly the OOBE SAP MCP Server at `https://mcp.sap.oobeprotocol.ai/mcp`, not a prompt to run a local HTTP server.
 
 ### Verification
 

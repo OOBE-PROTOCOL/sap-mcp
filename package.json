@@ -1,6 +1,6 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
   "main": "dist/index.js",

@@ -349,15 +349,17 @@ function ModeStep({ onSelect }: { onSelect: (mode: string) => void }) {
     { label: 'Local Dev Keypair - dedicated profile wallet', value: 'local-dev-keypair', hint: 'Development with wallet file' },
     { label: 'Delegated Session - session-scoped with limits', value: 'delegated-session', hint: 'Session-based with limits' },
     { label: 'External Signer - Ledger, Fireblocks, or signing proxy', value: 'external-signer', hint: 'Ledger, Fireblocks, etc.' },
-    { label: 'Hosted API - remote Streamable HTTP server', value: 'hosted-api', hint: 'HTTP API for remote clients' },
+    { label: 'Hosted SAP MCP Server - mcp.sap.oobeprotocol.ai', value: 'hosted-api', hint: 'OOBE hosted MCP, user-controlled signing' },
   ];
   
   return (
     <Box flexDirection="column" alignItems="center" marginTop={3}>
       <StepProgress current={2} total={8} />
       <Box marginTop={1}>
-        <Panel title="Server Mode">
-          <Text color="white">Choose the trust model for reads and signing</Text>
+        <Panel title="Connection & Signing Mode">
+          <Text color="white">Choose where SAP MCP runs and who controls signatures</Text>
+          <Text color="cyan">Hosted SAP MCP Server: https://mcp.sap.oobeprotocol.ai/mcp</Text>
+          <Text color="gray">Hosted mode connects agents remotely while wallet/payment signatures stay local or external.</Text>
         </Panel>
       </Box>
       <Box marginTop={1}>

@@ -681,15 +681,20 @@ async function wizardProfile(): Promise<string> {
 async function wizardMode(): Promise<SapMcpMode> {
   clearConsole();
   printSapLogo();
-  printHeader('Step 2: Server Mode', 'How will the MCP server run?');
+  printHeader('Step 2: Connection & Signing Mode', 'Where should this SAP MCP profile operate?');
   
-  printLead('Choose the trust model for this profile. This controls whether SAP MCP can only read data, prepare transactions, or request signatures.');
+  printLead('Choose how your agent will use SAP MCP. For the hosted OOBE server, select hosted-api: it connects clients to https://mcp.sap.oobeprotocol.ai/mcp while signatures remain user-controlled.');
   console.log('');
   printLabel('Mode guidance');
   printBullet('Choose readonly if the agent only needs discovery, analytics, profile context, or registry reads.');
   printBullet('Choose external-signer for production signing, hardware wallets, custody systems, or the local signing proxy.');
   printBullet('Choose local-dev-keypair only when this machine should hold the dedicated SAP MCP wallet file.');
-  printBullet('Choose hosted-api when this profile will connect to the OOBE hosted remote MCP endpoint.');
+  printBullet('Choose hosted-api for the public SAP MCP Server at https://mcp.sap.oobeprotocol.ai/mcp. This does not start a server on your machine.');
+  console.log('');
+  printLabel('SAP MCP Hosted Server');
+  printField('URL', paint('https://mcp.sap.oobeprotocol.ai/mcp', 'aqua'));
+  printField('Use case', 'Claude, Hermes, OpenClaw, Codex, or agents connecting to OOBE hosted MCP');
+  printField('Signing', 'Your local profile wallet or external signer; OOBE never receives keypair bytes');
   console.log('');
   printControlHints();
   console.log('');
@@ -699,14 +704,14 @@ async function wizardMode(): Promise<SapMcpMode> {
     `${paint('local-dev-keypair', 'aqua', 'bold')} ${paint('[local wallet]', 'yellow')} - Signs with this profile's dedicated keypair file.`,
     `${paint('external-signer', 'aqua', 'bold')} ${paint('[production]', 'green')} - Sends signing requests to Ledger, Fireblocks, or signing proxy.`,
     `${paint('delegated-session', 'aqua', 'bold')} ${paint('[limited session]', 'blue')} - Uses session-scoped permissions and spending limits.`,
-    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[OOBE hosted remote]', 'green')} - Connects agents to https://mcp.sap.oobeprotocol.ai/mcp.`,
+    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[SAP MCP SERVER]', 'green', 'bold')} - Use OOBE hosted MCP at https://mcp.sap.oobeprotocol.ai/mcp.`,
   ];
   
   const index = await askChoice(paint('Select operating mode:', 'aqua', 'bold'), choices, 0, [
     'readonly is recommended when you only need discovery and read tools.',
     'local-dev-keypair signs with the dedicated profile wallet, never Solana CLI id.json.',
     'external-signer is preferred for production signing.',
-    'hosted-api creates a local signer/profile for the OOBE hosted MCP endpoint; it does not start a local HTTP server.',
+    'hosted-api is the OOBE SAP MCP Server path: clients connect to mcp.sap.oobeprotocol.ai while your local profile or external signer authorizes payments and transactions.',
   ]);
   
   const modes: SapMcpMode[] = ['readonly', 'local-dev-keypair', 'external-signer', 'delegated-session', 'hosted-api'];
