@@ -528,17 +528,31 @@ export class RemoteMCPServer {
   }
 }
 
-if (process.argv[1]?.endsWith('server.js') || process.argv[1]?.endsWith('server.ts')) {
-  const server = new RemoteMCPServer();
-  server.start().catch((error: unknown) => {
-    logger.error('Failed to start remote MCP server', { error });
-    process.exit(1);
+/**
+ * @name startRemoteMcpServerProcess
+ * @description Starts the remote MCP HTTP server and installs process signal handlers for CLI/PM2 execution.
+ */
+export async function startRemoteMcpServerProcess(): Promise<void> {
+  initLogger({
+    level: process.env.SAP_MCP_LOG_LEVEL === 'debug' ? 'debug' : 'info',
+    format: process.env.SAP_MCP_LOG_FORMAT === 'json' ? 'json' : 'pretty',
   });
+
+  const server = new RemoteMCPServer();
 
   process.on('SIGINT', () => {
     void server.stop().then(() => process.exit(0));
   });
   process.on('SIGTERM', () => {
     void server.stop().then(() => process.exit(0));
+  });
+
+  await server.start();
+}
+
+if (process.argv[1]?.endsWith('server.js') || process.argv[1]?.endsWith('server.ts')) {
+  startRemoteMcpServerProcess().catch((error: unknown) => {
+    logger.error('Failed to start remote MCP server', { error });
+    process.exit(1);
   });
 }

@@ -43,6 +43,29 @@ const modeSchema = z.enum([
 const commitmentSchema = z.enum(['processed', 'confirmed', 'finalized']);
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 const monetizationProviderSchema = z.enum(['x402', 'pay-sh']);
+const booleanEnvSchema = z.preprocess((value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) {
+      return true;
+    }
+    if (value === 0) {
+      return false;
+    }
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', 'n', 'off'].includes(normalized)) {
+      return false;
+    }
+  }
+  return value;
+}, z.boolean());
 
 /**
  * Zod schema for environment-driven configuration.
@@ -51,7 +74,7 @@ export const envSchema = z.object({
   // Profile/config pointer. Prefer this in MCP client YAML instead of duplicating RPC/wallet values.
   SAP_MCP_PROFILE: z.string().optional(),
   SAP_MCP_CONFIG_PATH: z.string().optional(),
-  SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: z.coerce.boolean().default(false),
+  SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: booleanEnvSchema.default(false),
 
   // Server Mode
   SAP_MCP_MODE: modeSchema.default('readonly'),
@@ -72,7 +95,7 @@ export const envSchema = z.object({
   
   // Signer Configuration
   SAP_WALLET_PATH: z.string().optional(),
-  SAP_WALLET_ENCRYPTED: z.coerce.boolean().default(false),
+  SAP_WALLET_ENCRYPTED: booleanEnvSchema.default(false),
   SAP_WALLET_PASSPHRASE_ENV: z.string().optional(),
   
   // External Signer (for external-signer mode)
@@ -80,7 +103,7 @@ export const envSchema = z.object({
   SAP_EXTERNAL_SIGNER_TIMEOUT_MS: z.coerce.number().positive().default(30000),
   
   // HTTP Transport (for hosted-api mode)
-  SAP_ENABLE_HTTP: z.coerce.boolean().default(false),
+  SAP_ENABLE_HTTP: booleanEnvSchema.default(false),
   SAP_HTTP_PORT: z.coerce.number().positive().default(8787),
   SAP_HTTP_HOST: z.string().default('127.0.0.1'),
   SAP_HTTP_CORS_ORIGINS: z.string().optional(), // comma-separated
@@ -95,17 +118,17 @@ export const envSchema = z.object({
   SAP_LOG_LEVEL: logLevelSchema.default('info'),
   SAP_LOG_FORMAT: z.enum(['json', 'pretty']).default('pretty'),
   SAP_LOG_FILE: z.string().optional(),
-  SAP_ENABLE_METRICS: z.coerce.boolean().default(false),
+  SAP_ENABLE_METRICS: booleanEnvSchema.default(false),
   SAP_METRICS_PORT: z.coerce.number().positive().default(9090),
   
   // Advanced
-  SAP_ENABLE_CACHE: z.coerce.boolean().default(true),
+  SAP_ENABLE_CACHE: booleanEnvSchema.default(true),
   SAP_CACHE_TTL_SECONDS: z.coerce.number().positive().default(300),
-  SAP_ENABLE_RATE_LIMIT: z.coerce.boolean().default(true),
+  SAP_ENABLE_RATE_LIMIT: booleanEnvSchema.default(true),
   SAP_RATE_LIMIT_PER_MINUTE: z.coerce.number().positive().default(60),
 
   // Remote MCP monetization. Applies only when explicitly enabled by hosted HTTP deployments.
-  SAP_MCP_MONETIZATION_ENABLED: z.coerce.boolean().default(false),
+  SAP_MCP_MONETIZATION_ENABLED: booleanEnvSchema.default(false),
   SAP_MCP_MONETIZATION_PROVIDER: monetizationProviderSchema.default('x402'),
   SAP_MCP_MONETIZATION_PAY_TO: z.string().optional(),
   SAP_MCP_MONETIZATION_NETWORK: z.string().optional(),

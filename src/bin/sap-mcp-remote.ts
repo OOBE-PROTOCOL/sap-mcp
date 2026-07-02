@@ -6,4 +6,5 @@
 import { installPackageNodePath } from '../runtime/module-resolution.js';
 
 installPackageNodePath(import.meta.url);
-await import('../remote/server.js');
+const { startRemoteMcpServerProcess } = await import('../remote/server.js');
+await startRemoteMcpServerProcess();

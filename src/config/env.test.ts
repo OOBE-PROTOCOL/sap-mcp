@@ -125,4 +125,28 @@ describe('loadConfig profile precedence', () => {
       rmSync(configHome, { recursive: true, force: true });
     }
   });
+
+  it('parses string boolean environment values explicitly', () => {
+    const configHome = mkdtempSync(join(tmpdir(), 'sap-mcp-config-'));
+
+    try {
+      process.env.XDG_CONFIG_HOME = configHome;
+      process.env.SAP_MCP_CONFIG_PATH = join(configHome, 'mcp-sap', 'hosted.json');
+      process.env.SAP_MCP_MODE = 'hosted-api';
+      process.env.SAP_MCP_RPC_URL = 'https://api.devnet.solana.com';
+      process.env.SAP_ENABLE_HTTP = 'true';
+      process.env.SAP_ENABLE_CACHE = 'false';
+      process.env.SAP_ENABLE_RATE_LIMIT = 'false';
+      process.env.SAP_MCP_MONETIZATION_ENABLED = 'false';
+
+      const config = loadConfig();
+
+      expect(config.enableHttp).toBe(true);
+      expect(config.enableCache).toBe(false);
+      expect(config.enableRateLimit).toBe(false);
+      expect(config.monetization.enabled).toBe(false);
+    } finally {
+      rmSync(configHome, { recursive: true, force: true });
+    }
+  });
 });
