@@ -11,11 +11,16 @@ https://mcp.sap.oobeprotocol.ai/mcp
 Discovery endpoints:
 
 ```txt
+https://mcp.sap.oobeprotocol.ai/
+https://mcp.sap.oobeprotocol.ai/server.json
 https://mcp.sap.oobeprotocol.ai/health
 https://mcp.sap.oobeprotocol.ai/.well-known/agent-card.json
 https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json
 https://mcp.sap.oobeprotocol.ai/wizard/install.sh
+https://mcp.sap.oobeprotocol.ai/favicon.png
 ```
+
+The root page is safe to share publicly. It exposes professional metadata, favicon/social preview tags, and public endpoint information only. It must never expose RPC API keys, keypair paths, private VPS paths, or signer material.
 
 ## 2. Why Hosted Users Still Need The Wizard
 
@@ -28,6 +33,8 @@ Hosted MCP executes tools remotely, but the user's wallet and signer should rema
 - local context for agents that need to sign x402/pay.sh payloads or Solana transactions.
 
 The hosted server does not expose or store keypair bytes.
+
+Read-only discovery can connect directly to the hosted MCP URL. Any agent that needs to sign x402/pay.sh payloads, SAP transactions, Solana transactions, SNS operations, or settlement actions should run the wizard first so the signer remains user-controlled.
 
 ## 3. Install And Configure
 

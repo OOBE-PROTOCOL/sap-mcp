@@ -5,7 +5,10 @@
  */
 
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
 import * as http from 'http';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
@@ -14,6 +17,11 @@ import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
 import { McpMonetizationGate } from '../payments/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
+
+const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
+const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
+const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
+let logoAssetCache: Buffer | undefined;
 
 /**
  * @name RemoteMCPConfig
@@ -91,6 +99,56 @@ export interface WizardInstallDescriptor {
     keypairBytesExposed: false;
     modifiesSolanaCliKeypair: false;
     signerLocation: 'user-machine-or-external-signer';
+  };
+}
+
+/**
+ * @name PublicServerInfo
+ * @description Public, secret-free metadata for the hosted SAP MCP deployment.
+ */
+export interface PublicServerInfo {
+  name: 'sap-mcp-server';
+  title: string;
+  description: string;
+  version: string;
+  status: 'online';
+  protocol: {
+    primary: 'mcp';
+    transport: 'streamable-http';
+    protocolVersion: '2025-06-18';
+  };
+  endpoints: {
+    landing: string;
+    mcp: string;
+    health: string;
+    serverInfo: string;
+    agentCard: string;
+    wizardDescriptor: string;
+    wizardInstallScript: string;
+    favicon: string;
+  };
+  capabilities: {
+    tools: boolean;
+    resources: boolean;
+    prompts: boolean;
+    streaming: boolean;
+    payments: readonly ['x402', 'pay.sh'];
+    userControlledSigning: true;
+  };
+  authentication: {
+    schemes: readonly ('Bearer' | 'x402' | 'none')[];
+    bearerRequired: boolean;
+  };
+  security: {
+    keypairBytesExposed: false;
+    storesUserKeypairs: false;
+    rpcSecretsExposed: false;
+    wizardConfigDirectory: '~/.config/mcp-sap';
+  };
+  docs: {
+    npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server';
+    github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
+    userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
   };
 }
 
@@ -195,6 +253,43 @@ function writeJson(
 }
 
 /**
+ * @name writeHtml
+ * @description Writes a cacheable HTML response for public endpoint previews and social sharing.
+ */
+function writeHtml(res: http.ServerResponse, status: number, html: string): void {
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(html);
+}
+
+/**
+ * @name writePngAsset
+ * @description Writes the bundled SAP logo as a public icon/social image asset.
+ */
+function writePngAsset(res: http.ServerResponse): void {
+  const image = readLogoAsset();
+  res.writeHead(200, {
+    'Content-Type': 'image/png',
+    'Cache-Control': 'public, max-age=86400',
+    'Content-Length': image.byteLength,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(image);
+}
+
+/**
+ * @name readLogoAsset
+ * @description Loads the bundled public logo once and reuses it for favicon and social preview routes.
+ */
+function readLogoAsset(): Buffer {
+  logoAssetCache ??= readFileSync(LOGO_ASSET_PATH);
+  return logoAssetCache;
+}
+
+/**
  * @name getRateLimitKey
  * @description Resolves the best available caller identity for hosted MCP rate limiting behind a reverse proxy.
  */
@@ -222,6 +317,192 @@ function buildPublicBaseUrl(req: http.IncomingMessage, config: RemoteMCPConfig):
   const forwardedProto = req.headers['x-forwarded-proto'];
   const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto || 'http';
   return `${proto}://${host}`;
+}
+
+/**
+ * @name buildPublicServerInfo
+ * @description Builds secret-free public metadata for humans, crawlers, and agent discovery.
+ */
+export function buildPublicServerInfo(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+): PublicServerInfo {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  const authRequired = config.auth.type !== 'none';
+  return {
+    name: 'sap-mcp-server',
+    title: PUBLIC_SERVER_TITLE,
+    description: PUBLIC_SERVER_DESCRIPTION,
+    version: MCP_SERVER_VERSION,
+    status: 'online',
+    protocol: {
+      primary: 'mcp',
+      transport: 'streamable-http',
+      protocolVersion: '2025-06-18',
+    },
+    endpoints: {
+      landing: `${baseUrl}/`,
+      mcp: `${baseUrl}/mcp`,
+      health: `${baseUrl}/health`,
+      serverInfo: `${baseUrl}/server.json`,
+      agentCard: `${baseUrl}/.well-known/agent-card.json`,
+      wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
+      wizardInstallScript: `${baseUrl}/wizard/install.sh`,
+      favicon: `${baseUrl}/favicon.png`,
+    },
+    capabilities: {
+      tools: true,
+      resources: true,
+      prompts: true,
+      streaming: true,
+      payments: ['x402', 'pay.sh'],
+      userControlledSigning: true,
+    },
+    authentication: {
+      schemes: authRequired ? ['Bearer'] : ['none', 'x402'],
+      bearerRequired: authRequired,
+    },
+    security: {
+      keypairBytesExposed: false,
+      storesUserKeypairs: false,
+      rpcSecretsExposed: false,
+      wizardConfigDirectory: '~/.config/mcp-sap',
+    },
+    docs: {
+      npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server',
+      github: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
+      userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS',
+    },
+  };
+}
+
+/**
+ * @name buildLandingHtml
+ * @description Builds professional public HTML metadata for root and `/mcp` URL previews.
+ */
+export function buildLandingHtml(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+  endpoint: 'root' | 'mcp' = 'root',
+): string {
+  const info = buildPublicServerInfo(req, config);
+  const pageUrl = endpoint === 'mcp' ? info.endpoints.mcp : info.endpoints.landing;
+  const title = endpoint === 'mcp'
+    ? 'SAP MCP Streamable HTTP Endpoint | OOBE Protocol'
+    : info.title;
+  const endpointLabel = endpoint === 'mcp' ? 'Streamable HTTP MCP endpoint' : 'Hosted MCP gateway';
+  const publicInfo = JSON.stringify(info, null, 2).replace(/</g, '\\u003c');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(info.description)}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="${escapeHtml(pageUrl)}">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="shortcut icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${escapeHtml(title)}">
+  <meta property="og:description" content="${escapeHtml(info.description)}">
+  <meta property="og:url" content="${escapeHtml(pageUrl)}">
+  <meta property="og:image" content="${escapeHtml(info.endpoints.favicon)}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
+  <meta name="twitter:description" content="${escapeHtml(info.description)}">
+  <meta name="twitter:image" content="${escapeHtml(info.endpoints.favicon)}">
+  <script type="application/ld+json">${publicInfo}</script>
+  <style>
+    :root { color-scheme: dark; --aqua: #28d8e8; --ink: #f4fbff; --muted: #9db7c0; --panel: rgba(255,255,255,.055); --line: rgba(255,255,255,.14); }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: radial-gradient(circle at 20% 10%, rgba(40,216,232,.24), transparent 32rem), #080d12; }
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0; }
+    header { display: grid; grid-template-columns: 88px 1fr; gap: 22px; align-items: center; margin-bottom: 34px; }
+    img { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 18px 70px rgba(40,216,232,.22); }
+    h1 { margin: 0; font-size: clamp(2rem, 4vw, 4rem); line-height: 1; letter-spacing: 0; }
+    p { margin: 10px 0 0; color: var(--muted); max-width: 760px; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; color: var(--aqua); font-weight: 700; text-transform: uppercase; font-size: .78rem; letter-spacing: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 28px; }
+    section, a.card { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 18px; text-decoration: none; color: inherit; }
+    h2 { margin: 0 0 12px; font-size: 1rem; color: var(--aqua); }
+    code { color: #dffbff; overflow-wrap: anywhere; }
+    ul { padding-left: 18px; margin: 0; color: var(--muted); }
+    li + li { margin-top: 8px; }
+    a { color: var(--aqua); }
+    .footer { margin-top: 26px; color: var(--muted); font-size: .94rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="/favicon.png" alt="SAP MCP logo">
+      <div>
+        <span class="badge">OOBE Protocol • ${escapeHtml(endpointLabel)}</span>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(info.description)}</p>
+      </div>
+    </header>
+    <div class="grid">
+      <section>
+        <h2>Public Endpoints</h2>
+        <ul>
+          <li>MCP: <code>${escapeHtml(info.endpoints.mcp)}</code></li>
+          <li>Health: <code>${escapeHtml(info.endpoints.health)}</code></li>
+          <li>Server info: <code>${escapeHtml(info.endpoints.serverInfo)}</code></li>
+          <li>Agent card: <code>${escapeHtml(info.endpoints.agentCard)}</code></li>
+        </ul>
+      </section>
+      <section>
+        <h2>Capabilities</h2>
+        <ul>
+          <li>Native MCP tools, resources, and prompts</li>
+          <li>x402 and pay.sh monetization flows</li>
+          <li>User-controlled signing through local profile or external signer</li>
+          <li>Wizard config under <code>~/.config/mcp-sap</code></li>
+        </ul>
+      </section>
+      <section>
+        <h2>Security</h2>
+        <ul>
+          <li>Keypair bytes are never exposed by public endpoints.</li>
+          <li>Hosted server metadata does not print private RPC query secrets.</li>
+          <li>Paid tools return 402 payment instructions before execution.</li>
+        </ul>
+      </section>
+      <section>
+        <h2>Install Wizard</h2>
+        <p><code>npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard</code></p>
+      </section>
+    </div>
+    <p class="footer">Use <a href="/server.json">/server.json</a> for machine-readable public metadata. MCP clients should connect to <a href="/mcp">/mcp</a> with <code>Accept: application/json, text/event-stream</code>.</p>
+  </main>
+</body>
+</html>`;
+}
+
+/**
+ * @name acceptsHtmlPreview
+ * @description Returns true for browser-style GET previews without interfering with MCP SSE clients.
+ */
+function acceptsHtmlPreview(req: http.IncomingMessage): boolean {
+  const accept = String(req.headers.accept ?? '');
+  return accept.includes('text/html') && !accept.includes('text/event-stream') && !accept.includes('application/json');
+}
+
+/**
+ * @name escapeHtml
+ * @description Escapes dynamic strings before embedding them in public HTML metadata.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -417,6 +698,23 @@ export class RemoteMCPServer {
 
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
+      if (req.method === 'GET' && url.pathname === '/') {
+        writeHtml(res, 200, buildLandingHtml(req, this.config));
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/server.json') {
+        writeJson(res, 200, buildPublicServerInfo(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && ['/favicon.png', '/favicon.ico', '/apple-touch-icon.png', '/og.png'].includes(url.pathname)) {
+        writePngAsset(res);
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/health') {
         writeJson(res, 200, {
           status: 'ok',
@@ -443,6 +741,11 @@ export class RemoteMCPServer {
           'Cache-Control': 'public, max-age=300',
         });
         res.end(buildWizardInstallScript(req, this.config));
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/mcp' && acceptsHtmlPreview(req)) {
+        writeHtml(res, 200, buildLandingHtml(req, this.config, 'mcp'));
         return;
       }
 

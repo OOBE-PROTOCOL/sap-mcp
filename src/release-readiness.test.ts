@@ -24,6 +24,7 @@ describe('release readiness documentation and package surface', () => {
     expect(packageJson.bin['sap-mcp-pay-sh-spec']).toBe('dist/payments/pay-sh-spec.js');
     expect(packageJson.files).toEqual(expect.arrayContaining([
       'dist',
+      'assets',
       'docs',
       'skills',
       'README.md',

@@ -115,6 +115,9 @@ Production environment values should come from a private secret store or private
 Remote endpoints:
 
 ```text
+GET     /
+GET     /server.json
+GET     /favicon.png
 GET     /health
 GET     /.well-known/agent-card.json
 GET     /.well-known/sap-mcp-wizard.json
@@ -123,6 +126,8 @@ POST    /mcp
 GET     /mcp
 DELETE  /mcp
 ```
+
+`GET /` is a public, share-safe landing page with Open Graph/Twitter metadata. It exposes only public server information; keypair bytes, private wallet paths, RPC query secrets, and VPS-local paths must never appear there.
 
 See [05. Remote VPS Deployment](docs/05_REMOTE_VPS_DEPLOYMENT.md) and [07. Endpoints And Clients](docs/07_ENDPOINTS_AND_CLIENTS.md).
 

@@ -4,13 +4,18 @@
 
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
+| `GET` | `/` | Public landing page with share metadata and safe endpoint information. | Public. |
+| `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
+| `GET` | `/favicon.png` | SAP MCP favicon/social preview asset. | Public. |
 | `GET` | `/health` | Health check. | No, unless reverse proxy requires it. |
 | `GET` | `/.well-known/agent-card.json` | A2A-compatible discovery card. | Usually public. |
 | `GET` | `/.well-known/sap-mcp-wizard.json` | Machine-readable wizard install metadata for agents that cannot see local config. | Public. |
 | `GET` | `/wizard/install.sh` | Small shell launcher that runs the npm-hosted SAP MCP wizard. | Public. |
 | `POST` | `/mcp` | MCP JSON-RPC requests. | Public in `SAP_MCP_AUTH_TYPE=none`; Bearer in private modes. Paid tools require x402. |
-| `GET` | `/mcp` | Streamable HTTP session stream. | Same as `POST /mcp`. |
+| `GET` | `/mcp` | Streamable HTTP session stream. Browser-style `Accept: text/html` receives a public preview page instead. | Same as `POST /mcp`. |
 | `DELETE` | `/mcp` | Streamable HTTP session cleanup. | Same as `POST /mcp`. |
+
+The public HTML and JSON endpoints must remain secret-free. Do not expose RPC query parameters, private VPS paths, keypair file paths, bearer tokens, facilitator auth tokens, or wallet bytes through these routes.
 
 ## 07.2 Facilitator Endpoints
 

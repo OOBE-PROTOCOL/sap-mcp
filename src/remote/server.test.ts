@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { SapMcpConfig } from '../config/env.js';
 import {
   buildA2AAgentCard,
+  buildLandingHtml,
+  buildPublicServerInfo,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
   defaultRemoteConfig,
@@ -177,5 +179,54 @@ describe('remote MCP server config', () => {
     expect(script).toContain('Node.js 18+ is required');
     expect(script).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');
     expect(script).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
+  });
+
+  it('publishes share-safe public server metadata without runtime secrets', () => {
+    const info = buildPublicServerInfo(
+      { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage,
+      {
+        port: 8787,
+        host: '127.0.0.1',
+        auth: { type: 'none' },
+        stateless: true,
+        rateLimit: {
+          enabled: true,
+          requestsPerMinute: 60,
+          keyPrefix: 'test:',
+        },
+      },
+    );
+
+    expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
+    expect(info.security.keypairBytesExposed).toBe(false);
+    expect(info.security.rpcSecretsExposed).toBe(false);
+    expect(JSON.stringify(info)).not.toContain('api_key=');
+    expect(JSON.stringify(info)).not.toContain('/Users/keepeeto');
+  });
+
+  it('renders professional Open Graph metadata for root and MCP URL previews', () => {
+    const config = {
+      port: 8787,
+      host: '127.0.0.1',
+      auth: { type: 'none' as const },
+      stateless: true,
+      rateLimit: {
+        enabled: true,
+        requestsPerMinute: 60,
+        keyPrefix: 'test:',
+      },
+    };
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+
+    const root = buildLandingHtml(req, config);
+    const mcp = buildLandingHtml(req, config, 'mcp');
+
+    expect(root).toContain('<meta property="og:title" content="SAP MCP Server | OOBE Protocol">');
+    expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
+    expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
+    expect(mcp).toContain('SAP MCP Streamable HTTP Endpoint | OOBE Protocol');
+    expect(mcp).toContain('Accept: application/json, text/event-stream');
   });
 });
