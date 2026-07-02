@@ -35,4 +35,26 @@ describe('wizard setup validation', () => {
 
     expect(config.walletPath).toBe(join(homedir(), 'sap-agent.json'));
   });
+
+  it('keeps hosted user profiles on remote MCP without enabling a local HTTP server', () => {
+    const config = buildWizardConfig(wizardInput({
+      mode: 'hosted-api',
+      walletPath: '~/hosted-agent.json',
+    }));
+
+    expect(config.enableHttp).toBe(false);
+    expect(config.walletPath).toBe(join(homedir(), 'hosted-agent.json'));
+  });
+
+  it('supports hosted user profiles backed by an external signer', () => {
+    const config = buildWizardConfig(wizardInput({
+      mode: 'hosted-api',
+      walletPath: undefined,
+      externalSignerUrl: 'http://localhost:8080/sign',
+    }));
+
+    expect(config.enableHttp).toBe(false);
+    expect(config.walletPath).toBeUndefined();
+    expect(config.externalSignerUrl).toBe('http://localhost:8080/sign');
+  });
 });

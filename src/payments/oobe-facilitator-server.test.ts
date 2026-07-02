@@ -2,9 +2,11 @@ import { mkdtempSync, rmSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
+import type { PaymentRequirements } from '@x402/core/types';
 import {
   createFacilitatorSigner,
   getFacilitatorSignerPublicKey,
+  normalizeLegacySvmPaymentRequirements,
   type OobeFacilitatorConfig,
   validateFacilitatorConfig,
 } from './oobe-facilitator-server.js';
@@ -62,5 +64,24 @@ describe('OOBE x402 facilitator configuration', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it('adds the legacy SVM maxAmountRequired alias for x402 V2 requirements', () => {
+    const requirements: PaymentRequirements = {
+      scheme: 'exact',
+      network: DEVNET,
+      asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      amount: '50000',
+      payTo: '11111111111111111111111111111111',
+      maxTimeoutSeconds: 120,
+      extra: {},
+    };
+
+    const normalized = normalizeLegacySvmPaymentRequirements(requirements) as PaymentRequirements & {
+      maxAmountRequired?: string;
+    };
+
+    expect(normalized.amount).toBe('50000');
+    expect(normalized.maxAmountRequired).toBe('50000');
   });
 });

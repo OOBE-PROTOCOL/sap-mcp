@@ -200,7 +200,7 @@ export function sapCurrentConfigResource(server: Server, context: SapMcpContext)
           wallet: {
             managedByProfile: Boolean(context.config.walletPath),
             exists: context.config.walletPath ? existsSync(context.config.walletPath) : false,
-            type: context.config.mode === 'local-dev-keypair' ? 'keypair-file' : context.config.mode,
+            type: context.config.walletPath ? 'keypair-file' : context.config.mode,
             secretMaterial: 'never-exposed',
           },
           security: {

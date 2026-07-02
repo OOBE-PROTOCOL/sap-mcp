@@ -5,23 +5,26 @@
  */
 
 import { randomUUID } from 'crypto';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import * as http from 'http';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { loadConfig, type SapMcpConfig } from '../config/env.js';
+import { getDataDir, loadConfig, type SapMcpConfig } from '../config/env.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
 import { McpMonetizationGate } from '../payments/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
+import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
 const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
+const PAYMENT_STATS_CACHE_MS = 15_000;
 let logoAssetCache: Buffer | undefined;
+let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 
 /**
  * @name RemoteMCPConfig
@@ -150,6 +153,20 @@ export interface PublicServerInfo {
     github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
     userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
   };
+}
+
+/**
+ * @name PublicPaymentStats
+ * @description Aggregated, public-safe hosted payment metrics rendered on the landing page.
+ */
+export interface PublicPaymentStats {
+  totalVolumeUsd: number;
+  totalSettlements: number;
+  totalPaymentRequests: number;
+  totalVerifiedPayments: number;
+  totalFailedSettlements: number;
+  lastSettlementAt?: string;
+  ledgerAvailable: boolean;
 }
 
 /**
@@ -290,6 +307,101 @@ function readLogoAsset(): Buffer {
 }
 
 /**
+ * @name readPublicPaymentStats
+ * @description Reads cached public-safe payment totals from the append-only usage ledger.
+ */
+export function readPublicPaymentStats(now = Date.now()): PublicPaymentStats {
+  if (paymentStatsCache && paymentStatsCache.expiresAt > now) {
+    return paymentStatsCache.stats;
+  }
+
+  const stats = readPaymentStatsFromLedger();
+  paymentStatsCache = {
+    expiresAt: now + PAYMENT_STATS_CACHE_MS,
+    stats,
+  };
+  return stats;
+}
+
+function readPaymentStatsFromLedger(): PublicPaymentStats {
+  const stats: PublicPaymentStats = {
+    totalVolumeUsd: 0,
+    totalSettlements: 0,
+    totalPaymentRequests: 0,
+    totalVerifiedPayments: 0,
+    totalFailedSettlements: 0,
+    ledgerAvailable: false,
+  };
+
+  const ledgerPath = join(getDataDir(), 'payments', 'usage-ledger.jsonl');
+  if (!existsSync(ledgerPath)) {
+    return stats;
+  }
+
+  stats.ledgerAvailable = true;
+
+  const lines = readFileSync(ledgerPath, 'utf-8').split('\n');
+  for (const line of lines) {
+    const event = parsePaymentLedgerEvent(line);
+    if (!event) {
+      continue;
+    }
+
+    if (event.event === 'payment_required') {
+      stats.totalPaymentRequests += 1;
+    }
+
+    if (event.event === 'payment_verified') {
+      stats.totalVerifiedPayments += 1;
+    }
+
+    if (event.event === 'payment_settled') {
+      stats.totalSettlements += 1;
+      stats.totalVolumeUsd += event.priceUsd ?? 0;
+      stats.lastSettlementAt = event.timestamp;
+    }
+
+    if (event.event === 'payment_failed') {
+      stats.totalFailedSettlements += 1;
+    }
+  }
+
+  return stats;
+}
+
+function parsePaymentLedgerEvent(line: string): PaymentLedgerEvent | undefined {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!isPaymentLedgerEvent(parsed)) {
+      return undefined;
+    }
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function isPaymentLedgerEvent(value: unknown): value is PaymentLedgerEvent {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return typeof record.event === 'string'
+    && typeof record.timestamp === 'string'
+    && typeof record.requestHash === 'string'
+    && typeof record.method === 'string'
+    && typeof record.path === 'string'
+    && Array.isArray(record.toolNames)
+    && typeof record.paymentHeaderPresent === 'boolean';
+}
+
+/**
  * @name getRateLimitKey
  * @description Resolves the best available caller identity for hosted MCP rate limiting behind a reverse proxy.
  */
@@ -386,11 +498,14 @@ export function buildLandingHtml(
   endpoint: 'root' | 'mcp' = 'root',
 ): string {
   const info = buildPublicServerInfo(req, config);
+  const paymentStats = readPublicPaymentStats();
   const pageUrl = endpoint === 'mcp' ? info.endpoints.mcp : info.endpoints.landing;
   const title = endpoint === 'mcp'
     ? 'SAP MCP Streamable HTTP Endpoint | OOBE Protocol'
     : info.title;
   const endpointLabel = endpoint === 'mcp' ? 'Streamable HTTP MCP endpoint' : 'Hosted MCP gateway';
+  const wizardCommand = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
+  const installScriptCommand = 'curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh';
   const publicInfo = JSON.stringify(info, null, 2).replace(/</g, '\\u003c');
 
   return `<!doctype html>
@@ -416,65 +531,185 @@ export function buildLandingHtml(
   <meta name="twitter:image" content="${escapeHtml(info.endpoints.favicon)}">
   <script type="application/ld+json">${publicInfo}</script>
   <style>
-    :root { color-scheme: dark; --aqua: #28d8e8; --ink: #f4fbff; --muted: #9db7c0; --panel: rgba(255,255,255,.055); --line: rgba(255,255,255,.14); }
+    :root {
+      color-scheme: dark;
+      --aqua: #28d8e8;
+      --aqua-soft: rgba(40,216,232,.13);
+      --ink: #f4fbff;
+      --muted: #a8bdc6;
+      --subtle: #76909a;
+      --panel: rgba(255,255,255,.062);
+      --panel-strong: rgba(255,255,255,.095);
+      --line: rgba(255,255,255,.14);
+      --line-strong: rgba(40,216,232,.38);
+      --surface: #080d12;
+      --success: #8ef3c5;
+      --warning: #ffd38a;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: radial-gradient(circle at 20% 10%, rgba(40,216,232,.24), transparent 32rem), #080d12; }
-    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0; }
-    header { display: grid; grid-template-columns: 88px 1fr; gap: 22px; align-items: center; margin-bottom: 34px; }
-    img { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 18px 70px rgba(40,216,232,.22); }
-    h1 { margin: 0; font-size: clamp(2rem, 4vw, 4rem); line-height: 1; letter-spacing: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(115deg, rgba(40,216,232,.13), transparent 34%),
+        linear-gradient(180deg, #0a1218 0%, var(--surface) 46%, #05080b 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.75), transparent 72%);
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 40px; position: relative; }
+    header { display: grid; grid-template-columns: 92px 1fr; gap: 24px; align-items: center; margin-bottom: 30px; }
+    img.logo { width: 92px; height: 92px; border-radius: 24px; box-shadow: 0 18px 70px rgba(40,216,232,.22); }
+    h1 { margin: 0; max-width: 920px; font-size: clamp(2.2rem, 5vw, 5rem); line-height: .95; letter-spacing: 0; }
     p { margin: 10px 0 0; color: var(--muted); max-width: 760px; }
-    .badge { display: inline-flex; align-items: center; gap: 8px; color: var(--aqua); font-weight: 700; text-transform: uppercase; font-size: .78rem; letter-spacing: 0; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 28px; }
-    section, a.card { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 18px; text-decoration: none; color: inherit; }
-    h2 { margin: 0 0 12px; font-size: 1rem; color: var(--aqua); }
-    code { color: #dffbff; overflow-wrap: anywhere; }
-    ul { padding-left: 18px; margin: 0; color: var(--muted); }
-    li + li { margin-top: 8px; }
-    a { color: var(--aqua); }
+    a { color: var(--aqua); text-underline-offset: 4px; }
+    a:focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 6px; }
+    code {
+      color: #e9fcff;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }
+    .badge { display: inline-flex; align-items: center; gap: 8px; color: var(--aqua); font-weight: 750; text-transform: uppercase; font-size: .78rem; letter-spacing: 0; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+    .button {
+      display: inline-flex;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 9px 14px;
+      background: var(--aqua-soft);
+      color: var(--ink);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .button.secondary { background: transparent; border-color: var(--line); color: var(--aqua); }
+    .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-top: 28px; }
+    .card {
+      min-height: 148px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .card.strong { background: linear-gradient(180deg, var(--panel-strong), var(--panel)); border-color: var(--line-strong); }
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    h2 { margin: 0 0 12px; font-size: 1rem; color: var(--aqua); letter-spacing: 0; }
+    h3 { margin: 0 0 6px; font-size: .86rem; color: var(--muted); font-weight: 650; text-transform: uppercase; letter-spacing: 0; }
+    .metric { margin-top: 4px; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1; font-weight: 800; letter-spacing: 0; }
+    .metric.small { font-size: clamp(1.55rem, 3vw, 2.3rem); }
+    .caption { margin-top: 10px; color: var(--subtle); font-size: .94rem; }
+    .status { color: var(--success); }
+    .warning { color: var(--warning); }
+    .list { padding-left: 18px; margin: 0; color: var(--muted); }
+    .list li + li { margin-top: 8px; }
+    .command { margin-top: 12px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: rgba(0,0,0,.28); padding: 13px; }
+    .endpoint-list { display: grid; gap: 10px; margin-top: 10px; }
+    .endpoint-row { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: baseline; }
+    .method { color: var(--success); font: 700 .78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .footer { margin-top: 26px; color: var(--muted); font-size: .94rem; }
+    @media (max-width: 860px) {
+      header { grid-template-columns: 1fr; }
+      img.logo { width: 76px; height: 76px; border-radius: 20px; }
+      .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+    }
+    @media (min-width: 861px) and (max-width: 1120px) {
+      .span-3, .span-4 { grid-column: span 6; }
+      .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
   </style>
 </head>
 <body>
   <main>
     <header>
-      <img src="/favicon.png" alt="SAP MCP logo">
+      <img class="logo" src="/favicon.png" alt="SAP MCP logo" width="92" height="92">
       <div>
         <span class="badge">OOBE Protocol • ${escapeHtml(endpointLabel)}</span>
         <h1>${escapeHtml(title)}</h1>
         <p>${escapeHtml(info.description)}</p>
+        <div class="hero-actions">
+          <a class="button" href="/wizard/install.sh">Install wizard</a>
+          <a class="button secondary" href="/server.json">Server JSON</a>
+          <a class="button secondary" href="/.well-known/agent-card.json">Agent card</a>
+        </div>
       </div>
     </header>
-    <div class="grid">
-      <section>
-        <h2>Public Endpoints</h2>
-        <ul>
-          <li>MCP: <code>${escapeHtml(info.endpoints.mcp)}</code></li>
-          <li>Health: <code>${escapeHtml(info.endpoints.health)}</code></li>
-          <li>Server info: <code>${escapeHtml(info.endpoints.serverInfo)}</code></li>
-          <li>Agent card: <code>${escapeHtml(info.endpoints.agentCard)}</code></li>
-        </ul>
+
+    <div class="bento" aria-label="SAP MCP hosted server overview">
+      <section class="card strong span-4">
+        <h3>Facilitator Volume</h3>
+        <div class="metric">${escapeHtml(formatUsd(paymentStats.totalVolumeUsd))}</div>
+        <p class="caption">Estimated settled x402/pay.sh tool volume recorded by the hosted payment ledger.</p>
       </section>
-      <section>
-        <h2>Capabilities</h2>
-        <ul>
-          <li>Native MCP tools, resources, and prompts</li>
-          <li>x402 and pay.sh monetization flows</li>
-          <li>User-controlled signing through local profile or external signer</li>
-          <li>Wizard config under <code>~/.config/mcp-sap</code></li>
-        </ul>
+
+      <section class="card strong span-4">
+        <h3>Total Settlements</h3>
+        <div class="metric">${escapeHtml(formatInteger(paymentStats.totalSettlements))}</div>
+        <p class="caption">${escapeHtml(formatLastSettlement(paymentStats))}</p>
       </section>
-      <section>
-        <h2>Security</h2>
-        <ul>
-          <li>Keypair bytes are never exposed by public endpoints.</li>
-          <li>Hosted server metadata does not print private RPC query secrets.</li>
-          <li>Paid tools return 402 payment instructions before execution.</li>
-        </ul>
+
+      <section class="card span-4">
+        <h3>Payment Requests</h3>
+        <div class="metric">${escapeHtml(formatInteger(paymentStats.totalPaymentRequests))}</div>
+        <p class="caption"><span class="status">${escapeHtml(formatInteger(paymentStats.totalVerifiedPayments))}</span> verified, <span class="warning">${escapeHtml(formatInteger(paymentStats.totalFailedSettlements))}</span> failed settlements.</p>
       </section>
-      <section>
+
+      <section class="card span-7">
         <h2>Install Wizard</h2>
-        <p><code>npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard</code></p>
+        <p>Create a local SAP MCP profile, signer, policy limits, and optional client injection. Hosted users still sign x402/pay.sh and value-moving operations from their own machine or external signer.</p>
+        <div class="command"><code>${escapeHtml(installScriptCommand)}</code></div>
+        <div class="command"><code>${escapeHtml(wizardCommand)}</code></div>
+      </section>
+
+      <section class="card span-5">
+        <h2>Payments</h2>
+        <ul class="list">
+          <li><strong>x402:</strong> paid MCP tool calls return HTTP 402 with payment requirements, then settle through the OOBE facilitator.</li>
+          <li><strong>pay.sh:</strong> supports pay-per-use and subscription specs for agents or dashboards that prefer checkout flows.</li>
+          <li><strong>Local stdio:</strong> free by default; monetization applies to hosted remote usage.</li>
+        </ul>
+      </section>
+
+      <section class="card span-8">
+        <h2>Endpoints</h2>
+        <div class="endpoint-list">
+          <div class="endpoint-row"><span class="method">POST</span><code>${escapeHtml(info.endpoints.mcp)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.health)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.serverInfo)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.agentCard)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.wizardDescriptor)}</code></div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h2>Security Boundary</h2>
+        <ul class="list">
+          <li>Keypair bytes are never exposed by public endpoints.</li>
+          <li>RPC secrets are redacted from public metadata and UI.</li>
+          <li>Paid tools require payment before execution.</li>
+        </ul>
       </section>
     </div>
     <p class="footer">Use <a href="/server.json">/server.json</a> for machine-readable public metadata. MCP clients should connect to <a href="/mcp">/mcp</a> with <code>Accept: application/json, text/event-stream</code>.</p>
@@ -490,6 +725,37 @@ export function buildLandingHtml(
 function acceptsHtmlPreview(req: http.IncomingMessage): boolean {
   const accept = String(req.headers.accept ?? '');
   return accept.includes('text/html') && !accept.includes('text/event-stream') && !accept.includes('application/json');
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '$0.00';
+  }
+
+  return `$${value.toLocaleString('en-US', {
+    minimumFractionDigits: value < 1 ? 3 : 2,
+    maximumFractionDigits: value < 1 ? 3 : 2,
+  })}`;
+}
+
+function formatInteger(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0';
+  }
+
+  return Math.trunc(value).toLocaleString('en-US');
+}
+
+function formatLastSettlement(stats: PublicPaymentStats): string {
+  if (!stats.ledgerAvailable) {
+    return 'Ledger not initialized yet. Metrics appear after the first paid hosted call.';
+  }
+
+  if (!stats.lastSettlementAt) {
+    return 'No settlements yet. Paid requests will update this card after successful settlement.';
+  }
+
+  return `Last settlement: ${stats.lastSettlementAt}`;
 }
 
 /**

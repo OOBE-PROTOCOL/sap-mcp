@@ -59,8 +59,9 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 - Use `sap_discover_agents` only for protocol/capability-filtered discovery.
 - Treat `mcp_sap_<tool>` as a client display prefix; the callable MCP tool name
   inside this server is the suffix, for example `jupiter_getQuote`.
-- Use `docs/SAP_SDK_SKILLS.md` as the complete routing map when deciding which
-  SAP MCP tool or skill domain applies to a user request.
+- Use `skills/sap-mcp/TOOL_REFERENCE.md` and `USER_DOCS/05_SKILLS_AND_TOOLS.md`
+  as the bundled routing maps when deciding which SAP MCP tool or skill domain
+  applies to a user request.
 
 ## Install With MCP
 

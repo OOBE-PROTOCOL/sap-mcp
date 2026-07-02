@@ -138,12 +138,16 @@ describe('MCP client injection', () => {
 
   it('prints manual JSON snippets for hosted and local MCP setup', () => {
     const snippets = createManualMcpJsonSnippets(canonicalConfig());
-    const hosted = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON');
+    const hosted = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON (Claude, Codex, OpenClaw)');
+    const hermesGlobal = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON (Hermes global mcp.json)');
+    const hermesProfile = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP YAML (Hermes profile config.yaml)');
     const local = snippets.find((snippet) => snippet.title === 'Local SAP MCP JSON');
 
     expect(hosted).toBeDefined();
+    expect(hermesGlobal).toBeDefined();
+    expect(hermesProfile).toBeDefined();
     expect(local).toBeDefined();
-    expect(hosted?.description).toContain('after creating the user SAP profile');
+    expect(hosted?.description).toContain('root mcpServers map');
     expect(JSON.parse(hosted?.content ?? '{}')).toEqual({
       mcpServers: {
         sap: {
@@ -152,6 +156,13 @@ describe('MCP client injection', () => {
         },
       },
     });
+    expect(JSON.parse(hermesGlobal?.content ?? '{}')).toEqual({
+      sap: {
+        url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+        transport: 'streamable-http',
+      },
+    });
+    expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
     expect(JSON.parse(local?.content ?? '{}').mcpServers.sap.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',

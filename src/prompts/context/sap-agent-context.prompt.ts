@@ -245,8 +245,17 @@ function buildContextMessage(options: {
 - Wizard command: \`${WIZARD_NPM_COMMAND}\`
 - The wizard creates the user SAP profile, dedicated wallet path or external signer, policy limits, and optional MCP client injection.
 
+### 🌐 Hosted Remote MCP
+- Canonical endpoint: \`${HOSTED_MCP_URL}\`
+- Protocol: MCP Streamable HTTP, protocol version \`2025-06-18\`
+- Public metadata: \`https://mcp.sap.oobeprotocol.ai/server.json\`
+- Auth: bearerless public agent mode; paid tools require x402 payment proof.
+- Security: hosted SAP MCP never stores user keypairs and never exposes keypair bytes.
+- For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url, transport }\` entry, not a nested \`mcpServers.sap\` object.
+- For Hermes profile YAML, use \`mcp_servers.sap.url\` and \`mcp_servers.sap.transport\`.
+
 ### ⚙️ Features
-- **HTTP API:** ${config.enableHttp ? `Enabled (port ${config.httpPort})` : 'Disabled'}
+- **HTTP API:** ${config.enableHttp ? `Enabled (port ${config.httpPort})` : config.mode === 'hosted-api' ? `Hosted remote (${HOSTED_MCP_URL})` : 'Disabled'}
 - **Metrics:** ${config.enableMetrics ? 'Enabled' : 'Disabled'}
 - **Bento Guard:** ${config.bento?.enabled ? 'Enabled' : 'Disabled'}
 - **Logging:** ${config.logLevel} (${config.logFormat})
@@ -280,6 +289,14 @@ Some MCP clients display tool names as \`mcp_sap_<tool>\`; inside this server th
 - For availability checks, use \`sap_sns_check_domain\` or \`sap_sns_batch_check_domains\`.
 
 For transactions, preview first with \`sap_preview_transaction\`; sign only with \`sap_sign_transaction\` after policy checks and user approval when required.
+
+### ⚡ x402 Hosted Payment Fast Path
+- Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
+- Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.
+- Reuse the initialized MCP session and replay the exact same JSON-RPC body after payment; changing the body changes the request hash.
+- Prefer \`PAYMENT-SIGNATURE\` for the payment proof header; accept \`X-PAYMENT\` only when the client runtime requires it.
+- Capture \`PAYMENT-RESPONSE\` or \`X-PAYMENT-RESPONSE\` as the settlement receipt bound to the tool output.
+- x402/pay.sh payment payloads must be signed by the user's wizard-created SAP profile wallet or external signer, never by the hosted server.
 
 `;
 
@@ -315,9 +332,6 @@ npx sap-mcp-config profile-info
 
   contextText += `### 🚀 Quick Commands
 \`\`\`bash
-# Start server
-npx sap-mcp-server
-
 # Check config
 npx sap-mcp-config info
 
@@ -327,6 +341,8 @@ npx sap-mcp-config pubkey
 # Modify settings
 npx sap-mcp-config set <field> <value>
 \`\`\`
+
+Hosted MCP endpoint: \`${HOSTED_MCP_URL}\`
 
 ---
 

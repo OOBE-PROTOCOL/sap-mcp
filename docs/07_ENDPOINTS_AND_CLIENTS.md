@@ -100,12 +100,40 @@ curl -i https://mcp.sap.oobeprotocol.ai/mcp \
 
 ## 07.7 Remote Client Config
 
+Generic MCP client JSON:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+Hermes global `~/.hermes/mcp.json`:
+
+```json
+{
+  "sap": {
+    "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "transport": "streamable-http"
+  }
+}
+```
+
+Hermes profile YAML:
+
 ```yaml
 mcp_servers:
   sap:
     url: https://mcp.sap.oobeprotocol.ai/mcp
     transport: streamable-http
 ```
+
+Do not nest `mcpServers.sap` under a Hermes `mcp_servers.sap` entry.
 
 ## 07.8 MCP Client Behavior
 

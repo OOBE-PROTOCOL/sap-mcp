@@ -51,7 +51,52 @@ source skill taxonomy:
 
 Use the bundled routing map for local MCP tool selection:
 
-- `docs/SAP_SDK_SKILLS.md`
+- `skills/sap-mcp/TOOL_REFERENCE.md`
+- `USER_DOCS/05_SKILLS_AND_TOOLS.md`
+
+## Hosted Remote MCP
+
+Canonical hosted endpoint:
+
+```text
+https://mcp.sap.oobeprotocol.ai/mcp
+```
+
+Public server metadata:
+
+```json
+{
+  "name": "sap-mcp-server",
+  "title": "SAP MCP Server | OOBE Protocol",
+  "status": "online",
+  "protocol": {
+    "primary": "mcp",
+    "transport": "streamable-http",
+    "protocolVersion": "2025-06-18"
+  },
+  "endpoints": {
+    "landing": "https://mcp.sap.oobeprotocol.ai/",
+    "mcp": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "serverInfo": "https://mcp.sap.oobeprotocol.ai/server.json",
+    "wizardDescriptor": "https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json",
+    "wizardInstallScript": "https://mcp.sap.oobeprotocol.ai/wizard/install.sh"
+  },
+  "authentication": {
+    "schemes": ["none", "x402"],
+    "bearerRequired": false
+  },
+  "security": {
+    "keypairBytesExposed": false,
+    "storesUserKeypairs": false,
+    "rpcSecretsExposed": false,
+    "wizardConfigDirectory": "~/.config/mcp-sap"
+  }
+}
+```
+
+Hosted users still need a local SAP MCP profile when they sign x402/pay.sh
+payments, SAP transactions, Solana transactions, SNS operations, or settlement
+actions. The hosted MCP server is not a wallet custodian.
 
 ## Profile Tools
 
@@ -156,6 +201,39 @@ Avoid passing `SAP_WALLET_PATH` or `SAP_MCP_RPC_URL` from the MCP client unless
 the user intentionally wants env overrides and has set
 `SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE=true`.
 
+Hosted Claude/Codex/OpenClaw-style JSON:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+Hosted Hermes global `~/.hermes/mcp.json` JSON:
+
+```json
+{
+  "sap": {
+    "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "transport": "streamable-http"
+  }
+}
+```
+
+Hosted Hermes profile YAML:
+
+```yaml
+mcp_servers:
+  sap:
+    url: https://mcp.sap.oobeprotocol.ai/mcp
+    transport: streamable-http
+```
+
 Show active profile:
 
 ```bash
@@ -177,13 +255,16 @@ Start local MCP over stdio:
 npx sap-mcp-server start
 ```
 
-Start remote MCP over Streamable HTTP:
+Operator-only: start your own remote MCP over Streamable HTTP:
 
 ```bash
 SAP_MCP_AUTH_TYPE=api_key \
 SAP_MCP_API_KEYS=<api-key>=<operator-id> \
 npx sap-mcp-remote
 ```
+
+Do not ask hosted users to run their own HTTP server unless they are deploying
+their own VPS/operator instance.
 
 ## Signing Rules
 

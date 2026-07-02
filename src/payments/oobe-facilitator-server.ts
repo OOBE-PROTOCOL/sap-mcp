@@ -31,6 +31,14 @@ const DEFAULT_FACILITATOR_PORT = 8788;
 const DEFAULT_FACILITATOR_HOST = '127.0.0.1';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
 
+type LegacyCompatiblePaymentRequirements = PaymentRequirements & {
+  maxAmountRequired?: string;
+};
+
+type PaymentPayloadWithAccepted = PaymentPayload & {
+  accepted?: PaymentRequirements;
+};
+
 /**
  * @name OobeFacilitatorConfig
  * @description Runtime configuration for the self-hosted OOBE x402 facilitator.
@@ -347,20 +355,54 @@ async function readJsonBody(request: http.IncomingMessage): Promise<unknown> {
 
 function parseVerifyRequest(body: unknown): VerifyRequest {
   const record = requireRecord(body, 'verify request');
+  const paymentRequirements = normalizeLegacySvmPaymentRequirements(
+    requireRecord(record.paymentRequirements, 'paymentRequirements') as PaymentRequirements,
+  );
   return {
     x402Version: requireNumber(record.x402Version, 'x402Version'),
-    paymentPayload: requireRecord(record.paymentPayload, 'paymentPayload') as PaymentPayload,
-    paymentRequirements: requireRecord(record.paymentRequirements, 'paymentRequirements') as PaymentRequirements,
+    paymentPayload: normalizeLegacySvmPaymentPayload(requireRecord(record.paymentPayload, 'paymentPayload') as PaymentPayload),
+    paymentRequirements,
   };
 }
 
 function parseSettleRequest(body: unknown): SettleRequest {
   const record = requireRecord(body, 'settle request');
+  const paymentRequirements = normalizeLegacySvmPaymentRequirements(
+    requireRecord(record.paymentRequirements, 'paymentRequirements') as PaymentRequirements,
+  );
   return {
     x402Version: requireNumber(record.x402Version, 'x402Version'),
-    paymentPayload: requireRecord(record.paymentPayload, 'paymentPayload') as PaymentPayload,
-    paymentRequirements: requireRecord(record.paymentRequirements, 'paymentRequirements') as PaymentRequirements,
+    paymentPayload: normalizeLegacySvmPaymentPayload(requireRecord(record.paymentPayload, 'paymentPayload') as PaymentPayload),
+    paymentRequirements,
   };
+}
+
+/**
+ * @name normalizeLegacySvmPaymentRequirements
+ * @description Adds the x402 V1 SVM amount alias expected by older exact-SVM verifier paths.
+ */
+export function normalizeLegacySvmPaymentRequirements(requirements: PaymentRequirements): PaymentRequirements {
+  const compatible = requirements as LegacyCompatiblePaymentRequirements;
+  if (compatible.maxAmountRequired !== undefined || !requirements.amount) {
+    return requirements;
+  }
+
+  return {
+    ...requirements,
+    maxAmountRequired: requirements.amount,
+  } as PaymentRequirements;
+}
+
+function normalizeLegacySvmPaymentPayload(payload: PaymentPayload): PaymentPayload {
+  const withAccepted = payload as PaymentPayloadWithAccepted;
+  if (!withAccepted.accepted) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    accepted: normalizeLegacySvmPaymentRequirements(withAccepted.accepted),
+  } as PaymentPayload;
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {

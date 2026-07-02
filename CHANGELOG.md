@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.2.1 - 2026-07-02
+
+### Fixed
+
+- Fixed hosted wizard onboarding so `hosted-api` connects users to `https://mcp.sap.oobeprotocol.ai/mcp` without asking them to start a local HTTP server.
+- Fixed hosted MCP client snippets for Hermes by emitting flat `~/.hermes/mcp.json` JSON and flat `mcp_servers.sap` profile YAML instead of nested `mcpServers` blocks.
+- Fixed hosted signing resolution so hosted user profiles can use either a dedicated local wallet path or an external signer while the hosted server remains non-custodial.
+- Added x402 SVM V1/V2 compatibility normalization for facilitator verification and settlement by mapping V2 `amount` to the legacy `maxAmountRequired` alias.
+- Added a public bento-grid landing page for `/` and browser previews of `/mcp`, including aggregate facilitator volume, settlement counts, wizard install commands, endpoint guidance, and x402/pay.sh payment explanation.
+- Updated SAP MCP skills, prompts, and user docs to consistently reference the canonical hosted endpoint, public metadata routes, x402 fast path, and user-controlled signing boundary.
+
+### Verification
+
+- `pnpm run typecheck`
+- `pnpm run lint`
+- `pnpm run test:run -- src/config/mcp-client-injection.test.ts src/config/setup.test.ts src/payments/oobe-facilitator-server.test.ts src/payments/pricing.test.ts`
+- `pnpm run build`
+- `npm pack --dry-run --cache ./.npm-cache`
+
 ## 0.2.0 - 2026-07-02
 
 ### Security

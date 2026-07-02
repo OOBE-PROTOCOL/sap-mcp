@@ -22,6 +22,56 @@ https://mcp.sap.oobeprotocol.ai/favicon.png
 
 The root page is safe to share publicly. It exposes professional metadata, favicon/social preview tags, and public endpoint information only. It must never expose RPC API keys, keypair paths, private VPS paths, or signer material.
 
+Public `server.json` shape:
+
+```json
+{
+  "name": "sap-mcp-server",
+  "title": "SAP MCP Server | OOBE Protocol",
+  "description": "Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.",
+  "version": "0.2.1",
+  "status": "online",
+  "protocol": {
+    "primary": "mcp",
+    "transport": "streamable-http",
+    "protocolVersion": "2025-06-18"
+  },
+  "endpoints": {
+    "landing": "https://mcp.sap.oobeprotocol.ai/",
+    "mcp": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "health": "https://mcp.sap.oobeprotocol.ai/health",
+    "serverInfo": "https://mcp.sap.oobeprotocol.ai/server.json",
+    "agentCard": "https://mcp.sap.oobeprotocol.ai/.well-known/agent-card.json",
+    "wizardDescriptor": "https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json",
+    "wizardInstallScript": "https://mcp.sap.oobeprotocol.ai/wizard/install.sh",
+    "favicon": "https://mcp.sap.oobeprotocol.ai/favicon.png"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true,
+    "streaming": true,
+    "payments": ["x402", "pay.sh"],
+    "userControlledSigning": true
+  },
+  "authentication": {
+    "schemes": ["none", "x402"],
+    "bearerRequired": false
+  },
+  "security": {
+    "keypairBytesExposed": false,
+    "storesUserKeypairs": false,
+    "rpcSecretsExposed": false,
+    "wizardConfigDirectory": "~/.config/mcp-sap"
+  },
+  "docs": {
+    "npm": "https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server",
+    "github": "https://github.com/OOBE-PROTOCOL/sap-mcp",
+    "userDocs": "https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS"
+  }
+}
+```
+
 ## 2. Why Hosted Users Still Need The Wizard
 
 Hosted MCP executes tools remotely, but the user's wallet and signer should remain local or externally controlled. The wizard creates:

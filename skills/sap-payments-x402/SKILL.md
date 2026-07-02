@@ -22,8 +22,10 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 
 ## Hosted MCP Monetization
 
+Canonical hosted endpoint: `https://mcp.sap.oobeprotocol.ai/mcp`.
+
 Remote `/mcp` deployments can require x402 v2 payment for paid `tools/call`
-requests. Local `stdio` usage remains free.
+requests. Local `stdio` usage remains free and should not attempt x402 payment.
 
 - Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
   `sap_get_network_overview`.
@@ -38,7 +40,19 @@ instructions, create a payment, retry with `PAYMENT-SIGNATURE`, and capture
 `PAYMENT-RESPONSE` after settlement. If a `payShCheckoutUrl` is present, surface
 it for browser/manual checkout flows.
 
-Reference: `docs/MONETIZATION.md`.
+For fast x402 execution:
+
+1. Reuse the MCP session returned by `initialize`.
+2. Replay the exact same paid JSON-RPC body after payment; changing the body
+   changes the request hash and invalidates the payment intent.
+3. Use `PAYMENT-SIGNATURE` first; use `X-PAYMENT` only for clients that require
+   the alternate header.
+4. Cache free `tools/list`, `prompts/list`, and `resources/list` locally rather
+   than paying or re-fetching repeatedly.
+5. Treat `PAYMENT-RESPONSE` as the receipt bound to the tool output.
+
+References: `USER_DOCS/03_PAYMENTS_X402_PAYSH.md` and
+`docs/06_PAYMENTS_X402_AND_PAYSH.md`.
 
 ## Safety
 

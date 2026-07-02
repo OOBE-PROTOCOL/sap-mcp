@@ -167,13 +167,13 @@ describe('SAP MCP monetization pricing', () => {
 
   it('generates a valid pay.sh provider YAML for the hosted MCP route', () => {
     const yaml = generatePayShProviderYaml(sapConfig, {
-      upstreamUrl: 'https://sap.mcp.oobeprotocol.ai',
+      upstreamUrl: 'https://mcp.sap.oobeprotocol.ai',
       signerPath: '/etc/oobe/pay/operator.json',
     });
 
     expect(yaml).toContain("name: 'oobe-sap-mcp'");
     expect(yaml).toContain('routing:\n  type: proxy');
-    expect(yaml).toContain("url: 'https://sap.mcp.oobeprotocol.ai/'");
+    expect(yaml).toContain("url: 'https://mcp.sap.oobeprotocol.ai/'");
     expect(yaml).toContain("path: 'mcp'");
     expect(yaml).toContain('price_usd: 0.008');
     expect(yaml).toContain("signer: { type: file, path: '/etc/oobe/pay/operator.json' }");

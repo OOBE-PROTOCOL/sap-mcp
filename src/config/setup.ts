@@ -145,7 +145,7 @@ export function buildWizardConfig(input: WizardSetupInput): FullConfig {
     walletEncrypted: false,
     externalSignerUrl: input.externalSignerUrl,
     externalSignerTimeoutMs: defaults.externalSignerTimeoutMs,
-    enableHttp: input.enableHttp ?? mode === 'hosted-api',
+    enableHttp: input.enableHttp ?? false,
     httpPort: input.httpPort ?? defaults.httpPort,
     httpHost: defaults.httpHost,
     maxTxValueSol: input.maxTxValueSol,

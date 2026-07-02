@@ -69,7 +69,7 @@ export class SapClientManager {
       // Get wallet based on mode
       let wallet: Wallet | undefined;
 
-      if (config.mode === 'local-dev-keypair' && config.walletPath) {
+      if ((config.mode === 'local-dev-keypair' || config.mode === 'hosted-api') && config.walletPath) {
         // Load keypair from file
         const { loadKeypairFromFile } = await import('../signer/load-keypair.js');
         const keypair = loadKeypairFromFile(config.walletPath);

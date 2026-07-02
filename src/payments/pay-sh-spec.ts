@@ -214,7 +214,7 @@ function printUsage(): void {
     'Generate a pay.sh provider YAML for hosted SAP MCP monetization.',
     '',
     'Usage:',
-    '  npx sap-mcp-pay-sh-spec --out sap-mcp-pay-sh.yml --upstream-url https://sap.mcp.oobeprotocol.ai',
+    '  npx sap-mcp-pay-sh-spec --out sap-mcp-pay-sh.yml --upstream-url https://mcp.sap.oobeprotocol.ai',
     '',
     'Options:',
     '  --config <path>        SAP MCP profile/config JSON path',

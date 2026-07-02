@@ -197,7 +197,8 @@ function askChoice(question: string, choices: string[], defaultIndex: number = 0
     const ask = () => {
       console.log(question);
       choices.forEach((choice, i) => {
-        const marker = i === defaultIndex ? ' (recommended)' : '';
+        const alreadyMarked = choice.includes('[RECOMMENDED]') || choice.includes('[recommended]');
+        const marker = i === defaultIndex && !alreadyMarked ? ' (recommended)' : '';
         console.log(`  ${paint(`${i + 1})`, 'gray')} ${formatChoiceLabel(choice)}${paint(marker, 'green')}`);
       });
       
@@ -593,18 +594,6 @@ function validateDailyLimit(maxTxValueSol: number): QuestionValidator {
   };
 }
 
-/**
- * Validates TCP port numbers.
- */
-function validatePort(value: string): string | undefined {
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    return 'Port must be an integer between 1 and 65535.';
-  }
-
-  return undefined;
-}
-
 // ============================================================================
 // Wizard Steps
 // ============================================================================
@@ -700,7 +689,7 @@ async function wizardMode(): Promise<SapMcpMode> {
   printBullet('Choose readonly if the agent only needs discovery, analytics, profile context, or registry reads.');
   printBullet('Choose external-signer for production signing, hardware wallets, custody systems, or the local signing proxy.');
   printBullet('Choose local-dev-keypair only when this machine should hold the dedicated SAP MCP wallet file.');
-  printBullet('Choose hosted-api when deploying the MCP server for remote clients behind HTTPS.');
+  printBullet('Choose hosted-api when this profile will connect to the OOBE hosted remote MCP endpoint.');
   console.log('');
   printControlHints();
   console.log('');
@@ -710,14 +699,14 @@ async function wizardMode(): Promise<SapMcpMode> {
     `${paint('local-dev-keypair', 'aqua', 'bold')} ${paint('[local wallet]', 'yellow')} - Signs with this profile's dedicated keypair file.`,
     `${paint('external-signer', 'aqua', 'bold')} ${paint('[production]', 'green')} - Sends signing requests to Ledger, Fireblocks, or signing proxy.`,
     `${paint('delegated-session', 'aqua', 'bold')} ${paint('[limited session]', 'blue')} - Uses session-scoped permissions and spending limits.`,
-    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[remote HTTP]', 'magenta')} - Runs Streamable HTTP MCP for VPS/client access.`,
+    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[OOBE hosted remote]', 'green')} - Connects agents to https://mcp.sap.oobeprotocol.ai/mcp.`,
   ];
   
   const index = await askChoice(paint('Select operating mode:', 'aqua', 'bold'), choices, 0, [
     'readonly is recommended when you only need discovery and read tools.',
     'local-dev-keypair signs with the dedicated profile wallet, never Solana CLI id.json.',
     'external-signer is preferred for production signing.',
-    'hosted-api enables remote MCP over HTTP and should be deployed behind TLS.',
+    'hosted-api creates a local signer/profile for the OOBE hosted MCP endpoint; it does not start a local HTTP server.',
   ]);
   
   const modes: SapMcpMode[] = ['readonly', 'local-dev-keypair', 'external-signer', 'delegated-session', 'hosted-api'];
@@ -772,18 +761,41 @@ async function wizardSignerConfig(
     return {};
   }
   
-  if (mode === 'local-dev-keypair') {
+  if (mode === 'local-dev-keypair' || mode === 'hosted-api') {
     clearConsole();
     printSapLogo();
-    printHeader('Step 4: Wallet Configuration', 'Local keypair setup');
+    printHeader(
+      'Step 4: Wallet Configuration',
+      mode === 'hosted-api' ? 'Hosted signing profile' : 'Local keypair setup',
+    );
     
-    printLead('Choose the wallet that will sign transactions for this profile. A new dedicated wallet is safest for first-time setup.');
+    printLead(
+      mode === 'hosted-api'
+        ? 'Hosted SAP MCP runs remotely, but x402 payments and value-moving operations are still authorized by your local profile wallet or external signer.'
+        : 'Choose the wallet that will sign transactions for this profile. A new dedicated wallet is safest for first-time setup.',
+    );
     printControlHints();
     console.log('');
     printField('Profile', profileName);
     printField('Default wallet', `~/.config/mcp-sap/keypairs/${profileName}-keypair.json`);
     printWarning('The wizard never modifies ~/.config/solana/id.json and never asks you to paste secret key bytes.');
     console.log('');
+
+    if (mode === 'hosted-api') {
+      const signerType = await askChoice('Choose hosted signing method:', [
+        `${paint('Dedicated local wallet', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green')} - Creates or references a wallet under ~/.config/mcp-sap.`,
+        `${paint('External signer', 'aqua', 'bold')} ${paint('[advanced]', 'yellow')} - Delegates signing to a local proxy, hardware wallet, or custody service.`,
+      ], 0, [
+        'The hosted MCP server never receives keypair bytes.',
+        'Choose external signer when policy, custody, or hardware approval should happen outside this CLI.',
+      ]);
+
+      if (signerType === 1) {
+        return { externalSignerUrl: await askExternalSignerUrl() };
+      }
+
+      console.log('');
+    }
     
     const useExisting = await askChoice('Choose option:', [
       'Use existing wallet file',
@@ -837,30 +849,35 @@ async function wizardSignerConfig(
     clearConsole();
     printSapLogo();
     printHeader('Step 4: External Signer', 'Signing service configuration');
-    
-    printLead('Enter the URL of the service that will sign transactions without exposing key material to the MCP server.');
-    printControlHints();
-    console.log('');
-    printLabel('Examples');
-    printBullet('http://localhost:8080/sign');
-    printBullet('https://fireblocks.example.com/api/v1/sign');
-    console.log('');
-    
-    const externalSignerUrl = await askQuestion('External signer URL', {
-      defaultValue: 'http://localhost:8080/sign',
-      required: true,
-      validate: validateHttpUrl,
-      help: [
-        'The signer service must expose the SAP MCP signing protocol.',
-        'Use HTTPS for remote signer services.',
-        'Localhost HTTP is acceptable for local development only.',
-      ],
-    });
-    
-    return { externalSignerUrl };
+
+    return { externalSignerUrl: await askExternalSignerUrl() };
   }
   
   return {};
+}
+
+/**
+ * Prompts for an external signing service URL.
+ */
+async function askExternalSignerUrl(): Promise<string> {
+  printLead('Enter the URL of the service that will sign transactions without exposing key material to the MCP server.');
+  printControlHints();
+  console.log('');
+  printLabel('Examples');
+  printBullet('http://localhost:8080/sign');
+  printBullet('https://fireblocks.example.com/api/v1/sign');
+  console.log('');
+
+  return askQuestion('External signer URL', {
+    defaultValue: 'http://localhost:8080/sign',
+    required: true,
+    validate: validateHttpUrl,
+    help: [
+      'The signer service must expose the SAP MCP signing protocol.',
+      'Use HTTPS for remote signer services.',
+      'Localhost HTTP is acceptable for local development only.',
+    ],
+  });
 }
 
 /**
@@ -988,47 +1005,8 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
 /**
  * Internal helper for the wizard http transport operation.
  */
-async function wizardHttpTransport(mode: SapMcpMode): Promise<{ enableHttp: boolean; httpPort: number }> {
-  if (mode !== 'hosted-api') {
-    return { enableHttp: false, httpPort: defaults.httpPort };
-  }
-  
-  clearConsole();
-  printSapLogo();
-  printHeader('Step 7: HTTP Transport', 'API server configuration');
-  
-  printLead('HTTP mode exposes MCP over Streamable HTTP for remote clients. Use this for VPS deployments and hosted agent workflows.');
-  printControlHints();
-  console.log('');
-  printWarning('Production HTTP deployments must sit behind HTTPS/TLS and operational monitoring.');
-  console.log('');
-  
-  const enableHttp = await askConfirm('Enable HTTP API server?', true, [
-    'HTTP mode is for remote MCP clients and VPS deployment.',
-    'Use a reverse proxy such as Caddy or nginx for HTTPS/TLS.',
-  ]);
-  
-  if (!enableHttp) {
-    return { enableHttp: false, httpPort: defaults.httpPort };
-  }
-  
-  const httpPort = await askQuestion(
-    paint('HTTP port', 'aqua'),
-    {
-      defaultValue: defaults.httpPort.toString(),
-      required: true,
-      validate: validatePort,
-      help: [
-        'Use 8787 locally unless another service already uses it.',
-        'In production, expose HTTPS via a reverse proxy and forward to this port.',
-      ],
-    }
-  );
-  
-  return {
-    enableHttp: true,
-    httpPort: parseInt(httpPort, 10) || defaults.httpPort,
-  };
+async function wizardHttpTransport(_mode: SapMcpMode): Promise<{ enableHttp: boolean; httpPort: number }> {
+  return { enableHttp: false, httpPort: defaults.httpPort };
 }
 
 /**
@@ -1103,11 +1081,11 @@ function printManualMcpJsonSnippets(canonical = createCanonicalServerConfig(proc
  * Prints the recommended hosted MCP client configuration.
  */
 function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(process.cwd())): void {
-  const hostedSnippet = createManualMcpJsonSnippets(canonical)
-    .find((snippet) => snippet.title === 'Hosted SAP MCP JSON');
+  const hostedSnippets = createManualMcpJsonSnippets(canonical)
+    .filter((snippet) => snippet.title.startsWith('Hosted SAP MCP'));
 
-  if (!hostedSnippet) {
-    printError('Hosted SAP MCP snippet is not available.');
+  if (hostedSnippets.length === 0) {
+    printError('Hosted SAP MCP snippets are not available.');
     return;
   }
 
@@ -1121,13 +1099,15 @@ function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(proce
   printWarning('Do not paste keypair bytes into hosted client config. Keep wallet material in ~/.config/mcp-sap or an external signer.');
   printWarning('Do not add stale SAP_MCP_RPC_URL or SAP_WALLET_PATH overrides to the hosted MCP block.');
   console.log('');
-  printLabel(`${hostedSnippet.title} ${paint('[RECOMMENDED]', 'green', 'bold')}`);
-  printBullet(hostedSnippet.description);
-  printBullet('Run the wizard first to create the user SAP profile, wallet path, policy limits, and signing preferences.');
-  printBullet('For signing flows, the agent must use the configured local wallet/external signer rather than expecting the hosted server to hold private keys.');
-  console.log('');
-  console.log(hostedSnippet.content.trimEnd());
-  console.log('');
+  for (const hostedSnippet of hostedSnippets) {
+    printLabel(`${hostedSnippet.title} ${paint('[RECOMMENDED]', 'green', 'bold')}`);
+    printBullet(hostedSnippet.description);
+    printBullet('Run the wizard first to create the user SAP profile, wallet path, policy limits, and signing preferences.');
+    printBullet('For signing flows, the agent must use the configured local wallet/external signer rather than expecting the hosted server to hold private keys.');
+    console.log('');
+    console.log(hostedSnippet.content.trimEnd());
+    console.log('');
+  }
 }
 
 /**
@@ -1306,7 +1286,7 @@ async function wizardSummary(config: WizardSetupInput) {
     printBullet('This profile can sign transactions; preview and policy checks still apply.');
   }
   if (config.mode === 'hosted-api') {
-    printBullet('Remote deployments require TLS termination, rate limits, and deliberate auth/payment settings.');
+    printBullet('This profile is for the OOBE hosted MCP endpoint; it does not start a local HTTP server.');
   }
   console.log('');
   
@@ -1402,8 +1382,14 @@ export async function runWizard() {
     console.log('\n');
     printSuccess('Configuration complete!');
     console.log('');
-    printLabel('Start local stdio MCP');
-    printBullet(paint('npx sap-mcp-server', 'aqua'));
+    if (mode === 'hosted-api') {
+      printLabel('Connect hosted SAP MCP');
+      printBullet(paint('https://mcp.sap.oobeprotocol.ai/mcp', 'aqua'));
+      printBullet('Use the hosted snippets above for Claude, Hermes, OpenClaw, Codex, or another MCP client.');
+    } else {
+      printLabel('Start local stdio MCP');
+      printBullet(paint('npx sap-mcp-server', 'aqua'));
+    }
     console.log('');
     printLabel('Recommended MCP client environment');
     printBullet(`${paint('SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE=false', 'aqua')} keeps clients pointed at the active profile manager.`);

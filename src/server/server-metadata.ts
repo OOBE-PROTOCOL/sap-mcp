@@ -4,7 +4,7 @@
 
 export const SERVER_METADATA = {
   name: 'sap-mcp-server',
-  version: '0.2.0',
+  version: '0.2.1',
   description: 'Official MCP gateway for OOBE Protocol SAP',
   author: 'OOBE Protocol Labs',
   license: 'MIT',

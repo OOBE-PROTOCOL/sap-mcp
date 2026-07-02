@@ -13,7 +13,7 @@ import { createExternalSigner } from './external-signer.js';
  * Resolve signer based on configuration
  */
 export async function resolveSigner(config: SapMcpConfig): Promise<SignerResult> {
-  const mode = getSignerModeFromMcpMode(config.mode);
+  const mode = getSignerModeFromConfig(config);
   
   logger.info('Resolving signer', { mcpMode: config.mode, signerMode: mode });
   
@@ -54,12 +54,19 @@ export async function resolveSigner(config: SapMcpConfig): Promise<SignerResult>
 }
 
 /**
- * Map MCP mode to signer mode
+ * Map resolved MCP config to signer mode.
  */
-function getSignerModeFromMcpMode(mcpMode: string): SapSignerMode {
-  switch (mcpMode) {
+function getSignerModeFromConfig(config: SapMcpConfig): SapSignerMode {
+  switch (config.mode) {
     case 'readonly':
+      return 'none';
     case 'hosted-api':
+      if (config.externalSignerUrl) {
+        return 'external';
+      }
+      if (config.walletPath) {
+        return 'local-keypair';
+      }
       return 'none';
     case 'local-dev-keypair':
       return 'local-keypair';

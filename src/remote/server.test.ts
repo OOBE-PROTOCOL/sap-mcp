@@ -226,6 +226,12 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<meta property="og:title" content="SAP MCP Server | OOBE Protocol">');
     expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
+    expect(root).toContain('Facilitator Volume');
+    expect(root).toContain('Total Settlements');
+    expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
+    expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');
+    expect(root).toContain('<strong>x402:</strong>');
+    expect(root).toContain('<strong>pay.sh:</strong>');
     expect(mcp).toContain('SAP MCP Streamable HTTP Endpoint | OOBE Protocol');
     expect(mcp).toContain('Accept: application/json, text/event-stream');
   });

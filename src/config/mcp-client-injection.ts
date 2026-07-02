@@ -45,6 +45,15 @@ export interface McpServerInjectionConfig {
 }
 
 /**
+ * @name HostedMcpServerConfig
+ * @description Remote Streamable HTTP MCP server config for clients that connect to OOBE hosted SAP MCP.
+ */
+export interface HostedMcpServerConfig {
+  url: string;
+  transport: 'streamable-http';
+}
+
+/**
  * @name McpClientInjectionPlan
  * @description Preview data generated before writing a client config file.
  */
@@ -176,18 +185,38 @@ export function createManualMcpJsonSnippets(
   canonical: McpServerInjectionConfig,
   hostedUrl = HOSTED_SAP_MCP_URL
 ): ManualMcpClientSnippet[] {
+  const hostedConfig: HostedMcpServerConfig = {
+    url: hostedUrl,
+    transport: 'streamable-http',
+  };
+
   return [
     {
-      title: 'Hosted SAP MCP JSON',
-      description: 'Use this after creating the user SAP profile with the wizard; the agent connects remotely while signatures stay user-controlled.',
+      title: 'Hosted SAP MCP JSON (Claude, Codex, OpenClaw)',
+      description: 'Use this for clients whose config expects a root mcpServers map.',
       content: formatJson({
         mcpServers: {
-          [SAP_SERVER_NAME]: {
-            url: hostedUrl,
-            transport: 'streamable-http',
-          },
+          [SAP_SERVER_NAME]: hostedConfig,
         },
       }),
+    },
+    {
+      title: 'Hosted SAP MCP JSON (Hermes global mcp.json)',
+      description: 'Use this for ~/.hermes/mcp.json, which expects flat server entries rather than a nested mcpServers map.',
+      content: formatJson({
+        [SAP_SERVER_NAME]: hostedConfig,
+      }),
+    },
+    {
+      title: 'Hosted SAP MCP YAML (Hermes profile config.yaml)',
+      description: 'Use this inside Hermes profile YAML files under the top-level mcp_servers section.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${hostedUrl}`,
+        '    transport: streamable-http',
+        '',
+      ].join('\n'),
     },
     {
       title: 'Local SAP MCP JSON',
