@@ -4,6 +4,8 @@ SAP MCP Server is a production-oriented Model Context Protocol server for OOBE S
 
 This documentation set is intentionally numbered. Read it in order for a full system view, or jump directly to the operational area you need.
 
+For end-user installation and MCP client setup, start with [`../USER_DOCS/00_START_HERE.md`](../USER_DOCS/00_START_HERE.md). The files below are the engineering and operations reference set.
+
 ## 00.1 Document Map
 
 | Document | Purpose |

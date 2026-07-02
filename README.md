@@ -9,6 +9,8 @@ SAP MCP exposes the same typed tool registry through two supported MCP launch mo
 
 It also includes a professional setup wizard, profile-managed config under `~/.config/mcp-sap`, optional Bento policy integration, local and external signing modes, x402 monetization, a self-hosted OOBE facilitator, pay.sh provider YAML generation, and an A2A-compatible discovery card.
 
+User-facing setup docs live in [`USER_DOCS/`](USER_DOCS/00_START_HERE.md). Operator and engineering docs live in [`docs/`](docs/00_README.md).
+
 ## 1. Status
 
 | Area | Current behavior |

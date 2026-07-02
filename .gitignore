@@ -51,3 +51,7 @@ tmp_sdk_docs/
 .history/
 .venv/
 .superstack/
+
+# Private operator runbooks and VPS notes
+PRIVATE_VPS_DOCS/
+*.private.md
