@@ -432,8 +432,8 @@ export class RemoteMCPServer {
 
       try {
         if (monetizationGate) {
-          await monetizationGate.handle(req, res, async (mcpReq, mcpRes) => {
-            await this.transport?.handleRequest(mcpReq, mcpRes);
+          await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+            await this.transport?.handleRequest(mcpReq, mcpRes, parsedBody);
           });
         } else {
           await this.transport?.handleRequest(req, res);

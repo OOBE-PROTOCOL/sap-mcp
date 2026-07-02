@@ -15,7 +15,7 @@ import type { Network, PaymentPayload, PaymentRequirements } from '@x402/core/ty
 import { registerExactSvmScheme } from '@x402/svm/exact/server';
 import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { logger } from '../core/logger.js';
-import { NativeHttpAdapter, parseJsonBody, readRequestBody, replayRequest } from './http-adapter.js';
+import { NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
 import { parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
@@ -28,6 +28,7 @@ import { hashRequestBody, UsageLedger, type PaymentRequestMetadata } from './usa
 export type McpRequestHandler = (
   request: http.IncomingMessage,
   response: http.ServerResponse,
+  parsedBody?: unknown,
 ) => Promise<void>;
 
 type WriteHeadArgs =
@@ -152,10 +153,9 @@ export class McpMonetizationGate {
 
     const parsedMcp = parseJsonRpcBody(parsedBody);
     const decision = resolvePaymentDecision(parsedMcp, this.monetization);
-    const replayedRequest = replayRequest(request, rawBody);
 
     if (!decision.required) {
-      await next(replayedRequest, response);
+      await next(request, response, parsedBody);
       return;
     }
 
@@ -177,19 +177,20 @@ export class McpMonetizationGate {
     }
 
     if (paymentResult.type === 'no-payment-required') {
-      await next(replayedRequest, response);
+      await next(request, response, parsedBody);
       return;
     }
 
     await this.usageLedger.recordVerified(metadata, decision);
     await this.forwardAndSettle({
-      request: replayedRequest,
+      request,
       response,
       next,
       context,
       metadata,
       decision,
       paymentResult,
+      parsedBody,
     });
   }
 
@@ -220,11 +221,12 @@ export class McpMonetizationGate {
     metadata: PaymentRequestMetadata;
     decision: PaymentDecision;
     paymentResult: Extract<HTTPProcessResult, { type: 'payment-verified' }>;
+    parsedBody: unknown;
   }): Promise<void> {
     const buffered = bufferResponse(options.response);
 
     try {
-      await options.next(options.request, options.response);
+      await options.next(options.request, options.response, options.parsedBody);
       await buffered.waitForEnd();
     } catch (error) {
       await options.paymentResult.cancellationDispatcher.cancel({

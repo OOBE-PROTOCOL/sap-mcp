@@ -223,11 +223,11 @@ export async function startHttpTransport(
     try {
       // Route requests through StreamableHTTP transport
       if (monetizationGate) {
-        await monetizationGate.handle(req, res, async (mcpReq, mcpRes) => {
-          await transport.handleRequest(mcpReq, mcpRes, url.searchParams);
+        await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+          await transport.handleRequest(mcpReq, mcpRes, parsedBody);
         });
       } else {
-        await transport.handleRequest(req, res, url.searchParams);
+        await transport.handleRequest(req, res);
       }
     } catch (error) {
       logger.error('HTTP transport error', { error, path: url.pathname });
