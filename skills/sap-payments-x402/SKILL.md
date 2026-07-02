@@ -26,6 +26,9 @@ Canonical hosted endpoint: `https://mcp.sap.oobeprotocol.ai/mcp`.
 
 Remote `/mcp` deployments can require x402 v2 payment for paid `tools/call`
 requests. Local `stdio` usage remains free and should not attempt x402 payment.
+Do not treat hosted `402 Payment Required` as a failure; it is the expected
+payment handshake. Do not silently bypass hosted paid tools by switching to a
+local free stdio MCP server unless the user explicitly asks for local execution.
 
 - Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
   `sap_get_network_overview`.
@@ -50,6 +53,9 @@ For fast x402 execution:
 4. Cache free `tools/list`, `prompts/list`, and `resources/list` locally rather
    than paying or re-fetching repeatedly.
 5. Treat `PAYMENT-RESPONSE` as the receipt bound to the tool output.
+6. If the client runtime cannot sign or attach x402 payment headers, ask the
+   user to run the SAP MCP wizard/signing bridge instead of falling back to
+   local stdio automatically.
 
 References: `USER_DOCS/03_PAYMENTS_X402_PAYSH.md` and
 `docs/06_PAYMENTS_X402_AND_PAYSH.md`.

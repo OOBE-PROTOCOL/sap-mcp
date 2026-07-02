@@ -136,6 +136,32 @@ describe('createSapMcpServer', () => {
     expect(staleMappings).toEqual([]);
   });
 
+  it('explains hosted remote signing as non-custodial instead of broken', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig({
+      mode: 'hosted-api',
+      enableHttp: false,
+    })));
+
+    const response = await server.toolHandlers?.sap_profile_current({});
+    const profile = JSON.parse(response?.content[0]?.text ?? '{}') as {
+      runtime?: { signerConfigured?: boolean };
+      hostedRemote?: {
+        canonicalEndpoint?: string;
+        serverStoresUserKeypairs?: boolean;
+        paidToolBehavior?: string;
+        localFallbackPolicy?: string;
+      };
+    };
+
+    expect(profile.runtime?.signerConfigured).toBe(false);
+    expect(profile.hostedRemote).toMatchObject({
+      canonicalEndpoint: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      serverStoresUserKeypairs: false,
+      paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
+      localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
+    });
+  });
+
   it('previews and signs a Solana transaction with the dedicated local keypair signer', async () => {
     const keypair = Keypair.generate();
     const walletPath = join(mkdtempSync(join(tmpdir(), 'sap-mcp-test-')), 'agent-keypair.json');

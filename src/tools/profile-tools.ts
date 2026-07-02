@@ -21,6 +21,8 @@ import { PolicyEngine } from '../policy/policy-engine.js';
 import { loadConfig } from '../config/env.js';
 import { redactSensitiveString } from '../core/logger.js';
 
+const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
+
 /**
  * @name ProfileToolInput
  * @description Common input accepted by profile MCP tools.
@@ -69,6 +71,20 @@ interface IdentityConsistencySummary {
   signerPublicKey?: string;
   matchesSigner: boolean | null;
   status: 'consistent' | 'mismatch' | 'not-checkable';
+}
+
+/**
+ * @name HostedRemoteRuntimeSummary
+ * @description Explains the non-custodial hosted MCP signing and payment boundary to agents.
+ */
+interface HostedRemoteRuntimeSummary {
+  canonicalEndpoint: string;
+  serverRole: 'mcp-transport-payment-verifier-tool-executor';
+  serverStoresUserKeypairs: false;
+  serverSignerConfigured: boolean;
+  userSignerRequiredFor: string[];
+  paidToolBehavior: 'returns-402-x402-payment-required-before-execution';
+  localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks';
 }
 
 /**
@@ -181,6 +197,30 @@ function buildIdentityConsistency(context: SapMcpContext): IdentityConsistencySu
 }
 
 /**
+ * @name buildHostedRemoteRuntime
+ * @description Builds hosted-mode guidance so agents do not confuse non-custodial remote execution with missing setup.
+ */
+function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSummary | undefined {
+  if (context.config.mode !== 'hosted-api') {
+    return undefined;
+  }
+
+  return {
+    canonicalEndpoint: HOSTED_MCP_URL,
+    serverRole: 'mcp-transport-payment-verifier-tool-executor',
+    serverStoresUserKeypairs: false,
+    serverSignerConfigured: Boolean(context.signer),
+    userSignerRequiredFor: [
+      'x402/pay.sh payment proofs',
+      'value-moving Solana transactions',
+      'SAP registry, SNS, escrow, settlement, and swap submissions',
+    ],
+    paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
+    localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
+  };
+}
+
+/**
  * @name reloadRuntimeProfile
  * @description Replaces the live MCP context config, SAP client, signer, connection, and policy engine.
  */
@@ -245,6 +285,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
         secretMaterial: 'never-exposed',
       },
       identityConsistency: buildIdentityConsistency(context),
+      hostedRemote: buildHostedRemoteRuntime(context),
       policy: context.policyEngine.getRuntimeStatus() satisfies PolicyRuntimeSummary,
       profile: buildProfileSummary(getLoadedProfileName(), context),
     }, null, 2))

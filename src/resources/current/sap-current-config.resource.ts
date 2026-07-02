@@ -15,6 +15,8 @@ import { getActiveProfile, getProfileConfigPath, loadProfileConfig } from '../..
 import { fullConfigSchema, type FullConfig } from '../../config/secure-config.js';
 import { existsSync, readFileSync } from 'fs';
 
+const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
+
 /**
  * Sanitized configuration data exposed to agents.
  * Excludes sensitive information (private keys, secrets).
@@ -92,6 +94,19 @@ interface SanitizedConfig {
     metricsEnabled: boolean;
     /** Bento guard enabled */
     bentoEnabled: boolean;
+  };
+  /** Hosted remote MCP boundary */
+  hostedRemote?: {
+    /** Canonical OOBE hosted MCP endpoint */
+    canonicalEndpoint: string;
+    /** Hosted server is not a customer wallet custodian */
+    serverStoresUserKeypairs: false;
+    /** Whether the hosted server process itself has a signer loaded */
+    serverSignerConfigured: boolean;
+    /** How paid hosted calls behave */
+    paidToolBehavior: 'returns-402-x402-payment-required-before-execution';
+    /** Whether agents may silently switch to local stdio */
+    localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks';
   };
   /** Logging configuration */
   logging: {
@@ -216,6 +231,15 @@ export function sapCurrentConfigResource(server: Server, context: SapMcpContext)
             metricsEnabled: config.enableMetrics,
             bentoEnabled: context.config.bento?.enabled ?? false,
           },
+          hostedRemote: context.config.mode === 'hosted-api'
+            ? {
+                canonicalEndpoint: HOSTED_MCP_URL,
+                serverStoresUserKeypairs: false,
+                serverSignerConfigured: Boolean(context.signer),
+                paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
+                localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
+              }
+            : undefined,
           logging: {
             level: context.config.logLevel,
             format: config.logFormat,

@@ -98,6 +98,13 @@ Hosted users still need a local SAP MCP profile when they sign x402/pay.sh
 payments, SAP transactions, Solana transactions, SNS operations, or settlement
 actions. The hosted MCP server is not a wallet custodian.
 
+When connected to hosted SAP MCP, `signerConfigured: false` on the remote
+server means the hosted server is non-custodial. It does not mean the remote
+tool surface is unavailable. Do not silently switch to local stdio just because
+a hosted call requires x402 payment or because the hosted server does not hold
+the user's signer. Use the hosted x402 flow first; ask the user before using a
+local stdio fallback.
+
 ## Profile Tools
 
 | Tool | Purpose |
@@ -265,6 +272,10 @@ npx sap-mcp-remote
 
 Do not ask hosted users to run their own HTTP server unless they are deploying
 their own VPS/operator instance.
+
+Do not call a local free `stdio` SAP MCP server as an implicit substitute for
+hosted paid tools. Local stdio is a developer fallback only when the user asks
+for local execution or the client cannot perform remote Streamable HTTP/x402.
 
 ## Signing Rules
 

@@ -251,6 +251,9 @@ function buildContextMessage(options: {
 - Public metadata: \`https://mcp.sap.oobeprotocol.ai/server.json\`
 - Auth: bearerless public agent mode; paid tools require x402 payment proof.
 - Security: hosted SAP MCP never stores user keypairs and never exposes keypair bytes.
+- Non-custodial signer rule: hosted \`signerConfigured: false\` means the OOBE server is not holding the user's wallet. It does **not** mean the hosted tool surface is unusable.
+- Hosted paid tools should be paid through x402/pay.sh from the user's local SAP profile or external signer. Do not silently switch to local stdio just to avoid payment.
+- Local stdio is a developer fallback only when the user explicitly asks for local execution or the MCP client cannot perform remote/x402 calls.
 - For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url, transport }\` entry, not a nested \`mcpServers.sap\` object.
 - For Hermes profile YAML, use \`mcp_servers.sap.url\` and \`mcp_servers.sap.transport\`.
 
@@ -293,10 +296,12 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 ### ⚡ x402 Hosted Payment Fast Path
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
 - Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.
+- Treat \`402 Payment Required\` as the expected hosted payment handshake, not as a tool failure.
 - Reuse the initialized MCP session and replay the exact same JSON-RPC body after payment; changing the body changes the request hash.
 - Prefer \`PAYMENT-SIGNATURE\` for the payment proof header; accept \`X-PAYMENT\` only when the client runtime requires it.
 - Capture \`PAYMENT-RESPONSE\` or \`X-PAYMENT-RESPONSE\` as the settlement receipt bound to the tool output.
 - x402/pay.sh payment payloads must be signed by the user's wizard-created SAP profile wallet or external signer, never by the hosted server.
+- If the current client runtime cannot produce x402 payment headers, report that limitation and ask the user to run the wizard/signing bridge. Do not call the local free server as an implicit substitute.
 
 `;
 

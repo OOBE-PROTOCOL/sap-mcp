@@ -86,6 +86,8 @@ The hosted server does not expose or store keypair bytes.
 
 Read-only discovery can connect directly to the hosted MCP URL. Any agent that needs to sign x402/pay.sh payloads, SAP transactions, Solana transactions, SNS operations, or settlement actions should run the wizard first so the signer remains user-controlled.
 
+If `sap_profile_current` reports `runtime.signerConfigured: false` on the hosted server, read it as a non-custodial guarantee: OOBE is not holding the user's wallet. It is not a reason to switch to local stdio automatically. Paid hosted tools should complete the x402/pay.sh payment flow from the user's local SAP profile or external signer. Use local stdio only when the user explicitly chooses local execution or the client cannot support remote Streamable HTTP/x402.
+
 ## 3. Install And Configure
 
 ```bash
