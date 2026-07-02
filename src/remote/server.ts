@@ -684,12 +684,19 @@ export class RemoteMCPServer {
     this.validateAuthConfig();
     await this.rateLimiter.initialize();
 
-    const server = await createSapMcpServer(this.appConfig);
-    this.transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: this.config.stateless ? undefined : () => randomUUID(),
-    });
-    await server.connect(this.transport);
     const monetizationGate = await McpMonetizationGate.create(this.appConfig);
+
+    // In stateful mode, create one long-lived transport and connect the server once.
+    // In stateless mode, a fresh transport + server must be created per request —
+    // the MCP SDK throws "Stateless transport cannot be reused across requests"
+    // if a stateless transport handles more than one request.
+    if (!this.config.stateless) {
+      const server = await createSapMcpServer(this.appConfig);
+      this.transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+      });
+      await server.connect(this.transport);
+    }
 
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
@@ -777,12 +784,31 @@ export class RemoteMCPServer {
       }
 
       try {
-        if (monetizationGate) {
-          await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
-            await this.transport?.handleRequest(mcpReq, mcpRes, parsedBody);
+        if (this.config.stateless) {
+          // Stateless mode: create a fresh transport + server per request.
+          // The MCP SDK prohibits reusing a stateless transport across requests.
+          const perRequestServer = await createSapMcpServer(this.appConfig);
+          const perRequestTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
           });
+          await perRequestServer.connect(perRequestTransport);
+
+          if (monetizationGate) {
+            await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+              await perRequestTransport.handleRequest(mcpReq, mcpRes, parsedBody);
+            });
+          } else {
+            await perRequestTransport.handleRequest(req, res);
+          }
         } else {
-          await this.transport?.handleRequest(req, res);
+          // Stateful mode: reuse the long-lived transport.
+          if (monetizationGate) {
+            await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+              await this.transport?.handleRequest(mcpReq, mcpRes, parsedBody);
+            });
+          } else {
+            await this.transport?.handleRequest(req, res);
+          }
         }
       } catch (error) {
         logger.error('Remote MCP request failed', { error });
