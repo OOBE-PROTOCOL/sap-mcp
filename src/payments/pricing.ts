@@ -64,6 +64,9 @@ const FREE_TOOLS = new Set([
   'sap_skills_list',
   'sap_skills_bundle',
   'sap_get_network_overview',
+  'x402_parse_payment',
+  'x402_create_payment',
+  'x402_paid_call',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
