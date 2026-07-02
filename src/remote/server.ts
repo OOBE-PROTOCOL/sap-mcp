@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import * as http from 'http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
@@ -213,7 +214,7 @@ export function buildA2AAgentCard(
       ? 'Authenticated SAP Protocol and Solana agent gateway exposed through native MCP Streamable HTTP.'
       : 'Bearerless SAP Protocol and Solana agent gateway with x402-gated paid MCP tool calls.',
     url: `${baseUrl}/mcp`,
-    version: '0.1.1',
+    version: MCP_SERVER_VERSION,
     protocol: {
       primary: 'mcp',
       transport: 'streamable-http',
@@ -287,7 +288,7 @@ export function buildWizardInstallDescriptor(
   const baseUrl = buildPublicBaseUrl(req, config);
   return {
     name: 'SAP MCP Wizard',
-    version: '0.1.1',
+    version: MCP_SERVER_VERSION,
     packageName: '@oobe-protocol-labs/sap-mcp-server',
     hostedMcpUrl: `${baseUrl}/mcp`,
     configDirectory: '~/.config/mcp-sap',
