@@ -148,8 +148,11 @@ describe('createSapMcpServer', () => {
       hostedRemote?: {
         canonicalEndpoint?: string;
         serverStoresUserKeypairs?: boolean;
+        signerStatus?: string;
+        writeAccess?: string;
         paidToolBehavior?: string;
         localFallbackPolicy?: string;
+        doNotSummarizeAs?: string[];
       };
     };
 
@@ -157,9 +160,13 @@ describe('createSapMcpServer', () => {
     expect(profile.hostedRemote).toMatchObject({
       canonicalEndpoint: 'https://mcp.sap.oobeprotocol.ai/mcp',
       serverStoresUserKeypairs: false,
+      signerStatus: 'server-non-custodial-user-signer-required',
+      writeAccess: 'available-after-user-signature-and-payment-proof',
       paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
       localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
     });
+    expect(profile.hostedRemote?.doNotSummarizeAs).toContain('signer not configured');
+    expect(profile.hostedRemote?.doNotSummarizeAs).toContain('read-only only');
   });
 
   it('previews and signs a Solana transaction with the dedicated local keypair signer', async () => {

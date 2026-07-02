@@ -252,6 +252,8 @@ function buildContextMessage(options: {
 - Auth: bearerless public agent mode; paid tools require x402 payment proof.
 - Security: hosted SAP MCP never stores user keypairs and never exposes keypair bytes.
 - Non-custodial signer rule: hosted \`signerConfigured: false\` means the OOBE server is not holding the user's wallet. It does **not** mean the hosted tool surface is unusable.
+- When summarizing hosted mode, say: "server is non-custodial; user signatures come from the local SAP profile or external signer." Do **not** say "signer not configured", "read-only only", "writes unavailable", or "remote MCP broken" unless a specific tool call returns that explicit error.
+- Hosted writes are available only after the user completes the required x402/pay.sh payment proof and tool-specific signing flow. The hosted server must never be described as holding or needing the user's private key.
 - Hosted paid tools should be paid through x402/pay.sh from the user's local SAP profile or external signer. Do not silently switch to local stdio just to avoid payment.
 - Local stdio is a developer fallback only when the user explicitly asks for local execution or the MCP client cannot perform remote/x402 calls.
 - For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url, transport }\` entry, not a nested \`mcpServers.sap\` object.

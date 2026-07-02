@@ -29,6 +29,10 @@ requests. Local `stdio` usage remains free and should not attempt x402 payment.
 Do not treat hosted `402 Payment Required` as a failure; it is the expected
 payment handshake. Do not silently bypass hosted paid tools by switching to a
 local free stdio MCP server unless the user explicitly asks for local execution.
+If `sap_profile_current` says the hosted server has no signer, treat that as
+the non-custodial model: OOBE does not hold user keys. Paid and value-moving
+hosted calls still proceed through x402/pay.sh plus the user's local SAP profile
+or external signer.
 
 - Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
   `sap_get_network_overview`.

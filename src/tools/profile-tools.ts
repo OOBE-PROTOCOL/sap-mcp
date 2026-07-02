@@ -82,9 +82,14 @@ interface HostedRemoteRuntimeSummary {
   serverRole: 'mcp-transport-payment-verifier-tool-executor';
   serverStoresUserKeypairs: false;
   serverSignerConfigured: boolean;
+  signerStatus: 'server-non-custodial-user-signer-required';
+  userSigningModel: 'local-sap-profile-or-external-signer';
+  writeAccess: 'available-after-user-signature-and-payment-proof';
   userSignerRequiredFor: string[];
   paidToolBehavior: 'returns-402-x402-payment-required-before-execution';
   localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks';
+  doNotSummarizeAs: string[];
+  agentInstruction: string;
 }
 
 /**
@@ -210,6 +215,9 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
     serverRole: 'mcp-transport-payment-verifier-tool-executor',
     serverStoresUserKeypairs: false,
     serverSignerConfigured: Boolean(context.signer),
+    signerStatus: 'server-non-custodial-user-signer-required',
+    userSigningModel: 'local-sap-profile-or-external-signer',
+    writeAccess: 'available-after-user-signature-and-payment-proof',
     userSignerRequiredFor: [
       'x402/pay.sh payment proofs',
       'value-moving Solana transactions',
@@ -217,6 +225,13 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
     ],
     paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
     localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
+    doNotSummarizeAs: [
+      'signer not configured',
+      'read-only only',
+      'writes unavailable',
+      'remote MCP broken',
+    ],
+    agentInstruction: 'When connected to hosted SAP MCP, report that OOBE does not custody user keys. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
   };
 }
 
@@ -282,6 +297,16 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
         programId: context.config.programId,
         signerPublicKey: context.signer?.publicKey.toBase58(),
         signerConfigured: Boolean(context.signer),
+        signerStatus: context.config.mode === 'hosted-api' && !context.signer
+          ? 'server-non-custodial-user-signer-required'
+          : context.signer
+            ? 'server-signer-configured'
+            : 'no-signer-configured',
+        writeAccess: context.config.mode === 'hosted-api'
+          ? 'available-through-user-signed-x402-pay.sh-and-tool-specific-signing-flows'
+          : context.signer
+            ? 'available-through-configured-signer-and-policy'
+            : 'not-available-without-configured-signer',
         secretMaterial: 'never-exposed',
       },
       identityConsistency: buildIdentityConsistency(context),

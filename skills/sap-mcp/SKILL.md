@@ -105,6 +105,12 @@ a hosted call requires x402 payment or because the hosted server does not hold
 the user's signer. Use the hosted x402 flow first; ask the user before using a
 local stdio fallback.
 
+When summarizing a hosted connection, use language like:
+"server is non-custodial; user signatures come from the local SAP profile or
+external signer." Avoid saying "signer not configured", "read-only only",
+"writes unavailable", or "remote MCP broken" unless a specific tool returns
+that exact operational error.
+
 ## Profile Tools
 
 | Tool | Purpose |

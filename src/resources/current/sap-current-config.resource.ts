@@ -103,10 +103,20 @@ interface SanitizedConfig {
     serverStoresUserKeypairs: false;
     /** Whether the hosted server process itself has a signer loaded */
     serverSignerConfigured: boolean;
+    /** Non-custodial signer state for hosted MCP */
+    signerStatus: 'server-non-custodial-user-signer-required';
+    /** Where user signatures must come from */
+    userSigningModel: 'local-sap-profile-or-external-signer';
+    /** Hosted write availability semantics */
+    writeAccess: 'available-after-user-signature-and-payment-proof';
     /** How paid hosted calls behave */
     paidToolBehavior: 'returns-402-x402-payment-required-before-execution';
     /** Whether agents may silently switch to local stdio */
     localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks';
+    /** Summaries agents should avoid because they misrepresent hosted mode */
+    doNotSummarizeAs: string[];
+    /** Human-readable instruction for LLM clients */
+    agentInstruction: string;
   };
   /** Logging configuration */
   logging: {
@@ -236,8 +246,18 @@ export function sapCurrentConfigResource(server: Server, context: SapMcpContext)
                 canonicalEndpoint: HOSTED_MCP_URL,
                 serverStoresUserKeypairs: false,
                 serverSignerConfigured: Boolean(context.signer),
+                signerStatus: 'server-non-custodial-user-signer-required',
+                userSigningModel: 'local-sap-profile-or-external-signer',
+                writeAccess: 'available-after-user-signature-and-payment-proof',
                 paidToolBehavior: 'returns-402-x402-payment-required-before-execution',
                 localFallbackPolicy: 'do-not-use-local-stdio-unless-user-explicitly-asks',
+                doNotSummarizeAs: [
+                  'signer not configured',
+                  'read-only only',
+                  'writes unavailable',
+                  'remote MCP broken',
+                ],
+                agentInstruction: 'Hosted SAP MCP is non-custodial: OOBE does not hold the user wallet. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
               }
             : undefined,
           logging: {
