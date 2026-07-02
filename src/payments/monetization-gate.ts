@@ -171,6 +171,17 @@ export class McpMonetizationGate {
     });
 
     const context = this.buildRequestContext(request, parsedBody, virtualPath);
+
+    // Debug: check if Payment-Signature header is present
+    const psHeader = (request.headers['payment-signature'] as string | undefined) ??
+      (request.headers['x-payment'] as string | undefined);
+    if (psHeader) {
+      logger.info('Payment-Signature header present in request', {
+        headerLength: psHeader.length,
+        requestHash: requestHash.slice(0, 12),
+      });
+    }
+
     const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
       appName: 'SAP MCP Server',
       currentUrl: context.adapter.getUrl(),
