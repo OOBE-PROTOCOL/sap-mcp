@@ -178,6 +178,10 @@ export class McpMonetizationGate {
     });
 
     if (paymentResult.type === 'payment-error') {
+      // V1 compatibility: @x402/svm V1 exact scheme checks maxAmountRequired but
+      // V2 resource server only emits amount. Patch the 402 response body to add
+      // maxAmountRequired so V1-only clients and facilitators can verify payments.
+      patchV1Compatibility(paymentResult.response);
       writePaymentInstructions(response, paymentResult.response);
       return;
     }
@@ -609,5 +613,44 @@ function replayBufferedCall(
     case 'flushHeaders':
       flushHeaders();
       return;
+  }
+}
+
+/**
+ * @name patchV1Compatibility
+ * @description Patches the x402 402 response body to add maxAmountRequired (V1) alongside amount (V2).
+ * The @x402/svm V1 exact scheme verifier checks maxAmountRequired, but the V2 resource server
+ * only emits amount. This ensures V1-compatible clients and facilitators can verify payments.
+ */
+function patchV1Compatibility(instructions: HTTPResponseInstructions): void {
+  if (instructions.isHtml || !instructions.body) {
+    return;
+  }
+
+  const body = instructions.body as Record<string, unknown> | undefined;
+  if (!body || typeof body !== 'object') {
+    return;
+  }
+
+  // x402 response body: { accepts: [{ amount, ... }, ...], ... }
+  const accepts = body.accepts;
+  if (Array.isArray(accepts)) {
+    for (const req of accepts) {
+      if (req && typeof req === 'object' && 'amount' in req && !('maxAmountRequired' in req)) {
+        (req as Record<string, unknown>).maxAmountRequired = (req as Record<string, unknown>).amount;
+      }
+    }
+  }
+
+  // Also patch top-level paymentRequirements if present
+  const requirements = body.paymentRequirements;
+  if (Array.isArray(requirements)) {
+    for (const req of requirements) {
+      if (req && typeof req === 'object' && 'amount' in req && !('maxAmountRequired' in req)) {
+        (req as Record<string, unknown>).maxAmountRequired = (req as Record<string, unknown>).amount;
+      }
+    }
+  } else if (requirements && typeof requirements === 'object' && 'amount' in requirements && !('maxAmountRequired' in requirements)) {
+    (requirements as Record<string, unknown>).maxAmountRequired = (requirements as Record<string, unknown>).amount;
   }
 }
