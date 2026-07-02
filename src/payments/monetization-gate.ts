@@ -276,10 +276,19 @@ export class McpMonetizationGate {
     }
 
     // Parse the payment header → { x402Version, payload }
+    // x402 protocol: header is base64-encoded JSON
     let paymentPayload: PaymentPayload;
     let x402Version: number;
     try {
-      const parsed = JSON.parse(paymentHeader) as { x402Version?: number; payload?: unknown };
+      // Try base64 decode first (x402 spec compliant)
+      let decoded: string;
+      try {
+        decoded = Buffer.from(paymentHeader, 'base64').toString('utf-8');
+      } catch {
+        // Fallback: raw JSON (backward compat with non-spec clients)
+        decoded = paymentHeader;
+      }
+      const parsed = JSON.parse(decoded) as { x402Version?: number; payload?: unknown };
       x402Version = parsed.x402Version ?? 2;
       paymentPayload = { x402Version, payload: parsed.payload } as PaymentPayload;
     } catch {
