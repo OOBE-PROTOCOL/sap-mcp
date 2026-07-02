@@ -159,23 +159,6 @@ export class McpMonetizationGate {
       return;
     }
 
-    // ── Fast path: Payment-Signature header present ────────────────────────
-    // When the client sends a Payment-Signature header, it means it has
-    // already built a payment transaction. Skip the 402 response and go
-    // directly to facilitator verification + settlement.
-    const paymentHeader =
-      (request.headers['payment-signature'] as string | undefined) ??
-      (request.headers['x-payment'] as string | undefined);
-
-    if (paymentHeader && decision.required) {
-      logger.info('Payment-Signature header detected — verifying with facilitator', {
-        toolNames: (decision as Extract<PaymentDecision, { required: true }>).toolNames,
-        price: (decision as Extract<PaymentDecision, { required: true }>).price,
-      });
-      await this.handlePaidRequest(request, response, next, parsedBody, decision, rawBody);
-      return;
-    }
-
     const requestHash = hashRequestBody(rawBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
