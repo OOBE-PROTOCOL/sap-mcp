@@ -200,13 +200,35 @@ export class McpMonetizationGate {
       // maxAmountRequired so V1-only clients and facilitators can verify payments.
       patchV1Compatibility(paymentResult.response);
 
+      // Extract the x402 PaymentRequired object from the PAYMENT-REQUIRED header.
+      // The x402 resource server puts the accepts[] (with extra.feePayer) in this
+      // header as base64-encoded JSON.
+      let acceptsFromHeader: unknown = undefined;
+      try {
+        const paymentRequiredHeader = paymentResult.response.headers?.['payment-required'] ??
+          paymentResult.response.headers?.['PAYMENT-REQUIRED'];
+        if (typeof paymentRequiredHeader === 'string') {
+          const decoded = Buffer.from(paymentRequiredHeader, 'base64').toString('utf-8');
+          const paymentRequired = JSON.parse(decoded) as { accepts?: unknown[] };
+          acceptsFromHeader = paymentRequired.accepts;
+        }
+      } catch {
+        // Header not present or invalid — fall back to body
+      }
+
       // Instead of returning HTTP 402 (which the MCP SDK can't handle and hangs),
       // return HTTP 200 with a JSON-RPC error response containing the payment
       // requirements. The agent will see this as a normal (errorful) tool result
-      // and can use x402_parse_payment → x402_create_payment → x402_paid_call
-      // to self-pay and retry.
+      // and can use x402_paid_call to self-pay and retry.
       const responseBody = paymentResult.response.body as Record<string, unknown> | undefined;
       const jsonRpcId = extractJsonRpcId(parsedBody);
+
+      // Use accepts from header (has extra.feePayer) or fall back to body
+      const paymentRequirements = acceptsFromHeader ??
+        responseBody?.accepts ??
+        responseBody?.paymentRequirements ??
+        responseBody;
+
       writeJson(response, 200, {
         jsonrpc: '2.0',
         id: jsonRpcId,
@@ -215,13 +237,11 @@ export class McpMonetizationGate {
           message: 'payment_required',
           data: {
             protocol: 'x402',
-            paymentRequirements: responseBody?.accepts ?? responseBody?.paymentRequirements ?? responseBody,
+            paymentRequirements,
             instructions: {
               header: 'Payment-Signature',
               steps: [
-                'Call x402_parse_payment with this response body',
-                'Call x402_create_payment with the parsed requirements',
-                'Call x402_paid_call with the payment header to retry',
+                'Call x402_paid_call with endpoint, toolName, and arguments to auto-pay',
               ],
             },
           },
