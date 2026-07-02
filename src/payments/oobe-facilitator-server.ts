@@ -21,7 +21,7 @@ import { createKeyPairSignerFromBytes } from '@solana/kit';
 import { Keypair } from '@solana/web3.js';
 import { toFacilitatorSvmSigner } from '@x402/svm';
 import { registerExactSvmScheme } from '@x402/svm/exact/facilitator';
-import { logger, initLogger } from '../core/logger.js';
+import { logger, initLogger, redactSensitiveString } from '../core/logger.js';
 import { getKeypairsDir } from '../config/paths.js';
 
 const SOLANA_MAINNET_CAIP2 = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
@@ -473,7 +473,7 @@ async function runCli(argv: string[]): Promise<void> {
       `Networks: ${config.networks.join(', ')}`,
       `Signer Path: ${config.signerPath}`,
       `Signer Public Key: ${getFacilitatorSignerPublicKey(config.signerPath)}`,
-      `RPC URL: ${config.rpcUrl ?? '(x402 default)'}`,
+      `RPC URL: ${config.rpcUrl ? redactSensitiveString(config.rpcUrl) : '(x402 default)'}`,
       `Auth Token: ${config.authToken ? 'configured' : 'not configured'}`,
       'Secret Material: never printed',
       '',

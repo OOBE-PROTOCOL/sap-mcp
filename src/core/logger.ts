@@ -47,6 +47,75 @@ let currentLevel: LogLevel = 'info';
 let currentFormat: LogFormat = 'pretty';
 let logFile: string | undefined;
 
+const SENSITIVE_QUERY_KEYS = new Set([
+  'api_key',
+  'apikey',
+  'key',
+  'token',
+  'access_token',
+  'auth',
+  'secret',
+  'signature',
+]);
+
+/**
+ * @name redactSensitiveString
+ * @description Redacts URL query secrets and obvious inline secret assignments before writing logs.
+ */
+export function redactSensitiveString(value: string): string {
+  let redacted = value.replace(
+    /([?&](?:api_key|apikey|key|token|access_token|auth|secret|signature)=)[^&\s]+/gi,
+    '$1[REDACTED]',
+  );
+
+  try {
+    const url = new URL(redacted);
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) {
+        url.searchParams.set(key, '[REDACTED]');
+      }
+    }
+    redacted = url.toString();
+  } catch {
+    // Not a URL; regex redaction above still catches common inline forms.
+  }
+
+  return redacted;
+}
+
+function redactLogData(data: unknown): unknown {
+  if (typeof data === 'string') {
+    return redactSensitiveString(data);
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(redactLogData);
+  }
+
+  if (data && typeof data === 'object') {
+    if (data instanceof Error) {
+      return {
+        name: data.name,
+        message: redactSensitiveString(data.message),
+        stack: data.stack ? redactSensitiveString(data.stack) : undefined,
+      };
+    }
+
+    const redacted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      const lowerKey = key.toLowerCase();
+      if (SENSITIVE_QUERY_KEYS.has(lowerKey) || lowerKey.includes('token') || lowerKey.includes('secret')) {
+        redacted[key] = typeof value === 'undefined' ? value : '[REDACTED]';
+        continue;
+      }
+      redacted[key] = redactLogData(value);
+    }
+    return redacted;
+  }
+
+  return data;
+}
+
 /**
  * Initialize logger with options
  */
@@ -106,7 +175,7 @@ function createLogEntry(level: LogLevel, message: string, data?: unknown): LogEn
     timestamp: new Date().toISOString(),
     level,
     message,
-    data,
+    data: redactLogData(data),
     context: {
       pid: process.pid,
       mode: process.env.SAP_MCP_MODE,
@@ -166,7 +235,7 @@ export const logger = {
     console.error(banner);
     console.error(`Version: ${config.version || '0.1.1'}`);
     console.error(`Mode: ${config.mode}`);
-    console.error(`RPC: ${config.rpcUrl}`);
+    console.error(`RPC: ${redactSensitiveString(config.rpcUrl)}`);
     console.error(`Program: ${config.programId}`);
     console.error(`PID: ${process.pid}`);
     console.error('────────────────────────────────────────────────────────');

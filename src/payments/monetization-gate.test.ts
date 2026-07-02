@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
-import { McpMonetizationGate, resolvePaymentNetwork } from './monetization-gate.js';
+import { McpMonetizationGate, normalizePaymentNetwork, resolvePaymentNetwork } from './monetization-gate.js';
 
 const baseMonetization: SapMcpMonetizationConfig = {
   enabled: true,
@@ -82,5 +82,12 @@ describe('MCP monetization gate readiness', () => {
       ...baseConfig,
       rpcUrl: 'https://api.mainnet-beta.solana.com',
     })).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+  });
+
+  it('normalizes friendly Solana network aliases to x402 CAIP-2 identifiers', () => {
+    expect(normalizePaymentNetwork('mainnet')).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+    expect(normalizePaymentNetwork('mainnet-beta')).toBe('solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp');
+    expect(normalizePaymentNetwork('devnet')).toBe('solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1');
+    expect(normalizePaymentNetwork('testnet')).toBe('solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z');
   });
 });

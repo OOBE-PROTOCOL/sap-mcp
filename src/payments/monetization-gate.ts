@@ -313,7 +313,7 @@ export class McpMonetizationGate {
  */
 export function resolvePaymentNetwork(config: SapMcpConfig): string {
   if (config.monetization.network) {
-    return config.monetization.network;
+    return normalizePaymentNetwork(config.monetization.network);
   }
 
   if (config.rpcUrl.includes('devnet')) {
@@ -325,6 +325,24 @@ export function resolvePaymentNetwork(config: SapMcpConfig): string {
   }
 
   return SOLANA_MAINNET_CAIP2;
+}
+
+/**
+ * @name normalizePaymentNetwork
+ * @description Converts user-friendly Solana network aliases to the CAIP-2 identifiers expected by x402 SVM.
+ */
+export function normalizePaymentNetwork(network: string): string {
+  const normalized = network.trim().toLowerCase();
+  if (normalized === 'mainnet' || normalized === 'mainnet-beta' || normalized === 'solana') {
+    return SOLANA_MAINNET_CAIP2;
+  }
+  if (normalized === 'devnet' || normalized === 'solana-devnet') {
+    return SOLANA_DEVNET_CAIP2;
+  }
+  if (normalized === 'testnet' || normalized === 'solana-testnet') {
+    return SOLANA_TESTNET_CAIP2;
+  }
+  return network;
 }
 
 function validateMonetizationConfig(config: SapMcpMonetizationConfig): void {
