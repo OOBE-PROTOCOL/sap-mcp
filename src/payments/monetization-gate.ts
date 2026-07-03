@@ -195,28 +195,11 @@ export class McpMonetizationGate {
       parsedBody = parseJsonBody(rawBody);
     } catch (error) {
       // Non-JSON or empty body (e.g. x402scan probing, GET requests, health checks).
-      // If this is a POST to /mcp, return a 402 payment challenge so x402 discovery
-      // scanners can detect the paywall. For non-MCP requests, fall through to next().
-      const acceptHeader = request.headers['accept'] || '';
-      const isMcpClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
-      if (shouldInspectRequest(request) && !isMcpClient) {
-        // x402 scanner or non-MCP client probing — return 402 payment challenge
-        const context = this.buildRequestContext(request, { jsonrpc: '2.0', method: 'tools/list', params: {} }, '/mcp');
-        const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
-          appName: 'SAP MCP Server',
-          currentUrl: context.adapter.getUrl(),
-          testnet: resolvePaymentNetwork(this.appConfig) !== SOLANA_MAINNET_CAIP2,
-        });
-        if (paymentResult.type === 'payment-error') {
-          patchV1Compatibility(paymentResult.response);
-          const prHeader = paymentResult.response.headers?.['payment-required'] ?? paymentResult.response.headers?.['PAYMENT-REQUIRED'];
-          if (typeof prHeader === 'string') {
-            response.setHeader('PAYMENT-REQUIRED', prHeader);
-          }
-          response.writeHead(402, { 'Content-Type': 'application/json' });
-          response.end(JSON.stringify(paymentResult.response.body));
-          return;
-        }
+      // Return a 402 payment challenge with the standard x402 body so discovery
+      // scanners can detect the paywall.
+      if (shouldInspectRequest(request)) {
+        await this.returnX402Challenge(request, response, { jsonrpc: '2.0', method: 'tools/list', params: {} });
+        return;
       }
       logger.warn('Failed to parse monetized MCP request', { error });
       writeJson(response, 400, { error: 'Invalid JSON-RPC request body' });
@@ -331,12 +314,22 @@ export class McpMonetizationGate {
 
       if (!isMcpSdkClient) {
         // x402 scanner or non-MCP HTTP client — return standard HTTP 402
-        response.writeHead(402, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({
+        // with the full PaymentRequired object (x402Version, accepts, resource)
+        // decoded from the PAYMENT-REQUIRED header as the response body.
+        const prHeaderDecoded = paymentRequiredHeader;
+        let x402Body: unknown = {
           error: 'Payment required',
           accepts: paymentRequirements,
-          authenticated: false,
-        }));
+        };
+        if (typeof prHeaderDecoded === 'string') {
+          try {
+            x402Body = JSON.parse(Buffer.from(prHeaderDecoded, 'base64').toString('utf-8'));
+          } catch {
+            // fall back to the simple body
+          }
+        }
+        response.writeHead(402, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(x402Body));
         return;
       }
 
@@ -558,6 +551,56 @@ export class McpMonetizationGate {
       method: request.method ?? 'POST',
       paymentHeader: adapter.getHeader('payment-signature') ?? adapter.getHeader('x-payment'),
     };
+  }
+
+  /**
+   * @name returnX402Challenge
+   * @description Returns a standard HTTP 402 payment challenge for non-MCP clients
+   * (x402scan discovery, curl, health checks). Decodes the PaymentRequired object
+   * from the PAYMENT-REQUIRED header and returns it as the response body so x402
+   * scanners can validate the challenge format.
+   */
+  private async returnX402Challenge(
+    request: http.IncomingMessage,
+    response: http.ServerResponse,
+    parsedBody: unknown,
+  ): Promise<void> {
+    const context = this.buildRequestContext(request, parsedBody, '/mcp');
+    const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
+      appName: 'SAP MCP Server',
+      currentUrl: context.adapter.getUrl(),
+      testnet: resolvePaymentNetwork(this.appConfig) !== SOLANA_MAINNET_CAIP2,
+    });
+
+    if (paymentResult.type !== 'payment-error') {
+      // No payment required for this route — fall through
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    patchV1Compatibility(paymentResult.response);
+
+    // Set the PAYMENT-REQUIRED header from the x402 resource server
+    const prHeader = paymentResult.response.headers?.['payment-required'] ??
+      paymentResult.response.headers?.['PAYMENT-REQUIRED'];
+    if (typeof prHeader === 'string') {
+      response.setHeader('PAYMENT-REQUIRED', prHeader);
+    }
+
+    // Decode the PaymentRequired object from the header and return it as the body.
+    // x402 scanners expect: { x402Version, error, accepts, resource }
+    let x402Body: unknown = paymentResult.response.body ?? { error: 'Payment required' };
+    if (typeof prHeader === 'string') {
+      try {
+        x402Body = JSON.parse(Buffer.from(prHeader, 'base64').toString('utf-8'));
+      } catch {
+        // fall back to the response body
+      }
+    }
+
+    response.writeHead(402, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify(x402Body));
   }
 
   private async forwardAndSettle(options: {
@@ -784,7 +827,9 @@ function buildPayShCheckoutUrl(config: SapMcpConfig, decision: PaymentDecision):
 }
 
 function shouldInspectRequest(request: http.IncomingMessage): boolean {
-  return request.method === 'POST' && Boolean(request.url?.startsWith('/mcp'));
+  // Accept both GET and POST on /mcp so x402 discovery scanners (x402scan.com)
+  // that probe with GET requests trigger the payment challenge.
+  return Boolean(request.url?.startsWith('/mcp'));
 }
 
 /**
