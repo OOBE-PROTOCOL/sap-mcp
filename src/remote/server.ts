@@ -586,6 +586,7 @@ export function buildOpenApiSpec(
       contact: {
         name: 'OOBE Protocol Labs',
         url: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
+        email: 'build@oobeprotocol.ai',
       },
     },
     servers: [
@@ -1246,8 +1247,20 @@ export class RemoteMCPServer {
         return;
       }
 
-      if (req.method === 'GET' && ['/favicon.png', '/favicon.ico', '/apple-touch-icon.png', '/og.png'].includes(url.pathname)) {
+      if (req.method === 'GET' && ['/favicon.png', '/apple-touch-icon.png', '/og.png'].includes(url.pathname)) {
         writePngAsset(res);
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/favicon.ico') {
+        const image = readLogoAsset();
+        res.writeHead(200, {
+          'Content-Type': 'image/x-icon',
+          'Cache-Control': 'public, max-age=86400',
+          'Content-Length': image.byteLength,
+          'X-Content-Type-Options': 'nosniff',
+        });
+        res.end(image);
         return;
       }
 
