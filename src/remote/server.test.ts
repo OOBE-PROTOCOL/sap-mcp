@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { SapMcpConfig } from '../config/env.js';
 import {
   buildA2AAgentCard,
+  buildDocsHtml,
   buildLandingHtml,
   buildPublicServerInfo,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
   defaultRemoteConfig,
+  resolvePublicDocsMarkdown,
   resolvePublicLogoAsset,
 } from './server.js';
 
@@ -201,6 +203,7 @@ describe('remote MCP server config', () => {
     );
 
     expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
@@ -230,6 +233,7 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<meta property="og:title" content="SAP MCP Server | OOBE Protocol">');
     expect(root).toContain('<link rel="icon" type="image/x-icon" href="/favicon.ico">');
     expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
+    expect(root).toContain('href="/docs"');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
@@ -244,6 +248,29 @@ describe('remote MCP server config', () => {
     expect(mcp).toContain('Accept: application/json, text/event-stream');
   });
 
+  it('renders a Docsify documentation shell for /docs', () => {
+    const config = {
+      port: 8787,
+      host: '127.0.0.1',
+      auth: { type: 'none' as const },
+      stateless: true,
+      rateLimit: {
+        enabled: true,
+        requestsPerMinute: 60,
+        keyPrefix: 'test:',
+      },
+    };
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const docs = buildDocsHtml(req, config);
+
+    expect(docs).toContain('<title>SAP MCP Documentation | OOBE Protocol</title>');
+    expect(docs).toContain('https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/docsify.min.js');
+    expect(docs).toContain('homepage');
+    expect(docs).toContain('README.md');
+    expect(docs).toContain('Search SAP MCP docs');
+    expect(docs).toContain('https://mcp.sap.oobeprotocol.ai/docs');
+  });
+
   it('resolves favicon.ico for browser GETs and crawler HEAD probes', () => {
     const head = resolvePublicLogoAsset('HEAD', '/favicon.ico');
     const get = resolvePublicLogoAsset('GET', '/favicon.ico');
@@ -254,5 +281,21 @@ describe('remote MCP server config', () => {
     expect(get?.contentType).toBe('image/x-icon');
     expect(get?.body?.byteLength).toBeGreaterThan(0);
     expect(resolvePublicLogoAsset('POST', '/favicon.ico')).toBeUndefined();
+  });
+
+  it('resolves hosted docs markdown safely from docs and USER_DOCS', () => {
+    const root = resolvePublicDocsMarkdown('GET', '/docs/README.md');
+    const sidebar = resolvePublicDocsMarkdown('GET', '/docs/_sidebar.md');
+    const user = resolvePublicDocsMarkdown('GET', '/docs/user/01_HOSTED_REMOTE_MCP.md');
+    const head = resolvePublicDocsMarkdown('HEAD', '/docs/README.md');
+
+    expect(root?.contentType).toBe('text/markdown; charset=utf-8');
+    expect(root?.body).toContain('SAP MCP Documentation');
+    expect(sidebar?.body).toContain('Hosted Remote MCP');
+    expect(user?.body).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(head?.body).toBeUndefined();
+    expect(head?.contentLength).toBeGreaterThan(0);
+    expect(resolvePublicDocsMarkdown('GET', '/docs/../package.json')).toBeUndefined();
+    expect(resolvePublicDocsMarkdown('POST', '/docs/README.md')).toBeUndefined();
   });
 });

@@ -5,6 +5,8 @@
 | Method | Path | Purpose | Auth |
 | --- | --- | --- | --- |
 | `GET` | `/` | Public landing page with share metadata and safe endpoint information. | Public. |
+| `GET` | `/docs` | Docsify-powered public documentation site for install, start, configuration, hosted remote MCP, x402/pay.sh, and client setup. | Public. |
+| `GET` | `/docs/*.md` | Read-only markdown files used by the docs site. Supports `docs/` and `USER_DOCS/` through `/docs/user/*.md`. | Public. |
 | `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
 | `GET` | `/favicon.png` | SAP MCP favicon/social preview asset. | Public. |
 | `GET` | `/favicon.ico` | Browser favicon compatibility route at the API root. | Public. |

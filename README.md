@@ -116,6 +116,7 @@ Remote endpoints:
 
 ```text
 GET     /
+GET     /docs
 GET     /server.json
 GET     /favicon.png
 GET     /favicon.ico
@@ -129,6 +130,8 @@ DELETE  /mcp
 ```
 
 `GET /` is a public, share-safe landing page with Open Graph/Twitter metadata. It exposes only public server information; keypair bytes, private wallet paths, RPC query secrets, and VPS-local paths must never appear there.
+
+`GET /docs` serves the public documentation site for install, start, configuration, hosted remote MCP, x402/pay.sh payments, and MCP client setup.
 
 See [05. Remote VPS Deployment](docs/05_REMOTE_VPS_DEPLOYMENT.md) and [07. Endpoints And Clients](docs/07_ENDPOINTS_AND_CLIENTS.md).
 

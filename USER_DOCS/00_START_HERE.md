@@ -33,6 +33,12 @@ Hosted MCP URL:
 https://mcp.sap.oobeprotocol.ai/mcp
 ```
 
+Hosted documentation:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/docs
+```
+
 Wizard descriptor:
 
 ```txt

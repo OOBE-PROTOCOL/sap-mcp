@@ -7,7 +7,7 @@
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import * as http from 'http';
-import { dirname, join } from 'path';
+import { dirname, join, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getDataDir, loadConfig, type SapMcpConfig } from '../config/env.js';
@@ -22,6 +22,8 @@ import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
 const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
+const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
+const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
 const PAYMENT_STATS_CACHE_MS = 15_000;
 const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
 const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
@@ -37,6 +39,16 @@ export interface PublicLogoAsset {
   contentType: 'image/png' | 'image/x-icon';
   contentLength: number;
   body?: Buffer;
+}
+
+/**
+ * @name PublicMarkdownAsset
+ * @description Resolved public documentation markdown asset served by the hosted docs site.
+ */
+export interface PublicMarkdownAsset {
+  contentType: 'text/markdown; charset=utf-8';
+  contentLength: number;
+  body?: string;
 }
 
 /**
@@ -137,6 +149,7 @@ export interface PublicServerInfo {
   };
   endpoints: {
     landing: string;
+    docs: string;
     mcp: string;
     health: string;
     serverInfo: string;
@@ -371,6 +384,76 @@ function writeHtml(res: http.ServerResponse, status: number, html: string): void
 }
 
 /**
+ * @name writeMarkdownAsset
+ * @description Writes a resolved public markdown documentation asset.
+ */
+function writeMarkdownAsset(res: http.ServerResponse, asset: PublicMarkdownAsset): void {
+  res.writeHead(200, {
+    'Content-Type': asset.contentType,
+    'Cache-Control': 'public, max-age=120',
+    'Content-Length': asset.contentLength,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(asset.body);
+}
+
+/**
+ * @name resolvePublicDocsMarkdown
+ * @description Resolves safe hosted documentation markdown requests under /docs and /docs/user.
+ */
+export function resolvePublicDocsMarkdown(method: string | undefined, pathname: string): PublicMarkdownAsset | undefined {
+  if (method !== 'GET' && method !== 'HEAD') {
+    return undefined;
+  }
+
+  if (!pathname.startsWith('/docs/') || !pathname.endsWith('.md')) {
+    return undefined;
+  }
+
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(pathname.slice('/docs/'.length));
+  } catch {
+    return undefined;
+  }
+
+  const normalizedPath = normalize(decodedPath.replace(/\\/g, '/')).replace(/^[/\\]+/, '');
+  if (isUnsafeDocsPath(normalizedPath)) {
+    return undefined;
+  }
+
+  const root = normalizedPath.startsWith('user/')
+    ? USER_DOCS_ROOT_PATH
+    : DOCS_ROOT_PATH;
+  const relativePath = normalizedPath.startsWith('user/')
+    ? normalizedPath.slice('user/'.length)
+    : normalizedPath;
+  if (isUnsafeDocsPath(relativePath)) {
+    return undefined;
+  }
+
+  const absolutePath = join(root, relativePath);
+  if (!existsSync(absolutePath)) {
+    return undefined;
+  }
+
+  const markdown = readFileSync(absolutePath, 'utf-8');
+  return {
+    contentType: 'text/markdown; charset=utf-8',
+    contentLength: Buffer.byteLength(markdown),
+    body: method === 'HEAD' ? undefined : markdown,
+  };
+}
+
+function isUnsafeDocsPath(pathname: string): boolean {
+  return pathname === ''
+    || pathname.includes('\0')
+    || pathname === '..'
+    || pathname.startsWith('../')
+    || pathname.includes('/../');
+}
+
+/**
  * @name resolvePublicLogoAsset
  * @description Resolves public icon/social image routes, including HEAD-safe favicon responses for crawlers.
  */
@@ -571,6 +654,7 @@ export function buildPublicServerInfo(
     },
     endpoints: {
       landing: `${baseUrl}/`,
+      docs: `${baseUrl}/docs`,
       mcp: `${baseUrl}/mcp`,
       health: `${baseUrl}/health`,
       serverInfo: `${baseUrl}/server.json`,
@@ -922,6 +1006,7 @@ export function buildLandingHtml(
         <p>${escapeHtml(info.description)}</p>
         <div class="hero-actions">
           <a class="button" href="/wizard/install.sh">Install wizard</a>
+          <a class="button secondary" href="/docs">Docs</a>
           <a class="button secondary" href="/server.json">Server JSON</a>
           <a class="button secondary" href="/.well-known/agent-card.json">Agent card</a>
         </div>
@@ -974,6 +1059,7 @@ export function buildLandingHtml(
         <h2>Endpoints</h2>
         <div class="endpoint-list">
           <div class="endpoint-row"><span class="method">POST</span><code>${escapeHtml(info.endpoints.mcp)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.docs)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.health)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.serverInfo)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.agentCard)}</code></div>
@@ -992,6 +1078,120 @@ export function buildLandingHtml(
     </div>
     <p class="footer">Use <a href="/server.json">/server.json</a> for machine-readable public metadata. MCP clients should connect to <a href="/mcp">/mcp</a> with <code>Accept: application/json, text/event-stream</code>.</p>
   </main>
+</body>
+</html>`;
+}
+
+/**
+ * @name buildDocsHtml
+ * @description Builds the hosted SAP MCP documentation shell powered by Docsify.
+ */
+export function buildDocsHtml(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+): string {
+  const info = buildPublicServerInfo(req, config);
+  const docsUrl = info.endpoints.docs;
+  const title = 'SAP MCP Documentation | OOBE Protocol';
+  const description = 'Install, configure, and operate SAP MCP with a focus on hosted remote access, local signer setup, x402/pay.sh payments, and MCP client configuration.';
+  const docsifyConfig = JSON.stringify({
+    name: 'SAP MCP',
+    repo: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
+    homepage: 'README.md',
+    loadSidebar: true,
+    alias: {
+      '/.*/_sidebar.md': '/docs/_sidebar.md',
+    },
+    subMaxLevel: 2,
+    auto2top: true,
+    themeColor: '#28d8e8',
+    search: {
+      paths: 'auto',
+      placeholder: 'Search SAP MCP docs',
+      noData: 'No results.',
+      depth: 6,
+    },
+  }, null, 2).replace(/</g, '\\u003c');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="${escapeHtml(docsUrl)}">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${escapeHtml(title)}">
+  <meta property="og:description" content="${escapeHtml(description)}">
+  <meta property="og:url" content="${escapeHtml(docsUrl)}">
+  <meta property="og:image" content="${escapeHtml(info.endpoints.favicon)}">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
+  <meta name="twitter:description" content="${escapeHtml(description)}">
+  <meta name="twitter:image" content="${escapeHtml(info.endpoints.favicon)}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/themes/vue.css">
+  <style>
+    :root {
+      --theme-color: #28d8e8;
+      --sidebar-width: 310px;
+    }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #17242b;
+    }
+    .app-name-link {
+      color: #062730;
+      font-weight: 800;
+    }
+    .sidebar {
+      border-right: 1px solid rgba(6,39,48,.10);
+    }
+    .sidebar-nav strong,
+    .markdown-section h1,
+    .markdown-section h2,
+    .markdown-section h3 {
+      color: #062730;
+      letter-spacing: 0;
+    }
+    .markdown-section a {
+      color: #087f91;
+      text-underline-offset: 3px;
+    }
+    .markdown-section code {
+      color: #062730;
+      border-radius: 6px;
+    }
+    .markdown-section pre {
+      border-radius: 8px;
+      border: 1px solid rgba(6,39,48,.10);
+    }
+    .markdown-section table {
+      display: table;
+      width: 100%;
+    }
+    .markdown-section blockquote {
+      border-left-color: #28d8e8;
+      color: #49656f;
+    }
+    .cover-main,
+    section.cover {
+      background: linear-gradient(115deg, rgba(40,216,232,.13), transparent 34%), #f8fdff;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">Loading SAP MCP documentation...</div>
+  <script>
+    window.$docsify = ${docsifyConfig};
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/docsify.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4.13.1/lib/plugins/search.min.js" defer></script>
 </body>
 </html>`;
 }
@@ -1282,6 +1482,11 @@ export class RemoteMCPServer {
         return;
       }
 
+      if (req.method === 'GET' && ['/docs', '/docs/', '/docs/index.html'].includes(url.pathname)) {
+        writeHtml(res, 200, buildDocsHtml(req, this.config));
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/server.json') {
         writeJson(res, 200, buildPublicServerInfo(req, this.config), {
           'Cache-Control': 'public, max-age=300',
@@ -1292,6 +1497,12 @@ export class RemoteMCPServer {
       const publicLogoAsset = resolvePublicLogoAsset(req.method, url.pathname);
       if (publicLogoAsset) {
         writeLogoAsset(res, publicLogoAsset);
+        return;
+      }
+
+      const publicDocsMarkdown = resolvePublicDocsMarkdown(req.method, url.pathname);
+      if (publicDocsMarkdown) {
+        writeMarkdownAsset(res, publicDocsMarkdown);
         return;
       }
 
