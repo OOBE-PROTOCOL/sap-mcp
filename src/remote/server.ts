@@ -169,6 +169,15 @@ export interface PublicPaymentStats {
   ledgerAvailable: boolean;
 }
 
+type SapMcpServerInstance = Awaited<ReturnType<typeof createSapMcpServer>>;
+
+interface StatefulMcpSession {
+  server: SapMcpServerInstance;
+  transport: StreamableHTTPServerTransport;
+  createdAt: number;
+  lastSeenAt: number;
+}
+
 /**
  * @name parseApiKeys
  * @description Parses comma-separated `apiKey=userId` entries from environment configuration.
@@ -267,6 +276,69 @@ function writeJson(
     ...headers,
   });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * @name writeMcpJsonRpcError
+ * @description Writes an MCP-compatible JSON-RPC error response with HTTP status semantics.
+ */
+function writeMcpJsonRpcError(
+  res: http.ServerResponse,
+  status: number,
+  code: number,
+  id: string | number | null,
+  message: string,
+  data?: unknown,
+): void {
+  writeJson(res, status, {
+    jsonrpc: '2.0',
+    id,
+    error: {
+      code,
+      message,
+      ...(data === undefined ? {} : { data }),
+    },
+  });
+}
+
+/**
+ * @name readSingleHeader
+ * @description Reads one normalized HTTP header value without accepting ambiguous arrays.
+ */
+function readSingleHeader(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || undefined;
+  }
+  return value?.trim() || undefined;
+}
+
+/**
+ * @name extractJsonRpcId
+ * @description Extracts a JSON-RPC id for error correlation.
+ */
+function extractJsonRpcId(body: unknown): string | number | null {
+  if (Array.isArray(body) && body.length > 0) {
+    return extractJsonRpcId(body[0]);
+  }
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+  const record = body as Record<string, unknown>;
+  return typeof record.id === 'string' || typeof record.id === 'number' ? record.id : null;
+}
+
+/**
+ * @name isInitializeJsonRpcRequest
+ * @description Detects MCP initialize requests that are allowed to create a new stateful session.
+ */
+function isInitializeJsonRpcRequest(body: unknown): boolean {
+  if (Array.isArray(body)) {
+    return body.some(isInitializeJsonRpcRequest);
+  }
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
+  return (body as Record<string, unknown>).method === 'initialize';
 }
 
 /**
@@ -964,7 +1036,7 @@ export class RemoteMCPServer {
   private readonly appConfig: SapMcpConfig;
   private readonly authManager: AuthManager;
   private readonly rateLimiter: RemoteRateLimiter;
-  private transport?: StreamableHTTPServerTransport;
+  private readonly statefulSessions = new Map<string, StatefulMcpSession>();
   private httpServer?: http.Server;
 
   public constructor(config?: RemoteMCPConfig) {
@@ -989,18 +1061,6 @@ export class RemoteMCPServer {
     await this.rateLimiter.initialize();
 
     const monetizationGate = await McpMonetizationGate.create(this.appConfig);
-
-    // In stateful mode, create one long-lived transport and connect the server once.
-    // In stateless mode, a fresh transport + server must be created per request —
-    // the MCP SDK throws "Stateless transport cannot be reused across requests"
-    // if a stateless transport handles more than one request.
-    if (!this.config.stateless) {
-      const server = await createSapMcpServer(this.appConfig);
-      this.transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-      });
-      await server.connect(this.transport);
-    }
 
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
@@ -1133,15 +1193,17 @@ export class RemoteMCPServer {
             await perRequestTransport.handleRequest(req, res);
           }
         } else {
-          // Stateful mode: reuse the long-lived transport.
+          // Stateful mode: route each request to the transport created by its initialize response.
           if (monetizationGate) {
             await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
               loggedToolNames = extractToolNamesFromJsonRpc(parsedBody);
               loggedMethod = extractJsonRpcMethod(parsedBody);
-              await this.transport?.handleRequest(mcpReq, mcpRes, parsedBody);
+              await this.handleStatefulMcpRequest(mcpReq, mcpRes, parsedBody);
+            }, {
+              validatePaidRequest: context => this.validateStatefulPaidRequest(context.request, context.parsedBody),
             });
           } else {
-            await this.transport?.handleRequest(req, res);
+            await this.handleStatefulMcpRequest(req, res);
           }
         }
       } catch (error) {
@@ -1182,7 +1244,9 @@ export class RemoteMCPServer {
    * @description Gracefully closes the MCP transport and HTTP listener.
    */
   public async stop(): Promise<void> {
-    await this.transport?.close();
+    const sessions = Array.from(this.statefulSessions.values());
+    this.statefulSessions.clear();
+    await Promise.allSettled(sessions.map(session => session.transport.close()));
     if (!this.httpServer) {
       return;
     }
@@ -1211,6 +1275,139 @@ export class RemoteMCPServer {
     if (this.config.auth.type === 'jwt' && !this.config.auth.secret) {
       throw new Error('Remote MCP JWT auth requires SAP_MCP_AUTH_SECRET');
     }
+  }
+
+  /**
+   * @name handleStatefulMcpRequest
+   * @description Routes a stateful MCP request to the session transport created by initialize.
+   */
+  private async handleStatefulMcpRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    parsedBody?: unknown,
+  ): Promise<void> {
+    const transport = await this.resolveStatefulTransport(req, parsedBody);
+    if (!transport) {
+      const providedSessionId = readSingleHeader(req.headers['mcp-session-id']);
+      writeMcpJsonRpcError(
+        res,
+        providedSessionId ? 404 : 400,
+        providedSessionId ? -32011 : -32010,
+        extractJsonRpcId(parsedBody),
+        providedSessionId ? 'mcp_session_not_found' : 'mcp_session_required',
+        {
+          requiredHeader: 'mcp-session-id',
+          ...(providedSessionId ? { providedSessionId } : {}),
+          hint: providedSessionId
+            ? 'The mcp-session-id must come from this server initialize response. Client-generated UUIDs are not valid MCP sessions.'
+            : 'Call initialize first and reuse the returned mcp-session-id header. Do not generate a client-side UUID.',
+        },
+      );
+      return;
+    }
+
+    await transport.handleRequest(req, res, parsedBody);
+  }
+
+  /**
+   * @name validateStatefulPaidRequest
+   * @description Fails paid tool calls before x402 verification when the MCP session is missing or unknown.
+   */
+  private validateStatefulPaidRequest(
+    req: http.IncomingMessage,
+    parsedBody: unknown,
+  ): { code: number; message: string; data: unknown } | undefined {
+    if (isInitializeJsonRpcRequest(parsedBody)) {
+      return undefined;
+    }
+
+    const sessionId = readSingleHeader(req.headers['mcp-session-id']);
+    if (!sessionId) {
+      return {
+        code: -32010,
+        message: 'mcp_session_required',
+        data: {
+          requiredHeader: 'mcp-session-id',
+          hint: 'Initialize the MCP Streamable HTTP session first, then reuse the returned mcp-session-id for the unpaid payment challenge and the paid retry.',
+        },
+      };
+    }
+
+    if (!this.statefulSessions.has(sessionId)) {
+      return {
+        code: -32011,
+        message: 'mcp_session_not_found',
+        data: {
+          requiredHeader: 'mcp-session-id',
+          providedSessionId: sessionId,
+          hint: 'The mcp-session-id must come from this server initialize response. Client-generated UUIDs are not valid MCP sessions.',
+        },
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * @name resolveStatefulTransport
+   * @description Returns the transport for an existing session or creates one for an initialize request.
+   */
+  private async resolveStatefulTransport(
+    req: http.IncomingMessage,
+    parsedBody?: unknown,
+  ): Promise<StreamableHTTPServerTransport | undefined> {
+    const sessionId = readSingleHeader(req.headers['mcp-session-id']);
+    if (sessionId) {
+      const session = this.statefulSessions.get(sessionId);
+      if (!session) {
+        return undefined;
+      }
+      session.lastSeenAt = Date.now();
+      return session.transport;
+    }
+
+    if (req.method === 'POST' && (parsedBody === undefined || isInitializeJsonRpcRequest(parsedBody))) {
+      return await this.createStatefulSessionTransport();
+    }
+
+    return undefined;
+  }
+
+  /**
+   * @name createStatefulSessionTransport
+   * @description Creates one MCP server and Streamable HTTP transport for a single initialized session.
+   */
+  private async createStatefulSessionTransport(): Promise<StreamableHTTPServerTransport> {
+    const server = await createSapMcpServer(this.appConfig);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: sessionId => {
+        this.statefulSessions.set(sessionId, {
+          server,
+          transport,
+          createdAt: Date.now(),
+          lastSeenAt: Date.now(),
+        });
+        logger.info('Stateful MCP session initialized', {
+          sessionId,
+          activeSessions: this.statefulSessions.size,
+        });
+      },
+    });
+
+    transport.onclose = () => {
+      const sessionId = transport.sessionId;
+      if (sessionId) {
+        this.statefulSessions.delete(sessionId);
+        logger.info('Stateful MCP session closed', {
+          sessionId,
+          activeSessions: this.statefulSessions.size,
+        });
+      }
+    };
+
+    await server.connect(transport);
+    return transport;
   }
 
   /**

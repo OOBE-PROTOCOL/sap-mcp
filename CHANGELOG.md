@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
 - Fixed x402 signed retry handling by verifying the client-supplied `Payment-Signature.accepted` requirements instead of rebuilding requirements with a fresh facilitator fee payer.
 - Forwarded the `PAYMENT-REQUIRED` header on JSON-RPC `payment_required` responses so MCP clients can keep HTTP 200 compatibility while local payment plugins still receive the complete x402 challenge.
 - Bound x402 hosted receipts to the canonical MCP method-and-params hash instead of raw JSON-RPC bytes, preventing valid paid retries from failing when an agent changes only the JSON-RPC `id`.
+- Reworked hosted stateful MCP routing to create one official Streamable HTTP transport per initialized session instead of sharing a single global transport, and reject paid calls with missing or client-generated `mcp-session-id` before facilitator verification.
 
 ### Verification
 

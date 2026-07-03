@@ -201,6 +201,70 @@ describe('MCP monetization gate readiness', () => {
     );
   });
 
+  it('fails paid requests before x402 verification when the transport rejects the MCP session', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-session-test-'));
+    const fetchCalls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      fetchCalls.push(String(input));
+      return new Response(JSON.stringify({
+        kinds: [{
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+        }],
+        signers: {},
+        extensions: [],
+      }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 8,
+        method: 'tools/call',
+        params: {
+          name: 'sap_list_all_agents',
+          arguments: { limit: 5 },
+        },
+      }));
+      const response = createResponse();
+      const next = vi.fn();
+
+      await gate.handle(
+        createRequest(body, { 'content-type': 'application/json' }),
+        response.response,
+        next,
+        {
+          validatePaidRequest: () => ({
+            code: -32010,
+            message: 'mcp_session_required',
+            data: { requiredHeader: 'mcp-session-id' },
+          }),
+        },
+      );
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('mcp_session_required');
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(fetchCalls).toHaveLength(1);
+      expect(fetchCalls[0]).toBe('http://127.0.0.1:8788/facilitator/supported');
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
   it('verifies signed retries with the client accepted requirements and facilitator auth', async () => {
     const previousXdgDataHome = process.env.XDG_DATA_HOME;
     process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-ledger-test-'));

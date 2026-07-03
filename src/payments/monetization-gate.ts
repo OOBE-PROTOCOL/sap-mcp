@@ -38,6 +38,34 @@ export type McpRequestHandler = (
   parsedBody?: unknown,
 ) => Promise<void>;
 
+/**
+ * @name McpPaidRequestValidationContext
+ * @description Context provided to hosted transports before a paid request reaches the x402 facilitator.
+ */
+export interface McpPaidRequestValidationContext {
+  request: http.IncomingMessage;
+  parsedBody: unknown;
+  decision: Extract<PaymentDecision, { required: true }>;
+}
+
+/**
+ * @name McpPaidRequestValidationFailure
+ * @description JSON-RPC error returned when a paid request cannot safely enter the payment flow.
+ */
+export interface McpPaidRequestValidationFailure {
+  code: number;
+  message: string;
+  data?: unknown;
+}
+
+/**
+ * @name McpMonetizationGateOptions
+ * @description Optional hooks used by HTTP transports to fail closed before facilitator verification.
+ */
+export interface McpMonetizationGateOptions {
+  validatePaidRequest?: (context: McpPaidRequestValidationContext) => McpPaidRequestValidationFailure | undefined;
+}
+
 type WriteHeadArgs =
   | [statusCode: number, statusMessage?: string, headers?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]]
   | [statusCode: number, headers?: http.OutgoingHttpHeaders | http.OutgoingHttpHeader[]];
@@ -153,6 +181,7 @@ export class McpMonetizationGate {
     request: http.IncomingMessage,
     response: http.ServerResponse,
     next: McpRequestHandler,
+    options: McpMonetizationGateOptions = {},
   ): Promise<void> {
     if (!shouldInspectRequest(request)) {
       await next(request, response);
@@ -178,6 +207,23 @@ export class McpMonetizationGate {
       return;
     }
 
+    const requiredDecision = decision as Extract<PaymentDecision, { required: true }>;
+    const validationFailure = options.validatePaidRequest?.({
+      request,
+      parsedBody,
+      decision: requiredDecision,
+    });
+    if (validationFailure) {
+      writeJsonRpcError(
+        response,
+        parsedBody,
+        validationFailure.code,
+        validationFailure.message,
+        validationFailure.data,
+      );
+      return;
+    }
+
     const requestHash = hashPaymentRequest(rawBody, parsedBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
@@ -200,7 +246,7 @@ export class McpMonetizationGate {
         response,
         next,
         parsedBody,
-        decision: decision as Extract<PaymentDecision, { required: true }>,
+        decision: requiredDecision,
         metadata,
         paymentHeader,
         virtualPath,
