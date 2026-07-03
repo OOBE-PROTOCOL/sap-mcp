@@ -30,6 +30,16 @@ let logoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 
 /**
+ * @name PublicLogoAsset
+ * @description Resolved public logo asset response metadata for browser and crawler icon routes.
+ */
+export interface PublicLogoAsset {
+  contentType: 'image/png' | 'image/x-icon';
+  contentLength: number;
+  body?: Buffer;
+}
+
+/**
  * @name RemoteMCPConfig
  * @description Resolved runtime configuration for the remote MCP HTTP server.
  */
@@ -361,18 +371,47 @@ function writeHtml(res: http.ServerResponse, status: number, html: string): void
 }
 
 /**
- * @name writePngAsset
- * @description Writes the bundled SAP logo as a public icon/social image asset.
+ * @name resolvePublicLogoAsset
+ * @description Resolves public icon/social image routes, including HEAD-safe favicon responses for crawlers.
  */
-function writePngAsset(res: http.ServerResponse): void {
+export function resolvePublicLogoAsset(method: string | undefined, pathname: string): PublicLogoAsset | undefined {
+  if (method !== 'GET' && method !== 'HEAD') {
+    return undefined;
+  }
+
   const image = readLogoAsset();
+  const body = method === 'HEAD' ? undefined : image;
+  if (['/favicon.png', '/apple-touch-icon.png', '/og.png'].includes(pathname)) {
+    return {
+      contentType: 'image/png',
+      contentLength: image.byteLength,
+      body,
+    };
+  }
+
+  if (pathname === '/favicon.ico') {
+    return {
+      contentType: 'image/x-icon',
+      contentLength: image.byteLength,
+      body,
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * @name writeLogoAsset
+ * @description Writes a resolved public logo asset response.
+ */
+function writeLogoAsset(res: http.ServerResponse, asset: PublicLogoAsset): void {
   res.writeHead(200, {
-    'Content-Type': 'image/png',
+    'Content-Type': asset.contentType,
     'Cache-Control': 'public, max-age=86400',
-    'Content-Length': image.byteLength,
+    'Content-Length': asset.contentLength,
     'X-Content-Type-Options': 'nosniff',
   });
-  res.end(image);
+  res.end(asset.body);
 }
 
 /**
@@ -1250,20 +1289,9 @@ export class RemoteMCPServer {
         return;
       }
 
-      if (req.method === 'GET' && ['/favicon.png', '/apple-touch-icon.png', '/og.png'].includes(url.pathname)) {
-        writePngAsset(res);
-        return;
-      }
-
-      if (req.method === 'GET' && url.pathname === '/favicon.ico') {
-        const image = readLogoAsset();
-        res.writeHead(200, {
-          'Content-Type': 'image/x-icon',
-          'Cache-Control': 'public, max-age=86400',
-          'Content-Length': image.byteLength,
-          'X-Content-Type-Options': 'nosniff',
-        });
-        res.end(image);
+      const publicLogoAsset = resolvePublicLogoAsset(req.method, url.pathname);
+      if (publicLogoAsset) {
+        writeLogoAsset(res, publicLogoAsset);
         return;
       }
 

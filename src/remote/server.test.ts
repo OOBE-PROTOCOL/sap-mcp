@@ -8,6 +8,7 @@ import {
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
   defaultRemoteConfig,
+  resolvePublicLogoAsset,
 } from './server.js';
 
 const originalAuthType = process.env.SAP_MCP_AUTH_TYPE;
@@ -241,5 +242,17 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<strong>pay.sh:</strong>');
     expect(mcp).toContain('SAP MCP Streamable HTTP Endpoint | OOBE Protocol');
     expect(mcp).toContain('Accept: application/json, text/event-stream');
+  });
+
+  it('resolves favicon.ico for browser GETs and crawler HEAD probes', () => {
+    const head = resolvePublicLogoAsset('HEAD', '/favicon.ico');
+    const get = resolvePublicLogoAsset('GET', '/favicon.ico');
+
+    expect(head?.contentType).toBe('image/x-icon');
+    expect(head?.contentLength).toBeGreaterThan(0);
+    expect(head?.body).toBeUndefined();
+    expect(get?.contentType).toBe('image/x-icon');
+    expect(get?.body?.byteLength).toBeGreaterThan(0);
+    expect(resolvePublicLogoAsset('POST', '/favicon.ico')).toBeUndefined();
   });
 });

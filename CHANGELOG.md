@@ -71,6 +71,8 @@ with real MCP session management and a standalone client addon for AI agents.
   must not fall back to free local stdio to bypass x402.
 - Updated landing page and wizard descriptor to surface `npx sap-mcp-x402-paid-call`.
 - Added explicit `/favicon.ico` compatibility metadata and route coverage for API-root browser previews.
+- Added crawler-safe `HEAD /favicon.ico` support and consolidated public logo handling for
+  `/favicon.ico`, `/favicon.png`, `/apple-touch-icon.png`, and `/og.png`.
 
 ### Security
 
@@ -85,7 +87,7 @@ with real MCP session management and a standalone client addon for AI agents.
 ```
 CI=true pnpm run typecheck
 CI=true pnpm run lint
-CI=true pnpm run test:run        # 73 tests passed, 17 passed (suites)
+CI=true pnpm run test:run        # 74 tests passed, 17 passed (suites)
 CI=true pnpm run build
 CI=true pnpm run verify:release
 node dist/payments/x402-paid-call.js --help
