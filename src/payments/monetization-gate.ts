@@ -209,7 +209,19 @@ export class McpMonetizationGate {
     const parsedMcp = parseJsonRpcBody(parsedBody);
     const decision = resolvePaymentDecision(parsedMcp, this.monetization);
 
+    // For non-MCP clients (x402 scanners, curl without Accept header), always
+    // return 402 — the paywall must fire before body validation per the x402
+    // discovery spec: "Registration probes must reach a 402 challenge before
+    // body/query validation rejects the request."
+    const acceptHeader = request.headers['accept'] || '';
+    const isMcpSdkClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
+
     if (!decision.required) {
+      if (shouldInspectRequest(request) && !isMcpSdkClient) {
+        // x402 scanner probing with arbitrary body — return 402 challenge
+        await this.returnX402Challenge(request, response, parsedBody);
+        return;
+      }
       await next(request, response, parsedBody);
       return;
     }
@@ -292,10 +304,9 @@ export class McpMonetizationGate {
       }
 
       // Determine if this is a genuine MCP SDK client or an x402 scanner.
+      // isMcpSdkClient was already determined above from the Accept header.
       // MCP SDK sends Accept: application/json, text/event-stream.
       // x402 scanners (x402scan.com) send standard HTTP requests without MCP Accept.
-      const acceptHeader = request.headers['accept'] || '';
-      const isMcpSdkClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
 
       const responseBody = paymentResult.response.body as Record<string, unknown> | undefined;
       const jsonRpcId = extractJsonRpcId(parsedBody);
