@@ -586,7 +586,7 @@ export function buildOpenApiSpec(
       contact: {
         name: 'OOBE Protocol Labs',
         url: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
-        email: 'build@oobeprotocol.ai',
+        email: 'oobe@oobeprotocol.ai',
       },
     },
     servers: [
