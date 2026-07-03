@@ -6,7 +6,7 @@ import { PassThrough } from 'stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { buildPaidVirtualPath, McpMonetizationGate, normalizePaymentNetwork, resolvePaymentNetwork } from './monetization-gate.js';
-import { hashRequestBody } from './usage-ledger.js';
+import { hashPaymentRequest } from './usage-ledger.js';
 
 const baseMonetization: SapMcpMonetizationConfig = {
   enabled: true,
@@ -164,6 +164,43 @@ describe('MCP monetization gate readiness', () => {
     expect(normalizePaymentNetwork('testnet')).toBe('solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z');
   });
 
+  it('binds x402 receipts to MCP method and params instead of JSON-RPC ids', () => {
+    const first = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_list_all_agents',
+        arguments: { limit: 5 },
+      },
+    };
+    const retry = {
+      jsonrpc: '2.0',
+      id: 999,
+      method: 'tools/call',
+      params: {
+        name: 'sap_list_all_agents',
+        arguments: { limit: 5 },
+      },
+    };
+    const differentArguments = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_list_all_agents',
+        arguments: { limit: 10 },
+      },
+    };
+
+    expect(hashPaymentRequest(Buffer.from(JSON.stringify(first)), first)).toBe(
+      hashPaymentRequest(Buffer.from(JSON.stringify(retry)), retry),
+    );
+    expect(hashPaymentRequest(Buffer.from(JSON.stringify(first)), first)).not.toBe(
+      hashPaymentRequest(Buffer.from(JSON.stringify(differentArguments)), differentArguments),
+    );
+  });
+
   it('verifies signed retries with the client accepted requirements and facilitator auth', async () => {
     const previousXdgDataHome = process.env.XDG_DATA_HOME;
     process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-ledger-test-'));
@@ -177,7 +214,7 @@ describe('MCP monetization gate readiness', () => {
         arguments: { limit: 5 },
       },
     }));
-    const requestHash = hashRequestBody(body);
+    const requestHash = hashPaymentRequest(body, JSON.parse(body.toString('utf-8')));
     const virtualPath = buildPaidVirtualPath({
       required: true,
       tier: 'read-premium',

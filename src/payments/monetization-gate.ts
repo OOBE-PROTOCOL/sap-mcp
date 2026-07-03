@@ -26,7 +26,7 @@ import { NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapte
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
-import { hashRequestBody, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
+import { hashPaymentRequest, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
 
 /**
  * @name McpRequestHandler
@@ -178,7 +178,7 @@ export class McpMonetizationGate {
       return;
     }
 
-    const requestHash = hashRequestBody(rawBody);
+    const requestHash = hashPaymentRequest(rawBody, parsedBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
     await this.usageLedger.recordDecision(metadata, decision);
@@ -268,8 +268,14 @@ export class McpMonetizationGate {
             paymentRequirements,
             instructions: {
               header: 'Payment-Signature',
+              settlementHeader: 'Payment-Response',
+              requestHashBinding: 'json-rpc-method-and-params',
+              requiredRetryHeaders: ['Payment-Signature', 'mcp-session-id', 'mcp-protocol-version'],
+              paymentSignatureFormat: 'base64(JSON.stringify({ x402Version, accepted: paymentRequirements[0], payload, resource }))',
               steps: [
-                'Call x402_paid_call with endpoint, toolName, and arguments to auto-pay',
+                'Initialize the MCP session first and reuse the returned mcp-session-id for the unpaid call and paid retry.',
+                'Build the payment from paymentRequirements[0] / accepts[0] returned by this response.',
+                'Retry the same MCP method and params with the Payment-Signature header.',
               ],
             },
           },
@@ -344,7 +350,7 @@ export class McpMonetizationGate {
       });
       writeJsonRpcError(options.response, options.parsedBody, -32002, 'payment_verification_failed', {
         reason: validationError,
-        hint: 'Retry with the exact Payment-Signature generated from this request paymentRequirements.accepts[0].',
+        hint: 'Retry with Payment-Signature generated from this request paymentRequirements[0] / accepts[0]. Preserve the initialized MCP session id.',
       });
       return;
     }
@@ -699,7 +705,7 @@ function shouldInspectRequest(request: http.IncomingMessage): boolean {
 
 /**
  * @name buildPaidVirtualPath
- * @description Builds the paid x402 virtual resource path, bound to the exact JSON-RPC request hash.
+ * @description Builds the paid x402 virtual resource path, bound to the canonical MCP method-and-params hash.
  */
 export function buildPaidVirtualPath(decision: Extract<PaymentDecision, { required: true }>, requestHash: string): string {
   const toolSegment = decision.toolNames.map(name => encodeURIComponent(name)).join(',');

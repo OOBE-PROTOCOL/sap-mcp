@@ -299,7 +299,7 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
 - Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.
 - Treat \`402 Payment Required\` as the expected hosted payment handshake, not as a tool failure.
-- Reuse the initialized MCP session and replay the exact same JSON-RPC body after payment; changing the body changes the request hash.
+- Reuse the initialized MCP session and retry the same MCP method with the same params after payment; the x402 receipt is bound to method and params, not to JSON-RPC id.
 - Prefer \`PAYMENT-SIGNATURE\` for the payment proof header; accept \`X-PAYMENT\` only when the client runtime requires it.
 - Capture \`PAYMENT-RESPONSE\` or \`X-PAYMENT-RESPONSE\` as the settlement receipt bound to the tool output.
 - x402/pay.sh payment payloads must be signed by the user's wizard-created SAP profile wallet or external signer, never by the hosted server.

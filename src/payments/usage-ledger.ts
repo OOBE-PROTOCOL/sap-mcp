@@ -247,3 +247,69 @@ export class UsageLedger {
 export function hashRequestBody(body: Buffer): string {
   return createHash('sha256').update(body).digest('hex');
 }
+
+/**
+ * @name hashPaymentRequest
+ * @description Computes the x402 payment binding hash for an MCP request.
+ *
+ * The hash intentionally ignores JSON-RPC transport metadata such as `id` and
+ * `jsonrpc`, while preserving `method` and `params`. This binds a receipt to
+ * the paid operation and arguments without breaking legitimate agent retries
+ * that replay the same tool call with a different request id.
+ */
+export function hashPaymentRequest(rawBody: Buffer, parsedBody: unknown): string {
+  const canonical = canonicalizePaymentRequest(parsedBody);
+  if (canonical === undefined) {
+    return hashRequestBody(rawBody);
+  }
+
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+function canonicalizePaymentRequest(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    const requests = value.map(canonicalizeSingleRequest).filter((request): request is PaymentRequestIdentity => {
+      return request !== undefined;
+    });
+    return requests.length > 0 ? stableJson(requests) : undefined;
+  }
+
+  const request = canonicalizeSingleRequest(value);
+  return request ? stableJson(request) : undefined;
+}
+
+interface PaymentRequestIdentity {
+  method: string;
+  params?: unknown;
+}
+
+function canonicalizeSingleRequest(value: unknown): PaymentRequestIdentity | undefined {
+  if (!isPlainRecord(value) || typeof value.method !== 'string') {
+    return undefined;
+  }
+
+  return {
+    method: value.method,
+    ...(Object.prototype.hasOwnProperty.call(value, 'params') ? { params: value.params } : {}),
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(',')}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  const fields = Object.keys(record)
+    .sort()
+    .map(key => `${JSON.stringify(key)}:${stableJson(record[key])}`);
+  return `{${fields.join(',')}}`;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}

@@ -42,7 +42,7 @@ Without payment, a paid tool returns:
 HTTP/1.1 402 Payment Required
 ```
 
-The response contains payment instructions and the caller replays the same request with the payment header.
+The response contains payment instructions and the caller retries the same MCP method and params with the payment header. Agents must keep the initialized MCP session headers across both the unpaid challenge and the paid retry.
 
 Hosted SAP MCP accepts payment proof headers used by the x402/payment flow and exposes settlement headers back to the caller:
 
@@ -52,7 +52,7 @@ Hosted SAP MCP accepts payment proof headers used by the x402/payment flow and e
 | Server challenge | `PAYMENT-REQUIRED` |
 | Server receipt | `PAYMENT-RESPONSE` or `X-PAYMENT-RESPONSE` |
 
-The payment receipt should be treated as part of the tool output provenance. For paid hosted tools, agents should bind the receipt to the request hash, tool name, and returned result.
+The payment receipt should be treated as part of the tool output provenance. For paid hosted tools, agents should bind the receipt to the canonical request hash, tool name, method params, and returned result. The canonical hash ignores JSON-RPC `id`, so normal agent retries do not invalidate the receipt.
 
 ## 3. pay.sh Pay-Per-Use
 
