@@ -194,6 +194,30 @@ export class McpMonetizationGate {
       rawBody = await readRequestBody(request);
       parsedBody = parseJsonBody(rawBody);
     } catch (error) {
+      // Non-JSON or empty body (e.g. x402scan probing, GET requests, health checks).
+      // If this is a POST to /mcp, return a 402 payment challenge so x402 discovery
+      // scanners can detect the paywall. For non-MCP requests, fall through to next().
+      const acceptHeader = request.headers['accept'] || '';
+      const isMcpClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
+      if (shouldInspectRequest(request) && !isMcpClient) {
+        // x402 scanner or non-MCP client probing — return 402 payment challenge
+        const context = this.buildRequestContext(request, { jsonrpc: '2.0', method: 'tools/list', params: {} }, '/mcp');
+        const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
+          appName: 'SAP MCP Server',
+          currentUrl: context.adapter.getUrl(),
+          testnet: resolvePaymentNetwork(this.appConfig) !== SOLANA_MAINNET_CAIP2,
+        });
+        if (paymentResult.type === 'payment-error') {
+          patchV1Compatibility(paymentResult.response);
+          const prHeader = paymentResult.response.headers?.['payment-required'] ?? paymentResult.response.headers?.['PAYMENT-REQUIRED'];
+          if (typeof prHeader === 'string') {
+            response.setHeader('PAYMENT-REQUIRED', prHeader);
+          }
+          response.writeHead(402, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify(paymentResult.response.body));
+          return;
+        }
+      }
       logger.warn('Failed to parse monetized MCP request', { error });
       writeJson(response, 400, { error: 'Invalid JSON-RPC request body' });
       return;
@@ -284,10 +308,12 @@ export class McpMonetizationGate {
         // Header not present or invalid — fall back to body
       }
 
-      // Instead of returning HTTP 402 (which the MCP SDK can't handle and hangs),
-      // return HTTP 200 with a JSON-RPC error response containing the payment
-      // requirements. The agent will see this as a normal (errorful) tool result
-      // and can use x402_paid_call to self-pay and retry.
+      // Determine if this is a genuine MCP SDK client or an x402 scanner.
+      // MCP SDK sends Accept: application/json, text/event-stream.
+      // x402 scanners (x402scan.com) send standard HTTP requests without MCP Accept.
+      const acceptHeader = request.headers['accept'] || '';
+      const isMcpSdkClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
+
       const responseBody = paymentResult.response.body as Record<string, unknown> | undefined;
       const jsonRpcId = extractJsonRpcId(parsedBody);
 
@@ -303,6 +329,18 @@ export class McpMonetizationGate {
         responseBody?.paymentRequirements ??
         responseBody;
 
+      if (!isMcpSdkClient) {
+        // x402 scanner or non-MCP HTTP client — return standard HTTP 402
+        response.writeHead(402, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({
+          error: 'Payment required',
+          accepts: paymentRequirements,
+          authenticated: false,
+        }));
+        return;
+      }
+
+      // MCP SDK client — return HTTP 200 with JSON-RPC error (the SDK hangs on 402)
       writeJson(response, 200, {
         jsonrpc: '2.0',
         id: jsonRpcId,
