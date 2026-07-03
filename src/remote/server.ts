@@ -566,6 +566,156 @@ export function buildPublicServerInfo(
 }
 
 /**
+ * @name buildOpenApiSpec
+ * @description OpenAPI 3.1 spec for x402scan discovery. Describes the /mcp endpoint
+ * with x-payment-info so x402scan can discover and register the API.
+ */
+export function buildOpenApiSpec(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+): Record<string, unknown> {
+  const baseUrl = buildPublicBaseUrl(req, config);
+
+  return {
+    openapi: '3.1.0',
+    info: {
+      title: 'SAP MCP Server',
+      version: '0.5.0',
+      description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments. 248 tools across Jupiter, Drift, Metaplex, Pump.fun, Raydium, Orca, and more.',
+      'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use x402_paid_call or npx sap-mcp-x402-paid-call to self-pay and retry.',
+      contact: {
+        name: 'OOBE Protocol Labs',
+        url: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
+      },
+    },
+    servers: [
+      { url: baseUrl, description: 'SAP MCP Hosted Server' },
+    ],
+    paths: {
+      '/mcp': {
+        post: {
+          operationId: 'mcpCall',
+          summary: 'Execute an MCP tool call (JSON-RPC 2.0). Payment required for paid tools.',
+          tags: ['MCP'],
+          'x-payment-info': {
+            price: {
+              mode: 'dynamic',
+              currency: 'USD',
+              min: '0.008',
+              max: '0.20',
+            },
+            protocols: [{ 'x402': {} }],
+          },
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    jsonrpc: { type: 'string', const: '2.0' },
+                    id: { type: 'integer', description: 'JSON-RPC request ID' },
+                    method: {
+                      type: 'string',
+                      description: 'MCP method: tools/call, tools/list, initialize, etc.',
+                      examples: ['tools/call', 'initialize'],
+                    },
+                    params: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', description: 'Tool name (e.g. jupiter_getPrice)' },
+                        arguments: { type: 'object', description: 'Tool arguments' },
+                      },
+                      required: ['name', 'arguments'],
+                    },
+                  },
+                  required: ['jsonrpc', 'id', 'method', 'params'],
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'MCP tool result or payment_required JSON-RPC error (for MCP SDK clients)',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      jsonrpc: { type: 'string' },
+                      id: { type: 'integer' },
+                      result: { type: 'object', description: 'Tool result (if free or paid)' },
+                      error: {
+                        type: 'object',
+                        properties: {
+                          code: { type: 'integer' },
+                          message: { type: 'string' },
+                          data: {
+                            type: 'object',
+                            properties: {
+                              protocol: { type: 'string' },
+                              paymentRequirements: { type: 'array' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '402': {
+              description: 'Payment Required (x402 challenge for non-MCP clients)',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      x402Version: { type: 'integer' },
+                      error: { type: 'string' },
+                      accepts: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            scheme: { type: 'string' },
+                            network: { type: 'string' },
+                            amount: { type: 'string', description: 'USDC atomic units (6 decimals)' },
+                            asset: { type: 'string' },
+                            payTo: { type: 'string' },
+                            maxTimeoutSeconds: { type: 'integer' },
+                            extra: {
+                              type: 'object',
+                              properties: {
+                                feePayer: { type: 'string' },
+                              },
+                            },
+                          },
+                        },
+                      },
+                      resource: {
+                        type: 'object',
+                        properties: {
+                          url: { type: 'string' },
+                          description: { type: 'string' },
+                          mimeType: { type: 'string' },
+                          serviceName: { type: 'string' },
+                          tags: { type: 'array', items: { type: 'string' } },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
  * @name buildLandingHtml
  * @description Builds professional public HTML metadata for root and `/mcp` URL previews.
  */
@@ -1118,6 +1268,13 @@ export class RemoteMCPServer {
 
       if (req.method === 'GET' && ['/.well-known/sap-mcp-wizard.json', '/wizard', '/wizard.json'].includes(url.pathname)) {
         writeJson(res, 200, buildWizardInstallDescriptor(req, this.config));
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/openapi.json') {
+        writeJson(res, 200, buildOpenApiSpec(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        });
         return;
       }
 
