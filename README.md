@@ -118,6 +118,7 @@ Remote endpoints:
 GET     /
 GET     /server.json
 GET     /favicon.png
+GET     /favicon.ico
 GET     /health
 GET     /.well-known/agent-card.json
 GET     /.well-known/sap-mcp-wizard.json

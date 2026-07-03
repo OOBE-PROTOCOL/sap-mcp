@@ -7,6 +7,7 @@
 | `GET` | `/` | Public landing page with share metadata and safe endpoint information. | Public. |
 | `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
 | `GET` | `/favicon.png` | SAP MCP favicon/social preview asset. | Public. |
+| `GET` | `/favicon.ico` | Browser favicon compatibility route at the API root. | Public. |
 | `GET` | `/health` | Health check. | No, unless reverse proxy requires it. |
 | `GET` | `/.well-known/agent-card.json` | A2A-compatible discovery card. | Usually public. |
 | `GET` | `/.well-known/sap-mcp-wizard.json` | Machine-readable wizard install metadata for agents that cannot see local config. | Public. |

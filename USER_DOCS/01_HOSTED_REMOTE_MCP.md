@@ -44,7 +44,8 @@ Public `server.json` shape:
     "agentCard": "https://mcp.sap.oobeprotocol.ai/.well-known/agent-card.json",
     "wizardDescriptor": "https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json",
     "wizardInstallScript": "https://mcp.sap.oobeprotocol.ai/wizard/install.sh",
-    "favicon": "https://mcp.sap.oobeprotocol.ai/favicon.png"
+    "favicon": "https://mcp.sap.oobeprotocol.ai/favicon.png",
+    "faviconIco": "https://mcp.sap.oobeprotocol.ai/favicon.ico"
   },
   "capabilities": {
     "tools": true,

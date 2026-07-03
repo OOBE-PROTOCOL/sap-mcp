@@ -134,6 +134,7 @@ export interface PublicServerInfo {
     wizardDescriptor: string;
     wizardInstallScript: string;
     favicon: string;
+    faviconIco: string;
   };
   capabilities: {
     tools: boolean;
@@ -538,6 +539,7 @@ export function buildPublicServerInfo(
       wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
       wizardInstallScript: `${baseUrl}/wizard/install.sh`,
       favicon: `${baseUrl}/favicon.png`,
+      faviconIco: `${baseUrl}/favicon.ico`,
     },
     capabilities: {
       tools: true,
@@ -746,8 +748,9 @@ export function buildLandingHtml(
   <meta name="description" content="${escapeHtml(info.description)}">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="${escapeHtml(pageUrl)}">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="icon" type="image/png" href="/favicon.png">
-  <link rel="shortcut icon" type="image/png" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta property="og:type" content="website">
   <meta property="og:title" content="${escapeHtml(title)}">

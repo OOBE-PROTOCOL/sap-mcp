@@ -201,6 +201,7 @@ describe('remote MCP server config', () => {
 
     expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
     expect(info.security.keypairBytesExposed).toBe(false);
     expect(info.security.rpcSecretsExposed).toBe(false);
@@ -226,6 +227,7 @@ describe('remote MCP server config', () => {
     const mcp = buildLandingHtml(req, config, 'mcp');
 
     expect(root).toContain('<meta property="og:title" content="SAP MCP Server | OOBE Protocol">');
+    expect(root).toContain('<link rel="icon" type="image/x-icon" href="/favicon.ico">');
     expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');

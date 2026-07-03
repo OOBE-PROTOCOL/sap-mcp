@@ -70,6 +70,7 @@ with real MCP session management and a standalone client addon for AI agents.
   to clarify that retries must preserve `mcp-session-id`, bind to `method + params`, and
   must not fall back to free local stdio to bypass x402.
 - Updated landing page and wizard descriptor to surface `npx sap-mcp-x402-paid-call`.
+- Added explicit `/favicon.ico` compatibility metadata and route coverage for API-root browser previews.
 
 ### Security
 
@@ -84,7 +85,7 @@ with real MCP session management and a standalone client addon for AI agents.
 ```
 CI=true pnpm run typecheck
 CI=true pnpm run lint
-CI=true pnpm run test:run        # 72 tests passed, 17 passed (suites)
+CI=true pnpm run test:run        # 73 tests passed, 17 passed (suites)
 CI=true pnpm run build
 CI=true pnpm run verify:release
 node dist/payments/x402-paid-call.js --help
