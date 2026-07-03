@@ -213,8 +213,11 @@ export class McpMonetizationGate {
     // return 402 — the paywall must fire before body validation per the x402
     // discovery spec: "Registration probes must reach a 402 challenge before
     // body/query validation rejects the request."
+    // MCP SDK uniquely sends Accept: application/json, text/event-stream.
+    // x402scan sends Accept: */* or Accept: application/json (without text/event-stream).
+    // Only text/event-stream is a reliable MCP SDK marker.
     const acceptHeader = request.headers['accept'] || '';
-    const isMcpSdkClient = acceptHeader.includes('application/json') || acceptHeader.includes('text/event-stream');
+    const isMcpSdkClient = acceptHeader.includes('text/event-stream');
 
     if (!decision.required) {
       if (shouldInspectRequest(request) && !isMcpSdkClient) {
@@ -576,7 +579,10 @@ export class McpMonetizationGate {
     response: http.ServerResponse,
     parsedBody: unknown,
   ): Promise<void> {
-    const context = this.buildRequestContext(request, parsedBody, '/mcp');
+    // Use a path that matches the PAID_ROUTE_PATTERN ('POST /mcp/paid/*')
+    // so the x402 resource server generates a payment challenge.
+    const probePath = '/mcp/paid/read-premium/x402scan-probe/tools/list';
+    const context = this.buildRequestContext(request, parsedBody, probePath);
     const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
       appName: 'SAP MCP Server',
       currentUrl: context.adapter.getUrl(),
