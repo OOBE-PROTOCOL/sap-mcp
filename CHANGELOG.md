@@ -19,12 +19,16 @@ All notable changes to this project are documented in this file.
 - Forwarded the `PAYMENT-REQUIRED` header on JSON-RPC `payment_required` responses so MCP clients can keep HTTP 200 compatibility while local payment plugins still receive the complete x402 challenge.
 - Bound x402 hosted receipts to the canonical MCP method-and-params hash instead of raw JSON-RPC bytes, preventing valid paid retries from failing when an agent changes only the JSON-RPC `id`.
 - Reworked hosted stateful MCP routing to create one official Streamable HTTP transport per initialized session instead of sharing a single global transport, and reject paid calls with missing or client-generated `mcp-session-id` before facilitator verification.
+- Added the local `sap-mcp-x402-paid-call` helper plus optional wizard-installed `x402_paid_call` addon snippets for Hermes, Claude, Codex, OpenClaw, and custom runtimes.
+- Added the local MCP helper tool `sap_x402_paid_call` for signed hosted x402 retries when a user-controlled SAP MCP wallet profile is present, while keeping the non-custodial hosted server from advertising it without a wallet.
+- Updated payment docs and skills so agents retry hosted paid calls with the same MCP method and params, preserve `mcp-session-id`, and do not fall back to free local stdio just because the hosted server has no signer.
+- Added `x402_paid_call` agent plugin install guidance and the `npx sap-mcp-x402-paid-call` command to the public hosted landing page and wizard descriptor.
 
 ### Verification
 
 - `pnpm run typecheck`
 - `pnpm run lint`
-- `pnpm run test:run -- src/config/mcp-client-injection.test.ts src/config/setup.test.ts src/payments/oobe-facilitator-server.test.ts src/payments/pricing.test.ts`
+- `pnpm test -- --run`
 - `pnpm run build`
 - `npm pack --dry-run --cache ./.npm-cache`
 
@@ -116,4 +120,4 @@ All notable changes to this project are documented in this file.
 - MCP client injection no longer pins wallet paths or RPC overrides by default.
 - Private key and transaction policy guards run before MCP tool execution/signing paths.
 - Payment audit logs store request hashes and settlement metadata, not keypair bytes, raw arguments, or x402 payment signatures.
-- Paid x402 virtual resource paths are bound to the SHA-256 hash of the exact JSON-RPC request body.
+- Paid x402 virtual resource paths are bound to the SHA-256 hash of canonical MCP method and params, so JSON-RPC `id` changes do not invalidate a valid paid retry.

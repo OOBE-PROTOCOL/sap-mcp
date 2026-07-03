@@ -54,7 +54,49 @@ Hosted SAP MCP accepts payment proof headers used by the x402/payment flow and e
 
 The payment receipt should be treated as part of the tool output provenance. For paid hosted tools, agents should bind the receipt to the canonical request hash, tool name, method params, and returned result. The canonical hash ignores JSON-RPC `id`, so normal agent retries do not invalidate the receipt.
 
-## 3. pay.sh Pay-Per-Use
+## 3. Local x402 Paid-Call Addon
+
+Most agent runtimes can connect to hosted SAP MCP directly, but not every runtime can automatically sign an x402 challenge and replay the paid MCP request. SAP MCP ships a local helper for that gap:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
+  --tool sap_list_all_agents \
+  --arguments '{"limit":5}' \
+  --max-usd 0.02 \
+  --confirm
+```
+
+The helper:
+
+1. loads the user's active SAP MCP profile from `~/.config/mcp-sap`;
+2. initializes a real MCP session against `https://mcp.sap.oobeprotocol.ai/mcp`;
+3. receives the x402 challenge for the requested hosted tool;
+4. signs the payment payload locally with the user's SAP MCP profile wallet;
+5. retries the same MCP method and params with `PAYMENT-SIGNATURE`;
+6. returns the hosted MCP response plus the settlement receipt.
+
+Install or print addon snippets from the wizard:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
+```
+
+The wizard writes the addon bundle under:
+
+```txt
+~/.config/mcp-sap/addons/x402-paid-call
+```
+
+Local stdio SAP MCP also exposes `sap_x402_paid_call` when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise this helper in non-custodial mode because payment signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
+
+Security boundaries:
+
+- keypair bytes stay local and are never included in MCP client config;
+- every paid call requires `--max-usd` / `maxPriceUsd`;
+- every paid call requires `--confirm` / `confirm: true`;
+- encrypted wallet and external signer bridges are not faked; unsupported signing modes fail closed.
+
+## 4. pay.sh Pay-Per-Use
 
 pay.sh pay-per-use uses a provider YAML with `metering:` on paid endpoints. The pay.sh docs describe this as stablecoin-gated HTTP where the first request receives a `402`, the client signs proof locally, and the gateway settles before forwarding upstream.
 
@@ -112,7 +154,7 @@ operator:
   recipient: '<OOBE_REVENUE_WALLET>'
 ```
 
-## 4. pay.sh Subscriptions
+## 5. pay.sh Subscriptions
 
 pay.sh subscriptions use `subscription:` instead of `metering:`. A subscription gates an endpoint behind recurring flat-fee access for a fixed period. According to pay.sh docs, `metering:` and `subscription:` are mutually exclusive on the same endpoint, so use separate endpoints or separate provider specs when offering both.
 
@@ -184,7 +226,7 @@ pay subscriptions list --network mainnet
 pay subscriptions list --json
 ```
 
-## 5. Recommended OOBE Product Split
+## 6. Recommended OOBE Product Split
 
 | Product | Payment Model |
 | --- | --- |
@@ -194,7 +236,7 @@ pay subscriptions list --json
 | Pro remote access | pay.sh subscription endpoint |
 | Enterprise/custom routing | Dedicated subscription endpoint or private contract |
 
-## 6. Official pay.sh References Used
+## 7. Official pay.sh References Used
 
 - Getting started: https://pay.sh/docs/building-with-pay/getting-started
 - Pricing: https://pay.sh/docs/building-with-pay/pricing
@@ -203,7 +245,7 @@ pay subscriptions list --json
 - Subscriptions YAML specification: https://pay.sh/docs/building-with-pay/subscriptions/yaml-specification
 - Subscription examples: https://pay.sh/docs/building-with-pay/subscriptions/examples
 
-## 7. Security Requirements
+## 8. Security Requirements
 
 - Never put RPC API keys in public YAML.
 - Never put private keypair paths in public docs.

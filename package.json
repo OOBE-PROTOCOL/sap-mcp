@@ -13,7 +13,8 @@
     "sap-signing-proxy": "dist/signer/signing-proxy.js",
     "sap-mcp-remote": "dist/bin/sap-mcp-remote.js",
     "sap-mcp-facilitator": "dist/payments/oobe-facilitator-server.js",
-    "sap-mcp-pay-sh-spec": "dist/payments/pay-sh-spec.js"
+    "sap-mcp-pay-sh-spec": "dist/payments/pay-sh-spec.js",
+    "sap-mcp-x402-paid-call": "dist/payments/x402-paid-call.js"
   },
   "files": [
     "dist",

@@ -96,3 +96,54 @@ Run:
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
+
+## 7. x402 Paid-Call Addon
+
+Hosted SAP MCP paid tools return an x402 challenge. Some agent runtimes expose remote MCP tools but do not yet have a native x402 replay path. The wizard can install a local addon bundle for Hermes, Claude, Codex, OpenClaw, or custom runtimes:
+
+```txt
+~/.config/mcp-sap/addons/x402-paid-call
+```
+
+The addon command is:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
+  --tool sap_list_all_agents \
+  --arguments '{"limit":5}' \
+  --max-usd 0.02 \
+  --confirm
+```
+
+Hermes plugin/addon concept:
+
+```json
+{
+  "plugins": {
+    "x402_paid_call": {
+      "command": "sap-mcp-x402-paid-call",
+      "description": "Pay and retry hosted SAP MCP x402 tool calls with the active local SAP MCP profile.",
+      "args": [],
+      "env": {
+        "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false"
+      }
+    }
+  }
+}
+```
+
+Local MCP tool alternative:
+
+```json
+{
+  "name": "sap_x402_paid_call",
+  "arguments": {
+    "toolName": "sap_list_all_agents",
+    "arguments": { "limit": 5 },
+    "maxPriceUsd": 0.02,
+    "confirm": true
+  }
+}
+```
+
+Do not add wallet paths, keypair bytes, RPC API keys, or profile-specific overrides to hosted MCP client config. Hosted MCP config points to `https://mcp.sap.oobeprotocol.ai/mcp`; the local addon/profile signs only the payment payload on the user's machine.

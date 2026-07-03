@@ -98,6 +98,7 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_x402_get_balance',
   ],
   'payments:write': [
+    'sap_x402_paid_call',
     'sap_x402_settle',
     'sap_x402_settle_batch',
     'sap_create_subscription',

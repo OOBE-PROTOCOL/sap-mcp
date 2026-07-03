@@ -98,6 +98,12 @@ Hosted users still need a local SAP MCP profile when they sign x402/pay.sh
 payments, SAP transactions, Solana transactions, SNS operations, or settlement
 actions. The hosted MCP server is not a wallet custodian.
 
+For hosted paid tools, use the native x402 flow. If the client runtime cannot
+attach `PAYMENT-SIGNATURE` itself, use the local `x402_paid_call` addon installed
+by the wizard or the local MCP helper `sap_x402_paid_call`. That helper signs
+payment payloads with the user's local SAP MCP profile and retries the hosted
+tool call. It must not be treated as a remote hosted signing service.
+
 When connected to hosted SAP MCP, `signerConfigured: false` on the remote
 server means the hosted server is non-custodial. It does not mean the remote
 tool surface is unavailable. Do not silently switch to local stdio just because

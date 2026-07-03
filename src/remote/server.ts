@@ -23,6 +23,9 @@ const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
 const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
 const PAYMENT_STATS_CACHE_MS = 15_000;
+const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
+const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
+const X402_PAID_CALL_ADDON_PATH = '~/.config/mcp-sap/addons/x402-paid-call';
 let logoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 
@@ -97,6 +100,8 @@ export interface WizardInstallDescriptor {
     runWizard: string;
     showConfig: string;
     showProfile: string;
+    installX402PaidCallAddon: string;
+    runX402PaidCall: string;
   };
   security: {
     keypairBytesExposed: false;
@@ -576,8 +581,9 @@ export function buildLandingHtml(
     ? 'SAP MCP Streamable HTTP Endpoint | OOBE Protocol'
     : info.title;
   const endpointLabel = endpoint === 'mcp' ? 'Streamable HTTP MCP endpoint' : 'Hosted MCP gateway';
-  const wizardCommand = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
+  const wizardCommand = WIZARD_NPM_COMMAND;
   const installScriptCommand = 'curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh';
+  const x402PaidCallCommand = X402_PAID_CALL_NPX_COMMAND;
   const publicInfo = JSON.stringify(info, null, 2).replace(/</g, '\\u003c');
 
   return `<!doctype html>
@@ -762,6 +768,13 @@ export function buildLandingHtml(
           <li><strong>pay.sh:</strong> supports pay-per-use and subscription specs for agents or dashboards that prefer checkout flows.</li>
           <li><strong>Local stdio:</strong> free by default; monetization applies to hosted remote usage.</li>
         </ul>
+      </section>
+
+      <section class="card strong span-12">
+        <h2>x402 Paid-Call Plugin For Agents</h2>
+        <p>Agents that can reach hosted MCP but cannot replay x402 challenges natively can install the wizard addon or invoke the local paid-call helper directly. The helper signs the payment payload locally and retries the hosted tool call without sending keypair bytes to OOBE.</p>
+        <div class="command"><code>Addon path: ${escapeHtml(X402_PAID_CALL_ADDON_PATH)}</code></div>
+        <div class="command"><code>${escapeHtml(x402PaidCallCommand)}</code></div>
       </section>
 
       <section class="card span-8">
@@ -950,9 +963,11 @@ export function buildWizardInstallDescriptor(
       mcp: `${baseUrl}/mcp`,
     },
     commands: {
-      runWizard: 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard',
+      runWizard: WIZARD_NPM_COMMAND,
       showConfig: 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config show',
       showProfile: 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config profile-info',
+      installX402PaidCallAddon: WIZARD_NPM_COMMAND,
+      runX402PaidCall: X402_PAID_CALL_NPX_COMMAND,
     },
     security: {
       keypairBytesExposed: false,

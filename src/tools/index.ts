@@ -19,6 +19,9 @@ export { registerTransactionTools } from './transaction-tools.js';
 // REAL CHAT TOOLS — signed group rooms, manifests, chunked messages, history, and ciphertext transport
 export { registerChatTools } from './chat-tools.js';
 
+// REAL X402 HOSTED PAYMENT TOOL — local signer helper for paid remote MCP calls
+export { registerX402PaidCallTool } from './x402-paid-call-tool.js';
+
 // REAL PROFILE TOOLS — inspect and switch loaded SAP MCP profiles without exposing keypairs
 export { registerProfileTools } from './profile-tools.js';
 

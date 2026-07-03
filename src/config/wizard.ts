@@ -23,7 +23,9 @@ import {
   applyMcpClientInjection,
   createCanonicalServerConfig,
   createManualMcpJsonSnippets,
+  createX402PaidCallAddonSnippets,
   discoverMcpClientTargets,
+  installX402PaidCallAddon,
   planMcpClientInjection,
   type McpClientInjectionMode,
   type McpClientTarget,
@@ -1116,6 +1118,72 @@ function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(proce
 }
 
 /**
+ * Prints manual x402 paid-call addon snippets for agent runtimes.
+ */
+function printX402PaidCallAddonSnippets(): void {
+  console.log('');
+  printSection('x402 Paid-Call Addon Snippets');
+  printLead('Use these snippets when your agent runtime supports local command-backed plugins or custom tools.');
+  printInfo('The addon signs x402 payment payloads locally with the SAP MCP profile wallet. It never sends keypair bytes to the hosted server.');
+  printWarning('Every paid call must set a max USD cap and explicit confirmation.');
+  console.log('');
+
+  for (const snippet of createX402PaidCallAddonSnippets()) {
+    printLabel(snippet.title);
+    printBullet(snippet.description);
+    console.log('');
+    console.log(snippet.content.trimEnd());
+    console.log('');
+  }
+}
+
+/**
+ * Runs the optional local x402 paid-call addon setup step.
+ */
+async function wizardX402PaidCallAddon(): Promise<void> {
+  console.log('');
+  printSection('Optional x402 Paid-Call Addon');
+  printLead('Hosted paid tools need a local payment helper so agents can sign x402 payloads with the user-controlled SAP MCP profile.');
+  printInfo('Recommended for Hermes, Claude, Codex, OpenClaw, or custom agents that will call paid hosted tools.');
+  printInfo('If a runtime cannot load addons directly, it can call the local MCP tool sap_x402_paid_call or invoke sap-mcp-x402-paid-call.');
+  printWarning('This addon does not store or print keypair bytes. It uses the active SAP MCP profile at call time.');
+  printControlHints();
+  console.log('');
+
+  const choice = await askChoice(
+    'Install the local x402 paid-call addon bundle?',
+    [
+      `${paint('Install addon bundle under ~/.config/mcp-sap/addons/x402-paid-call', 'aqua', 'bold')} ${paint('[RECOMMENDED FOR HOSTED PAID TOOLS]', 'green', 'bold')}`,
+      'Print manual addon snippets only',
+      'Skip addon setup',
+    ],
+    0,
+    [
+      'Writes manifest, README, and client snippets for runtime-specific plugin wrappers.',
+      'Useful when you want to paste config into an existing Hermes/Claude/Codex/OpenClaw plugin system.',
+      'Skip if this profile will only use free/read-only hosted tools.',
+    ],
+  );
+
+  if (choice === 2) {
+    printInfo('Skipped x402 paid-call addon setup.');
+    return;
+  }
+
+  if (choice === 1) {
+    printX402PaidCallAddonSnippets();
+    return;
+  }
+
+  const result = installX402PaidCallAddon();
+  printSuccess(`Installed ${result.addonId} addon bundle to ${result.targetDir}`);
+  for (const file of result.files) {
+    printBullet(file);
+  }
+  printX402PaidCallAddonSnippets();
+}
+
+/**
  * Runs the optional MCP client injection step after profile config has been saved.
  */
 async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void> {
@@ -1153,22 +1221,26 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
 
   if (setupMode === 0) {
     printHostedMcpJsonSnippet(canonical);
+    await wizardX402PaidCallAddon();
     return;
   }
 
   if (setupMode === 1) {
     printManualMcpJsonSnippets(canonical);
+    await wizardX402PaidCallAddon();
     return;
   }
 
   if (setupMode === 3) {
     printInfo('Skipped MCP client injection.');
+    await wizardX402PaidCallAddon();
     return;
   }
 
   const targets = discoverMcpClientTargets();
   if (targets.length === 0) {
     printWarning('No known MCP client config paths were found.');
+    await wizardX402PaidCallAddon();
     return;
   }
 
@@ -1185,6 +1257,7 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
 
   if (selectedIndexes.length === 0) {
     printInfo('No MCP client configs selected.');
+    await wizardX402PaidCallAddon();
     return;
   }
 
@@ -1251,6 +1324,7 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
   console.log('');
   if (applied.length === 0) {
     printInfo('No MCP client config files were changed.');
+    await wizardX402PaidCallAddon();
     return;
   }
 
@@ -1258,6 +1332,7 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
   for (const item of applied) {
     console.log(`  - ${item}`);
   }
+  await wizardX402PaidCallAddon();
 }
 
 /**

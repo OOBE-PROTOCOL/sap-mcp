@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyMcpClientInjection,
   createManualMcpJsonSnippets,
+  createX402PaidCallAddonSnippets,
+  installX402PaidCallAddon,
   planMcpClientInjection,
   type McpServerInjectionConfig,
   type McpClientTarget,
@@ -167,5 +169,18 @@ describe('MCP client injection', () => {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
     });
+  });
+
+  it('provides x402 paid-call addon snippets and installs the addon bundle', () => {
+    const tempDir = makeTempDir();
+    const snippets = createX402PaidCallAddonSnippets();
+    const install = installX402PaidCallAddon(join(tempDir, 'x402-paid-call'));
+
+    expect(snippets.map(snippet => snippet.title)).toContain('Hermes Addon: x402_paid_call');
+    expect(snippets.map(snippet => snippet.title)).toContain('Local MCP Tool Alternative');
+    expect(install.addonId).toBe('x402-paid-call');
+    expect(readFileSync(join(tempDir, 'x402-paid-call', 'manifest.json'), 'utf-8')).toContain('sap-mcp-x402-paid-call');
+    expect(readFileSync(join(tempDir, 'x402-paid-call', 'README.md'), 'utf-8')).toContain('sap_x402_paid_call');
+    expect(readFileSync(join(tempDir, 'x402-paid-call', 'client-snippets.json'), 'utf-8')).toContain('x402_paid_call');
   });
 });

@@ -91,9 +91,21 @@ export interface ManualMcpClientSnippet {
   content: string;
 }
 
+/**
+ * @name McpClientAddonInstallResult
+ * @description Files written when the wizard installs a local client addon bundle.
+ */
+export interface McpClientAddonInstallResult {
+  addonId: 'x402-paid-call';
+  targetDir: string;
+  files: string[];
+}
+
 type JsonRecord = Record<string, unknown>;
 
 const SAP_SERVER_NAME = 'sap';
+const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
+const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
 /**
  * @name HOSTED_SAP_MCP_URL
  * @description Public OOBE hosted SAP MCP Streamable HTTP endpoint used in manual client setup snippets.
@@ -228,6 +240,119 @@ export function createManualMcpJsonSnippets(
       }),
     },
   ];
+}
+
+/**
+ * @name createX402PaidCallAddonSnippets
+ * @description Builds manual plugin/addon snippets for clients that can call a local x402 payment helper.
+ */
+export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
+  return [
+    {
+      title: 'Hermes Addon: x402_paid_call',
+      description: 'Use this concept for Hermes plugin/addon registries that expose local command-backed tools.',
+      content: formatJson({
+        plugins: {
+          x402_paid_call: {
+            command: X402_PAID_CALL_COMMAND,
+            description: 'Pay and retry hosted SAP MCP x402 tool calls with the active local SAP MCP profile.',
+            args: [],
+            env: {
+              SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
+            },
+          },
+        },
+      }),
+    },
+    {
+      title: 'Claude/Codex/OpenClaw Addon Command',
+      description: 'Use this command from a local tool/plugin wrapper when the client supports command-backed addons.',
+      content: [
+        `${X402_PAID_CALL_COMMAND} \\`,
+        '  --tool sap_list_all_agents \\',
+        '  --arguments \'{"limit":5}\' \\',
+        '  --max-usd 0.02 \\',
+        '  --confirm',
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'Local MCP Tool Alternative',
+      description: 'When the local SAP MCP stdio server is installed, agents can call sap_x402_paid_call instead of using a runtime-specific plugin.',
+      content: formatJson({
+        name: 'sap_x402_paid_call',
+        arguments: {
+          toolName: 'sap_list_all_agents',
+          arguments: { limit: 5 },
+          maxPriceUsd: 0.02,
+          confirm: true,
+        },
+      }),
+    },
+  ];
+}
+
+/**
+ * @name installX402PaidCallAddon
+ * @description Installs a portable local addon bundle with manifest and client snippets.
+ */
+export function installX402PaidCallAddon(
+  targetDir = join(homedir(), '.config', 'mcp-sap', 'addons', X402_PAID_CALL_ADDON_ID),
+): McpClientAddonInstallResult {
+  mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+
+  const manifestPath = join(targetDir, 'manifest.json');
+  const readmePath = join(targetDir, 'README.md');
+  const snippetsPath = join(targetDir, 'client-snippets.json');
+  const files = [manifestPath, readmePath, snippetsPath];
+
+  writeFileSync(manifestPath, formatJson({
+    id: X402_PAID_CALL_ADDON_ID,
+    name: 'SAP MCP x402 Paid Call',
+    command: X402_PAID_CALL_COMMAND,
+    toolName: 'x402_paid_call',
+    localMcpToolName: 'sap_x402_paid_call',
+    description: 'Local payment helper for hosted SAP MCP paid tools. It signs x402 payment payloads with the user-controlled SAP MCP profile signer.',
+    security: {
+      readsLocalKeypairFileForSigning: true,
+      printsKeypairBytes: false,
+      sendsKeypairBytesToHostedServer: false,
+      requiresConfirm: true,
+      requiresMaxPriceUsd: true,
+    },
+  }), { encoding: 'utf-8', mode: 0o600 });
+
+  writeFileSync(readmePath, [
+    '# SAP MCP x402 Paid Call Addon',
+    '',
+    'This addon lets local agent runtimes pay hosted SAP MCP x402 tool challenges without giving OOBE or the hosted server user keypair bytes.',
+    '',
+    'Use the command directly from a runtime-specific plugin wrapper:',
+    '',
+    '```bash',
+    `${X402_PAID_CALL_COMMAND} --tool sap_list_all_agents --arguments '{"limit":5}' --max-usd 0.02 --confirm`,
+    '```',
+    '',
+    'Or call the local SAP MCP tool `sap_x402_paid_call` when local stdio SAP MCP is available.',
+    '',
+    'Security rules:',
+    '',
+    '- keep keypair files under `~/.config/mcp-sap` or use a future external signing bridge;',
+    '- never paste keypair bytes into agent config;',
+    '- always set `maxPriceUsd` / `--max-usd`;',
+    '- `confirm: true` / `--confirm` is required because a payment payload is signed.',
+    '',
+  ].join('\n'), { encoding: 'utf-8', mode: 0o600 });
+
+  writeFileSync(snippetsPath, formatJson({
+    snippets: createX402PaidCallAddonSnippets(),
+  }), { encoding: 'utf-8', mode: 0o600 });
+
+  return {
+    addonId: X402_PAID_CALL_ADDON_ID,
+    targetDir,
+    files,
+  };
 }
 
 /**

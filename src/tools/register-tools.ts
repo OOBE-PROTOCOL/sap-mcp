@@ -12,6 +12,7 @@ import { registerTransactionTools } from './transaction-tools.js';
 import { registerProfileTools } from './profile-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
+import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 
 /**
  * Register all tools with the MCP server.
@@ -41,6 +42,12 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register SAP chat tools backed by on-chain session ledgers.
   registerChatTools(server, context);
+
+  // Register local x402 helper only when this process has a user-controlled wallet profile.
+  // Hosted non-custodial servers must not advertise a remote signer helper.
+  if (context.config.mode !== 'hosted-api' || context.config.walletPath) {
+    registerX402PaidCallTool(server, context);
+  }
 
   // Register profile tools with redacted signer metadata and live runtime reload.
   registerProfileTools(server, context);

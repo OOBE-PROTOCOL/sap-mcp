@@ -172,6 +172,20 @@ npx sap-mcp-pay-sh-spec \
 
 See [06. Payments, x402, And pay.sh](docs/06_PAYMENTS_X402_AND_PAYSH.md).
 
+For local agent runtimes that cannot replay x402 challenges natively, install
+the wizard's `x402_paid_call` addon or call the helper directly:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
+  --tool sap_list_all_agents \
+  --arguments '{"limit":5}' \
+  --max-usd 0.02 \
+  --confirm
+```
+
+The helper signs payment payloads with the user's local SAP MCP profile and
+never sends keypair bytes to the hosted server.
+
 ## 7. Commands
 
 ```bash
@@ -193,6 +207,7 @@ Installed binaries:
 | `sap-signing-proxy` | Local signing proxy |
 | `sap-mcp-facilitator` | Self-hosted x402 SVM facilitator |
 | `sap-mcp-pay-sh-spec` | pay.sh provider YAML generator |
+| `sap-mcp-x402-paid-call` | Local x402 payment helper for hosted paid MCP tools |
 
 ## 8. Documentation
 

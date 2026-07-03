@@ -157,6 +157,8 @@ describe('remote MCP server config', () => {
     expect(descriptor.configDirectory).toBe('~/.config/mcp-sap');
     expect(descriptor.requiredFor).toContain('signing x402/pay.sh payment payloads');
     expect(descriptor.commands.runWizard).toContain('@oobe-protocol-labs/sap-mcp-server');
+    expect(descriptor.commands.installX402PaidCallAddon).toContain('sap-mcp-config wizard');
+    expect(descriptor.commands.runX402PaidCall).toContain('sap-mcp-x402-paid-call');
     expect(descriptor.security.modifiesSolanaCliKeypair).toBe(false);
   });
 
@@ -230,6 +232,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('Total Settlements');
     expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
     expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');
+    expect(root).toContain('x402 Paid-Call Plugin For Agents');
+    expect(root).toContain('~/.config/mcp-sap/addons/x402-paid-call');
+    expect(root).toContain('npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call');
     expect(root).toContain('<strong>x402:</strong>');
     expect(root).toContain('<strong>pay.sh:</strong>');
     expect(mcp).toContain('SAP MCP Streamable HTTP Endpoint | OOBE Protocol');

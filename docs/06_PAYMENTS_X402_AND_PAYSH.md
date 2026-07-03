@@ -42,7 +42,41 @@ PAYMENT-SIGNATURE: <x402 payment payload>
 X-PAYMENT: <x402 payment payload>
 ```
 
-## 06.4 Payment Test Matrix
+The retry must preserve the initialized `mcp-session-id` and the same MCP method
+and params that produced the challenge. JSON-RPC `id` is not part of the
+canonical paid request hash.
+
+## 06.4 Local x402 Paid-Call Addon
+
+Some clients can connect to hosted Streamable HTTP MCP but cannot yet sign and
+replay x402 challenges natively. SAP MCP ships a local helper for that case:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
+  --tool sap_list_all_agents \
+  --arguments '{"limit":5}' \
+  --max-usd 0.02 \
+  --confirm
+```
+
+The wizard can install addon metadata and snippets for Hermes, Claude, Codex,
+OpenClaw, or custom runtimes:
+
+```text
+~/.config/mcp-sap/addons/x402-paid-call
+```
+
+The helper initializes the hosted MCP session, receives the x402 challenge,
+signs the payment payload with the user's local SAP MCP profile wallet, retries
+the hosted call, and prints the settlement receipt. It does not send keypair
+bytes to the hosted server. It fails closed when the active profile has no
+supported local payment signer.
+
+Local stdio SAP MCP may expose `sap_x402_paid_call` when the process has a
+user-controlled wallet profile. The public hosted server should not advertise
+that helper in non-custodial mode because signing belongs on the user's machine.
+
+## 06.5 Payment Test Matrix
 
 Before mainnet launch, verify these cases on devnet:
 
@@ -59,7 +93,7 @@ Before mainnet launch, verify these cases on devnet:
 | Facilitator unavailable | Paid call fails closed, not free. |
 | pay.sh checkout configured | 402 body includes checkout URL, but SAP MCP remains pricing authority. |
 
-## 06.5 pay.sh Role
+## 06.6 pay.sh Role
 
 pay.sh is useful as a provider/catalog/proxy layer for public distribution and checkout UX.
 
@@ -72,7 +106,7 @@ Important distinction:
 
 For that reason, SAP MCP should remain the pricing source of truth for MCP `tools/call` requests.
 
-## 06.6 Enable Monetization
+## 06.7 Enable Monetization
 
 Configure monetization through a private environment store. Public docs should not include live facilitator URLs, auth tokens, payment recipients, RPC credentials, or signer paths.
 
@@ -91,7 +125,7 @@ SAP_MCP_PAY_SH_CHECKOUT_URL=<optional-pay-sh-checkout-url>
 
 `SAP_MCP_MONETIZATION_PAY_TO` is the revenue recipient. It is not the facilitator signer, not a customer payment signer, and not an agent wallet.
 
-## 06.7 Facilitator Keypair
+## 06.8 Facilitator Keypair
 
 The facilitator needs its own dedicated signer. Initialize it:
 
@@ -112,7 +146,7 @@ The facilitator signer is used for facilitator operations. It must be separate f
 3. Revenue recipient wallet.
 4. Customer wallets.
 
-## 06.8 Start Facilitator
+## 06.9 Start Facilitator
 
 Start the facilitator through PM2, systemd, or a container supervisor with private environment injection:
 
@@ -122,7 +156,7 @@ npx sap-mcp-facilitator start
 
 If the facilitator binds to a non-loopback host or is reachable across a network boundary, an auth token is required.
 
-## 06.9 Generate pay.sh Provider YAML
+## 06.10 Generate pay.sh Provider YAML
 
 ```bash
 npx sap-mcp-pay-sh-spec \
@@ -149,7 +183,7 @@ Options:
 | `--title <text>` | pay.sh provider title. |
 | `--no-fee-payer` | Disable operator fee-payer sponsorship. |
 
-## 06.10 Usage Ledger
+## 06.11 Usage Ledger
 
 Payment decisions are written to the usage ledger. The ledger should store:
 
