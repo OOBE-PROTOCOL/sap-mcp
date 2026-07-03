@@ -98,7 +98,7 @@ describe('remote MCP server config', () => {
     const config = defaultRemoteConfig(appConfig);
 
     expect(config.auth).toEqual({ type: 'none' });
-    expect(config.stateless).toBe(true);
+    expect(config.stateless).toBe(false);
     expect(config.rateLimit.requestsPerMinute).toBe(60);
   });
 

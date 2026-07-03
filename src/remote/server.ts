@@ -1094,16 +1094,6 @@ export class RemoteMCPServer {
       let loggedMethod: string | undefined;
       let loggedToolNames: string[] | undefined;
 
-      // Try to extract JSON-RPC method and tool name from body for logging
-      if (req.method === 'POST') {
-        const chunks: Buffer[] = [];
-        const originalOn = req.on.bind(req);
-        // We can't consume the body here without breaking the handler,
-        // so we'll log what we can from the response status code.
-        // The monetization gate already parses the body for paid tools.
-        // For free tools, we'll log the method/path/status/latency.
-      }
-
       (res as http.ServerResponse).end = ((...args: Parameters<typeof res.end>) => {
         const latencyMs = Date.now() - reqStart;
         const statusCode = res.statusCode;

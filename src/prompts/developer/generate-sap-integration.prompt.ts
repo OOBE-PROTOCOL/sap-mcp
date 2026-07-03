@@ -139,5 +139,9 @@ function getFeatureExample(feature: string): string {
     attestation: '```typescript\nconst attestation = await sapClient.attestation.submit({\n  target: targetPda,\n  type: \'identity_verified\',\n  metadata: { verifiedBy: \'my-service\' },\n});\n```',
   };
   
-  return examples[feature] || '```typescript\n// Feature implementation depends on specific use case\n```';
+  return examples[feature] || [
+    'Unsupported feature requested.',
+    'Use one of: agent, escrow, vault, tools, attestation.',
+    'Do not generate generic integration code for unknown SAP features.',
+  ].join('\n');
 }

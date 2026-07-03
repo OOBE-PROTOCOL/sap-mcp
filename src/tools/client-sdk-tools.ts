@@ -356,7 +356,7 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
     throw new Error('Jupiter protocol tools not cached after initialization');
   }
 
-  // Tools that are blocked because they return placeholder responses or have known issues.
+  // Tools blocked because their AgentKit implementation does not produce an executable operation.
   // Agents should use the SAP SDK equivalents instead.
   const BLOCKED_AGENTKIT_TOOLS = new Set<string>([
     'sns_registerDomain',        // Returns { status: 'instruction_ready' } — use sap_sns_register_agent_domain instead
