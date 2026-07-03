@@ -2,6 +2,97 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.5.0 - 2026-07-03
+
+### Highlights
+
+First production-grade x402 monetized MCP server on Solana. This release delivers the full
+non-custodial payment flow — hosted server, client-side signing, facilitator verify+settle —
+with real MCP session management and a standalone client addon for AI agents.
+
+**Verified on-chain**: 5 successful USDC settlements on mainnet from wallet
+`28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP` during testing.
+
+### Added
+
+- **x402 Payment-Signature fast path** (`src/payments/monetization-gate.ts`):
+  - Server parses `Payment-Signature` header (base64 JSON with `x402Version`, `accepted`,
+    `payload`, and `resource`), validates requirements against the original decision, and
+    calls facilitator `/verify` → execute tool → `/settle` in a single pass.
+  - 402 responses are returned as HTTP 200 JSON-RPC errors (`-32001 payment_required`) for
+    MCP SDK `streamable_http_client` compatibility (the SDK hangs for 55s on raw HTTP 402).
+  - `PAYMENT-REQUIRED` response header forwarded so client-side plugins can extract the
+    full x402 challenge including `accepts[]` with `extra.feePayer`.
+
+- **x402 V1/V2 compatibility** (`patchV1Compatibility()`):
+  - V2 `buildPaymentRequirements()` emits `amount` but no `maxAmountRequired`; V1 verifier
+    checks `maxAmountRequired`. The gate patches every 402/response body to add the alias,
+    so both V1 and V2 clients work without modification.
+
+- **Standalone x402 client addon** (`src/payments/x402-paid-call.ts`):
+  - New npm binary `sap-mcp-x402-paid-call` — initializes a real MCP session, receives the
+    x402 challenge, signs locally with the user's SAP profile keypair, and retries with
+    `Payment-Signature`.
+  - Local MCP tool `sap_x402_paid_call` (`src/tools/x402-paid-call-tool.ts`) — available
+    only when the process has a local wallet profile; not advertised by the non-custodial
+    hosted server.
+
+- **MCP session registry** (`src/remote/server.ts`):
+  - Replaced the global singleton `StreamableHTTPServerTransport` with a per-session
+    `Map<sessionId, transport>` architecture. Each client `initialize` creates a real
+    session; paid calls without a valid session are rejected before facilitator contact.
+  - Eliminates "Server already initialized" and "Session not found" errors that made the
+    hosted server unusable for multiple concurrent clients.
+
+- **Receipt binding to method + params** (`src/payments/usage-ledger.ts`):
+  - Payment receipts are now bound to the canonical MCP method-and-params hash, not the
+    raw JSON-RPC body including `id`. This lets agents retry with a different `id` without
+    invalidating the payment proof.
+
+- **Wizard addon flow** (`src/config/wizard.ts`, `src/config/mcp-client-injection.ts`):
+  - After client config, the wizard proposes optional installation of the `x402-paid-call`
+    addon into `~/.config/mcp-sap/addons/x402-paid-call`.
+  - Emits config snippets for Hermes, Claude Code, Codex, OpenClaw, and custom runtimes.
+
+- **Log rotation** (`scripts/setup-logrotate.sh`):
+  - PM2 logrotate config: 50MB max, 7 retained, compressed, daily rotation.
+
+- **x402 protocol spec** (`docs/x402-protocol-spec.md`):
+  - 984-line reference document covering V1/V2 schemas, header encoding, amount conversion,
+    facilitator endpoints, and Solana transaction structure.
+
+### Changed
+
+- Updated skills (`skills/sap-payments-x402/SKILL.md`, `skills/sap-mcp/SKILL.md`) to
+  document the `initialize → tools/call unpaid → tools/call paid retry` flow and the
+  non-custodial signing boundary.
+- Updated user docs (`USER_DOCS/03_PAYMENTS_X402_PAYSH.md`, `USER_DOCS/04_CLIENT_CONFIGS.md`)
+  to clarify that retries must preserve `mcp-session-id`, bind to `method + params`, and
+  must not fall back to free local stdio to bypass x402.
+- Updated landing page and wizard descriptor to surface `npx sap-mcp-x402-paid-call`.
+
+### Security
+
+- Keypair bytes are never printed, logged, or written to config files.
+- The non-custodial hosted server does not advertise `sap_x402_paid_call` when no wallet
+  is present — the tool only exists when a local signer is configured.
+- Paid calls with client-generated (fake) `mcp-session-id` values are rejected before
+  facilitator verification, preventing wasted on-chain settlements for doomed sessions.
+
+### Verification
+
+```
+CI=true pnpm run typecheck
+CI=true pnpm run lint
+CI=true pnpm run test:run        # 72 tests passed, 17 passed (suites)
+CI=true pnpm run build
+CI=true pnpm run verify:release
+node dist/payments/x402-paid-call.js --help
+npm pack --dry-run                # includes new binary
+```
+
+On-chain verification: 5/5 USDC settlements confirmed on Solana mainnet.
+
 ## 0.3.0 - 2026-07-02
 
 ### Fixed
