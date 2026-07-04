@@ -49,7 +49,7 @@ module.exports = {
     allowToChangeInstallationDirectory: true,
   },
   linux: {
-    target: ['AppImage', 'tar.gz'],
+    target: ['tar.gz'],
     category: 'Development',
     artifactName: 'sap-mcp-wizard-${version}-${arch}.${ext}',
   },

@@ -77,7 +77,7 @@ Desktop flow:
 5. Configure hosted MCP and the local x402 paid-call bridge where supported.
 6. Show a final review before writing files.
 
-Release artifacts are produced as macOS DMG/ZIP, Windows NSIS EXE, and Linux AppImage/tar.gz. See [14. Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md).
+Release artifacts are produced as macOS DMG/ZIP, Windows NSIS EXE, and Linux tar.gz. See [14. Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md).
 
 ## 03.6 Client Config Injection
 

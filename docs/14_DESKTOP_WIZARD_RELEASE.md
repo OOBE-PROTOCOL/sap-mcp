@@ -21,7 +21,7 @@ The desktop app must not maintain a second config format, wallet model, signer m
 | `apps/desktop/preload.cjs` | Safe renderer bridge. |
 | `apps/desktop/src/main.tsx` | React wizard UI. |
 | `apps/desktop/src/styles.css` | Accessible aqua-themed desktop styling. |
-| `apps/desktop/electron-builder.cjs` | DMG/ZIP, NSIS EXE, AppImage/tar.gz packaging config. |
+| `apps/desktop/electron-builder.cjs` | DMG/ZIP, NSIS EXE, and Linux tar.gz packaging config. |
 | `apps/desktop/build/icon.png` | 1024x1024 installer icon derived from the public SAP MCP logo. |
 
 ## 14.3 Trust Boundary
@@ -111,7 +111,7 @@ Artifact matrix:
 | --- | --- |
 | `macos-15` | `.dmg`, `.zip` |
 | `windows-2025` | NSIS `.exe` |
-| `ubuntu-24.04` | `.AppImage`, `.tar.gz` |
+| `ubuntu-24.04` | `.tar.gz` |
 
 Tagged runs attach artifacts to a draft GitHub release.
 

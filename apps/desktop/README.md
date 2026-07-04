@@ -44,7 +44,7 @@ Tagged releases can also build native artifacts through:
 .github/workflows/desktop-release.yml
 ```
 
-That workflow creates macOS DMG/ZIP, Windows NSIS EXE, and Linux AppImage/tar.gz
+That workflow creates macOS DMG/ZIP, Windows NSIS EXE, and Linux tar.gz
 artifacts from native GitHub runners. Release uploads are created as draft
 GitHub releases so signing, notarization, and final notes can be reviewed before
 publishing.

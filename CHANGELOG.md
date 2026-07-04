@@ -14,7 +14,7 @@ Introduces the SAP MCP Desktop Wizard: a guided GUI/TUI-style installer for non-
 - Added shared desktop setup core in `src/wizard-core/desktop-flow.ts` so the GUI persists the same production profile format as the CLI/TUI wizard instead of maintaining a separate installer path.
 - Added automatic Codex hosted MCP + local `sap_payments` bridge configuration from the desktop flow.
 - Added x402 paid-call addon installation from the desktop flow, writing runtime snippets under `~/.config/mcp-sap/addons/x402-paid-call`.
-- Added Electron Builder packaging config for macOS DMG/ZIP, Windows NSIS, and Linux AppImage/tar.gz release artifacts.
+- Added Electron Builder packaging config for macOS DMG/ZIP, Windows NSIS, and Linux tar.gz release artifacts.
 - Added desktop wizard documentation in `apps/desktop/README.md`.
 - Added GitHub Actions desktop release workflow for native macOS, Windows, and Linux wizard artifacts on tagged releases or manual dispatch.
 

@@ -46,7 +46,7 @@ Expected artifacts:
 | --- | --- |
 | macOS | `SAP-MCP-Wizard-<version>-<arch>.dmg` or `.zip` |
 | Windows | `SAP-MCP-Wizard-Setup-<version>-x64.exe` |
-| Linux | `sap-mcp-wizard-<version>-<arch>.AppImage` or `.tar.gz` |
+| Linux | `sap-mcp-wizard-<version>-<arch>.tar.gz` |
 
 Until code signing is enabled, your operating system may show a warning. Verify the GitHub release, checksum, and publisher before installing.
 

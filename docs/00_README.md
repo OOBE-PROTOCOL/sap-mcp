@@ -36,7 +36,7 @@ For end-user installation and MCP client setup, start with [`../USER_DOCS/00_STA
 | `sap-signing-proxy` | Local signing proxy for external signer mode. |
 | `sap-mcp-facilitator` | Self-hosted x402 SVM facilitator. |
 | `sap-mcp-pay-sh-spec` | pay.sh provider YAML generator. |
-| SAP MCP Desktop Wizard | GUI/TUI-style installer released as DMG/ZIP, Windows EXE, and Linux AppImage/tar.gz artifacts. |
+| SAP MCP Desktop Wizard | GUI/TUI-style installer released as DMG/ZIP, Windows EXE, and Linux tar.gz artifacts. |
 
 ## 00.3 Golden Rules
 

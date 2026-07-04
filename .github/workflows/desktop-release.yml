@@ -60,7 +60,6 @@ jobs:
             release/desktop/*.dmg
             release/desktop/*.zip
             release/desktop/*.exe
-            release/desktop/*.AppImage
             release/desktop/*.tar.gz
             release/desktop/*.blockmap
             release/desktop/latest*.yml
@@ -75,7 +74,6 @@ jobs:
             release/desktop/*.dmg
             release/desktop/*.zip
             release/desktop/*.exe
-            release/desktop/*.AppImage
             release/desktop/*.tar.gz
             release/desktop/*.blockmap
             release/desktop/latest*.yml
