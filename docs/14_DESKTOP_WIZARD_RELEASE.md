@@ -117,7 +117,7 @@ Tagged runs attach artifacts to a draft GitHub release.
 
 ## 14.7 Signing Requirements
 
-Local unsigned builds are acceptable for internal testing only.
+Local unsigned builds are acceptable when the release notes clearly mark the macOS artifact as unsigned and provide the quarantine removal command.
 
 Public release requirements:
 
@@ -129,7 +129,7 @@ Public release requirements:
 
 Do not publish unsigned binaries as final user-facing installers without an explicit warning.
 
-For tagged GitHub release builds, the macOS job requires these secrets:
+For signed tagged GitHub release builds, the macOS job uses these secrets when they are configured:
 
 | Secret | Purpose |
 | --- | --- |
@@ -144,7 +144,8 @@ The Electron Builder macOS config uses:
 1. hardened runtime;
 2. explicit Electron entitlements;
 3. `afterSign` notarization through `apps/desktop/notarize.cjs`;
-4. CI preflight that fails tagged macOS releases when signing secrets are missing.
+4. ad-hoc signing mode when `CSC_LINK` is not present;
+5. signed/notarized mode when Apple Developer ID secrets are present.
 
 If macOS shows this message:
 
@@ -152,7 +153,7 @@ If macOS shows this message:
 "SAP MCP Wizard" is damaged and cannot be opened.
 ```
 
-the downloaded app was blocked by Gatekeeper because it was not signed and notarized for public distribution.
+the downloaded app was blocked by Gatekeeper because it was not signed and notarized for public distribution, or because the browser applied a quarantine attribute to an unsigned build.
 
 Temporary local-only workaround for a trusted internal build:
 
@@ -166,7 +167,14 @@ or, before dragging from the mounted image:
 xattr -dr com.apple.quarantine "/Volumes/SAP MCP Wizard/SAP MCP Wizard.app"
 ```
 
-Do not ask public users to rely on this workaround. A public macOS release must be signed and notarized.
+Unsigned/ad-hoc macOS release note text:
+
+```txt
+macOS note: this build is ad-hoc signed but not Apple-notarized. After copying the app to /Applications, run:
+xattr -dr com.apple.quarantine "/Applications/SAP MCP Wizard.app"
+```
+
+A zero-warning public macOS release still requires Apple Developer ID signing and notarization.
 
 ## 14.8 Verification Gates
 

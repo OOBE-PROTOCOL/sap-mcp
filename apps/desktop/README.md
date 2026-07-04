@@ -62,3 +62,11 @@ Tagged macOS release builds require:
 
 Unsigned macOS artifacts are for internal testing only. A browser-downloaded
 unsigned DMG can be blocked by Gatekeeper with an "app is damaged" message.
+
+When no `CSC_LINK` is configured, Electron Builder skips Developer ID signing
+and the `afterSign` hook applies an ad-hoc local signature. Users can still run
+the app after copying it to `/Applications` and removing quarantine:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SAP MCP Wizard.app"
+```

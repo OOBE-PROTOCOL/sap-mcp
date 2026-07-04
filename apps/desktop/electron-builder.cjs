@@ -28,6 +28,7 @@ module.exports = {
     category: 'public.app-category.developer-tools',
     target: ['dmg', 'zip'],
     artifactName: 'SAP-MCP-Wizard-${version}-${arch}.${ext}',
+    identity: process.env.CSC_LINK ? undefined : null,
     hardenedRuntime: true,
     entitlements: path.join('apps', 'desktop', 'build', 'entitlements.mac.plist'),
     entitlementsInherit: path.join('apps', 'desktop', 'build', 'entitlements.mac.plist'),

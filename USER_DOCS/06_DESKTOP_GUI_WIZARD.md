@@ -48,13 +48,15 @@ Expected artifacts:
 | Windows | `SAP-MCP-Wizard-Setup-<version>-x64.exe` |
 | Linux | `sap-mcp-wizard-<version>-<arch>.tar.gz` |
 
-macOS builds must be signed and notarized for a smooth double-click install after downloading from Chrome, Safari, or another browser. If macOS says the app is "damaged", the binary was blocked by Gatekeeper and should be replaced by a signed/notarized release.
+macOS builds must be signed and notarized for a zero-warning double-click install after downloading from Chrome, Safari, or another browser. Free public builds are ad-hoc signed but not Apple-notarized, so macOS may block them as "damaged" until you remove the quarantine flag.
 
-Advanced local-only workaround for trusted internal builds:
+For an unsigned SAP MCP Wizard build that you downloaded from the official GitHub release, copy the app to `/Applications`, then run:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/SAP MCP Wizard.app"
 ```
+
+Then open the app again from Finder.
 
 Do not paste wallet/keypair material into support chats while troubleshooting installer issues.
 
