@@ -48,7 +48,15 @@ Expected artifacts:
 | Windows | `SAP-MCP-Wizard-Setup-<version>-x64.exe` |
 | Linux | `sap-mcp-wizard-<version>-<arch>.tar.gz` |
 
-Until code signing is enabled, your operating system may show a warning. Verify the GitHub release, checksum, and publisher before installing.
+macOS builds must be signed and notarized for a smooth double-click install after downloading from Chrome, Safari, or another browser. If macOS says the app is "damaged", the binary was blocked by Gatekeeper and should be replaced by a signed/notarized release.
+
+Advanced local-only workaround for trusted internal builds:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SAP MCP Wizard.app"
+```
+
+Do not paste wallet/keypair material into support chats while troubleshooting installer issues.
 
 ## 4. GUI Flow
 

@@ -51,3 +51,14 @@ publishing.
 
 macOS signing and notarization require Apple Developer ID credentials.
 Windows SmartScreen-friendly builds require a code signing certificate.
+
+Tagged macOS release builds require:
+
+- `MACOS_CSC_LINK` or `CSC_LINK`
+- `MACOS_CSC_KEY_PASSWORD` or `CSC_KEY_PASSWORD`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+- `APPLE_TEAM_ID`
+
+Unsigned macOS artifacts are for internal testing only. A browser-downloaded
+unsigned DMG can be blocked by Gatekeeper with an "app is damaged" message.

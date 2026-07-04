@@ -129,6 +129,45 @@ Public release requirements:
 
 Do not publish unsigned binaries as final user-facing installers without an explicit warning.
 
+For tagged GitHub release builds, the macOS job requires these secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `MACOS_CSC_LINK` or `CSC_LINK` | Base64-encoded `.p12` Developer ID Application certificate, or a secure URL supported by Electron Builder. |
+| `MACOS_CSC_KEY_PASSWORD` or `CSC_KEY_PASSWORD` | Password for the certificate bundle. |
+| `APPLE_ID` | Apple Developer account email used for notarization. |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarization. |
+| `APPLE_TEAM_ID` | Apple Developer Team ID. |
+
+The Electron Builder macOS config uses:
+
+1. hardened runtime;
+2. explicit Electron entitlements;
+3. `afterSign` notarization through `apps/desktop/notarize.cjs`;
+4. CI preflight that fails tagged macOS releases when signing secrets are missing.
+
+If macOS shows this message:
+
+```txt
+"SAP MCP Wizard" is damaged and cannot be opened.
+```
+
+the downloaded app was blocked by Gatekeeper because it was not signed and notarized for public distribution.
+
+Temporary local-only workaround for a trusted internal build:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SAP MCP Wizard.app"
+```
+
+or, before dragging from the mounted image:
+
+```bash
+xattr -dr com.apple.quarantine "/Volumes/SAP MCP Wizard/SAP MCP Wizard.app"
+```
+
+Do not ask public users to rely on this workaround. A public macOS release must be signed and notarized.
+
 ## 14.8 Verification Gates
 
 Before publishing:

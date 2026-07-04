@@ -29,8 +29,11 @@ module.exports = {
     target: ['dmg', 'zip'],
     artifactName: 'SAP-MCP-Wizard-${version}-${arch}.${ext}',
     hardenedRuntime: true,
+    entitlements: path.join('apps', 'desktop', 'build', 'entitlements.mac.plist'),
+    entitlementsInherit: path.join('apps', 'desktop', 'build', 'entitlements.mac.plist'),
     gatekeeperAssess: false,
   },
+  afterSign: path.join('apps', 'desktop', 'notarize.cjs'),
   dmg: {
     artifactName: 'SAP-MCP-Wizard-${version}-${arch}.dmg',
   },

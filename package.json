@@ -104,6 +104,7 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@electron/notarize": "2.5.0",
     "@eslint/js": "^9.39.4",
     "@types/bn.js": "^5.2.0",
     "@types/cors": "^2.8.0",
