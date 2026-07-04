@@ -18,6 +18,14 @@ Most users should connect agents to the hosted remote MCP server while keeping s
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
+Users who prefer a GUI can download the Desktop Wizard from GitHub releases:
+
+```txt
+https://github.com/OOBE-PROTOCOL/sap-mcp/releases
+```
+
+The desktop wizard creates the same local SAP MCP profile, signer boundary, hosted MCP client config, and optional x402 paid-call bridge as the CLI wizard.
+
 The wizard creates an isolated SAP MCP profile under:
 
 ```txt
@@ -79,8 +87,9 @@ Read these first:
 1. [Hosted Remote MCP](user/01_HOSTED_REMOTE_MCP.md)
 2. [Client Configs](user/04_CLIENT_CONFIGS.md)
 3. [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
-4. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
-5. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
+4. [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
+5. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
+6. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
 
 ## Public Endpoints
 
@@ -93,4 +102,3 @@ Read these first:
 | `GET /.well-known/agent-card.json` | A2A-style agent card. |
 | `GET /.well-known/sap-mcp-wizard.json` | Wizard install descriptor for agents that cannot see local config. |
 | `GET /wizard/install.sh` | One-line wizard installer. |
-

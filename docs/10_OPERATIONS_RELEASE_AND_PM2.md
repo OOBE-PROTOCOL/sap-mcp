@@ -93,9 +93,10 @@ Version `0.2.0` includes:
 4. Optional client config injection for local agents.
 5. x402 monetization gate for paid hosted tool calls.
 6. OOBE self-hosted x402 SVM facilitator.
-7. pay.sh provider YAML generation.
-8. SAP SDK, SNS, Synapse AgentKit, Solana, profile, transaction, skill, chat, and payment tools.
-9. Policy engine support with local, Bento, and hybrid modes.
-10. Security guardrails for private key exposure and unsafe actions.
-11. Clean `pnpm audit --audit-level moderate` dependency graph.
-12. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
+7. Facilitator RPC failover through `SAP_MCP_FACILITATOR_RPC_FALLBACK_URLS` for transient endpoint failures.
+8. pay.sh provider YAML generation.
+9. SAP SDK, SNS, Synapse AgentKit, Solana, profile, transaction, skill, chat, and payment tools.
+10. Policy engine support with local, Bento, and hybrid modes.
+11. Security guardrails for private key exposure and unsafe actions.
+12. Clean `pnpm audit --audit-level moderate` dependency graph.
+13. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.

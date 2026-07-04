@@ -104,8 +104,14 @@ export interface McpClientAddonInstallResult {
 type JsonRecord = Record<string, unknown>;
 
 const SAP_SERVER_NAME = 'sap';
+const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
 const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
 const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
+const X402_PAYMENT_BRIDGE_TOOLS = [
+  'sap_x402_paid_call',
+  'sap_profile_current',
+  'sap_x402_estimate_cost',
+] as const;
 /**
  * @name HOSTED_SAP_MCP_URL
  * @description Public OOBE hosted SAP MCP Streamable HTTP endpoint used in manual client setup snippets.
@@ -135,6 +141,17 @@ function isRecord(value: unknown): value is JsonRecord {
  */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * @name shellQuote
+ * @description Quotes a command argument for copy/paste shell snippets.
+ */
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 /**
@@ -204,13 +221,18 @@ export function createManualMcpJsonSnippets(
 
   return [
     {
-      title: 'Hosted SAP MCP JSON (Claude, Codex, OpenClaw)',
-      description: 'Use this for clients whose config expects a root mcpServers map.',
+      title: 'Hosted SAP MCP JSON (Claude, OpenClaw, generic MCP clients)',
+      description: 'Use this for clients whose config expects a root mcpServers map. Do not paste this into Codex config.toml.',
       content: formatJson({
         mcpServers: {
           [SAP_SERVER_NAME]: hostedConfig,
         },
       }),
+    },
+    {
+      title: 'Hosted SAP MCP TOML (Codex config.toml)',
+      description: 'Use this for Codex ~/.codex/config.toml. Codex supports Streamable HTTP MCP servers with a url-based TOML entry.',
+      content: hostedTomlServerBlock(hostedConfig),
     },
     {
       title: 'Hosted SAP MCP JSON (Hermes global mcp.json)',
@@ -239,7 +261,55 @@ export function createManualMcpJsonSnippets(
         },
       }),
     },
+    {
+      title: 'Local SAP MCP TOML (Codex config.toml)',
+      description: 'Use this when you specifically want Codex to launch the local stdio SAP MCP server through npx and follow the active profile manager.',
+      content: tomlServerBlock(createNpxCodexServerConfig()),
+    },
   ];
+}
+
+/**
+ * @name createNpxCodexServerConfig
+ * @description Builds a portable Codex stdio config that works without a source checkout.
+ */
+export function createNpxCodexServerConfig(): McpServerInjectionConfig {
+  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return {
+    command,
+    args: [
+      '--yes',
+      '--package',
+      '@oobe-protocol-labs/sap-mcp-server',
+      'sap-mcp-server',
+    ],
+    env: {
+      SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
+      SAP_LOG_LEVEL: 'info',
+    },
+  };
+}
+
+/**
+ * @name createNpxPaymentBridgeServerConfig
+ * @description Builds a portable local stdio MCP config that exposes only x402 payment helper tools.
+ */
+export function createNpxPaymentBridgeServerConfig(): McpServerInjectionConfig {
+  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return {
+    command,
+    args: [
+      '--yes',
+      '--package',
+      '@oobe-protocol-labs/sap-mcp-server',
+      'sap-mcp-server',
+    ],
+    env: {
+      SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
+      SAP_ALLOWED_TOOLS: X402_PAYMENT_BRIDGE_TOOLS.join(','),
+      SAP_LOG_LEVEL: 'info',
+    },
+  };
 }
 
 /**
@@ -247,7 +317,67 @@ export function createManualMcpJsonSnippets(
  * @description Builds manual plugin/addon snippets for clients that can call a local x402 payment helper.
  */
 export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
+  const paymentBridge = createNpxPaymentBridgeServerConfig();
   return [
+    {
+      title: 'Codex Payment Bridge TOML',
+      description: 'Use this in ~/.codex/config.toml beside the hosted [mcp_servers.sap] entry. Codex will see only payment helper tools from this local bridge.',
+      content: codexPaymentBridgeTomlBlock(paymentBridge),
+    },
+    {
+      title: 'Claude Code Payment Bridge Commands',
+      description: 'Use the official Claude Code MCP CLI flow: add hosted SAP MCP over HTTP, then add this local stdio bridge for x402 payment retries.',
+      content: [
+        `claude mcp add --transport http ${SAP_SERVER_NAME} ${HOSTED_SAP_MCP_URL}`,
+        `claude mcp add --transport stdio ${SAP_PAYMENT_BRIDGE_SERVER_NAME} -- ${paymentBridge.command} ${paymentBridge.args.map(shellQuote).join(' ')}`,
+        '',
+        'Then ask Claude to call sap_payments.sap_x402_paid_call for hosted paid/write SAP MCP tools.',
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'Claude Desktop Payment Bridge JSON',
+      description: 'Use this for Claude-style JSON config files with a root mcpServers map.',
+      content: formatJson({
+        mcpServers: {
+          [SAP_SERVER_NAME]: {
+            type: 'http',
+            url: HOSTED_SAP_MCP_URL,
+          },
+          [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
+        },
+      }),
+    },
+    {
+      title: 'Hermes Payment Bridge YAML',
+      description: 'Use this inside Hermes profile config.yaml under mcp_servers when Hermes does not already have the x402 plugin installed.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${HOSTED_SAP_MCP_URL}`,
+        '    transport: streamable-http',
+        `  ${SAP_PAYMENT_BRIDGE_SERVER_NAME}:`,
+        `    command: ${paymentBridge.command}`,
+        '    args:',
+        ...paymentBridge.args.map((arg) => `    - ${arg}`),
+        '    env:',
+        ...Object.entries(paymentBridge.env).map(([key, value]) => `      ${key}: ${value === 'false' || value === 'true' ? `"${value}"` : value}`),
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'OpenClaw/Generic Payment Bridge JSON',
+      description: 'Use this for MCP clients that accept JSON mcpServers entries for one remote server plus one local stdio bridge.',
+      content: formatJson({
+        mcpServers: {
+          [SAP_SERVER_NAME]: {
+            url: HOSTED_SAP_MCP_URL,
+            transport: 'streamable-http',
+          },
+          [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
+        },
+      }),
+    },
     {
       title: 'Hermes Addon: x402_paid_call',
       description: 'Use this concept for Hermes plugin/addon registries that expose local command-backed tools.',
@@ -438,6 +568,7 @@ export function discoverMcpClientTargets(homeDir = homedir()): McpClientTarget[]
     }
 
     return target.path.endsWith('claude_desktop_config.json')
+      || target.path.endsWith(join('.codex', 'config.toml'))
       || target.path.endsWith(join('.openclaw', 'mcp.json'));
   });
 }
@@ -627,6 +758,42 @@ function tomlServerBlock(canonical: McpServerInjectionConfig): string {
 }
 
 /**
+ * @name hostedTomlServerBlock
+ * @description Renders a Codex-compatible TOML block for a hosted Streamable HTTP MCP server.
+ */
+function hostedTomlServerBlock(hosted: HostedMcpServerConfig): string {
+  return [
+    `[mcp_servers.${SAP_SERVER_NAME}]`,
+    `url = ${JSON.stringify(hosted.url)}`,
+    '',
+  ].join('\n');
+}
+
+/**
+ * @name codexPaymentBridgeTomlBlock
+ * @description Renders the Codex TOML block for the local x402 payment bridge MCP server.
+ */
+function codexPaymentBridgeTomlBlock(canonical: McpServerInjectionConfig): string {
+  const args = `[${canonical.args.map((arg) => JSON.stringify(arg)).join(', ')}]`;
+  const enabledTools = `[${X402_PAYMENT_BRIDGE_TOOLS.map((tool) => JSON.stringify(tool)).join(', ')}]`;
+  const lines = [
+    `[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`,
+    `command = ${JSON.stringify(canonical.command)}`,
+    `args = ${args}`,
+    `enabled_tools = ${enabledTools}`,
+    'tool_timeout_sec = 300',
+  ];
+
+  lines.push('');
+  lines.push(`[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}.env]`);
+  for (const [key, value] of Object.entries(canonical.env)) {
+    lines.push(`${key} = ${JSON.stringify(value)}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * @name removeTomlSapSections
  * @description Removes existing Codex SAP MCP TOML sections before appending the canonical one.
  */
@@ -658,6 +825,38 @@ function removeTomlSapSections(content: string): { content: string; hadSapConfig
 }
 
 /**
+ * @name removeTomlMcpServerSections
+ * @description Removes named Codex MCP server TOML sections before appending canonical blocks.
+ */
+function removeTomlMcpServerSections(content: string, serverNames: string[]): { content: string; hadConfig: boolean } {
+  const lines = content.split(/\r?\n/);
+  const nextLines: string[] = [];
+  let skipping = false;
+  let hadConfig = false;
+  const escapedNames = serverNames.map(escapeRegExp).join('|');
+  const header = new RegExp(`^\\[mcp_servers\\.(${escapedNames})(?:\\.|\\])`);
+
+  for (const line of lines) {
+    if (/^\[/.test(line)) {
+      skipping = header.test(line);
+      if (skipping) {
+        hadConfig = true;
+        continue;
+      }
+    }
+
+    if (!skipping) {
+      nextLines.push(line);
+    }
+  }
+
+  return {
+    content: nextLines.join('\n').replace(/\n*$/, ''),
+    hadConfig,
+  };
+}
+
+/**
  * @name buildTomlContent
  * @description Builds a merged TOML MCP client config.
  */
@@ -667,6 +866,65 @@ function buildTomlContent(content: string, canonical: McpServerInjectionConfig):
   return {
     nextContent: `${prefix ? `${prefix}\n\n` : ''}${tomlServerBlock(canonical)}\n`,
     hadSapConfig: stripped.hadSapConfig,
+  };
+}
+
+/**
+ * @name buildCodexHostedPaymentBridgeContent
+ * @description Builds Codex TOML with hosted SAP MCP plus a local sap_payments x402 bridge.
+ */
+export function buildCodexHostedPaymentBridgeContent(
+  content: string,
+  hostedUrl = HOSTED_SAP_MCP_URL,
+): { nextContent: string; hadSapConfig: boolean } {
+  const stripped = removeTomlMcpServerSections(content, [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]);
+  const hosted: HostedMcpServerConfig = {
+    url: hostedUrl,
+    transport: 'streamable-http',
+  };
+  const prefix = stripped.content.trimEnd();
+  const nextContent = [
+      prefix,
+      hostedTomlServerBlock(hosted).trimEnd(),
+      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfig()).trimEnd(),
+    ].filter(Boolean).join('\n\n');
+
+  return {
+    nextContent: `${nextContent}\n`,
+    hadSapConfig: stripped.hadConfig,
+  };
+}
+
+/**
+ * @name installCodexHostedPaymentBridgeConfig
+ * @description Writes Codex config.toml with hosted SAP MCP and the local x402 payment bridge.
+ */
+export function installCodexHostedPaymentBridgeConfig(homeDir = homedir()): McpClientInjectionResult {
+  const target: McpClientTarget = {
+    id: 'codex',
+    label: 'Codex',
+    path: join(homeDir, '.codex', 'config.toml'),
+    format: 'toml',
+    exists: existsSync(join(homeDir, '.codex', 'config.toml')),
+  };
+  const before = readTargetContent(target);
+  const built = buildCodexHostedPaymentBridgeContent(before);
+  const backupPath = target.exists ? `${target.path}.bak-${Date.now()}` : undefined;
+
+  mkdirSync(dirname(target.path), { recursive: true });
+  if (backupPath) {
+    writeFileSync(backupPath, before, 'utf-8');
+  }
+  writeFileSync(target.path, built.nextContent, 'utf-8');
+
+  return {
+    target,
+    mode: built.hadSapConfig ? 'override' : 'merge',
+    written: true,
+    backupPath,
+    message: built.hadSapConfig
+      ? 'Updated Codex hosted SAP MCP and local x402 payment bridge config'
+      : 'Created Codex hosted SAP MCP and local x402 payment bridge config',
   };
 }
 

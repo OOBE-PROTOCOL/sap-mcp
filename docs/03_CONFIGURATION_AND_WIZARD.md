@@ -62,7 +62,24 @@ The wizard should:
 9. Offer optional MCP client config injection.
 10. Warn before merge or override when an existing `sap` MCP entry is found.
 
-## 03.5 Client Config Injection
+## 03.5 Desktop GUI Wizard
+
+SAP MCP also ships a Desktop GUI Wizard for users who should not need to edit JSON, TOML, or YAML by hand.
+
+The desktop app uses the same setup modules as `sap-mcp-config wizard`; it must not create a second config format or a separate wallet model.
+
+Desktop flow:
+
+1. Choose a named profile.
+2. Create or import a dedicated SAP MCP wallet.
+3. Set policy limits and optional Bento Guard metadata.
+4. Detect local agent runtimes.
+5. Configure hosted MCP and the local x402 paid-call bridge where supported.
+6. Show a final review before writing files.
+
+Release artifacts are produced as macOS DMG/ZIP, Windows NSIS EXE, and Linux AppImage/tar.gz. See [14. Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md).
+
+## 03.6 Client Config Injection
 
 The injection step is optional. It targets known local MCP clients such as Claude Desktop, Hermes, Codex, and OpenClaw.
 
@@ -86,7 +103,17 @@ The injected config should follow the profile manager:
 
 Do not inject keypair bytes, hard-coded legacy wallet paths, or stale RPC overrides into agent client files.
 
-## 03.6 Config CLI
+For hosted paid/write tools, clients may also need a local `sap_payments` bridge that exposes only:
+
+```txt
+sap_x402_paid_call
+sap_profile_current
+sap_x402_estimate_cost
+```
+
+This bridge signs x402 payment proofs locally with the active SAP MCP profile and retries the hosted tool call.
+
+## 03.7 Config CLI
 
 Use `sap-mcp-config` for profile and policy operations:
 
@@ -109,7 +136,7 @@ npx sap-mcp-config audit
 npx sap-mcp-config hash
 ```
 
-## 03.7 Approval Workflow
+## 03.8 Approval Workflow
 
 Sensitive config changes can require approval. Typical protected fields are:
 
@@ -121,7 +148,7 @@ Sensitive config changes can require approval. Typical protected fields are:
 
 Pending changes are listed with `sap-mcp-config pending`, approved with `sap-mcp-config approve <id>`, and denied with `sap-mcp-config deny <id>`.
 
-## 03.8 Network Consistency
+## 03.9 Network Consistency
 
 The active profile is the source of truth for network behavior. If a profile is on devnet, SAP tools must return devnet data. If a profile is on mainnet, SAP tools must return mainnet data.
 
@@ -140,4 +167,3 @@ env:
   SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"
   SAP_LOG_LEVEL: info
 ```
-

@@ -21,6 +21,14 @@ Run the wizard:
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
+For non-technical users, download the Desktop GUI Wizard from GitHub releases:
+
+```txt
+https://github.com/OOBE-PROTOCOL/sap-mcp/releases
+```
+
+The Desktop GUI Wizard creates the same profile and signer setup as the CLI wizard, then can configure hosted MCP plus the local x402 payment bridge for supported agent runtimes.
+
 Show the active profile:
 
 ```bash
@@ -88,7 +96,14 @@ Minimal hosted MCP client concept:
 }
 ```
 
-If a client does not support remote Streamable HTTP MCP yet, use local stdio mode and let the local server connect to the same SAP/Solana stack.
+Codex users should not paste that JSON into `~/.codex/config.toml`. Use TOML:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+```
+
+Codex supports Streamable HTTP MCP servers with URL-based TOML entries. Use local stdio mode only when you want Codex to launch the SAP MCP process locally.
 
 ## 5. Safety Rules For Agents
 
@@ -134,3 +149,4 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config au
 | `03_PAYMENTS_X402_PAYSH.md` | x402, pay.sh pay-per-use, and pay.sh subscriptions |
 | `04_CLIENT_CONFIGS.md` | Claude, Hermes, Codex, OpenClaw config examples |
 | `05_SKILLS_AND_TOOLS.md` | Skills, tool selection, and security behavior |
+| `06_DESKTOP_GUI_WIZARD.md` | Desktop GUI wizard install, hosted setup, x402 client addon, and runtime behavior |

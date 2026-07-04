@@ -384,7 +384,7 @@ This will guide you through:
 4. Creating or linking a dedicated wallet without exposing keypair bytes to agents
 5. Setting security limits
 
-If this agent cannot access the user's OS config directory, tell the user to run the wizard locally. Do not ask for keypair bytes, do not inspect \`~/.config/solana/id.json\`, and do not invent a wallet path.
+If this agent cannot access the user's OS config directory, tell the user to run the wizard locally. Do not ask for keypair bytes, do not inspect \`~/.config/solana/id.json\`, and do not invent a wallet path. Do not create temporary signing scripts, do not run \`cat <keypair>.json\`, and do not pass keypair bytes through environment variables such as \`KEYPAIR_BYTES\`. For unsigned transactions use \`sap_preview_transaction\`, \`sap_sign_transaction\`, and \`sap_submit_signed_transaction\`; if the transaction format is unsupported, stop and report that limitation.
 
 **Current Profile:** ${activeProfile}
 **Config Directory:** ${configDir}

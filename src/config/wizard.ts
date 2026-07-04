@@ -25,6 +25,7 @@ import {
   createManualMcpJsonSnippets,
   createX402PaidCallAddonSnippets,
   discoverMcpClientTargets,
+  installCodexHostedPaymentBridgeConfig,
   installX402PaidCallAddon,
   planMcpClientInjection,
   type McpClientInjectionMode,
@@ -1071,7 +1072,7 @@ function printManualMcpJsonSnippets(canonical = createCanonicalServerConfig(proc
 
   console.log('');
   printSection('Manual MCP Client Configuration');
-  printLead('Paste one of these JSON snippets into the MCP config for Claude, Hermes, OpenClaw, Codex, or another MCP-capable agent.');
+  printLead('Paste the snippet that matches your MCP client config format. Codex uses TOML, Hermes profile config uses YAML, and Claude/OpenClaw commonly use JSON.');
   printWarning('Do not add wallet paths, RPC overrides, profile names, or keypair bytes to client config.');
   console.log('');
 
@@ -1092,7 +1093,7 @@ function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(proce
     .filter((snippet) => snippet.title.startsWith('Hosted SAP MCP'));
 
   if (hostedSnippets.length === 0) {
-    printError('Hosted SAP MCP snippets are not available.');
+    printError('Hosted SAP MCP config snippets are not available.');
     return;
   }
 
@@ -1120,7 +1121,7 @@ function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(proce
 /**
  * Prints manual x402 paid-call addon snippets for agent runtimes.
  */
-function printX402PaidCallAddonSnippets(): void {
+function printX402PaidCallAddonSnippets(titleFilter?: (title: string) => boolean): void {
   console.log('');
   printSection('x402 Paid-Call Addon Snippets');
   printLead('Use these snippets when your agent runtime supports local command-backed plugins or custom tools.');
@@ -1128,7 +1129,7 @@ function printX402PaidCallAddonSnippets(): void {
   printWarning('Every paid call must set a max USD cap and explicit confirmation.');
   console.log('');
 
-  for (const snippet of createX402PaidCallAddonSnippets()) {
+  for (const snippet of createX402PaidCallAddonSnippets().filter((item) => !titleFilter || titleFilter(item.title))) {
     printLabel(snippet.title);
     printBullet(snippet.description);
     console.log('');
@@ -1151,28 +1152,54 @@ async function wizardX402PaidCallAddon(): Promise<void> {
   console.log('');
 
   const choice = await askChoice(
-    'Install the local x402 paid-call addon bundle?',
+    'How should the local x402 payment bridge be installed?',
     [
-      `${paint('Install addon bundle under ~/.config/mcp-sap/addons/x402-paid-call', 'aqua', 'bold')} ${paint('[RECOMMENDED FOR HOSTED PAID TOOLS]', 'green', 'bold')}`,
-      'Print manual addon snippets only',
+      `${paint('Configure Codex automatically: hosted sap + local sap_payments bridge', 'aqua', 'bold')} ${paint('[RECOMMENDED FOR CODEX]', 'green', 'bold')}`,
+      'Print Claude Code / Claude Desktop payment bridge instructions',
+      'Print Hermes payment bridge instructions',
+      'Print OpenClaw / generic payment bridge instructions',
+      `${paint('Install addon bundle and print all runtime snippets', 'aqua', 'bold')}`,
       'Skip addon setup',
     ],
     0,
     [
+      'Writes ~/.codex/config.toml with the remote SAP MCP endpoint and a local MCP payment bridge exposing sap_x402_paid_call.',
+      'Shows the official Claude MCP CLI flow plus Claude-style JSON config.',
+      'Shows Hermes profile/global config options and the x402_paid_call addon concept.',
+      'Shows JSON snippets for runtimes with mcpServers support.',
       'Writes manifest, README, and client snippets for runtime-specific plugin wrappers.',
-      'Useful when you want to paste config into an existing Hermes/Claude/Codex/OpenClaw plugin system.',
       'Skip if this profile will only use free/read-only hosted tools.',
     ],
   );
 
-  if (choice === 2) {
+  if (choice === 5) {
     printInfo('Skipped x402 paid-call addon setup.');
     return;
   }
 
   if (choice === 1) {
-    printX402PaidCallAddonSnippets();
+    printX402PaidCallAddonSnippets((title) => title.startsWith('Claude'));
     return;
+  }
+
+  if (choice === 2) {
+    printX402PaidCallAddonSnippets((title) => title.startsWith('Hermes'));
+    return;
+  }
+
+  if (choice === 3) {
+    printX402PaidCallAddonSnippets((title) => title.startsWith('OpenClaw') || title.includes('Local MCP Tool'));
+    return;
+  }
+
+  if (choice === 0) {
+    const codexResult = installCodexHostedPaymentBridgeConfig();
+    printSuccess(codexResult.message);
+    printBullet(codexResult.target.path);
+    if (codexResult.backupPath) {
+      printBullet(`Backup: ${codexResult.backupPath}`);
+    }
+    printInfo('Restart Codex completely, then ask it to use sap_payments.sap_x402_paid_call for hosted paid/write SAP MCP tools.');
   }
 
   const result = installX402PaidCallAddon();
@@ -1204,8 +1231,8 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
   const setupMode = await askChoice(
     'How do you want to configure MCP clients?',
     [
-      `${paint('Connect to hosted SAP MCP at https://mcp.sap.oobeprotocol.ai/mcp', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
-      'Print manual JSON snippets for hosted and local setup',
+      `${paint('Print hosted SAP MCP config snippets for Claude, Hermes, Codex, OpenClaw', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
+      'Print all manual config snippets for hosted and local setup',
       'Automatically inject local active-profile config into detected client files',
       'Skip MCP client configuration',
     ],

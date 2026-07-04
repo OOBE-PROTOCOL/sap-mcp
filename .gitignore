@@ -5,6 +5,8 @@ node_modules/
 
 # Build output
 dist/
+apps/desktop/dist-renderer/
+release/
 !vendor/bigint-buffer/dist/
 !vendor/bigint-buffer/dist/**
 

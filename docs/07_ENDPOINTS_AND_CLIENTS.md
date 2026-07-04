@@ -116,6 +116,27 @@ Generic MCP client JSON:
 }
 ```
 
+Codex `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+```
+
+Codex supports Streamable HTTP MCP servers with URL-based TOML entries. Use local stdio through `npx` only when you want Codex to launch SAP MCP locally:
+
+```toml
+[mcp_servers.sap]
+command = "npx"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+
+[mcp_servers.sap.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_LOG_LEVEL = "info"
+```
+
+On Windows, use `command = "npx.cmd"`.
+
 Hermes global `~/.hermes/mcp.json`:
 
 ```json

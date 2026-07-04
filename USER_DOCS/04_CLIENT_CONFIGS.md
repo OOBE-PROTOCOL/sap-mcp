@@ -3,7 +3,7 @@
 ## 1. Hosted Remote MCP
 
 Use this when the client supports remote Streamable HTTP MCP and expects a root
-`mcpServers` object:
+`mcpServers` object. Do not paste this JSON into Codex `config.toml`.
 
 ```json
 {
@@ -16,7 +16,64 @@ Use this when the client supports remote Streamable HTTP MCP and expects a root
 }
 ```
 
-## 2. Hosted Hermes Configs
+## 2. Hosted Codex TOML
+
+Codex supports Streamable HTTP MCP servers and uses TOML config, usually at:
+
+- macOS/Linux: `~/.codex/config.toml`
+- Windows: `%USERPROFILE%\.codex\config.toml`
+
+Use this hosted remote entry:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+```
+
+Paid/write tools also need a local non-custodial payment bridge. The wizard can
+write both entries automatically. Choose:
+
+```txt
+Configure Codex automatically: hosted sap + local sap_payments bridge
+```
+
+The final Codex setup should look like this:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+
+[mcp_servers.sap_payments]
+command = "npx.cmd"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+tool_timeout_sec = 300
+
+[mcp_servers.sap_payments.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_LOG_LEVEL = "info"
+```
+
+On macOS/Linux, use `command = "npx"` instead of `npx.cmd`.
+
+Restart Codex after editing the file. Do not paste the JSON `mcpServers`
+snippet into Codex; Codex expects TOML. If you specifically want Codex to start
+the complete local stdio SAP MCP process instead of using the hosted endpoint, use:
+
+```toml
+[mcp_servers.sap]
+command = "npx.cmd"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+
+[mcp_servers.sap.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_LOG_LEVEL = "info"
+```
+
+On macOS/Linux, use `command = "npx"` instead of `npx.cmd`.
+
+## 3. Hosted Hermes Configs
 
 Hermes global `~/.hermes/mcp.json` uses flat server entries:
 
@@ -40,7 +97,7 @@ mcp_servers:
 
 Do not nest `mcpServers.sap` inside a Hermes `mcp_servers.sap` block.
 
-## 3. Local Stdio MCP
+## 4. Local Stdio MCP
 
 Use this when the client requires stdio:
 
@@ -60,7 +117,7 @@ Use this when the client requires stdio:
 }
 ```
 
-## 4. Local Hermes YAML Concept
+## 5. Local Hermes YAML Concept
 
 ```yaml
 mcp_servers:
@@ -74,7 +131,7 @@ mcp_servers:
       SAP_LOG_LEVEL: info
 ```
 
-## 5. Local Codex TOML Concept
+## 6. Local Codex TOML Concept
 
 ```toml
 [mcp_servers.sap]
@@ -87,7 +144,7 @@ SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
 SAP_LOG_LEVEL = "info"
 ```
 
-## 6. Wizard Injection
+## 7. Wizard Injection
 
 The wizard can automatically detect and update supported client config files. If a SAP MCP entry already exists, the wizard should show the existing config and ask whether to merge, override, skip, or print manual instructions.
 
@@ -97,7 +154,7 @@ Run:
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
-## 7. x402 Paid-Call Addon
+## 8. x402 Paid-Call Addon
 
 Hosted SAP MCP paid tools return an x402 challenge. Some agent runtimes expose remote MCP tools but do not yet have a native x402 replay path. The wizard can install a local addon bundle for Hermes, Claude, Codex, OpenClaw, or custom runtimes:
 
@@ -114,6 +171,26 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
   --max-usd 0.02 \
   --confirm
 ```
+
+For Codex, the recommended runtime integration is the local `sap_payments` MCP
+bridge shown above. It exposes only:
+
+```txt
+sap_x402_paid_call
+sap_profile_current
+sap_x402_estimate_cost
+```
+
+For Claude Code, use the official MCP CLI pattern:
+
+```bash
+claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp
+claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-server
+```
+
+Set `SAP_ALLOWED_TOOLS=sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost`
+in the local bridge environment if your Claude runtime exposes environment
+configuration. This keeps the local bridge focused on payment retries.
 
 Hermes plugin/addon concept:
 

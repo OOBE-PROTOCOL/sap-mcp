@@ -27,6 +27,7 @@ import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
 import { hashPaymentRequest, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
+import { isTransientRpcError } from './facilitator-rpc-fallback.js';
 
 /**
  * @name McpRequestHandler
@@ -96,6 +97,14 @@ const USDC_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 type PaymentRequirementsWithV1Alias = PaymentRequirements & {
   maxAmountRequired?: string;
 };
+
+interface ClassifiedPaymentFailure {
+  reason?: string;
+  message?: string;
+  retryable: boolean;
+  category: 'client_payment' | 'facilitator_rpc' | 'facilitator_unavailable';
+  hint: string;
+}
 
 interface ParsedPaymentHeader {
   x402Version: number;
@@ -452,24 +461,36 @@ export class McpMonetizationGate {
       requestHash: options.metadata.requestHash.slice(0, 12),
     });
 
-    const verifyResult = await this.callFacilitator<VerifyResponse>('verify', {
-      x402Version: parsedPayment.x402Version,
-      paymentPayload: parsedPayment.paymentPayload,
-      paymentRequirements: parsedPayment.paymentRequirements,
-    });
+    let verifyResult: VerifyResponse;
+    try {
+      verifyResult = await this.callFacilitator<VerifyResponse>('verify', {
+        x402Version: parsedPayment.x402Version,
+        paymentPayload: parsedPayment.paymentPayload,
+        paymentRequirements: parsedPayment.paymentRequirements,
+      });
+    } catch (error) {
+      const failure = classifyFacilitatorError(error);
+      logger.warn('Payment verification facilitator call failed', {
+        reason: failure.reason,
+        message: failure.message,
+        retryable: failure.retryable,
+        requestHash: options.metadata.requestHash.slice(0, 12),
+      });
+      writeJsonRpcError(options.response, options.parsedBody, -32002, 'payment_verification_failed', failure);
+      return;
+    }
 
     if (!verifyResult.isValid) {
+      const failure = classifyVerifyFailure(verifyResult);
       logger.warn('Payment verification failed', {
-        reason: verifyResult.invalidReason,
-        message: verifyResult.invalidMessage,
+        reason: failure.reason,
+        message: failure.message,
+        retryable: failure.retryable,
+        category: failure.category,
         payer: verifyResult.payer,
         requestHash: options.metadata.requestHash.slice(0, 12),
       });
-      writeJsonRpcError(options.response, options.parsedBody, -32002, 'payment_verification_failed', {
-        reason: verifyResult.invalidReason,
-        message: verifyResult.invalidMessage,
-        hint: 'Check USDC balance, network, payTo, feePayer, and that the payment was built from this request challenge.',
-      });
+      writeJsonRpcError(options.response, options.parsedBody, -32002, 'payment_verification_failed', failure);
       return;
     }
 
@@ -501,11 +522,25 @@ export class McpMonetizationGate {
       return;
     }
 
-    const settlement = await this.callFacilitator<SettleResponse>('settle', {
-      x402Version: parsedPayment.x402Version,
-      paymentPayload: parsedPayment.paymentPayload,
-      paymentRequirements: parsedPayment.paymentRequirements,
-    });
+    let settlement: SettleResponse;
+    try {
+      settlement = await this.callFacilitator<SettleResponse>('settle', {
+        x402Version: parsedPayment.x402Version,
+        paymentPayload: parsedPayment.paymentPayload,
+        paymentRequirements: parsedPayment.paymentRequirements,
+      });
+    } catch (error) {
+      const failure = classifyFacilitatorError(error);
+      await this.usageLedger.recordCanceled(
+        options.metadata,
+        options.decision,
+        'handler_failed',
+        failure.message ?? failure.reason ?? 'facilitator_settle_failed',
+      );
+      buffered.restore();
+      writeJsonRpcError(options.response, options.parsedBody, -32003, 'payment_settlement_failed', failure);
+      return;
+    }
     await this.usageLedger.recordSettlement(options.metadata, options.decision, settlement);
 
     if (!settlement.success) {
@@ -543,7 +578,8 @@ export class McpMonetizationGate {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw new Error(`Facilitator ${path} failed with HTTP ${response.status}`);
+      const bodyText = await response.text().catch(() => '');
+      throw new Error(`Facilitator ${path} failed with HTTP ${response.status}${bodyText ? `: ${bodyText}` : ''}`);
     }
     return await response.json() as TResponse;
   }
@@ -1012,6 +1048,69 @@ function setPaymentResponseHeaders(response: http.ServerResponse, settlement: Se
   const encoded = Buffer.from(JSON.stringify(settlement), 'utf-8').toString('base64');
   response.setHeader('PAYMENT-RESPONSE', encoded);
   response.setHeader('X-PAYMENT-RESPONSE', encoded);
+}
+
+function classifyVerifyFailure(verifyResult: VerifyResponse): ClassifiedPaymentFailure {
+  const reason = verifyResult.invalidReason;
+  const message = verifyResult.invalidMessage;
+  const combined = [reason, message].filter(Boolean).join(': ');
+  const retryable = isTransientFacilitatorFailure(combined);
+
+  if (retryable) {
+    return {
+      reason,
+      message,
+      retryable: true,
+      category: 'facilitator_rpc',
+      hint: 'The payment could not be simulated because the facilitator or its Solana RPC returned a transient gateway/availability error. Retry the same paid call; if it repeats, check facilitator health, configured RPC fallbacks, and the facilitator PM2 logs.',
+    };
+  }
+
+  return {
+    reason,
+    message,
+    retryable: false,
+    category: 'client_payment',
+    hint: 'Check USDC balance, network, payTo, feePayer, token account setup, and that the payment was built from this exact request challenge.',
+  };
+}
+
+function classifyFacilitatorError(error: unknown): ClassifiedPaymentFailure {
+  const message = error instanceof Error ? error.message : String(error);
+  const retryable = isTransientFacilitatorFailure(message);
+
+  return {
+    reason: retryable ? 'facilitator_unavailable' : 'facilitator_request_failed',
+    message,
+    retryable,
+    category: retryable ? 'facilitator_unavailable' : 'client_payment',
+    hint: retryable
+      ? 'The facilitator or one of its RPC endpoints is temporarily unavailable. Retry the paid call; if it repeats, verify facilitator /health, /supported, auth token, and RPC fallback configuration.'
+      : 'The facilitator rejected the verification or settlement request. Check the payment payload, accepted requirements, facilitator URL, and facilitator auth token.',
+  };
+}
+
+function isTransientFacilitatorFailure(message: string): boolean {
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return isTransientRpcError(message)
+    || containsAny(normalized, [
+      'transaction_simulation_failed',
+      'smart_wallet_simulation_failed',
+      'facilitator verify failed with http 502',
+      'facilitator verify failed with http 503',
+      'facilitator verify failed with http 504',
+      'facilitator settle failed with http 502',
+      'facilitator settle failed with http 503',
+      'facilitator settle failed with http 504',
+    ]);
+}
+
+function containsAny(message: string, needles: readonly string[]): boolean {
+  return needles.some(needle => message.includes(needle));
 }
 
 function buildRequestMetadata(

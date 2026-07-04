@@ -44,8 +44,16 @@ staking protocols.
    `jupiter_swapInstructions`.
 3. Explain slippage, route, token mints, amount units, and expected output.
 4. Preview and policy-check before signing.
+5. For any unsigned or partially signed transaction returned by Jupiter, use
+   `sap_preview_transaction`, `sap_sign_transaction`, and
+   `sap_submit_signed_transaction`. Do not write ad-hoc signing scripts.
 
 ## Safety
 
 DeFi execution can lose funds through slippage, MEV, wrong decimals, or bad
 mints. Do not proceed from ticker symbols alone when mint addresses are needed.
+Never read, print, export, or pass keypair bytes through shell commands,
+environment variables, temporary scripts, screenshots, prompts, or MCP client
+config. If a transaction cannot be decoded by SAP MCP transaction tools, stop
+and report the unsupported transaction format instead of manually signing raw
+message bytes.

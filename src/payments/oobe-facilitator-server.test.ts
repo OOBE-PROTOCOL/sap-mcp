@@ -4,12 +4,17 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import type { PaymentRequirements } from '@x402/core/types';
 import {
+  buildFacilitatorRpcUrls,
   createFacilitatorSigner,
   getFacilitatorSignerPublicKey,
   normalizeLegacySvmPaymentRequirements,
   type OobeFacilitatorConfig,
   validateFacilitatorConfig,
 } from './oobe-facilitator-server.js';
+import {
+  isTransientRpcError,
+  parseRpcFallbackUrls,
+} from './facilitator-rpc-fallback.js';
 
 const DEVNET = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
 
@@ -24,6 +29,7 @@ function configWith(path: string, overrides: Partial<OobeFacilitatorConfig> = {}
     pathPrefix: '/facilitator',
     networks: [DEVNET],
     signerPath: path,
+    rpcFallbackUrls: [],
     ...overrides,
   };
 }
@@ -83,5 +89,33 @@ describe('OOBE x402 facilitator configuration', () => {
 
     expect(normalized.amount).toBe('50000');
     expect(normalized.maxAmountRequired).toBe('50000');
+  });
+
+  it('builds facilitator RPC fallback URLs with primary, configured fallbacks, and network defaults', () => {
+    const urls = buildFacilitatorRpcUrls({
+      networks: [DEVNET],
+      rpcUrl: 'https://rpc.primary.example',
+      rpcFallbackUrls: [
+        'https://rpc.backup.example',
+        'https://rpc.primary.example',
+      ],
+    });
+
+    expect(urls).toEqual([
+      'https://rpc.primary.example',
+      'https://rpc.backup.example',
+      'https://api.devnet.solana.com',
+    ]);
+  });
+
+  it('parses fallback URLs and classifies only transient RPC errors as retryable', () => {
+    expect(parseRpcFallbackUrls('https://a.example, https://b.example,https://a.example')).toEqual([
+      'https://a.example',
+      'https://b.example',
+    ]);
+
+    expect(isTransientRpcError(new Error('fetch failed'))).toBe(true);
+    expect(isTransientRpcError(new Error('Node is behind by 48 slots'))).toBe(true);
+    expect(isTransientRpcError(new Error('Simulation failed: {"InstructionError":[1,{"Custom":1}]}'))).toBe(false);
   });
 });

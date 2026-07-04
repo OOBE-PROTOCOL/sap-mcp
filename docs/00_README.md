@@ -22,6 +22,8 @@ For end-user installation and MCP client setup, start with [`../USER_DOCS/00_STA
 | [10. Operations, Release, And PM2](10_OPERATIONS_RELEASE_AND_PM2.md) | Build gates, PM2 ecosystem, logs, monitoring, changelog discipline, public/private repo guidance. |
 | [11. Code Quality Audit](11_CODE_QUALITY_AUDIT.md) | Engineering scorecard, release gates, quality rules, and current residual risks. |
 | [12. On-Chain Agent Chat](12_ONCHAIN_AGENT_CHAT.md) | SAP signed thematic group rooms, room manifests, retrieval, link sharing, privacy boundaries, and SDK-native roadmap. |
+| [13. Bounty Program Proposal](13_BOUNTY_PROGRAM_PROPOSAL.md) | Proposed multi-partner bounty with OOBE/SAP MCP, Bento, Metaplex 014/MPL Core, SNS, judging criteria, and technical requirements. |
+| [14. Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md) | GUI wizard architecture, release artifacts, signing requirements, and multi-OS GitHub Actions packaging. |
 
 ## 00.2 Primary Binaries
 
@@ -34,6 +36,7 @@ For end-user installation and MCP client setup, start with [`../USER_DOCS/00_STA
 | `sap-signing-proxy` | Local signing proxy for external signer mode. |
 | `sap-mcp-facilitator` | Self-hosted x402 SVM facilitator. |
 | `sap-mcp-pay-sh-spec` | pay.sh provider YAML generator. |
+| SAP MCP Desktop Wizard | GUI/TUI-style installer released as DMG/ZIP, Windows EXE, and Linux AppImage/tar.gz artifacts. |
 
 ## 00.3 Golden Rules
 

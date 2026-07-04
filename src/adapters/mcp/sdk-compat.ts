@@ -399,6 +399,20 @@ function ensureHandlerRegistry(server: Server) {
 }
 
 /**
+ * @name filterVisibleTools
+ * @description Applies the configured allow-list to tools/list so bridge-only MCP clients do not see the full tool surface.
+ */
+function filterVisibleTools(server: Server, tools: Tool[]): Tool[] {
+  const context = executionContexts.get(server);
+  if (!context || context.config.allowedTools === 'all') {
+    return tools;
+  }
+
+  const allowed = new Set(context.config.allowedTools);
+  return tools.filter((tool) => allowed.has(tool.name));
+}
+
+/**
  * Tool registration helper
  * 
  * Registers a tool and ensures JSON-RPC handlers are set up for tools/list and tools/call
@@ -436,7 +450,7 @@ export function registerTool<TInput = unknown>(
   if (!registry.tools) {
     // Register tools/list handler
     server.setRequestHandler(ListToolsRequestSchema, async () => {
-      const tools = withRegistrationStore(server).tools || [];
+      const tools = filterVisibleTools(server, withRegistrationStore(server).tools || []);
       logger.debug('Handling tools/list', { count: tools.length });
       return { tools };
     });

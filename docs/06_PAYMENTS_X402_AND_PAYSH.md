@@ -156,6 +156,15 @@ npx sap-mcp-facilitator start
 
 If the facilitator binds to a non-loopback host or is reachable across a network boundary, an auth token is required.
 
+Facilitator settlement depends on Solana RPC health. Production deployments should configure at least one private primary RPC and one or more fallback endpoints:
+
+```bash
+SAP_MCP_FACILITATOR_RPC_URL=<private-primary-rpc-url>
+SAP_MCP_FACILITATOR_RPC_FALLBACK_URLS=<private-backup-rpc-url>,https://api.mainnet-beta.solana.com
+```
+
+The facilitator retries only transient RPC failures such as transport failures, throttling, lagging nodes, skipped slots, or blockhash visibility issues. It does not retry business failures such as insufficient funds, invalid signatures, or program errors. RPC URLs are redacted in logs and CLI output.
+
 ## 06.10 Generate pay.sh Provider YAML
 
 ```bash

@@ -23,6 +23,12 @@ import { toFacilitatorSvmSigner } from '@x402/svm';
 import { registerExactSvmScheme } from '@x402/svm/exact/facilitator';
 import { logger, initLogger, redactSensitiveString } from '../core/logger.js';
 import { getKeypairsDir } from '../config/paths.js';
+import {
+  createResilientFacilitatorSigner,
+  parseRpcFallbackUrls,
+  uniqueRpcUrls,
+  type FacilitatorRpcEndpoint,
+} from './facilitator-rpc-fallback.js';
 
 const SOLANA_MAINNET_CAIP2 = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
@@ -30,6 +36,9 @@ const SOLANA_TESTNET_CAIP2 = 'solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z';
 const DEFAULT_FACILITATOR_PORT = 8788;
 const DEFAULT_FACILITATOR_HOST = '127.0.0.1';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAINNET_RPC_URL = 'https://api.mainnet-beta.solana.com';
+const DEFAULT_DEVNET_RPC_URL = 'https://api.devnet.solana.com';
+const DEFAULT_TESTNET_RPC_URL = 'https://api.testnet.solana.com';
 
 type LegacyCompatiblePaymentRequirements = PaymentRequirements & {
   maxAmountRequired?: string;
@@ -50,6 +59,7 @@ export interface OobeFacilitatorConfig {
   networks: Network[];
   signerPath: string;
   rpcUrl?: string;
+  rpcFallbackUrls: string[];
   authToken?: string;
 }
 
@@ -75,10 +85,8 @@ export class OobeX402FacilitatorServer {
     validateFacilitatorConfig(config);
     const signerBytes = loadKeypairBytes(config.signerPath);
     const keypairSigner = await createKeyPairSignerFromBytes(signerBytes);
-    const svmSigner = toFacilitatorSvmSigner(
-      keypairSigner,
-      config.rpcUrl ? { defaultRpcUrl: config.rpcUrl } : undefined,
-    );
+    const rpcEndpoints = buildFacilitatorRpcEndpoints(keypairSigner, config);
+    const svmSigner = createResilientFacilitatorSigner(rpcEndpoints);
 
     const facilitator = new x402Facilitator();
     registerExactSvmScheme(facilitator, {
@@ -128,6 +136,7 @@ export class OobeX402FacilitatorServer {
     logger.info('OOBE x402 facilitator started', {
       endpoint: `http://${this.config.host}:${this.config.port}${this.config.pathPrefix}`,
       networks: this.config.networks,
+      rpcEndpoints: describeRpcEndpoints(buildFacilitatorRpcUrls(this.config)),
       signerAddresses: this.facilitator.getSupported().signers,
     });
   }
@@ -218,6 +227,7 @@ export function loadOobeFacilitatorConfig(): OobeFacilitatorConfig {
         ?? `${getKeypairsDir()}/oobe-x402-facilitator-keypair.json`,
     ),
     rpcUrl: process.env.SAP_MCP_FACILITATOR_RPC_URL,
+    rpcFallbackUrls: parseRpcFallbackUrls(process.env.SAP_MCP_FACILITATOR_RPC_FALLBACK_URLS),
     authToken: process.env.SAP_MCP_FACILITATOR_AUTH_TOKEN,
   };
 }
@@ -295,6 +305,55 @@ export function validateFacilitatorConfig(config: OobeFacilitatorConfig): void {
   if ((mode & 0o077) !== 0) {
     throw new Error(`Facilitator signer must not be group/world-readable. Run: chmod 600 ${config.signerPath}`);
   }
+
+  for (const rpcUrl of [config.rpcUrl, ...config.rpcFallbackUrls].filter(isDefined)) {
+    validateRpcUrl(rpcUrl);
+  }
+}
+
+/**
+ * @name buildFacilitatorRpcUrls
+ * @description Resolves primary, configured fallback, and network-default RPC URLs for facilitator failover.
+ */
+export function buildFacilitatorRpcUrls(config: Pick<OobeFacilitatorConfig, 'networks' | 'rpcUrl' | 'rpcFallbackUrls'>): string[] {
+  return uniqueRpcUrls([
+    ...(config.rpcUrl ? [config.rpcUrl] : []),
+    ...config.rpcFallbackUrls,
+    ...config.networks.flatMap(defaultRpcUrlsForNetwork),
+  ]);
+}
+
+function buildFacilitatorRpcEndpoints(
+  signer: Parameters<typeof toFacilitatorSvmSigner>[0],
+  config: OobeFacilitatorConfig,
+): FacilitatorRpcEndpoint[] {
+  const configuredEndpoints = buildFacilitatorRpcUrls(config).map((rpcUrl, index) => ({
+    label: index === 0 ? 'primary' : `fallback-${index}`,
+    rpcUrl,
+    signer: toFacilitatorSvmSigner(signer, { defaultRpcUrl: rpcUrl }),
+  }));
+
+  return [
+    ...configuredEndpoints,
+    {
+      label: 'x402-network-default',
+      signer: toFacilitatorSvmSigner(signer),
+    },
+  ];
+}
+
+function defaultRpcUrlsForNetwork(network: Network): string[] {
+  const normalized = normalizeNetworkAlias(network);
+  if (normalized === SOLANA_MAINNET_CAIP2) {
+    return [DEFAULT_MAINNET_RPC_URL];
+  }
+  if (normalized === SOLANA_DEVNET_CAIP2) {
+    return [DEFAULT_DEVNET_RPC_URL];
+  }
+  if (normalized === SOLANA_TESTNET_CAIP2) {
+    return [DEFAULT_TESTNET_RPC_URL];
+  }
+  return [];
 }
 
 function parseNetworks(value: string | undefined): Network[] {
@@ -317,6 +376,21 @@ function normalizeNetworkAlias(network: string): string {
     return SOLANA_TESTNET_CAIP2;
   }
   return network;
+}
+
+function validateRpcUrl(rpcUrl: string): void {
+  const url = new URL(rpcUrl);
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error(`Facilitator RPC URL must use http or https: ${redactSensitiveString(rpcUrl)}`);
+  }
+}
+
+function describeRpcEndpoints(rpcUrls: readonly string[]): string[] {
+  return rpcUrls.map(redactSensitiveString);
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function loadKeypairBytes(path: string): Uint8Array {
@@ -516,6 +590,7 @@ async function runCli(argv: string[]): Promise<void> {
       `Signer Path: ${config.signerPath}`,
       `Signer Public Key: ${getFacilitatorSignerPublicKey(config.signerPath)}`,
       `RPC URL: ${config.rpcUrl ? redactSensitiveString(config.rpcUrl) : '(x402 default)'}`,
+      `RPC Fallback URLs: ${describeRpcEndpoints(config.rpcFallbackUrls).join(', ') || '(network defaults)'}`,
       `Auth Token: ${config.authToken ? 'configured' : 'not configured'}`,
       'Secret Material: never printed',
       '',

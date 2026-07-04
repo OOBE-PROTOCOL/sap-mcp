@@ -100,6 +100,44 @@ For local agents, let SAP MCP follow the active profile manager instead of hard-
 }
 ```
 
+Codex uses TOML rather than the JSON `mcpServers` shape. For hosted remote MCP, add this to `~/.codex/config.toml` and restart Codex:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+```
+
+For paid/write hosted tools, add the local non-custodial payment bridge as well:
+
+```toml
+[mcp_servers.sap_payments]
+command = "npx"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+tool_timeout_sec = 300
+
+[mcp_servers.sap_payments.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_LOG_LEVEL = "info"
+```
+
+On Windows, use `command = "npx.cmd"`. The wizard can write this automatically.
+
+Codex supports Streamable HTTP MCP servers with URL-based entries in `config.toml`. Use local stdio through `npx` only when you specifically want Codex to launch the local SAP MCP process:
+
+```toml
+[mcp_servers.sap]
+command = "npx"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+
+[mcp_servers.sap.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_LOG_LEVEL = "info"
+```
+
+On Windows, use `command = "npx.cmd"`.
+
 See [04. Local Stdio Usage](docs/04_LOCAL_STDIO_USAGE.md).
 
 ## 5. Remote Server

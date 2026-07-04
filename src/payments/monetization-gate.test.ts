@@ -384,4 +384,118 @@ describe('MCP monetization gate readiness', () => {
       }
     }
   });
+
+  it('marks transient facilitator RPC verification failures as retryable MCP errors', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-rpc-failure-test-'));
+
+    const body = Buffer.from(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: {
+        name: 'sap_list_all_agents',
+        arguments: { limit: 5 },
+      },
+    }));
+    const requestHash = hashPaymentRequest(body, JSON.parse(body.toString('utf-8')));
+    const virtualPath = buildPaidVirtualPath({
+      required: true,
+      tier: 'read-premium',
+      priceUsd: 0.008,
+      price: '$0.008',
+      description: 'test',
+      toolPricings: [],
+      toolNames: ['sap_list_all_agents'],
+    }, requestHash);
+    const accepted = {
+      scheme: 'exact',
+      network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      amount: '8000',
+      maxAmountRequired: '8000',
+      payTo: baseMonetization.payTo,
+      maxTimeoutSeconds: 120,
+      extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+    };
+    const paymentPayload = {
+      x402Version: 2,
+      resource: {
+        url: `https://mcp.sap.oobeprotocol.ai${virtualPath}`,
+      },
+      accepted,
+      payload: {
+        transaction: 'base64-transaction',
+      },
+    };
+    const paymentHeader = Buffer.from(JSON.stringify(paymentPayload), 'utf-8').toString('base64');
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+      fetchCalls.push({ url: String(input), init });
+      if (String(input).endsWith('/supported')) {
+        return new Response(JSON.stringify({
+          kinds: [{
+            x402Version: 2,
+            scheme: 'exact',
+            network: accepted.network,
+            extra: accepted.extra,
+          }],
+          signers: {
+            [accepted.network]: [accepted.extra.feePayer],
+          },
+          extensions: [],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        isValid: false,
+        invalidReason: 'transaction_simulation_failed',
+        invalidMessage: 'Solana error #8100002; message=Bad Gateway; statusCode=502',
+        payer: 'payer-address',
+      }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const response = createResponse();
+      const next = vi.fn();
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          'payment-signature': paymentHeader,
+        }),
+        response.response,
+        next,
+      );
+
+      const payload = JSON.parse(response.body) as {
+        error?: {
+          message?: string;
+          data?: {
+            retryable?: boolean;
+            category?: string;
+            hint?: string;
+          };
+        };
+      };
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(200);
+      expect(payload.error?.message).toBe('payment_verification_failed');
+      expect(payload.error?.data?.retryable).toBe(true);
+      expect(payload.error?.data?.category).toBe('facilitator_rpc');
+      expect(payload.error?.data?.hint).toContain('RPC');
+      expect(fetchCalls).toHaveLength(2);
+      expect(fetchCalls[1]?.url).toBe('http://127.0.0.1:8788/facilitator/verify');
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
 });

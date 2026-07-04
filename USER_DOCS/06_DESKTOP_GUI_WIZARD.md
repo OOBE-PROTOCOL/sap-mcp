@@ -1,0 +1,138 @@
+# Desktop GUI Wizard
+
+## 1. What It Is
+
+The SAP MCP Desktop Wizard is the normie-friendly installer for users who do not want to edit MCP JSON, TOML, or YAML by hand.
+
+It creates the same real SAP MCP profile as the CLI/TUI wizard:
+
+- a named profile under `~/.config/mcp-sap`;
+- a dedicated local SAP MCP wallet or external signer boundary;
+- conservative policy limits;
+- hosted MCP config for `https://mcp.sap.oobeprotocol.ai/mcp`;
+- optional local x402 paid-call bridge for agent runtimes.
+
+The desktop app is not a mock installer. It calls the same setup modules used by `sap-mcp-config wizard`.
+
+## 2. When To Use It
+
+Use the desktop wizard when:
+
+1. You want hosted SAP MCP but local signing.
+2. You are setting up Codex, Hermes, Claude, OpenClaw, or another MCP client.
+3. You need paid/write tools to work through x402.
+4. You want a dedicated SAP MCP wallet separate from Solana CLI.
+5. You prefer a guided GUI instead of terminal prompts.
+
+Use the CLI wizard instead when you are on a server, SSH session, CI environment, or headless machine.
+
+## 3. Download Options
+
+The hosted endpoint exposes the installer descriptor:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json
+```
+
+Release artifacts are published on GitHub releases:
+
+```txt
+https://github.com/OOBE-PROTOCOL/sap-mcp/releases
+```
+
+Expected artifacts:
+
+| Platform | Artifact |
+| --- | --- |
+| macOS | `SAP-MCP-Wizard-<version>-<arch>.dmg` or `.zip` |
+| Windows | `SAP-MCP-Wizard-Setup-<version>-x64.exe` |
+| Linux | `sap-mcp-wizard-<version>-<arch>.AppImage` or `.tar.gz` |
+
+Until code signing is enabled, your operating system may show a warning. Verify the GitHub release, checksum, and publisher before installing.
+
+## 4. GUI Flow
+
+The desktop wizard walks through:
+
+1. **Profile**: choose a real profile name; the wizard refuses ambiguous `default` profiles.
+2. **Wallet**: create a dedicated SAP MCP wallet or point to an existing dedicated keypair path.
+3. **Policy**: set max transaction value, daily limits, log level, and optional Bento Guard settings.
+4. **Runtimes**: detect local agent runtimes and optionally configure Codex automatically.
+5. **Review**: show config path, wallet boundary, hosted MCP endpoint, and runtime actions before writing.
+
+The renderer never receives keypair bytes. Wallet creation and file writes happen in the local main process.
+
+## 5. Codex Setup From GUI
+
+For Codex, the desktop wizard can write both entries:
+
+```toml
+[mcp_servers.sap]
+url = "https://mcp.sap.oobeprotocol.ai/mcp"
+
+[mcp_servers.sap_payments]
+command = "npx"
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+tool_timeout_sec = 300
+
+[mcp_servers.sap_payments.env]
+SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
+SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_LOG_LEVEL = "info"
+```
+
+On Windows, the command is `npx.cmd`.
+
+The hosted `sap` server lists and executes remote SAP MCP tools. The local `sap_payments` bridge signs x402 payment proofs with the active local SAP MCP profile and retries paid hosted calls without exposing keypair bytes.
+
+## 6. x402 Client Addon
+
+The GUI can also install the x402 addon bundle under:
+
+```txt
+~/.config/mcp-sap/addons/x402-paid-call
+```
+
+Direct helper command:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
+  --tool sap_list_all_agents \
+  --arguments '{"limit":5}' \
+  --max-usd 0.02 \
+  --confirm
+```
+
+Use the helper when your agent runtime can see hosted tools but cannot natively sign and replay x402 challenges.
+
+## 7. CLI Fallback
+
+The same setup can always be done from terminal:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
+```
+
+Show active profile:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config show
+```
+
+Install from hosted script:
+
+```bash
+curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | bash
+```
+
+Read the script before running it when operating in a security-sensitive environment.
+
+## 8. Security Rules
+
+1. Do not paste keypair bytes into agent chat, MCP config, GitHub issues, or support tickets.
+2. Do not configure hosted MCP with `SAP_WALLET_PATH` or RPC API-key overrides.
+3. Keep the SAP MCP wallet separate from `~/.config/solana/id.json`.
+4. Use the local `sap_payments` bridge only for x402 helper tools.
+5. Restart the agent runtime after the wizard updates client config.
+6. For production wallets, prefer external signer or delegated session mode once available for your runtime.

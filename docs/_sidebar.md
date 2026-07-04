@@ -4,6 +4,7 @@
   - [Local Stdio MCP](user/02_LOCAL_STDIO_MCP.md)
   - [Client Configs](user/04_CLIENT_CONFIGS.md)
   - [Skills And Tools](user/05_SKILLS_AND_TOOLS.md)
+  - [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
 
 - Payments
   - [x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
@@ -21,8 +22,10 @@
   - [Local Stdio Usage](04_LOCAL_STDIO_USAGE.md)
   - [Remote VPS Deployment](05_REMOTE_VPS_DEPLOYMENT.md)
   - [Operations Release And PM2](10_OPERATIONS_RELEASE_AND_PM2.md)
+  - [Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md)
   - [Code Quality Audit](11_CODE_QUALITY_AUDIT.md)
 
 - Advanced
   - [Tools Skills And Agent Guide](09_TOOLS_SKILLS_AND_AGENT_GUIDE.md)
   - [On-Chain Agent Chat](12_ONCHAIN_AGENT_CHAT.md)
+  - [Bounty Program Proposal](13_BOUNTY_PROGRAM_PROPOSAL.md)
