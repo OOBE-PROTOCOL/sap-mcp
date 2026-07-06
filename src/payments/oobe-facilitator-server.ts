@@ -301,9 +301,11 @@ export function validateFacilitatorConfig(config: OobeFacilitatorConfig): void {
     );
   }
 
-  const mode = statSync(config.signerPath).mode & 0o777;
-  if ((mode & 0o077) !== 0) {
-    throw new Error(`Facilitator signer must not be group/world-readable. Run: chmod 600 ${config.signerPath}`);
+  if (process.platform !== 'win32') {
+    const mode = statSync(config.signerPath).mode & 0o777;
+    if ((mode & 0o077) !== 0) {
+      throw new Error(`Facilitator signer must not be group/world-readable. Run: chmod 600 ${config.signerPath}`);
+    }
   }
 
   for (const rpcUrl of [config.rpcUrl, ...config.rpcFallbackUrls].filter(isDefined)) {

@@ -10,6 +10,7 @@ type RuntimeStatus = {
 };
 
 type WizardDraft = {
+  setupMode: 'full' | 'payments-only';
   profileName: string;
   mode: 'readonly' | 'local-dev-keypair' | 'external-signer' | 'delegated-session' | 'hosted-api';
   rpcUrl: string;
@@ -23,11 +24,13 @@ type WizardDraft = {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   enableMetrics: boolean;
   configureCodex: boolean;
+  configureRuntimes: RuntimeStatus['id'][];
   installAddonBundle: boolean;
 };
 
 type WizardResult = {
-  setup: {
+  setupMode: 'full' | 'payments-only';
+  setup?: {
     configPath: string;
     walletPath?: string;
     walletCreated: boolean;

@@ -5,11 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyMcpClientInjection,
   buildCodexHostedPaymentBridgeContent,
+  buildHostedPaymentBridgeContent,
   createManualMcpJsonSnippets,
   createNpxCodexServerConfig,
   createX402PaidCallAddonSnippets,
   discoverMcpClientTargets,
+  getKnownClientTargets,
   installCodexHostedPaymentBridgeConfig,
+  installHostedPaymentBridgeConfigs,
   installX402PaidCallAddon,
   planMcpClientInjection,
   type McpServerInjectionConfig,
@@ -232,6 +235,118 @@ describe('MCP client injection', () => {
     expect(built.nextContent).toContain('SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"');
     expect(built.nextContent).not.toContain('SAP_MCP_RPC_URL');
     expect(built.nextContent).not.toContain('SAP_WALLET_PATH');
+  });
+
+  it('builds Claude JSON hosted MCP plus local payment bridge config', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'claude',
+      label: 'Claude Desktop',
+      path: '/tmp/claude_desktop_config.json',
+      format: 'json',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, JSON.stringify({
+      mcpServers: {
+        sap: { command: 'old' },
+      },
+    }));
+    const parsed = JSON.parse(built.nextContent);
+
+    expect(built.hadSapConfig).toBe(true);
+    expect(parsed.mcpServers.sap).toEqual({
+      type: 'http',
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+    });
+    expect(parsed.mcpServers.sap_payments.command).toMatch(/^npx/);
+    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(JSON.stringify(parsed)).not.toContain('SAP_WALLET_PATH');
+  });
+
+  it('builds Hermes global JSON hosted MCP plus local payment bridge config', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Global MCP',
+      path: '/tmp/mcp.json',
+      format: 'json',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, '{}');
+    const parsed = JSON.parse(built.nextContent);
+
+    expect(parsed.sap).toEqual({
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      transport: 'streamable-http',
+    });
+    expect(parsed.sap_payments.command).toMatch(/^npx/);
+  });
+
+  it('builds Hermes/OpenClaw YAML hosted MCP plus local payment bridge config', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Profile: trader',
+      path: '/tmp/config.yaml',
+      format: 'yaml',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, [
+      'name: trader',
+      'mcp_servers:',
+      '  sap:',
+      '    command: old',
+      '  keep:',
+      '    command: keep',
+      '',
+    ].join('\n'));
+
+    expect(built.hadSapConfig).toBe(true);
+    expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
+    expect(built.nextContent).toContain('  sap_payments:\n    command:');
+    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(built.nextContent).toContain('  keep:\n    command: keep');
+    expect(built.nextContent).not.toContain('command: old');
+  });
+
+  it('installs hosted payment bridge configs for selected runtimes', () => {
+    const tempDir = makeTempDir();
+    mkdirSync(join(tempDir, '.hermes'), { recursive: true });
+    writeFileSync(join(tempDir, '.hermes', 'mcp.json'), '{}');
+
+    const results = installHostedPaymentBridgeConfigs(['codex', 'hermes'], tempDir);
+    const codex = readFileSync(join(tempDir, '.codex', 'config.toml'), 'utf-8');
+    const hermes = JSON.parse(readFileSync(join(tempDir, '.hermes', 'mcp.json'), 'utf-8'));
+
+    expect(results.map((result) => result.target.id)).toEqual(expect.arrayContaining(['codex', 'hermes']));
+    expect(codex).toContain('[mcp_servers.sap_payments]');
+    expect(hermes.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+  });
+
+  it('discovers platform-specific Claude config paths', () => {
+    const tempDir = makeTempDir();
+    const macTargets = getKnownClientTargets(tempDir, 'darwin');
+    const windowsTargets = getKnownClientTargets(tempDir, 'win32');
+    const linuxTargets = getKnownClientTargets(tempDir, 'linux');
+
+    expect(macTargets.find((item) => item.label === 'Claude Desktop')?.path)
+      .toBe(join(tempDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'));
+    expect(windowsTargets.find((item) => item.label === 'Claude Desktop')?.path)
+      .toBe(join(tempDir, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json'));
+    expect(linuxTargets.find((item) => item.label === 'Claude Desktop')?.path)
+      .toBe(join(tempDir, '.config', 'Claude', 'claude_desktop_config.json'));
+  });
+
+  it('installs Windows Claude hosted payment bridge config in the native roaming profile path', () => {
+    const tempDir = makeTempDir();
+    const results = installHostedPaymentBridgeConfigs(['claude'], tempDir, 'win32');
+    const targetPath = join(tempDir, 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json');
+    const parsed = JSON.parse(readFileSync(targetPath, 'utf-8'));
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.target.path).toBe(targetPath);
+    expect(parsed.mcpServers.sap).toEqual({
+      type: 'http',
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+    });
+    expect(parsed.mcpServers.sap_payments.command).toMatch(/^npx/);
   });
 
   it('installs Codex hosted MCP plus local payment bridge config with backup', () => {

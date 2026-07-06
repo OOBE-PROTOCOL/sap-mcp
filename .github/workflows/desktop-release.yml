@@ -41,11 +41,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify release gates
-        run: |
-          pnpm run typecheck
-          pnpm run lint
-          pnpm run test:run
-          pnpm audit --audit-level moderate
+        run: pnpm run verify:release && pnpm audit --audit-level moderate
 
       - name: Report macOS signing mode
         if: matrix.os == 'macos-15' && github.ref_type == 'tag'

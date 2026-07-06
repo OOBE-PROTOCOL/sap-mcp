@@ -4,6 +4,7 @@ import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '
 import {
   discoverMcpClientTargets,
   installCodexHostedPaymentBridgeConfig,
+  installHostedPaymentBridgeConfigs,
   installX402PaidCallAddon,
   type McpClientTarget,
 } from '../config/mcp-client-injection.js';
@@ -20,6 +21,7 @@ export type DesktopRuntimeId = 'codex' | 'claude' | 'hermes' | 'openclaw';
  * @description Serializable setup draft collected by the desktop wizard renderer.
  */
 export interface DesktopWizardDraft {
+  setupMode: 'full' | 'payments-only';
   profileName: string;
   mode: SapMcpMode;
   rpcUrl: string;
@@ -33,6 +35,7 @@ export interface DesktopWizardDraft {
   logLevel: WizardSetupInput['logLevel'];
   enableMetrics: boolean;
   configureCodex: boolean;
+  configureRuntimes: DesktopRuntimeId[];
   installAddonBundle: boolean;
 }
 
@@ -54,7 +57,8 @@ export interface DesktopWizardRuntimeStatus {
  * @description Result returned after the desktop wizard saves profile and runtime integration state.
  */
 export interface DesktopWizardResult {
-  setup: WizardSetupResult;
+  setup?: WizardSetupResult;
+  setupMode: DesktopWizardDraft['setupMode'];
   runtimeActions: Array<{
     runtime: string;
     status: 'configured' | 'installed' | 'skipped';
@@ -94,7 +98,9 @@ export function createDefaultDesktopWizardDraft(): DesktopWizardDraft {
     enableBento: false,
     logLevel: 'info',
     enableMetrics: false,
+    setupMode: 'full',
     configureCodex: true,
+    configureRuntimes: ['codex'],
     installAddonBundle: true,
   };
 }
@@ -125,24 +131,24 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       label: 'Claude',
       detected: Boolean(byRuntime.get('claude')?.length),
       paths: byRuntime.get('claude')?.map((target) => target.path) ?? [],
-      autoConfigurable: false,
-      recommendation: 'Use the generated Claude Code commands or JSON snippet after setup.',
+      autoConfigurable: true,
+      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in Claude Desktop JSON.',
     },
     {
       id: 'hermes',
       label: 'Hermes',
       detected: Boolean(byRuntime.get('hermes')?.length),
       paths: byRuntime.get('hermes')?.map((target) => target.path) ?? [],
-      autoConfigurable: false,
-      recommendation: 'Use the Hermes x402 plugin or generated sap_payments YAML snippet.',
+      autoConfigurable: true,
+      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in Hermes global/profile config.',
     },
     {
       id: 'openclaw',
       label: 'OpenClaw',
       detected: Boolean(byRuntime.get('openclaw')?.length),
       paths: byRuntime.get('openclaw')?.map((target) => target.path) ?? [],
-      autoConfigurable: false,
-      recommendation: 'Use the generated generic JSON mcpServers snippet.',
+      autoConfigurable: true,
+      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in OpenClaw MCP JSON.',
     },
   ];
 }
@@ -153,6 +159,13 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
  */
 export function validateDesktopWizardDraft(draft: DesktopWizardDraft): string[] {
   const errors: string[] = [];
+  if (draft.setupMode === 'payments-only') {
+    if (draft.configureRuntimes.length === 0 && !draft.configureCodex && !draft.installAddonBundle) {
+      errors.push('Choose at least one runtime or install the local addon bundle.');
+    }
+    return errors;
+  }
+
   const profileName = normalizeDesktopProfileName(draft.profileName);
   if (!profileName || profileName === 'default') {
     errors.push('Choose a named profile such as solking-agent. The desktop wizard does not create ambiguous default profiles.');
@@ -186,25 +199,41 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
   }
 
   const profileName = normalizeDesktopProfileName(draft.profileName);
-  const setup = await saveWizardSetup({
-    mode: draft.mode,
-    rpcUrl: draft.rpcUrl,
-    profileName,
-    walletPath: draft.walletPath,
-    createNewWallet: draft.createNewWallet,
-    maxTxValueSol: draft.maxTxValueSol,
-    dailyLimitSol: draft.dailyLimitSol,
-    enableBento: draft.enableBento,
-    bentoApiKey: draft.bentoApiKey,
-    bentoAgentId: draft.bentoAgentId,
-    enableHttp: false,
-    logLevel: draft.logLevel,
-    enableMetrics: draft.enableMetrics,
-  });
+  const setup = draft.setupMode === 'full'
+    ? await saveWizardSetup({
+      mode: draft.mode,
+      rpcUrl: draft.rpcUrl,
+      profileName,
+      walletPath: draft.walletPath,
+      createNewWallet: draft.createNewWallet,
+      maxTxValueSol: draft.maxTxValueSol,
+      dailyLimitSol: draft.dailyLimitSol,
+      enableBento: draft.enableBento,
+      bentoApiKey: draft.bentoApiKey,
+      bentoAgentId: draft.bentoAgentId,
+      enableHttp: false,
+      logLevel: draft.logLevel,
+      enableMetrics: draft.enableMetrics,
+    })
+    : undefined;
 
   const runtimeActions: DesktopWizardResult['runtimeActions'] = [];
-
+  const selectedRuntimes = new Set<DesktopRuntimeId>(draft.configureRuntimes);
   if (draft.configureCodex) {
+    selectedRuntimes.add('codex');
+  }
+
+  for (const result of installHostedPaymentBridgeConfigs(Array.from(selectedRuntimes))) {
+    runtimeActions.push({
+      runtime: result.target.label,
+      status: 'configured',
+      path: result.target.path,
+      backupPath: result.backupPath,
+      message: result.message,
+    });
+  }
+
+  if (runtimeActions.length === 0 && draft.setupMode === 'full') {
     const codex = installCodexHostedPaymentBridgeConfig();
     runtimeActions.push({
       runtime: 'Codex',
@@ -212,12 +241,6 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
       path: codex.target.path,
       backupPath: codex.backupPath,
       message: codex.message,
-    });
-  } else {
-    runtimeActions.push({
-      runtime: 'Codex',
-      status: 'skipped',
-      message: 'Codex config was not modified.',
     });
   }
 
@@ -231,5 +254,5 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
     });
   }
 
-  return { setup, runtimeActions };
+  return { setup, setupMode: draft.setupMode, runtimeActions };
 }

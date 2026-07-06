@@ -14,6 +14,13 @@ It creates the same real SAP MCP profile as the CLI/TUI wizard:
 
 The desktop app is not a mock installer. It calls the same setup modules used by `sap-mcp-config wizard`.
 
+The first screen lets you choose one of two modes:
+
+| Mode | Use It When |
+| --- | --- |
+| **Full SAP MCP setup** | You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and x402 payment bridge. |
+| **Install x402 payment client only** | You already have `~/.config/mcp-sap` configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
+
 ## 2. When To Use It
 
 Use the desktop wizard when:
@@ -64,11 +71,14 @@ Do not paste wallet/keypair material into support chats while troubleshooting in
 
 The desktop wizard walks through:
 
-1. **Profile**: choose a real profile name; the wizard refuses ambiguous `default` profiles.
-2. **Wallet**: create a dedicated SAP MCP wallet or point to an existing dedicated keypair path.
-3. **Policy**: set max transaction value, daily limits, log level, and optional Bento Guard settings.
-4. **Runtimes**: detect local agent runtimes and optionally configure Codex automatically.
-5. **Review**: show config path, wallet boundary, hosted MCP endpoint, and runtime actions before writing.
+1. **Setup**: choose full setup or x402 payment-client-only repair.
+2. **Profile**: choose a real profile name; the wizard refuses ambiguous `default` profiles.
+3. **Wallet**: create a dedicated SAP MCP wallet or point to an existing dedicated keypair path.
+4. **Policy**: set max transaction value, daily limits, log level, and optional Bento Guard settings.
+5. **Runtimes**: detect local agent runtimes and configure hosted SAP MCP plus local `sap_payments`.
+6. **Review**: show config path, wallet boundary, hosted MCP endpoint, and runtime actions before writing.
+
+In x402 payment-client-only mode, the wizard skips profile, wallet, and policy steps. It only installs or repairs runtime MCP client entries and the optional addon bundle.
 
 The renderer never receives keypair bytes. Wallet creation and file writes happen in the local main process.
 
@@ -96,7 +106,111 @@ On Windows, the command is `npx.cmd`.
 
 The hosted `sap` server lists and executes remote SAP MCP tools. The local `sap_payments` bridge signs x402 payment proofs with the active local SAP MCP profile and retries paid hosted calls without exposing keypair bytes.
 
-## 6. x402 Client Addon
+## 6. Runtime Configs Written By The GUI
+
+The GUI writes runtime-native config shapes. It does not paste profile names, wallet paths, RPC API keys, or keypair bytes into hosted MCP entries.
+
+### 6.1 Claude Desktop
+
+Claude Desktop uses a root `mcpServers` JSON object:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "type": "http",
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp"
+    },
+    "sap_payments": {
+      "command": "npx",
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+      "env": {
+        "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
+        "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+        "SAP_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+Known paths:
+
+| OS | Path |
+| --- | --- |
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%USERPROFILE%\AppData\Roaming\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+### 6.2 Hermes
+
+Hermes global `mcp.json` uses flat server entries:
+
+```json
+{
+  "sap": {
+    "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "transport": "streamable-http"
+  },
+  "sap_payments": {
+    "command": "npx",
+    "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+    "env": {
+      "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
+      "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+      "SAP_LOG_LEVEL": "info"
+    }
+  }
+}
+```
+
+Hermes profile YAML uses top-level `mcp_servers`:
+
+```yaml
+mcp_servers:
+  sap:
+    url: https://mcp.sap.oobeprotocol.ai/mcp
+    transport: streamable-http
+  sap_payments:
+    command: npx
+    args:
+      - --yes
+      - --package
+      - @oobe-protocol-labs/sap-mcp-server
+      - sap-mcp-server
+    env:
+      SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"
+      SAP_ALLOWED_TOOLS: sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost
+      SAP_LOG_LEVEL: info
+```
+
+### 6.3 OpenClaw
+
+OpenClaw MCP JSON uses the same root `mcpServers` structure as generic MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+      "transport": "streamable-http"
+    },
+    "sap_payments": {
+      "command": "npx",
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+      "env": {
+        "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
+        "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+        "SAP_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+On Windows, command-backed bridge entries use `npx.cmd`.
+
+## 7. x402 Client Addon
 
 The GUI can also install the x402 addon bundle under:
 
@@ -116,7 +230,7 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
 
 Use the helper when your agent runtime can see hosted tools but cannot natively sign and replay x402 challenges.
 
-## 7. CLI Fallback
+## 8. CLI Fallback
 
 The same setup can always be done from terminal:
 
@@ -138,7 +252,7 @@ curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | bash
 
 Read the script before running it when operating in a security-sensitive environment.
 
-## 8. Security Rules
+## 9. Security Rules
 
 1. Do not paste keypair bytes into agent chat, MCP config, GitHub issues, or support tickets.
 2. Do not configure hosted MCP with `SAP_WALLET_PATH` or RPC API-key overrides.

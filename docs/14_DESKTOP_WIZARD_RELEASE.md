@@ -41,7 +41,18 @@ Profile creation and runtime config writes happen through the main-process IPC h
 
 ## 14.4 Runtime Integrations
 
-The desktop wizard currently focuses on the Codex happy path:
+The desktop wizard supports two setup modes:
+
+| Mode | Behavior |
+| --- | --- |
+| Full SAP MCP setup | Creates or updates the local SAP MCP profile, wallet boundary, policy limits, hosted MCP runtime entries, and x402 bridge. |
+| x402 payment client only | Skips profile/wallet writes and only installs or repairs hosted MCP plus local `sap_payments` runtime entries. |
+
+The x402-only mode is for users who already ran a wizard, can see hosted SAP MCP tools, but cannot execute paid/write calls because their runtime does not yet attach payment proofs.
+
+### 14.4.1 Codex
+
+Codex uses native Streamable HTTP MCP support for hosted SAP MCP and a local command-backed bridge for payment replay:
 
 1. hosted remote MCP entry:
 
@@ -62,7 +73,59 @@ tool_timeout_sec = 300
 
 On Windows, use `npx.cmd`.
 
-Hermes, Claude, OpenClaw, and custom runtimes receive snippets through the addon bundle until their exact local config mutation rules are stable enough for automatic editing.
+### 14.4.2 Claude Desktop
+
+Claude Desktop receives a root `mcpServers` JSON config. The hosted server uses Claude's HTTP MCP shape:
+
+```json
+{
+  "mcpServers": {
+    "sap": {
+      "type": "http",
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp"
+    }
+  }
+}
+```
+
+The desktop wizard writes platform-native Claude paths:
+
+| OS | Path |
+| --- | --- |
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%USERPROFILE%\AppData\Roaming\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+### 14.4.3 Hermes
+
+Hermes global `mcp.json` receives flat server entries:
+
+```json
+{
+  "sap": {
+    "url": "https://mcp.sap.oobeprotocol.ai/mcp",
+    "transport": "streamable-http"
+  }
+}
+```
+
+Hermes profile YAML receives entries under top-level `mcp_servers`.
+
+### 14.4.4 OpenClaw
+
+OpenClaw receives root `mcpServers` JSON when `~/.openclaw/mcp.json` is selected or created. Existing YAML config receives top-level `mcp_servers` entries.
+
+### 14.4.5 Payment Bridge Invariant
+
+Every supported runtime may also receive a local `sap_payments` server with only these enabled tools:
+
+```txt
+sap_x402_paid_call
+sap_profile_current
+sap_x402_estimate_cost
+```
+
+The hosted `sap` entry must not include wallet paths, RPC API-key overrides, profile names, keypair bytes, or private signer data.
 
 ## 14.5 Build Commands
 

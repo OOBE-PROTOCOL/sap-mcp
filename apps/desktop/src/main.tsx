@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const steps = ['Profile', 'Wallet', 'Policy', 'Runtimes', 'Review'] as const;
-type StepName = typeof steps[number];
+const fullSteps = ['Setup', 'Profile', 'Wallet', 'Policy', 'Runtimes', 'Review'] as const;
+const paymentsOnlySteps = ['Setup', 'Runtimes', 'Review'] as const;
+type StepName = typeof fullSteps[number];
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
 
@@ -23,7 +24,7 @@ function fieldId(name: string): string {
 function App() {
   const [draft, setDraft] = useState<WizardDraft | null>(null);
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([]);
-  const [step, setStep] = useState<StepName>('Profile');
+  const [step, setStep] = useState<StepName>('Setup');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<WizardResult | null>(null);
@@ -44,13 +45,29 @@ function App() {
     };
   }, []);
 
-  const stepIndex = steps.indexOf(step);
+  const visibleSteps = useMemo(
+    () => draft?.setupMode === 'payments-only' ? [...paymentsOnlySteps] : [...fullSteps],
+    [draft?.setupMode],
+  );
+  const stepIndex = visibleSteps.indexOf(step);
   const canGoBack = stepIndex > 0 && !saving;
-  const canGoForward = stepIndex < steps.length - 1 && !saving;
+  const canGoForward = stepIndex < visibleSteps.length - 1 && !saving;
+
+  useEffect(() => {
+    if (draft && !visibleSteps.includes(step)) {
+      setStep('Runtimes');
+    }
+  }, [draft, step, visibleSteps]);
 
   const validation = useMemo(() => {
     if (!draft) return ['Loading wizard state.'];
     const errors: string[] = [];
+    if (draft.setupMode === 'payments-only') {
+      if (draft.configureRuntimes.length === 0 && !draft.installAddonBundle) {
+        errors.push('Choose at least one runtime or install the local addon bundle.');
+      }
+      return errors;
+    }
     const profile = normalizeProfileName(draft.profileName);
     if (!profile || profile === 'default') {
       errors.push('Choose a named profile. Avoid default.');
@@ -113,7 +130,7 @@ function App() {
           <p className="sidebar-copy">Create a local SAP profile, connect hosted MCP, and install the local x402 payment bridge.</p>
         </div>
         <ol className="step-list">
-          {steps.map((item, index) => (
+          {visibleSteps.map((item, index) => (
             <li key={item}>
               <button
                 type="button"
@@ -136,7 +153,7 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Step {stepIndex + 1} of {steps.length}</p>
+            <p className="eyebrow">Step {stepIndex + 1} of {visibleSteps.length}</p>
             <h2>{step}</h2>
           </div>
           <button type="button" className="ghost-button" onClick={() => window.sapMcpWizard.openExternal('https://mcp.sap.oobeprotocol.ai/docs')}>
@@ -155,16 +172,16 @@ function App() {
 
         {!result && (
           <footer className="footer-actions">
-            <button type="button" className="secondary-button" disabled={!canGoBack} onClick={() => setStep(steps[stepIndex - 1])}>
+            <button type="button" className="secondary-button" disabled={!canGoBack} onClick={() => setStep(visibleSteps[stepIndex - 1])}>
               Back
             </button>
             {canGoForward ? (
-              <button type="button" className="primary-button" onClick={() => setStep(steps[stepIndex + 1])}>
+              <button type="button" className="primary-button" onClick={() => setStep(visibleSteps[stepIndex + 1])}>
                 Continue
               </button>
             ) : (
               <button type="button" className="primary-button" disabled={saving || validation.length > 0} onClick={save} aria-busy={saving}>
-                {saving ? 'Saving...' : 'Create Profile'}
+                {saving ? 'Saving...' : draft.setupMode === 'payments-only' ? 'Install Payment Client' : 'Create Profile'}
               </button>
             )}
           </footer>
@@ -191,6 +208,60 @@ function StepContent({
   validation: string[];
   update: (next: Partial<WizardDraft>) => void;
 }) {
+  function toggleRuntime(runtimeId: RuntimeStatus['id']) {
+    const selected = new Set(draft.configureRuntimes);
+    if (selected.has(runtimeId)) {
+      selected.delete(runtimeId);
+    } else {
+      selected.add(runtimeId);
+    }
+    const configureRuntimes = Array.from(selected);
+    update({
+      configureRuntimes,
+      configureCodex: configureRuntimes.includes('codex'),
+    });
+  }
+
+  if (step === 'Setup') {
+    return (
+      <>
+        <PanelHeader
+          title="Choose what you want to install"
+          copy="Use full setup for a new SAP MCP profile. Use payment client repair when your profile already exists but hosted x402 paid/write tools still return payment_required."
+        />
+        <div className="setup-layout">
+          <div className="setup-summary">
+            <p className="eyebrow">Hosted MCP + local trust boundary</p>
+            <h3>Remote tools, local signatures.</h3>
+            <ul>
+              <li>Hosted SAP MCP stays at {hostedUrl}</li>
+              <li>Your runtime gets a local sap_payments bridge for x402.</li>
+              <li>Wallet paths and keypair bytes never go into hosted config.</li>
+            </ul>
+            <div className="info-strip">
+              <strong>Non-custodial by design</strong>
+              <span>The payment client signs x402 proofs locally with the user-controlled SAP profile or external signer.</span>
+            </div>
+          </div>
+          <div className="setup-options">
+            <ToggleCard
+              title="Full SAP MCP setup"
+              copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the local x402 payment bridge."
+              checked={draft.setupMode === 'full'}
+              onChange={() => update({ setupMode: 'full' })}
+            />
+            <ToggleCard
+              title="Install x402 payment client only"
+              copy="Keep the existing SAP profile and only install or repair the local sap_payments bridge for Codex, Claude, Hermes, OpenClaw, or compatible agents."
+              checked={draft.setupMode === 'payments-only'}
+              onChange={() => update({ setupMode: 'payments-only' })}
+            />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (step === 'Profile') {
     return (
       <>
@@ -275,26 +346,28 @@ function StepContent({
   if (step === 'Runtimes') {
     return (
       <>
-        <PanelHeader title="Connect agent runtimes" copy="The wizard can make Codex fully usable with hosted SAP MCP and a local x402 payment bridge." />
+        <PanelHeader
+          title="Install hosted MCP and x402 payment bridge"
+          copy="Select the agent runtimes to repair. The wizard writes hosted sap plus local sap_payments entries using each runtime's native config structure."
+        />
         <div className="runtime-grid">
           {runtimes.map((runtime) => (
-            <article className="runtime-card" key={runtime.id}>
+            <button
+              type="button"
+              className={draft.configureRuntimes.includes(runtime.id) ? 'runtime-card selected' : 'runtime-card'}
+              key={runtime.id}
+              onClick={() => toggleRuntime(runtime.id)}
+              aria-pressed={draft.configureRuntimes.includes(runtime.id)}
+            >
               <div>
                 <h3>{runtime.label}</h3>
                 <p>{runtime.recommendation}</p>
               </div>
               <span className={runtime.detected ? 'pill success' : 'pill'}>{runtime.detected ? 'Detected' : 'Ready'}</span>
               {runtime.paths.length > 0 && <code>{runtime.paths[0]}</code>}
-            </article>
+            </button>
           ))}
         </div>
-        <label className="switch-row" htmlFor={fieldId('configureCodex')}>
-          <input id={fieldId('configureCodex')} type="checkbox" checked={draft.configureCodex} onChange={(event) => update({ configureCodex: event.target.checked })} />
-          <span>
-            <strong>Configure Codex automatically</strong>
-            <small>Add hosted sap and local sap_payments entries to Codex config.toml.</small>
-          </span>
-        </label>
         <label className="switch-row" htmlFor={fieldId('installAddonBundle')}>
           <input id={fieldId('installAddonBundle')} type="checkbox" checked={draft.installAddonBundle} onChange={(event) => update({ installAddonBundle: event.target.checked })} />
           <span>
@@ -310,11 +383,12 @@ function StepContent({
     <>
       <PanelHeader title="Review install plan" copy="Nothing is sent to OOBE. The hosted MCP URL is public; signing remains local." />
       <div className="review-grid">
-        <ReviewItem label="Profile" value={normalizeProfileName(draft.profileName)} />
-        <ReviewItem label="Mode" value={draft.mode} />
-        <ReviewItem label="RPC" value={draft.rpcUrl} />
-        <ReviewItem label="Wallet" value={draft.createNewWallet ? 'Create dedicated SAP MCP keypair' : draft.walletPath ?? 'Missing path'} />
-        <ReviewItem label="Codex" value={draft.configureCodex ? 'Configure hosted sap + sap_payments bridge' : 'Skip'} />
+        <ReviewItem label="Install mode" value={draft.setupMode === 'payments-only' ? 'x402 payment client only' : 'Full SAP MCP setup'} />
+        {draft.setupMode === 'full' && <ReviewItem label="Profile" value={normalizeProfileName(draft.profileName)} />}
+        {draft.setupMode === 'full' && <ReviewItem label="Mode" value={draft.mode} />}
+        {draft.setupMode === 'full' && <ReviewItem label="RPC" value={draft.rpcUrl} />}
+        {draft.setupMode === 'full' && <ReviewItem label="Wallet" value={draft.createNewWallet ? 'Create dedicated SAP MCP keypair' : draft.walletPath ?? 'Missing path'} />}
+        <ReviewItem label="Runtime configs" value={draft.configureRuntimes.length > 0 ? draft.configureRuntimes.join(', ') : 'Skip'} />
         <ReviewItem label="x402 addon" value={draft.installAddonBundle ? 'Install local addon bundle' : 'Skip'} />
       </div>
       {validation.length > 0 && <StatusBanner tone="error" title="Fix before saving" text={validation.join('\n')} />}
@@ -393,16 +467,19 @@ function StatusBanner({ tone, title, text }: { tone: 'error' | 'success'; title:
 }
 
 function DoneState({ result }: { result: WizardResult }) {
+  const setup = result.setup;
   return (
     <section className="done-state" aria-labelledby="done-title">
       <div className="done-icon" aria-hidden="true">✓</div>
-      <h2 id="done-title">SAP MCP is configured</h2>
-      <p>Restart your agent runtime. Codex can use hosted SAP MCP plus the local sap_payments bridge for x402 paid/write tools.</p>
-      <div className="review-grid">
-        <ReviewItem label="Config" value={result.setup.configPath} />
-        <ReviewItem label="Wallet" value={result.setup.walletPath ?? 'No local wallet'} />
-        <ReviewItem label="Agent public key" value={result.setup.config.agentPubkey ?? 'Not available'} />
-      </div>
+      <h2 id="done-title">{result.setupMode === 'payments-only' ? 'x402 payment client is installed' : 'SAP MCP is configured'}</h2>
+      <p>Restart your agent runtime. Hosted SAP MCP can use the local sap_payments bridge for x402 paid/write tools without exposing keypair bytes.</p>
+      {setup && (
+        <div className="review-grid">
+          <ReviewItem label="Config" value={setup.configPath} />
+          <ReviewItem label="Wallet" value={setup.walletPath ?? 'No local wallet'} />
+          <ReviewItem label="Agent public key" value={setup.config.agentPubkey ?? 'Not available'} />
+        </div>
+      )}
       <div className="runtime-grid">
         {result.runtimeActions.map((action) => (
           <article className="runtime-card" key={`${action.runtime}-${action.status}`}>

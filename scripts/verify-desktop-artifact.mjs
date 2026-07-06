@@ -74,7 +74,7 @@ function collectAppAsars(root) {
  * @param {string} archive App ASAR path.
  */
 function assertPackagedRenderer(asar, archive) {
-  const files = new Set(asar.listPackage(archive).map(file => file.replace(/^\//, '')));
+  const files = new Set(asar.listPackage(archive).map(file => file.replace(/\\/g, '/').replace(/^\//, '')));
   const requiredFiles = [
     'apps/desktop/main.mjs',
     'apps/desktop/preload.cjs',

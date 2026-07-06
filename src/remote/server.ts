@@ -7,7 +7,7 @@
 import { randomUUID } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import * as http from 'http';
-import { dirname, join, normalize } from 'path';
+import { dirname, join, posix } from 'path';
 import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getDataDir, loadConfig, type SapMcpConfig } from '../config/env.js';
@@ -417,7 +417,7 @@ export function resolvePublicDocsMarkdown(method: string | undefined, pathname: 
     return undefined;
   }
 
-  const normalizedPath = normalize(decodedPath.replace(/\\/g, '/')).replace(/^[/\\]+/, '');
+  const normalizedPath = posix.normalize(decodedPath.replace(/\\/g, '/')).replace(/^[/\\]+/, '');
   if (isUnsafeDocsPath(normalizedPath)) {
     return undefined;
   }

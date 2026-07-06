@@ -265,6 +265,45 @@ h1 {
   gap: 14px;
 }
 
+.setup-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.setup-summary {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid rgba(109, 235, 241, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(155deg, rgba(24, 212, 223, 0.12), rgba(7, 20, 24, 0.86) 54%),
+    rgba(13, 26, 31, 0.82);
+  padding: 18px;
+}
+
+.setup-summary h3 {
+  max-width: 14ch;
+  font-size: 1.45rem;
+  line-height: 1.08;
+}
+
+.setup-summary ul {
+  display: grid;
+  gap: 10px;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.setup-options {
+  display: grid;
+  gap: 14px;
+}
+
 .toggle-card,
 .runtime-card {
   min-height: 112px;
@@ -288,7 +327,8 @@ h1 {
 
 .toggle-card.selected {
   border-color: var(--aqua);
-  background: rgba(24, 212, 223, 0.1);
+  background: linear-gradient(145deg, rgba(24, 212, 223, 0.13), rgba(16, 37, 43, 0.72));
+  box-shadow: inset 0 0 0 1px rgba(24, 212, 223, 0.18);
 }
 
 .switch-row {
@@ -317,10 +357,36 @@ h1 {
 .runtime-card {
   display: grid;
   gap: 12px;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: rgba(13, 26, 31, 0.82);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
 }
 
 .runtime-card h3 {
   margin-bottom: 6px;
+}
+
+.runtime-card.selected {
+  border-color: rgba(24, 212, 223, 0.76);
+  background: linear-gradient(145deg, rgba(24, 212, 223, 0.13), rgba(13, 26, 31, 0.82));
+}
+
+.info-strip {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(109, 235, 241, 0.32);
+  border-radius: 8px;
+  background: rgba(24, 212, 223, 0.08);
+}
+
+.info-strip span {
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .pill {
@@ -454,6 +520,7 @@ button:disabled {
   .secondary-button,
   .ghost-button,
   .toggle-card,
+  .runtime-card,
   .step {
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
   }
@@ -461,7 +528,8 @@ button:disabled {
   .primary-button:hover,
   .secondary-button:hover,
   .ghost-button:hover,
-  .toggle-card:hover {
+  .toggle-card:hover,
+  .runtime-card:hover {
     transform: translateY(-1px);
   }
 }
@@ -483,7 +551,7 @@ button:disabled {
   }
 
   .step-list {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .step {
@@ -500,6 +568,7 @@ button:disabled {
   }
 
   .form-grid,
+  .setup-layout,
   .choice-row,
   .runtime-grid,
   .review-grid {

@@ -45,7 +45,9 @@ describe('OOBE x402 facilitator configuration', () => {
       expect(signer.created).toBe(true);
       expect(signer.path).toBe(signerPath);
       expect(signer.publicKey).toBe(getFacilitatorSignerPublicKey(signerPath));
-      expect(statSync(signerPath).mode & 0o777).toBe(0o600);
+      if (process.platform !== 'win32') {
+        expect(statSync(signerPath).mode & 0o777).toBe(0o600);
+      }
       expect(() => validateFacilitatorConfig(configWith(signerPath))).not.toThrow();
     } finally {
       rmSync(directory, { recursive: true, force: true });

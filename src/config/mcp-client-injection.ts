@@ -102,6 +102,7 @@ export interface McpClientAddonInstallResult {
 }
 
 type JsonRecord = Record<string, unknown>;
+type SupportedPlatform = NodeJS.Platform;
 
 const SAP_SERVER_NAME = 'sap';
 const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
@@ -486,25 +487,41 @@ export function installX402PaidCallAddon(
 }
 
 /**
- * @name getKnownClientTargets
- * @description Returns known MCP client config paths for the current operating system.
+ * @name getClaudeConfigTargets
+ * @description Returns Claude config targets for the host platform without relying on shell-specific environment variables.
  */
-export function getKnownClientTargets(homeDir = homedir()): McpClientTarget[] {
-  const targets: McpClientTarget[] = [
+function getClaudeConfigTargets(homeDir: string, platform: SupportedPlatform): McpClientTarget[] {
+  const baseDir = platform === 'win32'
+    ? join(homeDir, 'AppData', 'Roaming', 'Claude')
+    : platform === 'darwin'
+      ? join(homeDir, 'Library', 'Application Support', 'Claude')
+      : join(homeDir, '.config', 'Claude');
+
+  return [
     {
       id: 'claude',
       label: 'Claude Desktop',
-      path: join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+      path: join(baseDir, 'claude_desktop_config.json'),
       format: 'json',
       exists: false,
     },
     {
       id: 'claude',
       label: 'Claude App Config',
-      path: join(homeDir, 'Library', 'Application Support', 'Claude', 'config.json'),
+      path: join(baseDir, 'config.json'),
       format: 'json',
       exists: false,
     },
+  ];
+}
+
+/**
+ * @name getKnownClientTargets
+ * @description Returns known MCP client config paths for the current operating system.
+ */
+export function getKnownClientTargets(homeDir = homedir(), platform: SupportedPlatform = process.platform): McpClientTarget[] {
+  const targets: McpClientTarget[] = [
+    ...getClaudeConfigTargets(homeDir, platform),
     {
       id: 'hermes',
       label: 'Hermes Global MCP',
@@ -560,14 +577,15 @@ export function getKnownClientTargets(homeDir = homedir()): McpClientTarget[] {
  * @name discoverMcpClientTargets
  * @description Finds existing client config files and keeps create-capable standard targets.
  */
-export function discoverMcpClientTargets(homeDir = homedir()): McpClientTarget[] {
-  const targets = getKnownClientTargets(homeDir);
+export function discoverMcpClientTargets(homeDir = homedir(), platform: SupportedPlatform = process.platform): McpClientTarget[] {
+  const targets = getKnownClientTargets(homeDir, platform);
   return targets.filter((target) => {
     if (target.exists) {
       return true;
     }
 
     return target.path.endsWith('claude_desktop_config.json')
+      || target.path.endsWith(join('.hermes', 'mcp.json'))
       || target.path.endsWith(join('.codex', 'config.toml'))
       || target.path.endsWith(join('.openclaw', 'mcp.json'));
   });
@@ -650,6 +668,60 @@ function buildJsonContent(
 }
 
 /**
+ * @name hostedJsonServerConfig
+ * @description Builds the hosted SAP MCP server object for JSON-based clients.
+ */
+function hostedJsonServerConfig(target: Pick<McpClientTarget, 'id'>): JsonRecord {
+  if (target.id === 'claude') {
+    return {
+      type: 'http',
+      url: HOSTED_SAP_MCP_URL,
+    };
+  }
+
+  return {
+    url: HOSTED_SAP_MCP_URL,
+    transport: 'streamable-http',
+  };
+}
+
+/**
+ * @name buildHostedPaymentBridgeJsonContent
+ * @description Builds JSON config with hosted SAP MCP plus local x402 payment bridge.
+ */
+function buildHostedPaymentBridgeJsonContent(
+  content: string,
+  target: McpClientTarget,
+): { nextContent: string; hadSapConfig: boolean } {
+  const parsed: unknown = content.trim() ? JSON.parse(content) : {};
+  const root = isRecord(parsed) ? parsed : {};
+  const paymentBridge = createNpxPaymentBridgeServerConfig();
+
+  if (target.id === 'hermes') {
+    const hadSapConfig = isRecord(root[SAP_SERVER_NAME]) || isRecord(root[SAP_PAYMENT_BRIDGE_SERVER_NAME]);
+    return {
+      nextContent: formatJson({
+        ...root,
+        [SAP_SERVER_NAME]: hostedJsonServerConfig(target),
+        [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
+      }),
+      hadSapConfig,
+    };
+  }
+
+  const serversRaw = root.mcpServers;
+  const servers = isRecord(serversRaw) ? { ...serversRaw } : {};
+  const hadSapConfig = isRecord(servers[SAP_SERVER_NAME]) || isRecord(servers[SAP_PAYMENT_BRIDGE_SERVER_NAME]);
+  servers[SAP_SERVER_NAME] = hostedJsonServerConfig(target);
+  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = paymentBridge;
+
+  return {
+    nextContent: formatJson({ ...root, mcpServers: servers }),
+    hadSapConfig,
+  };
+}
+
+/**
  * @name yamlServerBlock
  * @description Renders a Hermes/OpenClaw-compatible YAML MCP server block.
  */
@@ -659,6 +731,51 @@ function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): s
   const grandchild = ' '.repeat(baseIndent + 4);
   const lines = [
     `${indent}${SAP_SERVER_NAME}:`,
+    `${child}command: ${canonical.command}`,
+    `${child}args:`,
+  ];
+
+  for (const arg of canonical.args) {
+    lines.push(`${child}- ${arg}`);
+  }
+
+  if (canonical.cwd) {
+    lines.push(`${child}cwd: ${canonical.cwd}`);
+  }
+
+  lines.push(`${child}env:`);
+  for (const [key, value] of Object.entries(canonical.env)) {
+    const rendered = value === 'false' || value === 'true' ? `"${value}"` : value;
+    lines.push(`${grandchild}${key}: ${rendered}`);
+  }
+
+  return lines;
+}
+
+/**
+ * @name yamlHostedServerBlock
+ * @description Renders a hosted Streamable HTTP MCP server block for Hermes/OpenClaw YAML configs.
+ */
+function yamlHostedServerBlock(serverName: string, baseIndent = 0): string[] {
+  const indent = ' '.repeat(baseIndent);
+  const child = ' '.repeat(baseIndent + 2);
+  return [
+    `${indent}${serverName}:`,
+    `${child}url: ${HOSTED_SAP_MCP_URL}`,
+    `${child}transport: streamable-http`,
+  ];
+}
+
+/**
+ * @name yamlCommandServerBlock
+ * @description Renders a command-backed MCP server block for Hermes/OpenClaw YAML configs.
+ */
+function yamlCommandServerBlock(serverName: string, canonical: McpServerInjectionConfig, baseIndent = 0): string[] {
+  const indent = ' '.repeat(baseIndent);
+  const child = ' '.repeat(baseIndent + 2);
+  const grandchild = ' '.repeat(baseIndent + 4);
+  const lines = [
+    `${indent}${serverName}:`,
     `${child}command: ${canonical.command}`,
     `${child}args:`,
   ];
@@ -729,6 +846,55 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
   return {
     nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
     hadSapConfig: true,
+  };
+}
+
+/**
+ * @name replaceYamlHostedPaymentBridgeBlocks
+ * @description Replaces or appends hosted SAP MCP plus local x402 bridge blocks under mcp_servers.
+ */
+function replaceYamlHostedPaymentBridgeBlocks(content: string): { nextContent: string; hadSapConfig: boolean } {
+  const lines = content.split(/\r?\n/);
+  const paymentBridge = createNpxPaymentBridgeServerConfig();
+  const replacement = [
+    ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
+    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
+  ];
+  const mcpIndex = lines.findIndex((line) => /^mcp_servers:\s*$/.test(line));
+
+  if (mcpIndex === -1) {
+    const prefix = content.trimEnd();
+    const appended = ['mcp_servers:', ...replacement].join('\n');
+    return {
+      nextContent: `${prefix ? `${prefix}\n` : ''}${appended}\n`,
+      hadSapConfig: false,
+    };
+  }
+
+  const nextLines = [...lines];
+  let hadSapConfig = false;
+  for (const serverName of [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]) {
+    const serverIndex = nextLines.findIndex((line, index) => index > mcpIndex && new RegExp(`^ {2}${escapeRegExp(serverName)}:\\s*$`).test(line));
+    if (serverIndex === -1) {
+      continue;
+    }
+
+    hadSapConfig = true;
+    let endIndex = serverIndex + 1;
+    while (endIndex < nextLines.length) {
+      const line = nextLines[endIndex];
+      if (line.trim() && countLeadingSpaces(line) <= 2) {
+        break;
+      }
+      endIndex += 1;
+    }
+    nextLines.splice(serverIndex, endIndex - serverIndex);
+  }
+
+  nextLines.splice(mcpIndex + 1, 0, ...replacement);
+  return {
+    nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+    hadSapConfig,
   };
 }
 
@@ -926,6 +1092,75 @@ export function installCodexHostedPaymentBridgeConfig(homeDir = homedir()): McpC
       ? 'Updated Codex hosted SAP MCP and local x402 payment bridge config'
       : 'Created Codex hosted SAP MCP and local x402 payment bridge config',
   };
+}
+
+/**
+ * @name buildHostedPaymentBridgeContent
+ * @description Builds runtime-specific config with hosted SAP MCP and local x402 bridge.
+ */
+export function buildHostedPaymentBridgeContent(
+  target: McpClientTarget,
+  content: string,
+): { nextContent: string; hadSapConfig: boolean } {
+  if (target.format === 'toml') {
+    return buildCodexHostedPaymentBridgeContent(content);
+  }
+
+  if (target.format === 'json') {
+    return buildHostedPaymentBridgeJsonContent(content, target);
+  }
+
+  return replaceYamlHostedPaymentBridgeBlocks(content);
+}
+
+/**
+ * @name installHostedPaymentBridgeConfig
+ * @description Installs or repairs hosted SAP MCP plus local x402 bridge config for a concrete runtime target.
+ */
+export function installHostedPaymentBridgeConfig(target: McpClientTarget): McpClientInjectionResult {
+  if (target.id === 'codex') {
+    return installCodexHostedPaymentBridgeConfig(dirname(dirname(target.path)));
+  }
+
+  const currentTarget = {
+    ...target,
+    exists: existsSync(target.path),
+  };
+  const before = readTargetContent(currentTarget);
+  const built = buildHostedPaymentBridgeContent(currentTarget, before);
+  const backupPath = currentTarget.exists ? `${currentTarget.path}.bak-${Date.now()}` : undefined;
+
+  mkdirSync(dirname(currentTarget.path), { recursive: true, mode: 0o700 });
+  if (backupPath) {
+    writeFileSync(backupPath, before, 'utf-8');
+  }
+  writeFileSync(currentTarget.path, built.nextContent, { encoding: 'utf-8', mode: 0o600 });
+
+  return {
+    target: currentTarget,
+    mode: built.hadSapConfig ? 'override' : 'merge',
+    written: true,
+    backupPath,
+    message: built.hadSapConfig
+      ? `Repaired hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`
+      : `Installed hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`,
+  };
+}
+
+/**
+ * @name installHostedPaymentBridgeConfigs
+ * @description Installs payment bridge configs for all selected runtime ids and detected/create-capable targets.
+ */
+export function installHostedPaymentBridgeConfigs(
+  runtimeIds: readonly McpClientId[],
+  homeDir = homedir(),
+  platform: SupportedPlatform = process.platform,
+): McpClientInjectionResult[] {
+  const selected = new Set(runtimeIds);
+  const targets = discoverMcpClientTargets(homeDir, platform)
+    .filter((target) => selected.has(target.id));
+
+  return targets.map((target) => installHostedPaymentBridgeConfig(target));
 }
 
 /**
