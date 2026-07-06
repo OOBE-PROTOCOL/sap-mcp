@@ -6,6 +6,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..');
 const rendererDir = join(__dirname, 'dist-renderer');
 
+/** @type {BrowserWindow | null} */
+let mainWindow = null;
+
 async function loadWizardCore() {
   return await import(join(repoRoot, 'dist', 'wizard-core', 'desktop-flow.js'));
 }
@@ -24,6 +27,26 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
+  });
+  mainWindow = window;
+
+  window.once('ready-to-show', () => {
+    window.show();
+    window.focus();
+  });
+
+  window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`SAP MCP Wizard renderer failed to load ${validatedURL}: ${errorCode} ${errorDescription}`);
+  });
+
+  window.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`SAP MCP Wizard renderer process exited: ${details.reason}`);
+  });
+
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
   });
 
   if (process.env.SAP_MCP_DESKTOP_DEV_URL) {

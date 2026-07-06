@@ -71,6 +71,9 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Verify packaged desktop renderer
+        run: pnpm run desktop:verify-artifact
+
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -88,7 +91,9 @@ jobs:
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
+          make_latest: true
+          tag_name: ${{ github.ref_name }}
           files: |
             release/desktop/*.dmg
             release/desktop/*.zip

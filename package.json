@@ -47,6 +47,7 @@
     "desktop:renderer": "vite --config apps/desktop/vite.config.ts",
     "desktop:renderer:build": "vite build --config apps/desktop/vite.config.ts",
     "desktop:build": "pnpm run build && pnpm run desktop:renderer:build && electron-builder --config apps/desktop/electron-builder.cjs --publish never",
+    "desktop:verify-artifact": "node scripts/verify-desktop-artifact.mjs",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "config": "tsx src/config-cli.ts",

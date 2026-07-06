@@ -92,4 +92,10 @@ describe('release readiness documentation and package surface', () => {
       expect(existsSync(join(repoRoot, legacyRootDoc))).toBe(false);
     }
   });
+
+  it('builds the desktop renderer with relative assets for packaged Electron apps', () => {
+    const viteConfig = readText('apps/desktop/vite.config.ts');
+
+    expect(viteConfig).toContain("base: './'");
+  });
 });

@@ -7,6 +7,7 @@ const desktopRoot = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   root: desktopRoot,
+  base: './',
   plugins: [react()],
   build: {
     outDir: 'dist-renderer',
