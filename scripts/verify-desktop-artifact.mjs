@@ -67,6 +67,42 @@ function collectAppAsars(root) {
 }
 
 /**
+ * @name extractListedFile
+ * @description Extracts an ASAR entry after verifying the normalized path is present.
+ * Different OS/package combinations expose list entries with or without a leading
+ * slash and with either POSIX or Windows separators.
+ * @param {ReturnType<typeof loadAsarModule>} asar Electron ASAR module.
+ * @param {string} archive App ASAR path.
+ * @param {Map<string, string>} archiveFiles Normalized-to-listed archive entries.
+ * @param {string} normalizedPath Required path using POSIX separators without a leading slash.
+ * @returns {Buffer} Extracted file bytes.
+ */
+function extractListedFile(asar, archive, archiveFiles, normalizedPath) {
+  if (!archiveFiles.has(normalizedPath)) {
+    throw new Error(`${archive} is missing ${normalizedPath}`);
+  }
+
+  const windowsPath = normalizedPath.replace(/\//g, '\\');
+  const candidates = [
+    normalizedPath,
+    `/${normalizedPath}`,
+    windowsPath,
+    `\\${windowsPath}`,
+    archiveFiles.get(normalizedPath),
+  ].filter((value, index, values) => typeof value === 'string' && values.indexOf(value) === index);
+
+  for (const candidate of candidates) {
+    try {
+      return asar.extractFile(archive, candidate);
+    } catch {
+      // Try the next platform-specific representation.
+    }
+  }
+
+  throw new Error(`${archive} listed ${normalizedPath} but could not extract it with known path variants.`);
+}
+
+/**
  * @name assertPackagedRenderer
  * @description Verifies that a packaged Electron archive contains the desktop
  * renderer, preload bridge, main process entry, and relative file:// asset URLs.
@@ -74,7 +110,10 @@ function collectAppAsars(root) {
  * @param {string} archive App ASAR path.
  */
 function assertPackagedRenderer(asar, archive) {
-  const files = new Set(asar.listPackage(archive).map(file => file.replace(/\\/g, '/').replace(/^\//, '')));
+  const archiveFiles = new Map(
+    asar.listPackage(archive).map(file => [file.replace(/\\/g, '/').replace(/^\//, ''), file])
+  );
+  const files = new Set(archiveFiles.keys());
   const requiredFiles = [
     'apps/desktop/main.mjs',
     'apps/desktop/preload.cjs',
@@ -88,7 +127,7 @@ function assertPackagedRenderer(asar, archive) {
     }
   }
 
-  const html = asar.extractFile(archive, 'apps/desktop/dist-renderer/index.html').toString('utf-8');
+  const html = extractListedFile(asar, archive, archiveFiles, 'apps/desktop/dist-renderer/index.html').toString('utf-8');
   if (!html.includes('src="./assets/')) {
     throw new Error(`${archive} renderer index.html does not use relative script assets.`);
   }
@@ -99,7 +138,7 @@ function assertPackagedRenderer(asar, archive) {
     throw new Error(`${archive} renderer index.html contains absolute /assets paths that break file:// Electron loading.`);
   }
 
-  const mainProcess = asar.extractFile(archive, 'apps/desktop/main.mjs').toString('utf-8');
+  const mainProcess = extractListedFile(asar, archive, archiveFiles, 'apps/desktop/main.mjs').toString('utf-8');
   if (!mainProcess.includes('let mainWindow')) {
     throw new Error(`${archive} main process does not keep a persistent BrowserWindow reference.`);
   }
