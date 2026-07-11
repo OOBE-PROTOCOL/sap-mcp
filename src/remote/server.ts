@@ -15,7 +15,7 @@ import { MCP_SERVER_VERSION } from '../core/constants.js';
 import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
-import { McpMonetizationGate } from '../payments/index.js';
+import { McpMonetizationGate, resolvePaymentNetwork } from '../payments/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 
@@ -29,6 +29,9 @@ const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/rele
 const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
 const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
 const X402_PAID_CALL_ADDON_PATH = '~/.config/mcp-sap/addons/x402-paid-call';
+const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
+const USDC_MAINNET_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 let logoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 
@@ -63,6 +66,7 @@ export interface RemoteMCPConfig {
   auth: RemoteAuthConfig;
   stateless: boolean;
   rateLimit: RemoteRateLimitConfig;
+  paymentDiscovery?: PublicPaymentDiscovery;
 }
 
 /**
@@ -182,6 +186,7 @@ export interface PublicServerInfo {
     schemes: readonly ('Bearer' | 'x402' | 'none')[];
     bearerRequired: boolean;
   };
+  payments?: PublicPaymentDiscovery;
   security: {
     keypairBytesExposed: false;
     storesUserKeypairs: false;
@@ -192,6 +197,31 @@ export interface PublicServerInfo {
     npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server';
     github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
     userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
+  };
+}
+
+/**
+ * @name PublicPaymentDiscovery
+ * @description Secret-free payment coordinates for x402/pay.sh discovery surfaces.
+ */
+export interface PublicPaymentDiscovery {
+  provider: 'x402' | 'pay-sh';
+  network: string;
+  asset: string;
+  assetSymbol: 'USDC';
+  payTo: string;
+  seller: {
+    name: 'OOBE Protocol';
+    payTo: string;
+  };
+  facilitator?: {
+    role: 'x402-svm-fee-payer';
+    publicKey: string;
+  };
+  headers: {
+    paymentRequired: 'PAYMENT-REQUIRED';
+    paymentSignature: 'PAYMENT-SIGNATURE';
+    paymentResponse: 'PAYMENT-RESPONSE';
   };
 }
 
@@ -216,6 +246,7 @@ export interface PublicPaymentStats {
 export interface X402DiscoveryDocument {
   version: 1;
   resources: string[];
+  payments?: PublicPaymentDiscovery;
   instructions: string;
 }
 
@@ -268,6 +299,7 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
     corsOrigins: appConfig.httpCorsOrigins,
     stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, false),
     rateLimit: buildRemoteRateLimitConfigFromEnv(appConfig.rateLimitPerMinute),
+    paymentDiscovery: buildPublicPaymentDiscovery(appConfig),
   };
 
   if (authType === 'none') {
@@ -302,6 +334,59 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
       keys,
     },
   };
+}
+
+/**
+ * @name buildPublicPaymentDiscovery
+ * @description Builds public x402 seller/facilitator coordinates without exposing facilitator URL or auth tokens.
+ */
+function buildPublicPaymentDiscovery(appConfig: SapMcpConfig): PublicPaymentDiscovery | undefined {
+  if (!appConfig.monetization.enabled || !appConfig.monetization.payTo) {
+    return undefined;
+  }
+
+  const network = resolvePaymentNetwork(appConfig);
+  const facilitatorPublicKey = (
+    process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY
+    ?? process.env.SAP_MCP_X402_FACILITATOR_FEE_PAYER
+    ?? ''
+  ).trim();
+
+  return {
+    provider: appConfig.monetization.provider,
+    network,
+    asset: resolvePublicPaymentAsset(network),
+    assetSymbol: 'USDC',
+    payTo: appConfig.monetization.payTo,
+    seller: {
+      name: 'OOBE Protocol',
+      payTo: appConfig.monetization.payTo,
+    },
+    ...(facilitatorPublicKey
+      ? {
+          facilitator: {
+            role: 'x402-svm-fee-payer',
+            publicKey: facilitatorPublicKey,
+          },
+        }
+      : {}),
+    headers: {
+      paymentRequired: 'PAYMENT-REQUIRED',
+      paymentSignature: 'PAYMENT-SIGNATURE',
+      paymentResponse: 'PAYMENT-RESPONSE',
+    },
+  };
+}
+
+/**
+ * @name resolvePublicPaymentAsset
+ * @description Resolves the public USDC mint advertised in x402 discovery metadata.
+ */
+function resolvePublicPaymentAsset(network: string): string {
+  if (network === SOLANA_DEVNET_CAIP2) {
+    return USDC_DEVNET_MINT;
+  }
+  return USDC_MAINNET_MINT;
 }
 
 function parseRemoteBoolean(raw: string | undefined, fallback: boolean): boolean {
@@ -726,6 +811,7 @@ export function buildPublicServerInfo(
       schemes: authRequired ? ['Bearer'] : ['none', 'x402'],
       bearerRequired: authRequired,
     },
+    ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
     security: {
       keypairBytesExposed: false,
       storesUserKeypairs: false,
@@ -766,6 +852,7 @@ export function buildOpenApiSpec(
     },
     'x-discovery': {
       resources: [`${baseUrl}/mcp`],
+      ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
     },
     servers: [
       { url: baseUrl, description: 'SAP MCP Hosted Server' },
@@ -784,6 +871,16 @@ export function buildOpenApiSpec(
               max: '0.20',
             },
             protocols: ['x402'],
+            ...(config.paymentDiscovery
+              ? {
+                  network: config.paymentDiscovery.network,
+                  asset: config.paymentDiscovery.asset,
+                  assetSymbol: config.paymentDiscovery.assetSymbol,
+                  payTo: config.paymentDiscovery.payTo,
+                  seller: config.paymentDiscovery.seller,
+                  facilitator: config.paymentDiscovery.facilitator,
+                }
+              : {}),
           },
           requestBody: {
             required: true,
@@ -906,6 +1003,7 @@ export function buildX402DiscoveryDocument(
   return {
     version: 1,
     resources: [`${baseUrl}/mcp`],
+    ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
     instructions: 'SAP MCP exposes paid hosted MCP tool calls at /mcp. Probe POST /mcp without a payment header to receive a parseable x402 challenge for paid tools.',
   };
 }

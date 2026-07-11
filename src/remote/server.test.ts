@@ -20,6 +20,7 @@ const originalApiKeys = process.env.SAP_MCP_API_KEYS;
 const originalAuthSecret = process.env.SAP_MCP_AUTH_SECRET;
 const originalStateless = process.env.SAP_MCP_HTTP_STATELESS;
 const originalRemoteRateLimit = process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE;
+const originalFacilitatorPublicKey = process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY;
 
 const appConfig: SapMcpConfig = {
   mode: 'hosted-api',
@@ -62,6 +63,40 @@ const appConfig: SapMcpConfig = {
   },
 };
 
+const paymentDiscovery = {
+  provider: 'x402' as const,
+  network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+  asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+  assetSymbol: 'USDC' as const,
+  payTo: '11111111111111111111111111111111',
+  seller: {
+    name: 'OOBE Protocol' as const,
+    payTo: '11111111111111111111111111111111',
+  },
+  facilitator: {
+    role: 'x402-svm-fee-payer' as const,
+    publicKey: 'FeePayer111111111111111111111111111111111',
+  },
+  headers: {
+    paymentRequired: 'PAYMENT-REQUIRED' as const,
+    paymentSignature: 'PAYMENT-SIGNATURE' as const,
+    paymentResponse: 'PAYMENT-RESPONSE' as const,
+  },
+};
+
+const publicRemoteConfig = {
+  port: 8787,
+  host: '127.0.0.1',
+  auth: { type: 'none' as const },
+  stateless: true,
+  rateLimit: {
+    enabled: true,
+    requestsPerMinute: 60,
+    keyPrefix: 'test:',
+  },
+  paymentDiscovery,
+};
+
 function restoreEnv(): void {
   if (originalAuthType === undefined) {
     delete process.env.SAP_MCP_AUTH_TYPE;
@@ -88,6 +123,11 @@ function restoreEnv(): void {
   } else {
     process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE = originalRemoteRateLimit;
   }
+  if (originalFacilitatorPublicKey === undefined) {
+    delete process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY;
+  } else {
+    process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY = originalFacilitatorPublicKey;
+  }
 }
 
 afterEach(() => {
@@ -97,6 +137,7 @@ afterEach(() => {
 describe('remote MCP server config', () => {
   it('supports explicit bearerless x402-first hosted mode', () => {
     process.env.SAP_MCP_AUTH_TYPE = 'none';
+    process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY = 'FeePayer111111111111111111111111111111111';
     delete process.env.SAP_MCP_API_KEYS;
     delete process.env.SAP_MCP_AUTH_SECRET;
 
@@ -105,6 +146,16 @@ describe('remote MCP server config', () => {
     expect(config.auth).toEqual({ type: 'none' });
     expect(config.stateless).toBe(false);
     expect(config.rateLimit.requestsPerMinute).toBe(60);
+    expect(config.paymentDiscovery).toMatchObject({
+      provider: 'x402',
+      network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+      payTo: '11111111111111111111111111111111',
+      facilitator: {
+        role: 'x402-svm-fee-payer',
+        publicKey: 'FeePayer111111111111111111111111111111111',
+      },
+    });
   });
 
   it('allows stateful remote sessions and custom remote rate limits when explicitly requested', () => {
@@ -192,17 +243,7 @@ describe('remote MCP server config', () => {
   it('publishes share-safe public server metadata without runtime secrets', () => {
     const info = buildPublicServerInfo(
       { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage,
-      {
-        port: 8787,
-        host: '127.0.0.1',
-        auth: { type: 'none' },
-        stateless: true,
-        rateLimit: {
-          enabled: true,
-          requestsPerMinute: 60,
-          keyPrefix: 'test:',
-        },
-      },
+      publicRemoteConfig,
     );
 
     expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
@@ -213,6 +254,7 @@ describe('remote MCP server config', () => {
     expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
     expect(info.downloads.desktopWizard.macosArm64Dmg).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-0.6.0-arm64.dmg');
     expect(info.downloads.desktopWizard.linuxX64TarGz).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/sap-mcp-wizard-0.6.0-x64.tar.gz');
+    expect(info.payments).toEqual(paymentDiscovery);
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
     expect(info.security.keypairBytesExposed).toBe(false);
     expect(info.security.rpcSecretsExposed).toBe(false);
@@ -221,42 +263,41 @@ describe('remote MCP server config', () => {
   });
 
   it('publishes x402scan-compatible discovery metadata', () => {
-    const config = {
-      port: 8787,
-      host: '127.0.0.1',
-      auth: { type: 'none' as const },
-      stateless: true,
-      rateLimit: {
-        enabled: true,
-        requestsPerMinute: 60,
-        keyPrefix: 'test:',
-      },
-    };
     const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
 
-    const openApi = buildOpenApiSpec(req, config) as {
+    const openApi = buildOpenApiSpec(req, publicRemoteConfig) as {
       info: { version: string };
-      'x-discovery': { resources: string[] };
+      'x-discovery': { resources: string[]; payments: typeof paymentDiscovery };
       paths: {
         '/mcp': {
           post: {
             'x-payment-info': {
               protocols: string[];
+              network: string;
+              asset: string;
+              payTo: string;
+              facilitator: typeof paymentDiscovery.facilitator;
             };
             responses: Record<string, unknown>;
           };
         };
       };
     };
-    const wellKnown = buildX402DiscoveryDocument(req, config);
+    const wellKnown = buildX402DiscoveryDocument(req, publicRemoteConfig);
 
     expect(openApi.info.version).toBe('0.6.0');
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
+    expect(openApi['x-discovery'].payments).toEqual(paymentDiscovery);
     expect(openApi.paths['/mcp'].post['x-payment-info'].protocols).toEqual(['x402']);
+    expect(openApi.paths['/mcp'].post['x-payment-info'].network).toBe(paymentDiscovery.network);
+    expect(openApi.paths['/mcp'].post['x-payment-info'].asset).toBe(paymentDiscovery.asset);
+    expect(openApi.paths['/mcp'].post['x-payment-info'].payTo).toBe(paymentDiscovery.payTo);
+    expect(openApi.paths['/mcp'].post['x-payment-info'].facilitator).toEqual(paymentDiscovery.facilitator);
     expect(openApi.paths['/mcp'].post.responses['402']).toBeDefined();
     expect(wellKnown).toEqual({
       version: 1,
       resources: ['https://mcp.sap.oobeprotocol.ai/mcp'],
+      payments: paymentDiscovery,
       instructions: expect.stringContaining('Probe POST /mcp'),
     });
   });
