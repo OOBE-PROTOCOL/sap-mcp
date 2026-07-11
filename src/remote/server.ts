@@ -320,12 +320,15 @@ function writeJson(
   status: number,
   body: unknown,
   headers: http.OutgoingHttpHeaders = {},
+  omitBody = false,
 ): void {
+  const serialized = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(serialized),
     ...headers,
   });
-  res.end(JSON.stringify(body));
+  res.end(omitBody ? undefined : serialized);
 }
 
 /**
@@ -395,13 +398,30 @@ function isInitializeJsonRpcRequest(body: unknown): boolean {
  * @name writeHtml
  * @description Writes a cacheable HTML response for public endpoint previews and social sharing.
  */
-function writeHtml(res: http.ServerResponse, status: number, html: string): void {
+function writeHtml(res: http.ServerResponse, status: number, html: string, omitBody = false): void {
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'public, max-age=300',
+    'Content-Length': Buffer.byteLength(html),
     'X-Content-Type-Options': 'nosniff',
   });
-  res.end(html);
+  res.end(omitBody ? undefined : html);
+}
+
+/**
+ * @name isPublicReadMethod
+ * @description Returns true for cacheable public metadata reads, including crawler-friendly HEAD checks.
+ */
+function isPublicReadMethod(method: string | undefined): boolean {
+  return method === 'GET' || method === 'HEAD';
+}
+
+/**
+ * @name isHeadMethod
+ * @description Returns true when the request must emit headers without a response body.
+ */
+function isHeadMethod(method: string | undefined): boolean {
+  return method === 'HEAD';
 }
 
 /**
@@ -1555,20 +1575,20 @@ export class RemoteMCPServer {
 
       const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
-      if (req.method === 'GET' && url.pathname === '/') {
-        writeHtml(res, 200, buildLandingHtml(req, this.config));
+      if (isPublicReadMethod(req.method) && url.pathname === '/') {
+        writeHtml(res, 200, buildLandingHtml(req, this.config), isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && ['/docs', '/docs/', '/docs/index.html'].includes(url.pathname)) {
-        writeHtml(res, 200, buildDocsHtml(req, this.config));
+      if (isPublicReadMethod(req.method) && ['/docs', '/docs/', '/docs/index.html'].includes(url.pathname)) {
+        writeHtml(res, 200, buildDocsHtml(req, this.config), isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/server.json') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/server.json') {
         writeJson(res, 200, buildPublicServerInfo(req, this.config), {
           'Cache-Control': 'public, max-age=300',
-        });
+        }, isHeadMethod(req.method));
         return;
       }
 
@@ -1584,59 +1604,61 @@ export class RemoteMCPServer {
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/health') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/health') {
         writeJson(res, 200, {
           status: 'ok',
           service: 'sap-mcp-remote',
           transport: 'streamable-http',
           timestamp: new Date().toISOString(),
-        });
+        }, {}, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && ['/.well-known/agent-card.json', '/a2a/agent-card'].includes(url.pathname)) {
-        writeJson(res, 200, buildA2AAgentCard(req, this.config));
+      if (isPublicReadMethod(req.method) && ['/.well-known/agent-card.json', '/a2a/agent-card'].includes(url.pathname)) {
+        writeJson(res, 200, buildA2AAgentCard(req, this.config), {}, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && ['/.well-known/sap-mcp-wizard.json', '/wizard', '/wizard.json'].includes(url.pathname)) {
-        writeJson(res, 200, buildWizardInstallDescriptor(req, this.config));
+      if (isPublicReadMethod(req.method) && ['/.well-known/sap-mcp-wizard.json', '/wizard', '/wizard.json'].includes(url.pathname)) {
+        writeJson(res, 200, buildWizardInstallDescriptor(req, this.config), {}, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/wizard/downloads.json') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/wizard/downloads.json') {
         const info = buildPublicServerInfo(req, this.config);
         writeJson(res, 200, info.downloads, {
           'Cache-Control': 'public, max-age=300',
-        });
+        }, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/openapi.json') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/openapi.json') {
         writeJson(res, 200, buildOpenApiSpec(req, this.config), {
           'Cache-Control': 'public, max-age=300',
-        });
+        }, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/.well-known/x402') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/.well-known/x402') {
         writeJson(res, 200, buildX402DiscoveryDocument(req, this.config), {
           'Cache-Control': 'public, max-age=300',
-        });
+        }, isHeadMethod(req.method));
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/wizard/install.sh') {
+      if (isPublicReadMethod(req.method) && url.pathname === '/wizard/install.sh') {
+        const script = buildWizardInstallScript(req, this.config);
         res.writeHead(200, {
           'Content-Type': 'text/x-shellscript; charset=utf-8',
           'Cache-Control': 'public, max-age=300',
+          'Content-Length': Buffer.byteLength(script),
         });
-        res.end(buildWizardInstallScript(req, this.config));
+        res.end(isHeadMethod(req.method) ? undefined : script);
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/mcp' && acceptsHtmlPreview(req)) {
-        writeHtml(res, 200, buildLandingHtml(req, this.config, 'mcp'));
+      if (isPublicReadMethod(req.method) && url.pathname === '/mcp' && (isHeadMethod(req.method) || acceptsHtmlPreview(req))) {
+        writeHtml(res, 200, buildLandingHtml(req, this.config, 'mcp'), isHeadMethod(req.method));
         return;
       }
 
