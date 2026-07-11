@@ -53,7 +53,7 @@ export const MCP_SERVER_NAME = 'sap-mcp-server';
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.2.1';
+export const MCP_SERVER_VERSION = '0.6.0';
 
 /**
  * Tool categories

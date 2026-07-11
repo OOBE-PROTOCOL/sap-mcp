@@ -222,8 +222,8 @@ export function createManualMcpJsonSnippets(
 
   return [
     {
-      title: 'Hosted SAP MCP JSON (Claude, OpenClaw, generic MCP clients)',
-      description: 'Use this for clients whose config expects a root mcpServers map. Do not paste this into Codex config.toml.',
+      title: 'Hosted SAP MCP JSON (Claude and generic MCP clients)',
+      description: 'Use this for clients whose config expects a root mcpServers map. Do not paste this into Codex config.toml or OpenClaw gateway config.',
       content: formatJson({
         mcpServers: {
           [SAP_SERVER_NAME]: hostedConfig,
@@ -250,6 +250,18 @@ export function createManualMcpJsonSnippets(
         `  ${SAP_SERVER_NAME}:`,
         `    url: ${hostedUrl}`,
         '    transport: streamable-http',
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'Hosted SAP MCP YAML (OpenClaw gateway config)',
+      description: 'Use this inside OpenClaw gateway YAML config under the top-level mcp.servers section.',
+      content: [
+        'mcp:',
+        '  servers:',
+        `    ${SAP_SERVER_NAME}:`,
+        `      url: ${hostedUrl}`,
+        '      transport: streamable-http',
         '',
       ].join('\n'),
     },
@@ -367,8 +379,23 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
       ].join('\n'),
     },
     {
-      title: 'OpenClaw/Generic Payment Bridge JSON',
-      description: 'Use this for MCP clients that accept JSON mcpServers entries for one remote server plus one local stdio bridge.',
+      title: 'OpenClaw Payment Bridge JSON',
+      description: 'Use this for OpenClaw gateway JSON config, which expects named servers under mcp.servers.',
+      content: formatJson({
+        mcp: {
+          servers: {
+            [SAP_SERVER_NAME]: {
+              url: HOSTED_SAP_MCP_URL,
+              transport: 'streamable-http',
+            },
+            [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
+          },
+        },
+      }),
+    },
+    {
+      title: 'Generic Payment Bridge JSON',
+      description: 'Use this only for MCP clients that explicitly accept JSON mcpServers entries for one remote server plus one local stdio bridge.',
       content: formatJson({
         mcpServers: {
           [SAP_SERVER_NAME]: {
@@ -697,6 +724,10 @@ function buildHostedPaymentBridgeJsonContent(
   const root = isRecord(parsed) ? parsed : {};
   const paymentBridge = createNpxPaymentBridgeServerConfig();
 
+  if (target.id === 'openclaw') {
+    return buildOpenClawHostedPaymentBridgeJsonContent(root, paymentBridge);
+  }
+
   if (target.id === 'hermes') {
     const hadSapConfig = isRecord(root[SAP_SERVER_NAME]) || isRecord(root[SAP_PAYMENT_BRIDGE_SERVER_NAME]);
     return {
@@ -722,8 +753,51 @@ function buildHostedPaymentBridgeJsonContent(
 }
 
 /**
+ * @name buildOpenClawHostedPaymentBridgeJsonContent
+ * @description Builds OpenClaw gateway JSON using the documented `mcp.servers` shape.
+ */
+function buildOpenClawHostedPaymentBridgeJsonContent(
+  root: JsonRecord,
+  paymentBridge: McpServerInjectionConfig,
+): { nextContent: string; hadSapConfig: boolean } {
+  const mcp = isRecord(root.mcp) ? { ...root.mcp } : {};
+  const servers = isRecord(mcp.servers) ? { ...mcp.servers } : {};
+  const legacyServers = isRecord(root.mcpServers) ? { ...root.mcpServers } : undefined;
+  const hadSapConfig = isRecord(servers[SAP_SERVER_NAME])
+    || isRecord(servers[SAP_PAYMENT_BRIDGE_SERVER_NAME])
+    || Boolean(legacyServers && (
+      isRecord(legacyServers[SAP_SERVER_NAME])
+      || isRecord(legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME])
+    ));
+
+  servers[SAP_SERVER_NAME] = hostedJsonServerConfig({ id: 'openclaw' });
+  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = paymentBridge;
+  mcp.servers = servers;
+
+  const nextRoot: JsonRecord = {
+    ...root,
+    mcp,
+  };
+
+  if (legacyServers) {
+    delete legacyServers[SAP_SERVER_NAME];
+    delete legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME];
+    if (Object.keys(legacyServers).length > 0) {
+      nextRoot.mcpServers = legacyServers;
+    } else {
+      delete nextRoot.mcpServers;
+    }
+  }
+
+  return {
+    nextContent: formatJson(nextRoot),
+    hadSapConfig,
+  };
+}
+
+/**
  * @name yamlServerBlock
- * @description Renders a Hermes/OpenClaw-compatible YAML MCP server block.
+ * @description Renders a Hermes-compatible YAML MCP server block.
  */
 function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): string[] {
   const indent = ' '.repeat(baseIndent);
@@ -892,6 +966,61 @@ function replaceYamlHostedPaymentBridgeBlocks(content: string): { nextContent: s
   }
 
   nextLines.splice(mcpIndex + 1, 0, ...replacement);
+  return {
+    nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+    hadSapConfig,
+  };
+}
+
+/**
+ * @name replaceOpenClawYamlHostedPaymentBridgeBlocks
+ * @description Replaces or appends hosted SAP MCP plus local x402 bridge blocks under OpenClaw `mcp.servers`.
+ */
+function replaceOpenClawYamlHostedPaymentBridgeBlocks(content: string): { nextContent: string; hadSapConfig: boolean } {
+  const lines = content.split(/\r?\n/);
+  const paymentBridge = createNpxPaymentBridgeServerConfig();
+  const replacement = [
+    ...yamlHostedServerBlock(SAP_SERVER_NAME, 4),
+    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4),
+  ];
+  const mcpIndex = lines.findIndex((line) => /^mcp:\s*$/.test(line));
+
+  if (mcpIndex === -1) {
+    const prefix = content.trimEnd();
+    const appended = ['mcp:', '  servers:', ...replacement].join('\n');
+    return {
+      nextContent: `${prefix ? `${prefix}\n` : ''}${appended}\n`,
+      hadSapConfig: false,
+    };
+  }
+
+  const nextLines = [...lines];
+  let serversIndex = nextLines.findIndex((line, index) => index > mcpIndex && /^ {2}servers:\s*$/.test(line));
+  if (serversIndex === -1) {
+    serversIndex = mcpIndex + 1;
+    nextLines.splice(serversIndex, 0, '  servers:');
+  }
+
+  let hadSapConfig = false;
+  for (const serverName of [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]) {
+    const serverIndex = nextLines.findIndex((line, index) => index > serversIndex && new RegExp(`^ {4}${escapeRegExp(serverName)}:\\s*$`).test(line));
+    if (serverIndex === -1) {
+      continue;
+    }
+
+    hadSapConfig = true;
+    let endIndex = serverIndex + 1;
+    while (endIndex < nextLines.length) {
+      const line = nextLines[endIndex];
+      if (line.trim() && countLeadingSpaces(line) <= 4) {
+        break;
+      }
+      endIndex += 1;
+    }
+    nextLines.splice(serverIndex, endIndex - serverIndex);
+  }
+
+  nextLines.splice(serversIndex + 1, 0, ...replacement);
   return {
     nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
     hadSapConfig,
@@ -1108,6 +1237,10 @@ export function buildHostedPaymentBridgeContent(
 
   if (target.format === 'json') {
     return buildHostedPaymentBridgeJsonContent(content, target);
+  }
+
+  if (target.id === 'openclaw') {
+    return replaceOpenClawYamlHostedPaymentBridgeBlocks(content);
   }
 
   return replaceYamlHostedPaymentBridgeBlocks(content);

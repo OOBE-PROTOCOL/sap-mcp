@@ -25,6 +25,7 @@ const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..'
 const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
 const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
 const PAYMENT_STATS_CACHE_MS = 15_000;
+const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
 const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
 const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
 const X402_PAID_CALL_ADDON_PATH = '~/.config/mcp-sap/addons/x402-paid-call';
@@ -115,6 +116,7 @@ export interface WizardInstallDescriptor {
   requiredFor: readonly string[];
   endpoints: {
     descriptor: string;
+    downloads: string;
     installScript: string;
     mcp: string;
   };
@@ -155,9 +157,18 @@ export interface PublicServerInfo {
     serverInfo: string;
     agentCard: string;
     wizardDescriptor: string;
+    wizardDownloads: string;
     wizardInstallScript: string;
     favicon: string;
     faviconIco: string;
+  };
+  downloads: {
+    release: string;
+    desktopWizard: {
+      macosArm64Dmg: string;
+      windowsX64Setup: string;
+      linuxX64TarGz: string;
+    };
   };
   capabilities: {
     tools: boolean;
@@ -196,6 +207,16 @@ export interface PublicPaymentStats {
   totalFailedSettlements: number;
   lastSettlementAt?: string;
   ledgerAvailable: boolean;
+}
+
+/**
+ * @name X402DiscoveryDocument
+ * @description x402scan-compatible discovery fan-out document for paid hosted resources.
+ */
+export interface X402DiscoveryDocument {
+  version: 1;
+  resources: string[];
+  instructions: string;
 }
 
 type SapMcpServerInstance = Awaited<ReturnType<typeof createSapMcpServer>>;
@@ -660,9 +681,18 @@ export function buildPublicServerInfo(
       serverInfo: `${baseUrl}/server.json`,
       agentCard: `${baseUrl}/.well-known/agent-card.json`,
       wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
+      wizardDownloads: `${baseUrl}/wizard/downloads.json`,
       wizardInstallScript: `${baseUrl}/wizard/install.sh`,
       favicon: `${baseUrl}/favicon.png`,
       faviconIco: `${baseUrl}/favicon.ico`,
+    },
+    downloads: {
+      release: `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/${MCP_SERVER_VERSION}`,
+      desktopWizard: {
+        macosArm64Dmg: `${RELEASE_DOWNLOAD_BASE_URL}/SAP-MCP-Wizard-${MCP_SERVER_VERSION}-arm64.dmg`,
+        windowsX64Setup: `${RELEASE_DOWNLOAD_BASE_URL}/SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`,
+        linuxX64TarGz: `${RELEASE_DOWNLOAD_BASE_URL}/sap-mcp-wizard-${MCP_SERVER_VERSION}-x64.tar.gz`,
+      },
     },
     capabilities: {
       tools: true,
@@ -705,7 +735,7 @@ export function buildOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'SAP MCP Server',
-      version: '0.5.0',
+      version: MCP_SERVER_VERSION,
       description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments. 248 tools across Jupiter, Drift, Metaplex, Pump.fun, Raydium, Orca, and more.',
       'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use x402_paid_call or npx sap-mcp-x402-paid-call to self-pay and retry.',
       contact: {
@@ -713,6 +743,9 @@ export function buildOpenApiSpec(
         url: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
         email: 'oobe@oobeprotocol.ai',
       },
+    },
+    'x-discovery': {
+      resources: [`${baseUrl}/mcp`],
     },
     servers: [
       { url: baseUrl, description: 'SAP MCP Hosted Server' },
@@ -730,7 +763,7 @@ export function buildOpenApiSpec(
               min: '0.008',
               max: '0.20',
             },
-            protocols: [{ 'x402': {} }],
+            protocols: ['x402'],
           },
           requestBody: {
             required: true,
@@ -838,6 +871,22 @@ export function buildOpenApiSpec(
         },
       },
     },
+  };
+}
+
+/**
+ * @name buildX402DiscoveryDocument
+ * @description Builds the compatibility discovery document consumed by x402scan.
+ */
+export function buildX402DiscoveryDocument(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+): X402DiscoveryDocument {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  return {
+    version: 1,
+    resources: [`${baseUrl}/mcp`],
+    instructions: 'SAP MCP exposes paid hosted MCP tool calls at /mcp. Probe POST /mcp without a payment header to receive a parseable x402 challenge for paid tools.',
   };
 }
 
@@ -978,6 +1027,21 @@ export function buildLandingHtml(
     .list { padding-left: 18px; margin: 0; color: var(--muted); }
     .list li + li { margin-top: 8px; }
     .command { margin-top: 12px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: rgba(0,0,0,.28); padding: 13px; }
+    .download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .download-link {
+      display: grid;
+      min-height: 74px;
+      align-content: center;
+      gap: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0,0,0,.18);
+      padding: 12px;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .download-link strong { color: var(--aqua); }
+    .download-link span { color: var(--muted); font-size: .88rem; }
     .endpoint-list { display: grid; gap: 10px; margin-top: 10px; }
     .endpoint-row { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: baseline; }
     .method { color: var(--success); font: 700 .78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -986,6 +1050,7 @@ export function buildLandingHtml(
       header { grid-template-columns: 1fr; }
       img.logo { width: 76px; height: 76px; border-radius: 20px; }
       .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
+      .download-grid { grid-template-columns: 1fr; }
     }
     @media (min-width: 861px) and (max-width: 1120px) {
       .span-3, .span-4 { grid-column: span 6; }
@@ -1006,6 +1071,7 @@ export function buildLandingHtml(
         <p>${escapeHtml(info.description)}</p>
         <div class="hero-actions">
           <a class="button" href="/wizard/install.sh">Install wizard</a>
+          <a class="button secondary" href="/wizard/downloads.json">Downloads</a>
           <a class="button secondary" href="/docs">Docs</a>
           <a class="button secondary" href="/server.json">Server JSON</a>
           <a class="button secondary" href="/.well-known/agent-card.json">Agent card</a>
@@ -1037,6 +1103,17 @@ export function buildLandingHtml(
         <p>Create a local SAP MCP profile, signer, policy limits, and optional client injection. Hosted users still sign x402/pay.sh and value-moving operations from their own machine or external signer.</p>
         <div class="command"><code>${escapeHtml(installScriptCommand)}</code></div>
         <div class="command"><code>${escapeHtml(wizardCommand)}</code></div>
+      </section>
+
+      <section class="card span-5">
+        <h2>Native Downloads</h2>
+        <p>Use the desktop wizard when you want a guided setup without touching config files by hand.</p>
+        <div class="download-grid">
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}"><strong>Windows</strong><span>x64 setup .exe</span></a>
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}"><strong>macOS</strong><span>Apple Silicon .dmg</span></a>
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.linuxX64TarGz)}"><strong>Linux</strong><span>x64 tar.gz</span></a>
+        </div>
+        <p class="caption">Machine-readable links: <a href="${escapeHtml(info.endpoints.wizardDownloads)}">/wizard/downloads.json</a>.</p>
       </section>
 
       <section class="card span-5">
@@ -1352,6 +1429,7 @@ export function buildWizardInstallDescriptor(
     ],
     endpoints: {
       descriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
+      downloads: `${baseUrl}/wizard/downloads.json`,
       installScript: `${baseUrl}/wizard/install.sh`,
       mcp: `${baseUrl}/mcp`,
     },
@@ -1526,8 +1604,23 @@ export class RemoteMCPServer {
         return;
       }
 
+      if (req.method === 'GET' && url.pathname === '/wizard/downloads.json') {
+        const info = buildPublicServerInfo(req, this.config);
+        writeJson(res, 200, info.downloads, {
+          'Cache-Control': 'public, max-age=300',
+        });
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/openapi.json') {
         writeJson(res, 200, buildOpenApiSpec(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/.well-known/x402') {
+        writeJson(res, 200, buildX402DiscoveryDocument(req, this.config), {
           'Cache-Control': 'public, max-age=300',
         });
         return;

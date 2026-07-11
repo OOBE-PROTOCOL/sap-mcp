@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
+import { MCP_SERVER_VERSION } from './core/constants.js';
 
 const repoRoot = process.cwd();
 
@@ -11,11 +12,13 @@ function readText(path: string): string {
 describe('release readiness documentation and package surface', () => {
   it('ships the wizard, remote server, facilitator, docs, and PM2 example in the npm package surface', () => {
     const packageJson = JSON.parse(readText('package.json')) as {
+      version: string;
       bin: Record<string, string>;
       files: string[];
       scripts: Record<string, string>;
     };
 
+    expect(MCP_SERVER_VERSION).toBe(packageJson.version);
     expect(packageJson.bin['sap-mcp-server']).toBe('dist/bin/sap-mcp-server.js');
     expect(packageJson.bin['sap-mcp-config']).toBe('dist/config-cli.js');
     expect(packageJson.bin['sap-mcp-wizard']).toBe('dist/tui/config-wizard.js');

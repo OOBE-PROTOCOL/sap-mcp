@@ -147,10 +147,11 @@ describe('MCP client injection', () => {
 
   it('prints manual JSON snippets for hosted and local MCP setup', () => {
     const snippets = createManualMcpJsonSnippets(canonicalConfig());
-    const hosted = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON (Claude, OpenClaw, generic MCP clients)');
+    const hosted = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON (Claude and generic MCP clients)');
     const codexHosted = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP TOML (Codex config.toml)');
     const hermesGlobal = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP JSON (Hermes global mcp.json)');
     const hermesProfile = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP YAML (Hermes profile config.yaml)');
+    const openClawProfile = snippets.find((snippet) => snippet.title === 'Hosted SAP MCP YAML (OpenClaw gateway config)');
     const local = snippets.find((snippet) => snippet.title === 'Local SAP MCP JSON');
     const codexLocal = snippets.find((snippet) => snippet.title === 'Local SAP MCP TOML (Codex config.toml)');
 
@@ -158,10 +159,12 @@ describe('MCP client injection', () => {
     expect(codexHosted).toBeDefined();
     expect(hermesGlobal).toBeDefined();
     expect(hermesProfile).toBeDefined();
+    expect(openClawProfile).toBeDefined();
     expect(local).toBeDefined();
     expect(codexLocal).toBeDefined();
     expect(hosted?.description).toContain('root mcpServers map');
     expect(hosted?.description).toContain('Do not paste this into Codex');
+    expect(hosted?.description).toContain('OpenClaw gateway config');
     expect(JSON.parse(hosted?.content ?? '{}')).toEqual({
       mcpServers: {
         sap: {
@@ -180,6 +183,7 @@ describe('MCP client injection', () => {
     expect(codexHosted?.content).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(codexHosted?.content).not.toContain('transport = "streamable-http"');
     expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
+    expect(openClawProfile?.content).toContain('mcp:\n  servers:\n    sap:\n      url: https://mcp.sap.oobeprotocol.ai/mcp\n      transport: streamable-http');
     expect(JSON.parse(local?.content ?? '{}').mcpServers.sap.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
@@ -214,11 +218,15 @@ describe('MCP client injection', () => {
 
     expect(snippets.map(snippet => snippet.title)).toContain('Codex Payment Bridge TOML');
     expect(snippets.map(snippet => snippet.title)).toContain('Claude Code Payment Bridge Commands');
+    expect(snippets.map(snippet => snippet.title)).toContain('OpenClaw Payment Bridge JSON');
+    expect(snippets.map(snippet => snippet.title)).toContain('Generic Payment Bridge JSON');
     expect(snippets.map(snippet => snippet.title)).toContain('Hermes Addon: x402_paid_call');
     expect(snippets.map(snippet => snippet.title)).toContain('Local MCP Tool Alternative');
     expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('[mcp_servers.sap_payments]');
     expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]');
     expect(snippets.find(snippet => snippet.title === 'Claude Code Payment Bridge Commands')?.content).toContain('claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(snippets.find(snippet => snippet.title === 'OpenClaw Payment Bridge JSON')?.content).toContain('"mcp"');
+    expect(snippets.find(snippet => snippet.title === 'OpenClaw Payment Bridge JSON')?.content).toContain('"servers"');
     expect(install.addonId).toBe('x402-paid-call');
     expect(readFileSync(join(tempDir, 'x402-paid-call', 'manifest.json'), 'utf-8')).toContain('sap-mcp-x402-paid-call');
     expect(readFileSync(join(tempDir, 'x402-paid-call', 'README.md'), 'utf-8')).toContain('sap_x402_paid_call');
@@ -280,7 +288,7 @@ describe('MCP client injection', () => {
     expect(parsed.sap_payments.command).toMatch(/^npx/);
   });
 
-  it('builds Hermes/OpenClaw YAML hosted MCP plus local payment bridge config', () => {
+  it('builds Hermes YAML hosted MCP plus local payment bridge config', () => {
     const targetConfig: McpClientTarget = {
       id: 'hermes',
       label: 'Hermes Profile: trader',
@@ -304,6 +312,59 @@ describe('MCP client injection', () => {
     expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
     expect(built.nextContent).toContain('  keep:\n    command: keep');
     expect(built.nextContent).not.toContain('command: old');
+  });
+
+  it('builds OpenClaw YAML hosted MCP plus local payment bridge config under mcp.servers', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'openclaw',
+      label: 'OpenClaw',
+      path: '/tmp/config.yaml',
+      format: 'yaml',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, [
+      'theme: dark',
+      'mcp:',
+      '  servers:',
+      '    sap:',
+      '      command: old',
+      '    keep:',
+      '      command: keep',
+      '',
+    ].join('\n'));
+
+    expect(built.hadSapConfig).toBe(true);
+    expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: https://mcp.sap.oobeprotocol.ai/mcp\n      transport: streamable-http');
+    expect(built.nextContent).toContain('    sap_payments:\n      command:');
+    expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(built.nextContent).toContain('    keep:\n      command: keep');
+    expect(built.nextContent).not.toContain('command: old');
+  });
+
+  it('builds OpenClaw JSON hosted MCP plus local payment bridge config under mcp.servers', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'openclaw',
+      label: 'OpenClaw MCP',
+      path: '/tmp/mcp.json',
+      format: 'json',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, JSON.stringify({
+      mcpServers: {
+        sap: { command: 'legacy' },
+        keep: { command: 'keep' },
+      },
+    }));
+    const parsed = JSON.parse(built.nextContent);
+
+    expect(built.hadSapConfig).toBe(true);
+    expect(parsed.mcp.servers.sap).toEqual({
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      transport: 'streamable-http',
+    });
+    expect(parsed.mcp.servers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(parsed.mcpServers.keep.command).toBe('keep');
+    expect(parsed.mcpServers.sap).toBeUndefined();
   });
 
   it('installs hosted payment bridge configs for selected runtimes', () => {

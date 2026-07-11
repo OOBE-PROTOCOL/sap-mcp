@@ -8,6 +8,8 @@ import {
   buildPublicServerInfo,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
+  buildOpenApiSpec,
+  buildX402DiscoveryDocument,
   defaultRemoteConfig,
   resolvePublicDocsMarkdown,
   resolvePublicLogoAsset,
@@ -137,6 +139,7 @@ describe('remote MCP server config', () => {
     expect(card.authentication.schemes).toEqual(['none', 'x402']);
     expect(card.url).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(card.setup.wizard.endpoints.descriptor).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json');
+    expect(card.setup.wizard.endpoints.downloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
     expect(card.setup.wizard.security.keypairBytesExposed).toBe(false);
   });
 
@@ -206,11 +209,56 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
+    expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
+    expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
+    expect(info.downloads.desktopWizard.macosArm64Dmg).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-0.6.0-arm64.dmg');
+    expect(info.downloads.desktopWizard.linuxX64TarGz).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/sap-mcp-wizard-0.6.0-x64.tar.gz');
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
     expect(info.security.keypairBytesExposed).toBe(false);
     expect(info.security.rpcSecretsExposed).toBe(false);
     expect(JSON.stringify(info)).not.toContain('api_key=');
     expect(JSON.stringify(info)).not.toContain('/Users/keepeeto');
+  });
+
+  it('publishes x402scan-compatible discovery metadata', () => {
+    const config = {
+      port: 8787,
+      host: '127.0.0.1',
+      auth: { type: 'none' as const },
+      stateless: true,
+      rateLimit: {
+        enabled: true,
+        requestsPerMinute: 60,
+        keyPrefix: 'test:',
+      },
+    };
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+
+    const openApi = buildOpenApiSpec(req, config) as {
+      info: { version: string };
+      'x-discovery': { resources: string[] };
+      paths: {
+        '/mcp': {
+          post: {
+            'x-payment-info': {
+              protocols: string[];
+            };
+            responses: Record<string, unknown>;
+          };
+        };
+      };
+    };
+    const wellKnown = buildX402DiscoveryDocument(req, config);
+
+    expect(openApi.info.version).toBe('0.6.0');
+    expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
+    expect(openApi.paths['/mcp'].post['x-payment-info'].protocols).toEqual(['x402']);
+    expect(openApi.paths['/mcp'].post.responses['402']).toBeDefined();
+    expect(wellKnown).toEqual({
+      version: 1,
+      resources: ['https://mcp.sap.oobeprotocol.ai/mcp'],
+      instructions: expect.stringContaining('Probe POST /mcp'),
+    });
   });
 
   it('renders professional Open Graph metadata for root and MCP URL previews', () => {
@@ -237,6 +285,11 @@ describe('remote MCP server config', () => {
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
+    expect(root).toContain('Native Downloads');
+    expect(root).toContain('SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
+    expect(root).toContain('SAP-MCP-Wizard-0.6.0-arm64.dmg');
+    expect(root).toContain('sap-mcp-wizard-0.6.0-x64.tar.gz');
+    expect(root).toContain('/wizard/downloads.json');
     expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
     expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');
     expect(root).toContain('x402 Paid-Call Plugin For Agents');

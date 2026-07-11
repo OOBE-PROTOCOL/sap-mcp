@@ -7,6 +7,7 @@ const paymentsOnlySteps = ['Setup', 'Runtimes', 'Review'] as const;
 type StepName = typeof fullSteps[number];
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
+const initialStateTimeoutMs = 15_000;
 
 function normalizeProfileName(value: string): string {
   return value
@@ -31,13 +32,30 @@ function App() {
 
   useEffect(() => {
     let mounted = true;
-    window.sapMcpWizard.getInitialState()
+
+    async function loadInitialState() {
+      const bridge = window.sapMcpWizard;
+      if (!bridge?.getInitialState) {
+        throw new Error('SAP MCP Wizard desktop bridge is unavailable. Reinstall the latest wizard build, then reopen the app.');
+      }
+
+      const timeout = new Promise<never>((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error('SAP MCP Wizard startup timed out while detecting local agent runtimes. Check the desktop wizard log and try the payment-client-only setup if you already have a profile.'));
+        }, initialStateTimeoutMs);
+      });
+
+      return await Promise.race([bridge.getInitialState(), timeout]);
+    }
+
+    loadInitialState()
       .then((state) => {
         if (!mounted) return;
         setDraft(state.draft);
         setRuntimes(state.runtimes);
       })
       .catch((cause: unknown) => {
+        if (!mounted) return;
         setError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
@@ -88,9 +106,22 @@ function App() {
     return (
       <Shell>
         <main className="center-state" aria-busy="true">
-          <div className="loader" aria-hidden="true" />
-          <h1>Loading SAP MCP Wizard</h1>
-          <p>Preparing local profile, runtime detection, and hosted MCP defaults.</p>
+          {error ? (
+            <div className="boot-card">
+              <h1>Wizard startup needs attention</h1>
+              <p>{error}</p>
+              <div className="command-line"><code>npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard</code></div>
+              <button type="button" className="primary-button" onClick={() => window.location.reload()}>
+                Retry
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="loader" aria-hidden="true" />
+              <h1>Loading SAP MCP Wizard</h1>
+              <p>Preparing local profile, runtime detection, and hosted MCP defaults.</p>
+            </>
+          )}
         </main>
       </Shell>
     );
@@ -231,13 +262,16 @@ function StepContent({
         />
         <div className="setup-layout">
           <div className="setup-summary">
-            <p className="eyebrow">Hosted MCP + local trust boundary</p>
-            <h3>Remote tools, local signatures.</h3>
-            <ul>
-              <li>Hosted SAP MCP stays at {hostedUrl}</li>
-              <li>Your runtime gets a local sap_payments bridge for x402.</li>
-              <li>Wallet paths and keypair bytes never go into hosted config.</li>
-            </ul>
+            <div className="setup-kicker">
+              <span>Hosted MCP</span>
+              <code>{hostedUrl}</code>
+            </div>
+            <h3>Remote tools. Local signatures. No key custody.</h3>
+            <div className="setup-bullets">
+              <span>Profile under ~/.config/mcp-sap</span>
+              <span>Native runtime config repair</span>
+              <span>x402 paid-call bridge</span>
+            </div>
             <div className="info-strip">
               <strong>Non-custodial by design</strong>
               <span>The payment client signs x402 proofs locally with the user-controlled SAP profile or external signer.</span>

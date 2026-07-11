@@ -29,6 +29,11 @@ Introduces the SAP MCP Desktop Wizard: a guided GUI/TUI-style installer for non-
 - Expanded runtime-native config injection for Codex, Claude Desktop, Hermes global/profile configs, and OpenClaw instead of relying on one generic MCP JSON shape.
 - Added platform-aware Claude config paths for macOS, Windows, and Linux.
 - Improved Step 1 desktop wizard layout with a clearer hosted MCP/local trust-boundary explanation.
+- Added guarded desktop startup diagnostics so Windows users no longer get an infinite loading screen when preload/runtime detection fails; the wizard now times out with actionable fallback instructions and writes a desktop log.
+- Corrected OpenClaw hosted MCP and payment-bridge injection to use the documented `mcp.servers` configuration shape instead of a generic root `mcpServers` map.
+- Added hosted native wizard download metadata at `/wizard/downloads.json` and direct Windows, macOS, and Linux download cards on the public dashboard.
+- Published x402scan-compatible discovery metadata through `/.well-known/x402` and aligned the OpenAPI payment metadata with x402 resource discovery expectations.
+- Fixed the shared public server version constant so `/server.json`, `/openapi.json`, and release download links report `0.6.0` instead of stale metadata.
 - Hardened desktop release CI so Windows, macOS, and Linux jobs fail correctly when verification fails.
 - Added packaged `app.asar` verification to prevent blank renderer builds, absolute `/assets` paths, and missing Electron entrypoints from shipping.
 
