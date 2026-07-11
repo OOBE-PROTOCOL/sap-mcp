@@ -1,0 +1,164 @@
+# MagicBlock Tools
+
+> 20 MCP tools wrapping the MagicBlock ER Router, Private Payment API, and Solana VRF.
+
+---
+
+## Overview
+
+The SAP MCP server now includes 20 MagicBlock tools that wrap two MagicBlock
+API surfaces:
+
+1. **ER Router** — JSON-RPC 2.0 at `https://(devnet-)router.magicblock.app`
+2. **Private Payment API** — REST at `https://payments.magicblock.app`
+
+A third protocol (VRF) is scaffolded but requires the
+`@magicblock-labs/ephemeral-vrf-sdk` package for full implementation.
+
+All tools are registered automatically when the MCP server starts — no
+additional configuration needed.
+
+---
+
+## Pricing
+
+Two tiers, priced in USDC base units (6 decimals):
+
+| Tier | Price | Count | Tools |
+|------|-------|-------|-------|
+| READ | $0.01 | 14 | ER Router queries, health, auth, balances, swap quotes, mint checks, VRF result |
+| WRITE | $0.05 | 6 | deposit, transfer, withdraw, swap, initializeMint, VRF request |
+
+Every tool description includes its price. Every successful response
+includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
+
+---
+
+## Tools (20 total)
+
+### ER Router (6 read-only — $0.01)
+
+| Tool | Description |
+|------|-------------|
+| `magicblock_getRoutes` | List available ER nodes (identity, FQDN, fee, block time, country) |
+| `magicblock_getIdentity` | Get the identity and FQDN of the current ER validator |
+| `magicblock_getDelegationStatus` | Check if a Solana account is delegated to an ER |
+| `magicblock_getAccountInfo` | Fetch account info via the Magic Router |
+| `magicblock_getBlockhashForAccounts` | Get a blockhash for a batch of accounts (max 100) |
+| `magicblock_getSignatureStatuses` | Check transaction confirmation status |
+
+### Private Payments — Meta & Auth (3 — $0.01)
+
+| Tool | Description |
+|------|-------------|
+| `magicblock_health` | Check Private Payments API health |
+| `magicblock_challenge` | Generate a challenge string for wallet auth |
+| `magicblock_login` | Exchange signed challenge for bearer token |
+
+### Private Payments — Balance (2 — $0.01)
+
+| Tool | Description |
+|------|-------------|
+| `magicblock_balance` | Read base-chain SPL token balance |
+| `magicblock_privateBalance` | Read ephemeral-rollup SPL balance (requires auth) |
+
+### Private Payments — SPL Token Flows (3 — $0.05)
+
+| Tool | Description |
+|------|-------------|
+| `magicblock_deposit` | Build unsigned deposit tx (Solana → ER) |
+| `magicblock_transfer` | Build unsigned SPL transfer (public or private) |
+| `magicblock_withdraw` | Build unsigned withdraw tx (ER → Solana) |
+
+### Private Payments — Swap (2)
+
+| Tool | Price | Description |
+|------|-------|-------------|
+| `magicblock_swapQuote` | $0.01 | Get a swap quote between two SPL mints |
+| `magicblock_swap` | $0.05 | Build unsigned swap tx (public or private) |
+
+### Private Payments — Mint Init (2)
+
+| Tool | Price | Description |
+|------|-------|-------------|
+| `magicblock_initializeMint` | $0.05 | Build unsigned mint transfer queue init tx |
+| `magicblock_isMintInitialized` | $0.01 | Check if a mint's transfer queue exists |
+
+### VRF (2 — scaffolded)
+
+| Tool | Price | Description |
+|------|-------|-------------|
+| `magicblock_requestRandomness` | $0.05 | Request provably fair on-chain randomness |
+| `magicblock_getRandomnessResult` | $0.01 | Check if a VRF request is fulfilled |
+
+---
+
+## Auth Flow (Private Ephemeral Rollup)
+
+```
+1. magicblock_challenge({ pubkey })          → { challenge: "..." }
+2. Wallet signs the challenge string
+3. magicblock_login({ pubkey, challenge, signature })  → { token: "..." }
+4. Pass authToken on magicblock_privateBalance and magicblock_transfer (private)
+```
+
+---
+
+## Transaction Flow (Write Tools)
+
+Write tools return an unsigned transaction:
+
+```json
+{
+  "kind": "deposit",
+  "version": "legacy",
+  "transactionBase64": "AQAAAA...",
+  "sendTo": "base",
+  "recentBlockhash": "9A4VhP8M...",
+  "lastValidBlockHeight": 284512337,
+  "instructionCount": 3,
+  "requiredSigners": ["3rXKwQ1kpjBd..."]
+}
+```
+
+Expected flow:
+
+1. Call the MagicBlock tool (e.g. `magicblock_deposit`) → get `transactionBase64`
+2. Sign with `sap_sign_transaction`
+3. Submit with `sap_submit_signed_transaction` to the RPC indicated by `sendTo`
+
+---
+
+## Response Format
+
+Every successful response is wrapped with pricing metadata:
+
+```json
+{
+  "success": true,
+  "tool": "magicblock_deposit",
+  "priceUsd": "$0.05",
+  "priceBaseUnits": "50000",
+  "data": { ... }
+}
+```
+
+Error responses:
+
+```json
+{
+  "error": "MagicBlock tool magicblock_deposit failed",
+  "message": "MagicBlock API 400: ..."
+}
+```
+
+---
+
+## File Reference
+
+| File | Description |
+|------|-------------|
+| `src/tools/magicblock-tools.ts` | 20 tool registrations with HTTP client |
+| `src/tools/__tests__/magicblock-tools.test.ts` | 10 smoke tests |
+| `src/tools/index.ts` | Barrel export |
+| `src/tools/register-tools.ts` | Registration call during server init |

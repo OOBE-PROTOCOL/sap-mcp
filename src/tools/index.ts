@@ -27,3 +27,6 @@ export { registerProfileTools } from './profile-tools.js';
 
 // REAL SKILL TOOLS — list, bundle, and install SAP MCP agent skills
 export { registerSkillsTools } from './skills-tools.js';
+
+// REAL MAGICBLOCK TOOLS — 20 tools for ER Router, Private Payments, and VRF
+export { registerMagicBlockTools } from './magicblock-tools.js';

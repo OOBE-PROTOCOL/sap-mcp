@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added — MagicBlock Tools (20 tools, 3 protocols)
+
+New `magicblock-tools.ts` module registering 20 MagicBlock tools with the
+MCP server, covering ER Router (JSON-RPC), Private Payment API (REST),
+and Solana VRF (scaffolded).
+
+**Tools added:**
+
+- `src/tools/magicblock-tools.ts` — 20 tools with JSON Schema input
+  definitions, stateless HTTP client (global `fetch`, zero external deps),
+  error handling with structured responses, and per-tool pricing metadata.
+- `src/tools/__tests__/magicblock-tools.test.ts` — 10 smoke tests
+  verifying tool registration, schema shapes, pricing, and handler
+  presence.
+
+**Files modified:**
+
+- `src/tools/index.ts` — export `registerMagicBlockTools`
+- `src/tools/register-tools.ts` — call `registerMagicBlockTools` during
+  server initialization
+
+**Pricing:**
+
+| Tier | Price | Tools |
+|------|-------|-------|
+| READ | $0.01 | `getRoutes`, `getIdentity`, `getDelegationStatus`, `getAccountInfo`, `getBlockhashForAccounts`, `getSignatureStatuses`, `health`, `challenge`, `login`, `balance`, `privateBalance`, `swapQuote`, `isMintInitialized`, `getRandomnessResult` (14) |
+| WRITE | $0.05 | `deposit`, `transfer`, `withdraw`, `swap`, `initializeMint`, `requestRandomness` (6) |
+
+Every tool description includes its price ($0.01 or $0.05). Every
+successful response includes `priceUsd` and `priceBaseUnits` fields for
+SAP escrow settlement.
+
+**Validation:**
+
+- `tsc --noEmit` passed (0 errors).
+- `eslint` passed.
+- `vitest` 10/10 passed.
+
 ## 0.6.0 - 2026-07-04
 
 ### Highlights

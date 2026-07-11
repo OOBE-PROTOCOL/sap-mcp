@@ -13,6 +13,7 @@ import { registerProfileTools } from './profile-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
+import { registerMagicBlockTools } from './magicblock-tools.js';
 
 /**
  * Register all tools with the MCP server.
@@ -54,6 +55,9 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);
+
+  // Register MagicBlock tools (20 tools: ER Router, Private Payments, VRF).
+  registerMagicBlockTools(server, context);
   
   logger.debug('Tools registered', { count: getRegisteredTools(server).length });
 }
