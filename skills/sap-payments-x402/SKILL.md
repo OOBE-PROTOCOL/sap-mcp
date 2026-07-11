@@ -69,6 +69,26 @@ tool call, and returns the settlement receipt. The OOBE hosted server should
 not expose this helper when it has no local user wallet because payment signing
 belongs on the user's machine.
 
+## Transient Settlement Errors
+
+If a hosted paid call fails with `BlockhashNotFound`,
+`transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is
+behind`, `minimum context slot`, `fetch failed`, `gateway timeout`, or a
+response marked `retryable: true`, treat it as a transient x402/Solana RPC
+settlement failure. Do not say the SAP MCP server is down unless `/health`
+also fails. Do not switch to terminal/direct RPC to bypass payment, and do not
+reuse the old signed payment payload.
+
+Correct recovery:
+
+1. Call the local `sap_x402_paid_call` bridge again with the same `toolName`
+   and `arguments`.
+2. Set `maxAttempts: 5` when the runtime supports it.
+3. Let the helper create a fresh x402 challenge and payment payload for each
+   attempt.
+4. If all attempts fail, report that x402 settlement is temporarily unavailable
+   and ask the user to retry or repair the facilitator/RPC deployment.
+
 References: `USER_DOCS/03_PAYMENTS_X402_PAYSH.md` and
 `docs/06_PAYMENTS_X402_AND_PAYSH.md`.
 

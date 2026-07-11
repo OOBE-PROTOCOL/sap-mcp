@@ -56,6 +56,7 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
   --tool sap_list_all_agents \
   --arguments '{"limit":5}' \
   --max-usd 0.02 \
+  --max-attempts 5 \
   --confirm
 ```
 
@@ -75,6 +76,13 @@ supported local payment signer.
 Local stdio SAP MCP may expose `sap_x402_paid_call` when the process has a
 user-controlled wallet profile. The public hosted server should not advertise
 that helper in non-custodial mode because signing belongs on the user's machine.
+
+Transient settlement errors such as `BlockhashNotFound`,
+`transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is
+behind`, `minimum context slot`, or `fetch failed` should be retried with a
+fresh x402 challenge and payment payload. Do not reuse old signed payment
+payloads, and do not bypass the hosted paid path with direct RPC calls unless
+the user explicitly asks for local execution.
 
 ## 06.5 Payment Test Matrix
 

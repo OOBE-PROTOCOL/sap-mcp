@@ -111,6 +111,16 @@ a hosted call requires x402 payment or because the hosted server does not hold
 the user's signer. Use the hosted x402 flow first; ask the user before using a
 local stdio fallback.
 
+If a hosted paid tool returns `BlockhashNotFound`,
+`transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is
+behind`, `minimum context slot`, `fetch failed`, `gateway timeout`, or a
+response marked `retryable: true`, treat it as a transient x402/Solana RPC
+settlement error. Do not claim that SAP MCP is down unless `/health` also
+fails. Do not bypass the paid hosted path with terminal/direct RPC. Retry
+through the local `sap_x402_paid_call` bridge with the same tool name and
+arguments, `confirm: true`, and `maxAttempts: 5` so a fresh payment payload is
+created.
+
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or
 external signer." Avoid saying "signer not configured", "read-only only",

@@ -63,6 +63,7 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
   --tool sap_list_all_agents \
   --arguments '{"limit":5}' \
   --max-usd 0.02 \
+  --max-attempts 5 \
   --confirm
 ```
 
@@ -94,6 +95,9 @@ Security boundaries:
 - keypair bytes stay local and are never included in MCP client config;
 - every paid call requires `--max-usd` / `maxPriceUsd`;
 - every paid call requires `--confirm` / `confirm: true`;
+- transient settlement failures such as `BlockhashNotFound`,
+  `transaction_simulation_failed`, `node is behind`, or `fetch failed` should
+  be retried with a fresh challenge using `--max-attempts 5`;
 - encrypted wallet and external signer bridges are not faked; unsupported signing modes fail closed.
 
 ## 4. pay.sh Pay-Per-Use

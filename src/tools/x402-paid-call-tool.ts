@@ -35,7 +35,7 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
     'sap_x402_paid_call',
     {
       title: 'Pay And Call Hosted SAP MCP Tool',
-      description: 'Local helper that initializes the hosted MCP session, signs an x402 payment with the user SAP MCP profile wallet, retries the remote tool call, and returns the settlement receipt. Requires confirm: true and maxPriceUsd.',
+      description: 'Local helper that initializes the hosted MCP session, signs an x402 payment with the user SAP MCP profile wallet, retries the remote tool call, and returns the settlement receipt. Use this instead of calling hosted paid tools directly when the runtime cannot attach x402 payment headers. Requires confirm: true and maxPriceUsd.',
       inputSchema: {
         endpoint: {
           type: 'string',
@@ -77,7 +77,7 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
         const result = await executeX402PaidCall(parsed);
         return createTextResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTextResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
@@ -103,4 +103,57 @@ function parseInput(input: unknown): X402PaidCallInput {
     maxAttempts: record.maxAttempts,
     confirm: record.confirm === true,
   };
+}
+
+type X402PaidCallErrorCategory = 'x402_transient_rpc' | 'x402_client_or_config';
+
+interface X402PaidCallErrorPayload {
+  success: false;
+  error: string;
+  retryable: boolean;
+  category: X402PaidCallErrorCategory;
+  agentInstruction: string;
+  nextAction: string;
+}
+
+function formatPaidCallError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const retryable = isRetryablePaymentError(message);
+  const payload: X402PaidCallErrorPayload = {
+    success: false,
+    error: message,
+    retryable,
+    category: retryable ? 'x402_transient_rpc' : 'x402_client_or_config',
+    agentInstruction: retryable
+      ? 'This is a transient x402 settlement or Solana RPC failure, not proof that SAP MCP is down. Do not bypass hosted x402, do not switch to terminal/direct RPC, and do not reuse an old signed payment payload unless the user explicitly asks.'
+      : 'The local x402 payment bridge could not complete the call. Fix the SAP MCP profile, wallet balance, maxPriceUsd, or runtime configuration before retrying.',
+    nextAction: retryable
+      ? 'Retry sap_x402_paid_call with the same toolName and arguments, confirm: true, and maxAttempts: 5 so the helper creates a fresh x402 challenge and payment payload.'
+      : 'Run sap_profile_current and sap_x402_estimate_cost, then repair the local x402 payment bridge with sap-mcp-config wizard or the desktop wizard if needed.',
+  };
+
+  return JSON.stringify(payload, null, 2);
+}
+
+function isRetryablePaymentError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  const retryablePatterns = [
+    'blockhashnotfound',
+    'blockhash not found',
+    'transaction_simulation_failed',
+    'smart_wallet_simulation_failed',
+    '"retryable":true',
+    '"category":"facilitator_rpc"',
+    '"category":"facilitator_unavailable"',
+    'node is behind',
+    'minimum context slot',
+    'slot was skipped',
+    'fetch failed',
+    'gateway timeout',
+    'service unavailable',
+    'too many requests',
+    'rate limit',
+  ];
+
+  return retryablePatterns.some((pattern) => normalized.includes(pattern));
 }
