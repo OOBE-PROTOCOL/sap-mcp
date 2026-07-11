@@ -63,6 +63,7 @@ const FREE_TOOLS = new Set([
   'sap_profile_public_key',
   'sap_skills_list',
   'sap_skills_bundle',
+  'sap_skills_install',
   'sap_get_network_overview',
 ]);
 

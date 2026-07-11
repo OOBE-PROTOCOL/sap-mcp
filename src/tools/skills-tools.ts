@@ -226,7 +226,7 @@ function installSkillFiles(files: SkillFile[], targetDir: string): string[] {
  * @name registerSkillsTools
  * @description Registers skill pack discovery, export, and install tools.
  */
-export function registerSkillsTools(server: Server, _context: SapMcpContext): void {
+export function registerSkillsTools(server: Server, context: SapMcpContext): void {
   registerTool(
     server,
     'sap_skills_list',
@@ -299,6 +299,16 @@ export function registerSkillsTools(server: Server, _context: SapMcpContext): vo
     },
     async (input: unknown) => {
       try {
+        if (context.config.mode === 'hosted-api') {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            dryRun: true,
+            hosted: true,
+            message: 'Hosted SAP MCP cannot install files on the caller machine. Use sap_skills_bundle to download the skill files, or run the local SAP MCP wizard/addon installer on the user machine.',
+            nextAction: 'Call sap_skills_bundle with includeContents: true, or run sap-mcp-config wizard locally and choose the skills/addon install step.',
+          }, null, 2), { isError: true });
+        }
+
         const parsed = parseInput(input);
         const targetDir = resolveTargetDir(parsed);
         const files = getSkillFiles(parsed.skills);

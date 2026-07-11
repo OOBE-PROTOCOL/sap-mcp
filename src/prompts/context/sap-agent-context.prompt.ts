@@ -297,6 +297,7 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 
 ### ⚡ x402 Hosted Payment Fast Path
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
+- SAP MCP skill bootstrap tools are free: use \`sap_skills_list\`, \`sap_skills_bundle\`, and \`sap_skills_install\` directly. Do not route skill installation through \`sap_x402_paid_call\`.
 - Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.
 - Treat \`402 Payment Required\` as the expected hosted payment handshake, not as a tool failure.
 - Reuse the initialized MCP session and retry the same MCP method with the same params after payment; the x402 receipt is bound to method and params, not to JSON-RPC id.

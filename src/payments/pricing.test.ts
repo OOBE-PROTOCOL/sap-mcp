@@ -65,6 +65,12 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_profile_current')).toBe('free');
   });
 
+  it('keeps SAP MCP skill bootstrap tools free', () => {
+    expect(classifyTool('sap_skills_list')).toBe('free');
+    expect(classifyTool('sap_skills_bundle')).toBe('free');
+    expect(classifyTool('sap_skills_install')).toBe('free');
+  });
+
   it('prices enriched discovery as read premium', () => {
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',

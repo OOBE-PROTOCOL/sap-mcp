@@ -54,6 +54,14 @@ Use the bundled routing map for local MCP tool selection:
 - `skills/sap-mcp/TOOL_REFERENCE.md`
 - `USER_DOCS/05_SKILLS_AND_TOOLS.md`
 
+SAP MCP skill bootstrap tools are free context/setup tools. Call
+`sap_skills_list`, `sap_skills_bundle`, and local `sap_skills_install`
+directly. Do not route skill listing, bundling, or installation through
+`sap_x402_paid_call`. On hosted remote MCP, use `sap_skills_bundle` to download
+skill contents; the hosted server cannot install files onto the caller's local
+machine. Local installation belongs to the wizard, desktop app, addon installer,
+or a local stdio SAP MCP process.
+
 ## Hosted Remote MCP
 
 Canonical hosted endpoint:

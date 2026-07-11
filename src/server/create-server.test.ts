@@ -316,4 +316,22 @@ describe('createSapMcpServer', () => {
     expect(installText).toContain('"dryRun": true');
     expect(installText).toContain('requiresConfirmation');
   });
+
+  it('does not install skill files from hosted-api mode', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig({
+      mode: 'hosted-api',
+    })));
+
+    const install = await server.toolHandlers?.sap_skills_install({
+      agent: 'custom',
+      targetDir: join(tmpdir(), 'sap-mcp-hosted-skills-test'),
+      confirm: true,
+    });
+
+    const installText = install?.content[0]?.text ?? '';
+
+    expect(install?.isError).toBe(true);
+    expect(installText).toContain('Hosted SAP MCP cannot install files');
+    expect(installText).toContain('sap_skills_bundle');
+  });
 });
