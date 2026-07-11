@@ -3,13 +3,29 @@
  *
  * Verifies that all 20 MagicBlock tools are registered correctly
  * and that the registration function completes without errors.
- * Tool execution is tested via integration tests with a running server.
  */
 
 import { describe, expect, it } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerMagicBlockTools } from '../magicblock-tools.js';
 import type { SapMcpContext } from '../../core/types.js';
+
+// ─── Typed interface for the MCP server's internal tool store ─────
+
+interface RegisteredTool {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: {
+    readonly type: string;
+    readonly properties: Record<string, unknown>;
+    readonly required?: readonly string[];
+  };
+}
+
+interface RegisteredServer extends Server {
+  tools?: RegisteredTool[];
+  toolHandlers?: Record<string, (input: unknown) => Promise<unknown>>;
+}
 
 // ─── Mock context ────────────────────────────────────────────────
 
@@ -40,6 +56,21 @@ function createServer(): Server {
   );
 }
 
+function getMagicBlockTools(server: Server): RegisteredTool[] {
+  const registered = server as RegisteredServer;
+  return (registered.tools ?? []).filter((t) => t.name.startsWith('magicblock_'));
+}
+
+function getMagicBlockHandlers(server: Server): Record<string, (input: unknown) => Promise<unknown>> {
+  const registered = server as RegisteredServer;
+  const all = registered.toolHandlers ?? {};
+  const mbHandlers: Record<string, (input: unknown) => Promise<unknown>> = {};
+  for (const [name, handler] of Object.entries(all)) {
+    if (name.startsWith('magicblock_')) mbHandlers[name] = handler;
+  }
+  return mbHandlers;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  Tests
 // ═══════════════════════════════════════════════════════════════════
@@ -53,22 +84,13 @@ describe('MagicBlock tools registration', () => {
   it('registers tools in the server store (20 magicblock_ tools)', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // The sdk-compat layer stores tools on the server instance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = (server as any);
-    const tools = store.tools ?? [];
-    const mbTools = tools.filter((t: { name: string }) => t.name.startsWith('magicblock_'));
-    expect(mbTools).toHaveLength(20);
+    expect(getMagicBlockTools(server)).toHaveLength(20);
   });
 
   it('registers all 6 ER Router tools', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const names = tools.map((t: { name: string }) => t.name);
+    const names = getMagicBlockTools(server).map((t) => t.name);
     expect(names).toContain('magicblock_getRoutes');
     expect(names).toContain('magicblock_getIdentity');
     expect(names).toContain('magicblock_getDelegationStatus');
@@ -80,23 +102,13 @@ describe('MagicBlock tools registration', () => {
   it('registers all 12 Private Payment API tools', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const names = tools.map((t: { name: string }) => t.name);
+    const names = getMagicBlockTools(server).map((t) => t.name);
     const expected = [
-      'magicblock_health',
-      'magicblock_challenge',
-      'magicblock_login',
-      'magicblock_balance',
-      'magicblock_privateBalance',
-      'magicblock_deposit',
-      'magicblock_transfer',
-      'magicblock_withdraw',
-      'magicblock_swapQuote',
-      'magicblock_swap',
-      'magicblock_initializeMint',
-      'magicblock_isMintInitialized',
+      'magicblock_health', 'magicblock_challenge', 'magicblock_login',
+      'magicblock_balance', 'magicblock_privateBalance',
+      'magicblock_deposit', 'magicblock_transfer', 'magicblock_withdraw',
+      'magicblock_swapQuote', 'magicblock_swap',
+      'magicblock_initializeMint', 'magicblock_isMintInitialized',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -106,10 +118,7 @@ describe('MagicBlock tools registration', () => {
   it('registers 2 VRF tools', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const names = tools.map((t: { name: string }) => t.name);
+    const names = getMagicBlockTools(server).map((t) => t.name);
     expect(names).toContain('magicblock_requestRandomness');
     expect(names).toContain('magicblock_getRandomnessResult');
   });
@@ -117,16 +126,11 @@ describe('MagicBlock tools registration', () => {
   it('every tool has a description with price info', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const mbTools = tools.filter((t: { name: string }) => t.name.startsWith('magicblock_'));
+    const mbTools = getMagicBlockTools(server);
     expect(mbTools).toHaveLength(20);
-
     for (const tool of mbTools) {
       expect(tool.description).toBeTruthy();
       expect(tool.description.length).toBeGreaterThan(20);
-      // Every description must include a price ($0.01 or $0.05)
       expect(tool.description).toMatch(/\$0\.\d{2}/);
     }
   });
@@ -134,10 +138,7 @@ describe('MagicBlock tools registration', () => {
   it('every tool has an inputSchema with type: object', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const mbTools = tools.filter((t: { name: string }) => t.name.startsWith('magicblock_'));
+    const mbTools = getMagicBlockTools(server);
     for (const tool of mbTools) {
       expect(tool.inputSchema).toBeDefined();
       expect(tool.inputSchema.type).toBe('object');
@@ -148,45 +149,28 @@ describe('MagicBlock tools registration', () => {
   it('READ tools have $0.01 in description (14 tools)', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const readTools = tools.filter((t: { name: string; description: string }) =>
-      t.name.startsWith('magicblock_') && t.description.includes('$0.01'),
-    );
+    const readTools = getMagicBlockTools(server).filter((t) => t.description.includes('$0.01'));
     expect(readTools).toHaveLength(14);
   });
 
   it('WRITE tools have $0.05 in description (6 tools)', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const writeTools = tools.filter((t: { name: string; description: string }) =>
-      t.name.startsWith('magicblock_') && t.description.includes('$0.05'),
-    );
+    const writeTools = getMagicBlockTools(server).filter((t) => t.description.includes('$0.05'));
     expect(writeTools).toHaveLength(6);
   });
 
   it('every tool has a handler registered', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const store = (server as any);
-    const handlers = store.toolHandlers ?? {};
-    const mbHandlerNames = Object.keys(handlers).filter((n) => n.startsWith('magicblock_'));
-    expect(mbHandlerNames).toHaveLength(20);
+    const handlers = getMagicBlockHandlers(server);
+    expect(Object.keys(handlers)).toHaveLength(20);
   });
 
   it('VRF tools have real descriptions without not-yet-implemented', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = (server as any).tools ?? [];
-    const vrfTools = tools.filter((t: { name: string }) =>
+    const vrfTools = getMagicBlockTools(server).filter((t) =>
       t.name === 'magicblock_requestRandomness' || t.name === 'magicblock_getRandomnessResult',
     );
     expect(vrfTools).toHaveLength(2);
@@ -194,11 +178,9 @@ describe('MagicBlock tools registration', () => {
       expect(t.description).not.toContain('not yet implemented');
       expect(t.description).not.toContain('Requires @magicblock-labs');
     }
-    // requestRandomness must reference the VRF program ID
-    const reqTool = vrfTools.find((t: { name: string }) => t.name === 'magicblock_requestRandomness');
+    const reqTool = vrfTools.find((t) => t.name === 'magicblock_requestRandomness');
     expect(reqTool?.description).toContain('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
-    // getRandomnessResult must reference on-chain account reading
-    const resTool = vrfTools.find((t: { name: string }) => t.name === 'magicblock_getRandomnessResult');
+    const resTool = vrfTools.find((t) => t.name === 'magicblock_getRandomnessResult');
     expect(resTool?.description).toContain('RandomnessRequest');
   });
 });

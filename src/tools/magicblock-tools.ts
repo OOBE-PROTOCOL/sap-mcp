@@ -17,70 +17,361 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { PublicKey, TransactionInstruction, Transaction } from '@solana/web3.js';
+import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
 
 // ═══════════════════════════════════════════════════════════════════
+//  Shared Types
+// ═══════════════════════════════════════════════════════════════════
+
+type RouterEndpoint = 'mainnet' | 'devnet';
+type Visibility = 'public' | 'private';
+type BalanceLocation = 'base' | 'ephemeral';
+type SwapMode = 'ExactIn' | 'ExactOut';
+type Encoding = 'base64' | 'base64+zstd';
+
+/** JSON Schema property definition for MCP tool input schemas. */
+interface JsonSchemaProperty {
+  readonly type: string;
+  readonly description: string;
+  readonly enum?: readonly string[];
+  readonly items?: JsonSchemaProperty;
+  readonly properties?: Record<string, JsonSchemaProperty>;
+  readonly additionalProperties?: boolean;
+}
+
+/** Complete JSON Schema object for an MCP tool input. */
+interface JsonSchema {
+  readonly type: 'object';
+  readonly properties: Record<string, JsonSchemaProperty>;
+  readonly required?: readonly string[];
+}
+
+/** VRF callback account metadata. */
+interface CallbackAccountMeta {
+  readonly pubkey: string;
+  readonly isSigner?: boolean;
+  readonly isWritable?: boolean;
+}
+
+// ─── ER Router Response Types ─────────────────────────────────────
+
+interface ErRoute {
+  readonly identity: string;
+  readonly fqdn: string;
+  readonly baseFee: number;
+  readonly blockTimeMs: number;
+  readonly countryCode: string;
+}
+
+interface ErIdentity {
+  readonly identity: string;
+  readonly fqdn: string;
+}
+
+interface DelegationRecord {
+  readonly authority: string;
+  readonly owner: string;
+  readonly delegationSlot: number;
+  readonly lamports: number;
+}
+
+interface DelegationStatus {
+  readonly isDelegated: boolean;
+  readonly fqdn?: string;
+  readonly delegationRecord?: DelegationRecord;
+}
+
+interface AccountInfoValue {
+  readonly data: readonly string[];
+  readonly executable: boolean;
+  readonly lamports: number;
+  readonly owner: string;
+  readonly rentEpoch: string;
+  readonly space: number;
+}
+
+interface AccountInfoResponse {
+  readonly context: { readonly apiVersion: string; readonly slot: number };
+  readonly value: AccountInfoValue;
+}
+
+interface BlockhashResponse {
+  readonly blockhash: string;
+  readonly lastValidBlockHeight: number;
+}
+
+interface SignatureStatusEntry {
+  readonly confirmationStatus?: 'finalized' | 'confirmed' | 'processed';
+  readonly confirmations?: number | null;
+  readonly err?: unknown;
+  readonly slot?: number;
+}
+
+interface SignatureStatusesResponse {
+  readonly context: { readonly apiVersion: string; readonly slot: number };
+  readonly value: readonly SignatureStatusEntry[];
+}
+
+// ─── Private Payment API Response Types ───────────────────────────
+
+interface HealthResponse {
+  readonly status: string;
+}
+
+interface ChallengeResponse {
+  readonly challenge: string;
+}
+
+interface LoginResponse {
+  readonly token: string;
+}
+
+interface BalanceResponse {
+  readonly address: string;
+  readonly mint: string;
+  readonly ata: string;
+  readonly location: BalanceLocation;
+  readonly balance: string;
+}
+
+interface UnsignedTransactionResponse {
+  readonly kind: string;
+  readonly version: 'legacy' | 'v0';
+  readonly transactionBase64: string;
+  readonly sendTo: 'base' | 'ephemeral';
+  readonly recentBlockhash: string;
+  readonly lastValidBlockHeight: number;
+  readonly instructionCount: number;
+  readonly requiredSigners: readonly string[];
+  readonly validator?: string;
+}
+
+interface SwapQuoteResponse {
+  readonly inputMint: string;
+  readonly inAmount: string;
+  readonly outputMint: string;
+  readonly outAmount: string;
+  readonly otherAmountThreshold: string;
+  readonly swapMode: SwapMode;
+  readonly slippageBps: number;
+  readonly priceImpactPct: string;
+  readonly routePlan: readonly unknown[];
+  readonly contextSlot: number;
+  readonly timeTaken: number;
+  readonly [key: string]: unknown;
+}
+
+interface SwapTransactionResponse {
+  readonly swapTransaction: string;
+  readonly lastValidBlockHeight: number;
+  readonly prioritizationFeeLamports?: number;
+  readonly privateTransfer?: {
+    readonly stashAta: string;
+    readonly hydraCrankPda: string;
+    readonly shuttleId: number;
+  };
+  readonly [key: string]: unknown;
+}
+
+interface MintInitStatusResponse {
+  readonly initialized: boolean;
+}
+
+// ─── VRF Response Types ───────────────────────────────────────────
+
+interface VrfRequestResult {
+  readonly requestKey: string;
+  readonly vrfProgramId: string;
+  readonly oracleQueue: string;
+  readonly transactionBase64: string;
+  readonly sendTo: 'base';
+  readonly callbackProgramId: string;
+  readonly callerSeedHash: string;
+  readonly note: string;
+}
+
+interface VrfRandomnessResult {
+  readonly fulfilled: boolean;
+  readonly requestKey: string;
+  readonly randomness: readonly number[] | null;
+  readonly randomnessHex: string | null;
+  readonly callerSeed: string;
+  readonly owner: string;
+  readonly lamports: number;
+  readonly executable: boolean;
+  readonly rentEpoch: number | undefined;
+  readonly dataLength: number;
+  readonly message: string;
+}
+
+// ─── Tool Input Interfaces ────────────────────────────────────────
+
+interface EndpointInput { readonly endpoint?: RouterEndpoint }
+interface AccountInput { readonly account: string; readonly endpoint?: RouterEndpoint }
+interface AccountsInput { readonly accounts: readonly string[]; readonly endpoint?: RouterEndpoint }
+interface SignaturesInput { readonly signatures: readonly string[]; readonly endpoint?: RouterEndpoint }
+interface AccountInfoInput { readonly account: string; readonly encoding?: Encoding; readonly endpoint?: RouterEndpoint }
+
+interface ChallengeInput { readonly pubkey: string; readonly cluster?: string; readonly mock?: boolean }
+interface LoginInput { readonly pubkey: string; readonly challenge: string; readonly signature: string; readonly cluster?: string; readonly mock?: boolean }
+interface BalanceInput { readonly address: string; readonly mint: string; readonly cluster?: string }
+interface PrivateBalanceInput { readonly address: string; readonly mint: string; readonly cluster?: string; readonly authToken: string }
+
+interface DepositInput {
+  readonly owner: string;
+  readonly amount: number;
+  readonly mint?: string;
+  readonly cluster?: string;
+  readonly validator?: string;
+  readonly initIfMissing?: boolean;
+  readonly initVaultIfMissing?: boolean;
+  readonly initAtasIfMissing?: boolean;
+  readonly idempotent?: boolean;
+}
+
+interface TransferInput {
+  readonly from: string;
+  readonly to: string;
+  readonly mint: string;
+  readonly amount: number;
+  readonly visibility: Visibility;
+  readonly fromBalance: BalanceLocation;
+  readonly toBalance: BalanceLocation;
+  readonly cluster?: string;
+  readonly validator?: string;
+  readonly authToken?: string;
+  readonly initIfMissing?: boolean;
+  readonly initAtasIfMissing?: boolean;
+  readonly initVaultIfMissing?: boolean;
+  readonly memo?: string;
+  readonly minDelayMs?: string;
+  readonly maxDelayMs?: string;
+  readonly clientRefId?: string;
+  readonly split?: number;
+  readonly gasless?: boolean;
+  readonly legacy?: boolean;
+}
+
+interface WithdrawInput {
+  readonly owner: string;
+  readonly mint: string;
+  readonly amount: number;
+  readonly cluster?: string;
+  readonly validator?: string;
+  readonly initIfMissing?: boolean;
+  readonly initAtasIfMissing?: boolean;
+  readonly escrowIndex?: number;
+  readonly idempotent?: boolean;
+}
+
+interface SwapQuoteInput {
+  readonly inputMint: string;
+  readonly outputMint: string;
+  readonly amount: string;
+  readonly slippageBps?: number;
+  readonly swapMode?: SwapMode;
+  readonly onlyDirectRoutes?: boolean;
+  readonly restrictIntermediateTokens?: boolean;
+  readonly platformFeeBps?: number;
+  readonly maxAccounts?: number;
+}
+
+interface SwapInput {
+  readonly userPublicKey: string;
+  readonly quoteResponse: SwapQuoteResponse;
+  readonly visibility?: Visibility;
+  readonly destination?: string;
+  readonly minDelayMs?: string;
+  readonly maxDelayMs?: string;
+  readonly split?: number;
+  readonly clientRefId?: string;
+  readonly validator?: string;
+  readonly wrapAndUnwrapSol?: boolean;
+  readonly asLegacyTransaction?: boolean;
+}
+
+interface InitializeMintInput {
+  readonly owner: string;
+  readonly mint: string;
+  readonly cluster?: string;
+  readonly validator?: string;
+}
+
+interface IsMintInitializedInput {
+  readonly mint: string;
+  readonly cluster?: string;
+  readonly validator?: string;
+}
+
+interface VrfRequestInput {
+  readonly payer: string;
+  readonly callbackProgramId: string;
+  readonly callbackDiscriminator: string;
+  readonly callerSeed: string;
+  readonly callbackAccounts: readonly CallbackAccountMeta[];
+  readonly ephemeral?: boolean;
+  readonly endpoint?: RouterEndpoint;
+}
+
+interface VrfResultInput {
+  readonly requestKey: string;
+  readonly endpoint?: RouterEndpoint;
+}
+
+// ─── Pricing Response ─────────────────────────────────────────────
+
+interface ToolSuccessResponse<T> {
+  readonly success: true;
+  readonly tool: string;
+  readonly priceUsd: string;
+  readonly priceBaseUnits: string;
+  readonly data: T;
+}
+
+interface ToolErrorResponse {
+  readonly error: string;
+  readonly message: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  Constants
 // ═══════════════════════════════════════════════════════════════════
 
-const ROUTER_ENDPOINTS = {
+const ROUTER_ENDPOINTS: Readonly<Record<RouterEndpoint, string>> = {
   mainnet: 'https://router.magicblock.app',
   devnet: 'https://devnet-router.magicblock.app',
-} as const;
+};
 
 const PAYMENTS_ENDPOINT = 'https://payments.magicblock.app';
 const JSONRPC_VERSION = '2.0';
 
-// ═══════════════════════════════════════════════════════════════════
-//  VRF Program Constants (from ephemeral_vrf_sdk::consts)
-// ═══════════════════════════════════════════════════════════════════
+// ─── VRF Program Constants (from ephemeral_vrf_sdk::consts) ───────
 
-/** VRF program ID (mainnet + devnet). */
 const VRF_PROGRAM_ID = new PublicKey('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
-/** VRF callback signer PDA (verifies callback is invoked by the VRF program). */
 const VRF_PROGRAM_IDENTITY = new PublicKey('9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw');
-/** Base-layer oracle queue (mainnet + devnet). */
 const DEFAULT_QUEUE = new PublicKey('Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh');
-/** Ephemeral Rollup oracle queue (mainnet + devnet). */
 const DEFAULT_EPHEMERAL_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc');
 
-/** $0.01 in USDC base units (6 decimals). */
+// ─── Pricing Constants ────────────────────────────────────────────
+
 const READ_PRICE_USDC = 10_000n;
-/** $0.05 in USDC base units (6 decimals). */
 const WRITE_PRICE_USDC = 50_000n;
 
-// ═══════════════════════════════════════════════════════════════════
-//  Pricing
-// ═══════════════════════════════════════════════════════════════════
-
-const READ_TOOLS = new Set([
-  'magicblock_getRoutes',
-  'magicblock_getIdentity',
-  'magicblock_getDelegationStatus',
-  'magicblock_getAccountInfo',
-  'magicblock_getBlockhashForAccounts',
-  'magicblock_getSignatureStatuses',
-  'magicblock_health',
-  'magicblock_challenge',
-  'magicblock_login',
-  'magicblock_balance',
-  'magicblock_privateBalance',
-  'magicblock_swapQuote',
-  'magicblock_isMintInitialized',
-  'magicblock_getRandomnessResult',
+const READ_TOOLS = new Set<string>([
+  'magicblock_getRoutes', 'magicblock_getIdentity', 'magicblock_getDelegationStatus',
+  'magicblock_getAccountInfo', 'magicblock_getBlockhashForAccounts', 'magicblock_getSignatureStatuses',
+  'magicblock_health', 'magicblock_challenge', 'magicblock_login',
+  'magicblock_balance', 'magicblock_privateBalance', 'magicblock_swapQuote',
+  'magicblock_isMintInitialized', 'magicblock_getRandomnessResult',
 ]);
 
-const WRITE_TOOLS = new Set([
-  'magicblock_deposit',
-  'magicblock_transfer',
-  'magicblock_withdraw',
-  'magicblock_swap',
-  'magicblock_initializeMint',
-  'magicblock_requestRandomness',
+const WRITE_TOOLS = new Set<string>([
+  'magicblock_deposit', 'magicblock_transfer', 'magicblock_withdraw',
+  'magicblock_swap', 'magicblock_initializeMint', 'magicblock_requestRandomness',
 ]);
 
 function getPriceForTool(toolName: string): bigint {
@@ -93,10 +384,15 @@ function getPriceForTool(toolName: string): bigint {
 //  HTTP Helpers (stateless — zero external deps, uses global fetch)
 // ═══════════════════════════════════════════════════════════════════
 
+interface JsonRpcResponse<T> {
+  readonly result?: T;
+  readonly error?: { readonly code: number; readonly message: string };
+}
+
 async function rpcCall<T>(
-  endpoint: 'mainnet' | 'devnet',
+  endpoint: RouterEndpoint,
   method: string,
-  params: unknown[],
+  params: readonly unknown[],
 ): Promise<T> {
   const url = ROUTER_ENDPOINTS[endpoint];
   const res = await fetch(url, {
@@ -106,16 +402,15 @@ async function rpcCall<T>(
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`MagicBlock Router ${res.status}: ${text.slice(0, 200)}`);
-  const json = JSON.parse(text) as { result?: T; error?: { code: number; message: string } };
+  const json = JSON.parse(text) as JsonRpcResponse<T>;
   if (json.error) throw new Error(`JSON-RPC error ${json.error.code}: ${json.error.message}`);
-  return json.result as T;
+  if (!json.result) throw new Error(`JSON-RPC response missing result for ${method}`);
+  return json.result;
 }
 
-async function apiGet<T>(
-  path: string,
-  query?: Record<string, string | null | undefined>,
-  authToken?: string,
-): Promise<T> {
+type QueryParams = Record<string, string | undefined>;
+
+async function apiGet<T>(path: string, query?: QueryParams, authToken?: string): Promise<T> {
   const url = new URL(PAYMENTS_ENDPOINT + path);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -130,11 +425,7 @@ async function apiGet<T>(
   return JSON.parse(text) as T;
 }
 
-async function apiPost<T>(
-  path: string,
-  body: Record<string, unknown>,
-  authToken?: string,
-): Promise<T> {
+async function apiPost<T>(path: string, body: object, authToken?: string): Promise<T> {
   const url = PAYMENTS_ENDPOINT + path;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -144,25 +435,20 @@ async function apiPost<T>(
   return JSON.parse(text) as T;
 }
 
-function stripNullish(
-  obj: Record<string, unknown> | undefined,
-  exclude: readonly string[] = [],
-): Record<string, unknown> {
-  if (!obj) return {};
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value != null && !exclude.includes(key)) result[key] = value;
+/** Strip nullish values from an object. Returns a new object with only non-null values. */
+function stripNullish<T extends object>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const [key, value] of Object.entries(obj) as [keyof T, T[keyof T]][]) {
+    if (value != null) result[key] = value;
   }
   return result;
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  Tool Schema Definitions (JSON Schema for MCP)
+//  JSON Schema Helpers
 // ═══════════════════════════════════════════════════════════════════
 
-type JsonSchema = Record<string, unknown>;
-
-function schema(properties: JsonSchema, required?: string[]): JsonSchema {
+function schema(properties: Record<string, JsonSchemaProperty>, required?: readonly string[]): JsonSchema {
   return {
     type: 'object',
     properties,
@@ -170,22 +456,19 @@ function schema(properties: JsonSchema, required?: string[]): JsonSchema {
   };
 }
 
-const pubkeyField = (desc: string): JsonSchema => ({ type: 'string', description: desc });
-const stringField = (desc: string): JsonSchema => ({ type: 'string', description: desc });
-const numberField = (desc: string): JsonSchema => ({ type: 'number', description: desc });
-const booleanField = (desc: string): JsonSchema => ({ type: 'boolean', description: desc });
-const enumField = (desc: string, values: string[]): JsonSchema => ({
-  type: 'string',
-  enum: values,
-  description: desc,
-});
-const arrayField = (desc: string, items: JsonSchema): JsonSchema => ({
-  type: 'array',
-  items,
-  description: desc,
-});
+const f = {
+  pubkey: (d: string): JsonSchemaProperty => ({ type: 'string', description: d }),
+  string: (d: string): JsonSchemaProperty => ({ type: 'string', description: d }),
+  number: (d: string): JsonSchemaProperty => ({ type: 'number', description: d }),
+  boolean: (d: string): JsonSchemaProperty => ({ type: 'boolean', description: d }),
+  enum: (d: string, values: readonly string[]): JsonSchemaProperty => ({ type: 'string', enum: values, description: d }),
+  array: (d: string, items: JsonSchemaProperty): JsonSchemaProperty => ({ type: 'array', items, description: d }),
+  object: (d: string, props: Record<string, JsonSchemaProperty>): JsonSchemaProperty => ({ type: 'object', properties: props, description: d }),
+};
 
-const endpointField = enumField("MagicBlock Router endpoint: 'mainnet' or 'devnet'", ['mainnet', 'devnet']);
+const endpointField = f.enum("MagicBlock Router endpoint: 'mainnet' or 'devnet'", ['mainnet', 'devnet']);
+const clusterField = f.string("Cluster: 'mainnet', 'devnet', or custom RPC URL");
+const validatorField = f.string('Optional ER validator pubkey. Defaults to the selected ephemeral RPC identity.');
 
 // ═══════════════════════════════════════════════════════════════════
 //  Registration
@@ -196,41 +479,35 @@ const endpointField = enumField("MagicBlock Router endpoint: 'mainnet' or 'devne
  * @description Registers 20 MagicBlock tools (ER Router, Private Payments, VRF)
  *   with the MCP server. Each tool is priced at $0.01 (read) or $0.05 (write).
  * @param server - MCP server receiving tool definitions and handlers.
- * @param _context - Shared runtime context (unused — MagicBlock APIs are stateless).
+ * @param context - Shared runtime context (VRF getRandomnessResult uses the Solana connection).
  */
-export function registerMagicBlockTools(server: Server, _context: SapMcpContext): void {
+export function registerMagicBlockTools(server: Server, context: SapMcpContext): void {
   logger.debug('Registering MagicBlock tools');
-
   let registered = 0;
 
-  // ─── Helper to register a single tool ───────────────────────────
-  function tool(
+  function register<TInput extends object>(
     name: string,
     description: string,
     inputSchema: JsonSchema,
-    handler: (input: Record<string, unknown>) => Promise<unknown>,
+    handler: (input: TInput) => Promise<unknown>,
   ): void {
     registerTool(server, name, { title: name.replace(/_/g, ' '), description, inputSchema }, handler);
     registered++;
   }
 
-  // ─── Helper for error handling ──────────────────────────────────
   function handleError(toolName: string, error: unknown) {
     logger.error(`MagicBlock tool failed: ${toolName}`, { error });
-    return createTextResponse(
-      JSON.stringify({
-        error: `MagicBlock tool ${toolName} failed`,
-        message: error instanceof Error ? error.message : 'Unknown error',
-      }, null, 2),
-      { isError: true },
-    );
+    const errorResponse: ToolErrorResponse = {
+      error: `MagicBlock tool ${toolName} failed`,
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    return createTextResponse(JSON.stringify(errorResponse, null, 2), { isError: true });
   }
 
-  // ─── Helper to format success responses ─────────────────────────
-  function success(data: unknown, toolName: string) {
+  function success<T>(data: T, toolName: string) {
     const price = getPriceForTool(toolName);
     const priceUsd = Number(price) / 1e6;
-    const response = {
+    const response: ToolSuccessResponse<T> = {
       success: true,
       tool: toolName,
       priceUsd: `$${priceUsd.toFixed(2)}`,
@@ -240,90 +517,81 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
     return createTextResponse(JSON.stringify(response, null, 2));
   }
 
+  function parseInput<T extends object>(raw: unknown): T {
+    return raw as T;
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  ER Router (6 read-only tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_getRoutes',
+  register<EndpointInput>('magicblock_getRoutes',
     'List available Ephemeral Rollup nodes from the Magic Router (identity, FQDN, fee, block time, country). Price: $0.01.',
     schema({ endpoint: endpointField }),
-    async (input) => {
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const routes = await rpcCall<unknown[]>(endpoint, 'getRoutes', []);
+        const { endpoint = 'devnet' } = parseInput<EndpointInput>(raw);
+        const routes = await rpcCall<readonly ErRoute[]>(endpoint, 'getRoutes', []);
         return success({ routes }, 'magicblock_getRoutes');
       } catch (e) { return handleError('magicblock_getRoutes', e); }
     },
   );
 
-  tool('magicblock_getIdentity',
+  register<EndpointInput>('magicblock_getIdentity',
     'Get the identity and FQDN of the current ER Validator node. Price: $0.01.',
     schema({ endpoint: endpointField }),
-    async (input) => {
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const identity = await rpcCall<{ identity: string; fqdn: string }>(endpoint, 'getIdentity', []);
+        const { endpoint = 'devnet' } = parseInput<EndpointInput>(raw);
+        const identity = await rpcCall<ErIdentity>(endpoint, 'getIdentity', []);
         return success(identity, 'magicblock_getIdentity');
       } catch (e) { return handleError('magicblock_getIdentity', e); }
     },
   );
 
-  tool('magicblock_getDelegationStatus',
+  register<AccountInput>('magicblock_getDelegationStatus',
     'Check whether a Solana account is delegated to an Ephemeral Rollup. Returns authority, owner, delegation slot, and lamports. Price: $0.01.',
-    schema({ account: pubkeyField('Account pubkey to check delegation status for'), endpoint: endpointField }, ['account']),
-    async (input) => {
+    schema({ account: f.pubkey('Account pubkey to check delegation status for'), endpoint: endpointField }, ['account']),
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const status = await rpcCall(endpoint, 'getDelegationStatus', [input.account]);
+        const { account, endpoint = 'devnet' } = parseInput<AccountInput>(raw);
+        const status = await rpcCall<DelegationStatus>(endpoint, 'getDelegationStatus', [account]);
         return success(status, 'magicblock_getDelegationStatus');
       } catch (e) { return handleError('magicblock_getDelegationStatus', e); }
     },
   );
 
-  tool('magicblock_getAccountInfo',
+  register<AccountInfoInput>('magicblock_getAccountInfo',
     'Fetch account information (data, lamports, owner, executable, space) via the Magic Router. Price: $0.01.',
-    schema({
-      account: pubkeyField('Account pubkey to fetch info for'),
-      encoding: enumField('Encoding for account data', ['base64', 'base64+zstd']),
-      endpoint: endpointField,
-    }, ['account']),
-    async (input) => {
+    schema({ account: f.pubkey('Account pubkey to fetch info for'), encoding: f.enum('Encoding for account data', ['base64', 'base64+zstd']), endpoint: endpointField }, ['account']),
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const encoding = (input.encoding as string) ?? 'base64';
-        const info = await rpcCall(endpoint, 'getAccountInfo', [input.account, { encoding }]);
+        const { account, encoding = 'base64', endpoint = 'devnet' } = parseInput<AccountInfoInput>(raw);
+        const info = await rpcCall<AccountInfoResponse>(endpoint, 'getAccountInfo', [account, { encoding }]);
         return success(info, 'magicblock_getAccountInfo');
       } catch (e) { return handleError('magicblock_getAccountInfo', e); }
     },
   );
 
-  tool('magicblock_getBlockhashForAccounts',
+  register<AccountsInput>('magicblock_getBlockhashForAccounts',
     'Get a blockhash and last valid block height for a batch of account addresses (max 100). Price: $0.01.',
-    schema({
-      accounts: arrayField('Array of account addresses (max 100)', pubkeyField('Account pubkey')),
-      endpoint: endpointField,
-    }, ['accounts']),
-    async (input) => {
+    schema({ accounts: f.array('Array of account addresses (max 100)', f.pubkey('Account pubkey')), endpoint: endpointField }, ['accounts']),
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const accounts = input.accounts as string[];
-        const blockhash = await rpcCall(endpoint, 'getBlockhashForAccounts', [accounts]);
+        const { accounts, endpoint = 'devnet' } = parseInput<AccountsInput>(raw);
+        const blockhash = await rpcCall<BlockhashResponse>(endpoint, 'getBlockhashForAccounts', [accounts]);
         return success(blockhash, 'magicblock_getBlockhashForAccounts');
       } catch (e) { return handleError('magicblock_getBlockhashForAccounts', e); }
     },
   );
 
-  tool('magicblock_getSignatureStatuses',
+  register<SignaturesInput>('magicblock_getSignatureStatuses',
     'Check the confirmation status (processed/confirmed/finalized) of one or more transaction signatures. Price: $0.01.',
-    schema({
-      signatures: arrayField('Array of transaction signatures', stringField('Transaction signature (base58)')),
-      endpoint: endpointField,
-    }, ['signatures']),
-    async (input) => {
+    schema({ signatures: f.array('Array of transaction signatures', f.string('Transaction signature (base58)')), endpoint: endpointField }, ['signatures']),
+    async (raw) => {
       try {
-        const endpoint = (input.endpoint as 'mainnet' | 'devnet') ?? 'devnet';
-        const signatures = input.signatures as string[];
-        const statuses = await rpcCall(endpoint, 'getSignatureStatuses', [signatures]);
+        const { signatures, endpoint = 'devnet' } = parseInput<SignaturesInput>(raw);
+        const statuses = await rpcCall<SignatureStatusesResponse>(endpoint, 'getSignatureStatuses', [signatures]);
         return success(statuses, 'magicblock_getSignatureStatuses');
       } catch (e) { return handleError('magicblock_getSignatureStatuses', e); }
     },
@@ -333,53 +601,39 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   //  Private Payment API — Meta & Auth (3 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_health',
+  register<Record<string, never>>('magicblock_health',
     'Check the health status of the MagicBlock Private Payments API. Price: $0.01.',
     schema({}),
     async () => {
       try {
-        const health = await apiGet<{ status: string }>('/health');
+        const health = await apiGet<HealthResponse>('/health');
         return success(health, 'magicblock_health');
       } catch (e) { return handleError('magicblock_health', e); }
     },
   );
 
-  tool('magicblock_challenge',
+  register<ChallengeInput>('magicblock_challenge',
     'Generate a challenge string for the wallet to sign (step 1 of the PER auth flow). Price: $0.01.',
-    schema({
-      pubkey: pubkeyField('Wallet pubkey that will sign the challenge'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      mock: booleanField('Use a mock challenge for testing (default false)'),
-    }, ['pubkey']),
-    async (input) => {
+    schema({ pubkey: f.pubkey('Wallet pubkey that will sign the challenge'), cluster: clusterField, mock: f.boolean('Use a mock challenge for testing (default false)') }, ['pubkey']),
+    async (raw) => {
       try {
-        const result = await apiGet<{ challenge: string }>('/v1/spl/challenge', {
-          pubkey: input.pubkey as string,
-          cluster: input.cluster as string | undefined,
-          mock: input.mock ? 'true' : undefined,
+        const { pubkey, cluster, mock } = parseInput<ChallengeInput>(raw);
+        const result = await apiGet<ChallengeResponse>('/v1/spl/challenge', {
+          pubkey, cluster: cluster ?? undefined, mock: mock ? 'true' : undefined,
         });
         return success(result, 'magicblock_challenge');
       } catch (e) { return handleError('magicblock_challenge', e); }
     },
   );
 
-  tool('magicblock_login',
+  register<LoginInput>('magicblock_login',
     'Exchange a signed challenge for a bearer token (step 2 of PER auth flow). The token is used for private-balance and private transfers. Price: $0.01.',
-    schema({
-      pubkey: pubkeyField('Wallet pubkey that signed the challenge'),
-      challenge: stringField('Challenge string from magicblock_challenge'),
-      signature: stringField('Wallet signature over the challenge string'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      mock: booleanField('Use mock login flow (default false)'),
-    }, ['pubkey', 'challenge', 'signature']),
-    async (input) => {
+    schema({ pubkey: f.pubkey('Wallet pubkey that signed the challenge'), challenge: f.string('Challenge string from magicblock_challenge'), signature: f.string('Wallet signature over the challenge string'), cluster: clusterField, mock: f.boolean('Use mock login flow (default false)') }, ['pubkey', 'challenge', 'signature']),
+    async (raw) => {
       try {
-        const result = await apiPost<{ token: string }>('/v1/spl/login', {
-          pubkey: input.pubkey,
-          challenge: input.challenge,
-          signature: input.signature,
-          cluster: input.cluster,
-          mock: input.mock || undefined,
+        const { pubkey, challenge, signature, cluster, mock } = parseInput<LoginInput>(raw);
+        const result = await apiPost<LoginResponse>('/v1/spl/login', {
+          pubkey, challenge, signature, cluster: cluster ?? undefined, mock: mock || undefined,
         });
         return success(result, 'magicblock_login');
       } catch (e) { return handleError('magicblock_login', e); }
@@ -390,40 +644,25 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   //  Private Payment API — Balance (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_balance',
+  register<BalanceInput>('magicblock_balance',
     'Read the base-chain SPL token balance for an address (public, no auth required). Price: $0.01.',
-    schema({
-      address: pubkeyField('Owner wallet pubkey'),
-      mint: stringField('SPL mint pubkey'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-    }, ['address', 'mint']),
-    async (input) => {
+    schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField }, ['address', 'mint']),
+    async (raw) => {
       try {
-        const result = await apiGet('/v1/spl/balance', {
-          address: input.address as string,
-          mint: input.mint as string,
-          cluster: input.cluster as string | undefined,
-        });
+        const { address, mint, cluster } = parseInput<BalanceInput>(raw);
+        const result = await apiGet<BalanceResponse>('/v1/spl/balance', { address, mint, cluster: cluster ?? undefined });
         return success(result, 'magicblock_balance');
       } catch (e) { return handleError('magicblock_balance', e); }
     },
   );
 
-  tool('magicblock_privateBalance',
+  register<PrivateBalanceInput>('magicblock_privateBalance',
     'Read the ephemeral-rollup SPL token balance for an address (requires bearer token from login). Price: $0.01.',
-    schema({
-      address: pubkeyField('Owner wallet pubkey'),
-      mint: stringField('SPL mint pubkey'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      authToken: stringField('Bearer token from magicblock_login (required for private reads)'),
-    }, ['address', 'mint', 'authToken']),
-    async (input) => {
+    schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField, authToken: f.string('Bearer token from magicblock_login (required for private reads)') }, ['address', 'mint', 'authToken']),
+    async (raw) => {
       try {
-        const result = await apiGet('/v1/spl/private-balance', {
-          address: input.address as string,
-          mint: input.mint as string,
-          cluster: input.cluster as string | undefined,
-        }, input.authToken as string);
+        const { address, mint, cluster, authToken } = parseInput<PrivateBalanceInput>(raw);
+        const result = await apiGet<BalanceResponse>('/v1/spl/private-balance', { address, mint, cluster: cluster ?? undefined }, authToken);
         return success(result, 'magicblock_privateBalance');
       } catch (e) { return handleError('magicblock_privateBalance', e); }
     },
@@ -433,32 +672,17 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   //  Private Payment API — SPL Token Flows (3 write tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_deposit',
+  register<DepositInput>('magicblock_deposit',
     'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Sign with sap_sign_transaction and submit to the RPC indicated by sendTo. Price: $0.05.',
-    schema({
-      owner: pubkeyField('Wallet pubkey that owns the tokens and will sign'),
-      amount: numberField('Base-unit amount to deposit (integer, minimum 1)'),
-      mint: stringField('SPL mint. Defaults to USDC (mainnet) or devnet USDC'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      validator: stringField('Optional ER validator pubkey. Defaults to the selected ephemeral RPC identity.'),
-      initIfMissing: booleanField('Initialize the transfer queue if missing (default true)'),
-      initVaultIfMissing: booleanField('Initialize the vault if missing (default true)'),
-      initAtasIfMissing: booleanField('Initialize associated token accounts if missing (default true)'),
-      idempotent: booleanField('Use idempotent variants for preparatory init instructions (default true)'),
-    }, ['owner', 'amount']),
-    async (input) => {
+    schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), amount: f.number('Base-unit amount to deposit (integer, minimum 1)'), mint: f.string('SPL mint. Defaults to USDC (mainnet) or devnet USDC'), cluster: clusterField, validator: validatorField, initIfMissing: f.boolean('Initialize the transfer queue if missing (default true)'), initVaultIfMissing: f.boolean('Initialize the vault if missing (default true)'), initAtasIfMissing: f.boolean('Initialize associated token accounts if missing (default true)'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'amount']),
+    async (raw) => {
       try {
-        const result = await apiPost('/v1/spl/deposit', {
-          owner: input.owner,
-          amount: input.amount,
-          ...stripNullish({
-            mint: input.mint,
-            cluster: input.cluster,
-            validator: input.validator,
-            initIfMissing: input.initIfMissing,
-            initVaultIfMissing: input.initVaultIfMissing,
-            initAtasIfMissing: input.initAtasIfMissing,
-            idempotent: input.idempotent,
+        const input = parseInput<DepositInput>(raw);
+        const result = await apiPost<UnsignedTransactionResponse>('/v1/spl/deposit', {
+          owner: input.owner, amount: input.amount, ...stripNullish({
+            mint: input.mint, cluster: input.cluster, validator: input.validator,
+            initIfMissing: input.initIfMissing, initVaultIfMissing: input.initVaultIfMissing,
+            initAtasIfMissing: input.initAtasIfMissing, idempotent: input.idempotent,
           }),
         });
         return success(result, 'magicblock_deposit');
@@ -466,88 +690,59 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
     },
   );
 
-  tool('magicblock_transfer',
+  register<TransferInput>('magicblock_transfer',
     'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Price: $0.05.',
     schema({
-      from: pubkeyField('Sender wallet pubkey'),
-      to: pubkeyField('Recipient wallet pubkey'),
-      mint: stringField('SPL mint pubkey'),
-      amount: numberField('Base-unit amount to transfer (integer, minimum 1)'),
-      visibility: enumField("'public' = transparent SPL transfer, 'private' = routed through Private ER with delayed+split settlement", ['public', 'private']),
-      fromBalance: enumField("Where the sender's balance is held", ['base', 'ephemeral']),
-      toBalance: enumField('Where the recipient should receive funds', ['base', 'ephemeral']),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      validator: stringField('Optional ER validator pubkey'),
-      authToken: stringField('Bearer token from login (required for private transfers)'),
-      initIfMissing: booleanField('Initialize transfer queue if missing (default true)'),
-      initAtasIfMissing: booleanField('Initialize recipient ATA if missing (default true)'),
-      initVaultIfMissing: booleanField('Initialize vault if missing (default false)'),
-      memo: stringField('Optional memo appended to the transaction'),
-      minDelayMs: stringField("Private only. Earliest (ms) the queued transfer may settle. Default '0'"),
-      maxDelayMs: stringField('Private only. Latest (ms) the queued transfer may settle (<= 600000)'),
-      clientRefId: stringField('Private only. Encrypted client reference ID for payment confirmation'),
-      split: numberField('Private only. Number of queue entries to split across (1-15, default 1)'),
-      gasless: booleanField('When true, uses configured sponsor as fee payer (default false)'),
-      legacy: booleanField('Skip lookup-table compilation, return a legacy transaction (default false)'),
+      from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
+      amount: f.number('Base-unit amount to transfer (integer, minimum 1)'),
+      visibility: f.enum("'public' = transparent SPL transfer, 'private' = routed through Private ER with delayed+split settlement", ['public', 'private']),
+      fromBalance: f.enum("Where the sender's balance is held", ['base', 'ephemeral']),
+      toBalance: f.enum('Where the recipient should receive funds', ['base', 'ephemeral']),
+      cluster: clusterField, validator: f.string('Optional ER validator pubkey'),
+      authToken: f.string('Bearer token from login (required for private transfers)'),
+      initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'),
+      initAtasIfMissing: f.boolean('Initialize recipient ATA if missing (default true)'),
+      initVaultIfMissing: f.boolean('Initialize vault if missing (default false)'),
+      memo: f.string('Optional memo appended to the transaction'),
+      minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle. Default '0'"),
+      maxDelayMs: f.string('Private only. Latest (ms) the queued transfer may settle (<= 600000)'),
+      clientRefId: f.string('Private only. Encrypted client reference ID for payment confirmation'),
+      split: f.number('Private only. Number of queue entries to split across (1-15, default 1)'),
+      gasless: f.boolean('When true, uses configured sponsor as fee payer (default false)'),
+      legacy: f.boolean('Skip lookup-table compilation, return a legacy transaction (default false)'),
     }, ['from', 'to', 'mint', 'amount', 'visibility', 'fromBalance', 'toBalance']),
-    async (input) => {
+    async (raw) => {
       try {
-        const authToken = input.authToken as string | undefined;
-        const body: Record<string, unknown> = {
-          from: input.from,
-          to: input.to,
-          mint: input.mint,
-          amount: input.amount,
-          visibility: input.visibility,
-          fromBalance: input.fromBalance,
-          toBalance: input.toBalance,
+        const input = parseInput<TransferInput>(raw);
+        const result = await apiPost<UnsignedTransactionResponse>('/v1/spl/transfer', {
+          from: input.from, to: input.to, mint: input.mint, amount: input.amount,
+          visibility: input.visibility, fromBalance: input.fromBalance, toBalance: input.toBalance,
           ...stripNullish({
-            cluster: input.cluster,
-            validator: input.validator,
-            initIfMissing: input.initIfMissing,
-            initAtasIfMissing: input.initAtasIfMissing,
-            initVaultIfMissing: input.initVaultIfMissing,
-            memo: input.memo,
-            minDelayMs: input.minDelayMs,
-            maxDelayMs: input.maxDelayMs,
-            clientRefId: input.clientRefId,
-            split: input.split,
-            gasless: input.gasless,
-            legacy: input.legacy,
-          }, ['authToken']),
-        };
-        const result = await apiPost('/v1/spl/transfer', body, authToken);
+            cluster: input.cluster, validator: input.validator,
+            initIfMissing: input.initIfMissing, initAtasIfMissing: input.initAtasIfMissing,
+            initVaultIfMissing: input.initVaultIfMissing, memo: input.memo,
+            minDelayMs: input.minDelayMs, maxDelayMs: input.maxDelayMs,
+            clientRefId: input.clientRefId, split: input.split,
+            gasless: input.gasless, legacy: input.legacy,
+          }),
+        }, input.authToken);
         return success(result, 'magicblock_transfer');
       } catch (e) { return handleError('magicblock_transfer', e); }
     },
   );
 
-  tool('magicblock_withdraw',
+  register<WithdrawInput>('magicblock_withdraw',
     'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Price: $0.05.',
-    schema({
-      owner: pubkeyField('Wallet pubkey that owns the tokens and will sign'),
-      mint: stringField('SPL mint on Solana'),
-      amount: numberField('Base-unit amount to withdraw (integer, minimum 1)'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      validator: stringField('Optional ER validator pubkey'),
-      initIfMissing: booleanField('Initialize transfer queue if missing (default true)'),
-      initAtasIfMissing: booleanField('Initialize ATAs if missing (default true)'),
-      escrowIndex: numberField('Optional escrow index for the withdrawal'),
-      idempotent: booleanField('Use idempotent variants for preparatory init instructions (default true)'),
-    }, ['owner', 'mint', 'amount']),
-    async (input) => {
+    schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), mint: f.string('SPL mint on Solana'), amount: f.number('Base-unit amount to withdraw (integer, minimum 1)'), cluster: clusterField, validator: f.string('Optional ER validator pubkey'), initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'), initAtasIfMissing: f.boolean('Initialize ATAs if missing (default true)'), escrowIndex: f.number('Optional escrow index for the withdrawal'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'mint', 'amount']),
+    async (raw) => {
       try {
-        const result = await apiPost('/v1/spl/withdraw', {
-          owner: input.owner,
-          mint: input.mint,
-          amount: input.amount,
+        const input = parseInput<WithdrawInput>(raw);
+        const result = await apiPost<UnsignedTransactionResponse>('/v1/spl/withdraw', {
+          owner: input.owner, mint: input.mint, amount: input.amount,
           ...stripNullish({
-            cluster: input.cluster,
-            validator: input.validator,
-            initIfMissing: input.initIfMissing,
-            initAtasIfMissing: input.initAtasIfMissing,
-            escrowIndex: input.escrowIndex,
-            idempotent: input.idempotent,
+            cluster: input.cluster, validator: input.validator,
+            initIfMissing: input.initIfMissing, initAtasIfMissing: input.initAtasIfMissing,
+            escrowIndex: input.escrowIndex, idempotent: input.idempotent,
           }),
         });
         return success(result, 'magicblock_withdraw');
@@ -556,30 +751,19 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   );
 
   // ═══════════════════════════════════════════════════════════════
-  //  Private Payment API — Swap (2 tools: 1 read + 1 write)
+  //  Private Payment API — Swap (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_swapQuote',
+  register<SwapQuoteInput>('magicblock_swapQuote',
     'Get a swap quote between two SPL mints (proxies Triton Metis swap API). Pass the result into magicblock_swap. Price: $0.01.',
-    schema({
-      inputMint: stringField('Input token mint address'),
-      outputMint: stringField('Output token mint address'),
-      amount: stringField("Raw amount to swap (unsigned integer string, e.g. '1000000')"),
-      slippageBps: numberField('Slippage threshold in basis points (e.g. 50 = 0.5%)'),
-      swapMode: enumField('Swap mode: fixed input or fixed output amount', ['ExactIn', 'ExactOut']),
-      onlyDirectRoutes: booleanField('Limit routing to a single hop (default false)'),
-      restrictIntermediateTokens: booleanField('Restrict intermediate tokens to a more stable set (default false)'),
-      platformFeeBps: numberField('Optional platform fee in basis points'),
-      maxAccounts: numberField('Approximate maximum account budget for the route (default 64)'),
-    }, ['inputMint', 'outputMint', 'amount']),
-    async (input) => {
+    schema({ inputMint: f.string('Input token mint address'), outputMint: f.string('Output token mint address'), amount: f.string("Raw amount to swap (unsigned integer string, e.g. '1000000')"), slippageBps: f.number('Slippage threshold in basis points (e.g. 50 = 0.5%)'), swapMode: f.enum('Swap mode: fixed input or fixed output amount', ['ExactIn', 'ExactOut']), onlyDirectRoutes: f.boolean('Limit routing to a single hop (default false)'), restrictIntermediateTokens: f.boolean('Restrict intermediate tokens to a more stable set (default false)'), platformFeeBps: f.number('Optional platform fee in basis points'), maxAccounts: f.number('Approximate maximum account budget for the route (default 64)') }, ['inputMint', 'outputMint', 'amount']),
+    async (raw) => {
       try {
-        const result = await apiGet('/v1/swap/quote', {
-          inputMint: input.inputMint as string,
-          outputMint: input.outputMint as string,
-          amount: input.amount as string,
+        const input = parseInput<SwapQuoteInput>(raw);
+        const result = await apiGet<SwapQuoteResponse>('/v1/swap/quote', {
+          inputMint: input.inputMint, outputMint: input.outputMint, amount: input.amount,
           slippageBps: input.slippageBps != null ? String(input.slippageBps) : undefined,
-          swapMode: input.swapMode as string | undefined,
+          swapMode: input.swapMode,
           onlyDirectRoutes: input.onlyDirectRoutes ? 'true' : undefined,
           restrictIntermediateTokens: input.restrictIntermediateTokens ? 'true' : undefined,
           platformFeeBps: input.platformFeeBps != null ? String(input.platformFeeBps) : undefined,
@@ -590,35 +774,19 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
     },
   );
 
-  tool('magicblock_swap',
+  register<SwapInput>('magicblock_swap',
     "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter, 'private' mode routes output through a scheduled private transfer with delay and split. Price: $0.05.",
-    schema({
-      userPublicKey: pubkeyField('Wallet that will sign the swap transaction'),
-      quoteResponse: { type: 'object', description: 'Quote response object from magicblock_swapQuote (pass as-is)', additionalProperties: true },
-      visibility: enumField("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']),
-      destination: pubkeyField("Final private-transfer recipient (required when visibility='private')"),
-      minDelayMs: stringField("Private only. Earliest (ms) the queued transfer may settle"),
-      maxDelayMs: stringField("Private only. Latest (ms) the queued transfer may settle (<= 600000)"),
-      split: numberField('Private only. Number of queue entries to split across (1-14)'),
-      clientRefId: stringField('Private only. Optional u64 client correlation ID'),
-      validator: stringField('Optional validator pubkey for the transfer-queue PDA'),
-      wrapAndUnwrapSol: booleanField('Auto wrap/unwrap native SOL when needed (default true)'),
-      asLegacyTransaction: booleanField('Build a legacy transaction (not allowed when visibility=private, default false)'),
-    }, ['userPublicKey', 'quoteResponse']),
-    async (input) => {
+    schema({ userPublicKey: f.pubkey('Wallet that will sign the swap transaction'), quoteResponse: f.object('Quote response object from magicblock_swapQuote (pass as-is)', {}), visibility: f.enum("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']), destination: f.pubkey("Final private-transfer recipient (required when visibility='private')"), minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle"), maxDelayMs: f.string("Private only. Latest (ms) the queued transfer may settle (<= 600000)"), split: f.number('Private only. Number of queue entries to split across (1-14)'), clientRefId: f.string('Private only. Optional u64 client correlation ID'), validator: f.string('Optional validator pubkey for the transfer-queue PDA'), wrapAndUnwrapSol: f.boolean('Auto wrap/unwrap native SOL when needed (default true)'), asLegacyTransaction: f.boolean('Build a legacy transaction (not allowed when visibility=private, default false)') }, ['userPublicKey', 'quoteResponse']),
+    async (raw) => {
       try {
-        const result = await apiPost('/v1/swap/swap', {
-          userPublicKey: input.userPublicKey,
-          quoteResponse: input.quoteResponse,
+        const input = parseInput<SwapInput>(raw);
+        const result = await apiPost<SwapTransactionResponse>('/v1/swap/swap', {
+          userPublicKey: input.userPublicKey, quoteResponse: input.quoteResponse,
           ...stripNullish({
-            visibility: input.visibility,
-            destination: input.destination,
-            minDelayMs: input.minDelayMs,
-            maxDelayMs: input.maxDelayMs,
-            split: input.split,
-            clientRefId: input.clientRefId,
-            validator: input.validator,
-            wrapAndUnwrapSol: input.wrapAndUnwrapSol,
+            visibility: input.visibility, destination: input.destination,
+            minDelayMs: input.minDelayMs, maxDelayMs: input.maxDelayMs,
+            split: input.split, clientRefId: input.clientRefId,
+            validator: input.validator, wrapAndUnwrapSol: input.wrapAndUnwrapSol,
             asLegacyTransaction: input.asLegacyTransaction,
           }),
         });
@@ -628,45 +796,31 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   );
 
   // ═══════════════════════════════════════════════════════════════
-  //  Private Payment API — Mint Init (2 tools: 1 write + 1 read)
+  //  Private Payment API — Mint Init (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_initializeMint',
+  register<InitializeMintInput>('magicblock_initializeMint',
     'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Price: $0.05.',
-    schema({
-      owner: pubkeyField('Wallet pubkey that will sign the transaction'),
-      mint: stringField('SPL mint to initialize a transfer queue for'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      validator: stringField('Optional ER validator pubkey'),
-    }, ['owner', 'mint']),
-    async (input) => {
+    schema({ owner: f.pubkey('Wallet pubkey that will sign the transaction'), mint: f.string('SPL mint to initialize a transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['owner', 'mint']),
+    async (raw) => {
       try {
-        const result = await apiPost('/v1/spl/initialize-mint', {
-          owner: input.owner,
-          mint: input.mint,
-          ...stripNullish({
-            cluster: input.cluster,
-            validator: input.validator,
-          }),
+        const input = parseInput<InitializeMintInput>(raw);
+        const result = await apiPost<UnsignedTransactionResponse>('/v1/spl/initialize-mint', {
+          owner: input.owner, mint: input.mint, ...stripNullish({ cluster: input.cluster, validator: input.validator }),
         });
         return success(result, 'magicblock_initializeMint');
       } catch (e) { return handleError('magicblock_initializeMint', e); }
     },
   );
 
-  tool('magicblock_isMintInitialized',
+  register<IsMintInitializedInput>('magicblock_isMintInitialized',
     'Check whether a mint has a validator-scoped transfer queue on the ephemeral RPC. Price: $0.01.',
-    schema({
-      mint: stringField('SPL mint to check'),
-      cluster: stringField("Cluster: 'mainnet', 'devnet', or custom RPC URL"),
-      validator: stringField('Optional ER validator pubkey'),
-    }, ['mint']),
-    async (input) => {
+    schema({ mint: f.string('SPL mint to check'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['mint']),
+    async (raw) => {
       try {
-        const result = await apiGet<{ initialized: boolean }>('/v1/spl/is-mint-initialized', {
-          mint: input.mint as string,
-          cluster: input.cluster as string | undefined,
-          validator: input.validator as string | undefined,
+        const input = parseInput<IsMintInitializedInput>(raw);
+        const result = await apiGet<MintInitStatusResponse>('/v1/spl/is-mint-initialized', {
+          mint: input.mint, cluster: input.cluster ?? undefined, validator: input.validator ?? undefined,
         });
         return success(result, 'magicblock_isMintInitialized');
       } catch (e) { return handleError('magicblock_isMintInitialized', e); }
@@ -677,134 +831,87 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   //  VRF (2 tools — on-chain via @solana/web3.js)
   // ═══════════════════════════════════════════════════════════════
 
-  tool('magicblock_requestRandomness',
+  register<VrfRequestInput>('magicblock_requestRandomness',
     'Request provably fair on-chain randomness from the MagicBlock VRF oracle (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz). Builds an unsigned transaction that invokes request_randomness on the VRF program. The caller must sign with sap_sign_transaction and submit to Solana. The oracle queue defaults to the base-layer queue (Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh); set ephemeral=true to use the ER queue for delegated programs. Price: $0.05.',
     schema({
-      payer: pubkeyField('Wallet pubkey that will pay for the request and sign the transaction'),
-      callbackProgramId: pubkeyField('Program ID of the callback program (the program that will consume the randomness)'),
-      callbackDiscriminator: stringField('Base58 or hex discriminator for the callback instruction in your program (e.g. the Anchor instruction discriminator)'),
-      callerSeed: stringField('Seed string for the VRF request — committed before randomness is produced. The seed is hashed to 32 bytes.'),
-      callbackAccounts: arrayField('Accounts to pass to the callback instruction', { type: 'object', properties: { pubkey: pubkeyField('Account pubkey'), isSigner: booleanField('Whether the account is a signer'), isWritable: booleanField('Whether the account is writable') } }),
-      ephemeral: booleanField('Use the Ephemeral Rollup oracle queue instead of the base-layer queue (default false). Set to true for delegated programs.'),
+      payer: f.pubkey('Wallet pubkey that will pay for the request and sign the transaction'),
+      callbackProgramId: f.pubkey('Program ID of the callback program (the program that will consume the randomness)'),
+      callbackDiscriminator: f.string('Base58 or hex discriminator for the callback instruction in your program'),
+      callerSeed: f.string('Seed string for the VRF request — committed before randomness is produced. The seed is hashed to 32 bytes.'),
+      callbackAccounts: f.array('Accounts to pass to the callback instruction', f.object('Callback account metadata', { pubkey: f.pubkey('Account pubkey'), isSigner: f.boolean('Whether the account is a signer'), isWritable: f.boolean('Whether the account is writable') })),
+      ephemeral: f.boolean('Use the Ephemeral Rollup oracle queue instead of the base-layer queue (default false)'),
       endpoint: endpointField,
     }, ['payer', 'callbackProgramId', 'callbackDiscriminator', 'callerSeed', 'callbackAccounts']),
-    async (input) => {
+    async (raw) => {
       try {
-        const payer = new PublicKey(input.payer as string);
-        const callbackProgramId = new PublicKey(input.callbackProgramId as string);
+        const input = parseInput<VrfRequestInput>(raw);
+        const payer = new PublicKey(input.payer);
+        const callbackProgramId = new PublicKey(input.callbackProgramId);
         const oracleQueue = input.ephemeral ? DEFAULT_EPHEMERAL_QUEUE : DEFAULT_QUEUE;
 
-        // Hash the caller seed string to 32 bytes using SHA-256.
-        const seedString = input.callerSeed as string;
         const callerSeed = new Uint8Array(
-          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seedString)),
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input.callerSeed)),
         );
 
         // Parse callback discriminator: accept hex (0x-prefixed) or base58.
-        const discInput = input.callbackDiscriminator as string;
         let callbackDiscriminator: number[];
-        if (discInput.startsWith('0x')) {
-          callbackDiscriminator = Array.from(Buffer.from(discInput.slice(2), 'hex'));
+        if (input.callbackDiscriminator.startsWith('0x')) {
+          callbackDiscriminator = Array.from(Buffer.from(input.callbackDiscriminator.slice(2), 'hex'));
         } else {
-          // Try base58 decode
           const bs58 = await import('bs58');
-          callbackDiscriminator = Array.from(bs58.default.decode(discInput));
+          callbackDiscriminator = Array.from(bs58.default.decode(input.callbackDiscriminator));
         }
 
         // Build callback account metas
-        const accountsMetas = (input.callbackAccounts as Array<{ pubkey: string; isSigner?: boolean; isWritable?: boolean }>).map(
-          (acc) => ({
-            pubkey: new PublicKey(acc.pubkey),
-            isSigner: acc.isSigner ?? false,
-            isWritable: acc.isWritable ?? false,
-          }),
-        );
+        const accountMetas = input.callbackAccounts.map((acc) => ({
+          pubkey: new PublicKey(acc.pubkey),
+          isSigner: acc.isSigner ?? false,
+          isWritable: acc.isWritable ?? false,
+        }));
 
-        // Derive the request PDA: ["vrf_request", payer, oracle_queue, seed_hash]
-        // The VRF program derives the request account from these seeds.
+        // Derive the request PDA
         const [requestKey] = PublicKey.findProgramAddressSync(
-          [
-            Buffer.from('vrf_request'),
-            payer.toBuffer(),
-            oracleQueue.toBuffer(),
-            callerSeed,
-          ],
+          [Buffer.from('vrf_request'), payer.toBuffer(), oracleQueue.toBuffer(), callerSeed],
           VRF_PROGRAM_ID,
         );
 
-        // Build the request_randomness instruction data.
-        // Instruction discriminator (8 bytes) + payload.
-        // The VRF program's request_randomness instruction expects:
-        //   - oracle_queue: PublicKey (32 bytes)
-        //   - callback_program_id: PublicKey (32 bytes)
-        //   - callback_discriminator: Vec<u8> (4-byte length prefix + bytes)
-        //   - caller_seed: [u8; 32]
-        //   - accounts_metas: Vec<SerializableAccountMeta> (4-byte length + entries)
-        // Each SerializableAccountMeta: { pubkey: [u8;32], is_signer: bool, is_writable: bool }
+        // Build the request_randomness instruction data
         const data = Buffer.alloc(1024);
         let offset = 0;
 
-        // Anchor instruction discriminator for "request_randomness" (first 8 bytes of sha256("global:request_randomness"))
-        // This is the standard Anchor discriminator pattern.
+        // Anchor instruction discriminator (first 8 bytes of sha256("global:request_randomness"))
         const discHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('global:request_randomness'));
         const discBytes = new Uint8Array(discHash).slice(0, 8);
-        data.writeUInt8(discBytes[0], offset++); data.writeUInt8(discBytes[1], offset++);
-        data.writeUInt8(discBytes[2], offset++); data.writeUInt8(discBytes[3], offset++);
-        data.writeUInt8(discBytes[4], offset++); data.writeUInt8(discBytes[5], offset++);
-        data.writeUInt8(discBytes[6], offset++); data.writeUInt8(discBytes[7], offset++);
-
-        // oracle_queue (32 bytes)
+        for (let i = 0; i < 8; i++) data.writeUInt8(discBytes[i], offset++);
         oracleQueue.toBuffer().copy(data, offset); offset += 32;
-
-        // callback_program_id (32 bytes)
         callbackProgramId.toBuffer().copy(data, offset); offset += 32;
-
-        // callback_discriminator (Vec<u8>): 4-byte LE length + bytes
         data.writeUInt32LE(callbackDiscriminator.length, offset); offset += 4;
         Buffer.from(callbackDiscriminator).copy(data, offset); offset += callbackDiscriminator.length;
-
-        // caller_seed (32 bytes)
         Buffer.from(callerSeed).copy(data, offset); offset += 32;
-
-        // accounts_metas (Vec<SerializableAccountMeta>): 4-byte LE length + entries
-        data.writeUInt32LE(accountsMetas.length, offset); offset += 4;
-        for (const meta of accountsMetas) {
+        data.writeUInt32LE(accountMetas.length, offset); offset += 4;
+        for (const meta of accountMetas) {
           meta.pubkey.toBuffer().copy(data, offset); offset += 32;
           data.writeUInt8(meta.isSigner ? 1 : 0, offset++);
           data.writeUInt8(meta.isWritable ? 1 : 0, offset++);
         }
 
-        const instructionData = data.subarray(0, offset);
-
-        // Build the instruction.
-        // Accounts required by request_randomness:
-        //   0. payer (signer, writable)
-        //   1. oracle_queue (writable)
-        //   2. request PDA (writable, derived)
-        //   3. system_program
-        //   4. vrf_program_identity
         const ix = new TransactionInstruction({
           programId: VRF_PROGRAM_ID,
           keys: [
             { pubkey: payer, isSigner: true, isWritable: true },
             { pubkey: oracleQueue, isSigner: false, isWritable: true },
             { pubkey: requestKey, isSigner: false, isWritable: true },
-            { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // SystemProgram
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             { pubkey: VRF_PROGRAM_IDENTITY, isSigner: false, isWritable: false },
           ],
-          data: instructionData,
+          data: data.subarray(0, offset),
         });
 
-        // Build a partial transaction (no blockhash — caller must add it).
         const tx = new Transaction();
         tx.add(ix);
-
-        // Serialize the transaction (without blockhash — caller fills it).
-        // We return the serialized instruction data + account keys so the caller
-        // can reconstruct the transaction with a fresh blockhash.
         const serializedTx = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
 
-        return success({
+        const result: VrfRequestResult = {
           requestKey: requestKey.toBase58(),
           vrfProgramId: VRF_PROGRAM_ID.toBase58(),
           oracleQueue: oracleQueue.toBase58(),
@@ -813,86 +920,63 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
           callbackProgramId: callbackProgramId.toBase58(),
           callerSeedHash: Buffer.from(callerSeed).toString('hex'),
           note: 'Sign with sap_sign_transaction, then submit with sap_submit_signed_transaction. After submission, poll magicblock_getRandomnessResult with the requestKey until fulfilled=true.',
-        }, 'magicblock_requestRandomness');
+        };
+        return success(result, 'magicblock_requestRandomness');
       } catch (e) { return handleError('magicblock_requestRandomness', e); }
     },
   );
 
-  tool('magicblock_getRandomnessResult',
+  register<VrfResultInput>('magicblock_getRandomnessResult',
     'Check whether a VRF request has been fulfilled by reading the RandomnessRequest account on-chain. Returns fulfilled status, random bytes (if available), and the request metadata. Price: $0.01.',
-    schema({
-      requestKey: pubkeyField('VRF request PDA key from magicblock_requestRandomness'),
-      endpoint: endpointField,
-    }, ['requestKey']),
-    async (input) => {
+    schema({ requestKey: f.pubkey('VRF request PDA key from magicblock_requestRandomness'), endpoint: endpointField }, ['requestKey']),
+    async (raw) => {
       try {
-        const requestKey = new PublicKey(input.requestKey as string);
+        const { requestKey: requestKeyStr } = parseInput<VrfResultInput>(raw);
+        const requestKey = new PublicKey(requestKeyStr);
 
-        // Read the RandomnessRequest account from the configured Solana RPC.
-        // The account is owned by the VRF program and contains:
-        //   - discriminator (8 bytes)
-        //   - caller_seed: [u8; 32]
-        //   - randomness: [u8; 32] (zeroed if not yet fulfilled)
-        //   - proof: Vec<u8> (empty if not yet fulfilled)
-        //   - oracle_pubkey: [u8; 32]
-        //   - callback_program_id: [u8; 32]
-        //   - callback_discriminator: Vec<u8>
-        //   - accounts_metas: Vec<SerializableAccountMeta>
-        //   - fulfilled: bool
-        //   - slot: u64
-        const accountInfo = await _context.connection.getAccountInfo(requestKey, 'confirmed');
+        const accountInfo = await context.connection.getAccountInfo(requestKey, 'confirmed');
 
         if (!accountInfo) {
-          return success({
-            fulfilled: false,
-            requestKey: requestKey.toBase58(),
+          const result: VrfRandomnessResult = {
+            fulfilled: false, requestKey: requestKey.toBase58(),
+            randomness: null, randomnessHex: null, callerSeed: '',
+            owner: '', lamports: 0, executable: false, rentEpoch: 0, dataLength: 0,
             message: 'Request account not found. The request may not have been submitted yet, or the transaction has not been confirmed.',
-          }, 'magicblock_getRandomnessResult');
+          };
+          return success(result, 'magicblock_getRandomnessResult');
         }
 
-        // Parse the account data.
-        // Layout: 8-byte discriminator + 32-byte caller_seed + 32-byte randomness + 1-byte fulfilled + ...
         const data = accountInfo.data;
         if (data.length < 73) {
-          return success({
-            fulfilled: false,
-            requestKey: requestKey.toBase58(),
+          const result: VrfRandomnessResult = {
+            fulfilled: false, requestKey: requestKey.toBase58(),
+            randomness: null, randomnessHex: null, callerSeed: '',
+            owner: accountInfo.owner.toBase58(), lamports: accountInfo.lamports,
+            executable: accountInfo.executable, rentEpoch: accountInfo.rentEpoch, dataLength: data.length,
             message: 'Account data too short — request may be in an unexpected state.',
-            accountSize: data.length,
-            owner: accountInfo.owner.toBase58(),
-          }, 'magicblock_getRandomnessResult');
+          };
+          return success(result, 'magicblock_getRandomnessResult');
         }
 
-        // Skip 8-byte Anchor discriminator
-        let offset = 8;
-
-        // caller_seed: [u8; 32]
-        const callerSeed = data.subarray(offset, offset + 32);
-        offset += 32;
-
-        // randomness: [u8; 32]
-        const randomness = data.subarray(offset, offset + 32);
-        offset += 32;
-
-        // Check if randomness is non-zero (fulfilled)
+        // Layout: 8-byte discriminator + 32-byte caller_seed + 32-byte randomness
+        const discriminatorEnd = 8;
+        const callerSeed = data.subarray(discriminatorEnd, discriminatorEnd + 32);
+        const randomness = data.subarray(discriminatorEnd + 32, discriminatorEnd + 64);
         const isZero = randomness.every((byte) => byte === 0);
         const fulfilled = !isZero;
 
-        return success({
-          fulfilled,
-          requestKey: requestKey.toBase58(),
+        const result: VrfRandomnessResult = {
+          fulfilled, requestKey: requestKey.toBase58(),
           randomness: fulfilled ? Array.from(randomness) : null,
           randomnessHex: fulfilled ? Buffer.from(randomness).toString('hex') : null,
           callerSeed: Buffer.from(callerSeed).toString('hex'),
-          owner: accountInfo.owner.toBase58(),
-          lamports: accountInfo.lamports,
-          executable: accountInfo.executable,
-          rentEpoch: accountInfo.rentEpoch,
-          dataLength: data.length,
+          owner: accountInfo.owner.toBase58(), lamports: accountInfo.lamports,
+          executable: accountInfo.executable, rentEpoch: accountInfo.rentEpoch, dataLength: data.length,
           message: fulfilled
             ? 'Randomness has been produced and verified. Use the random bytes in your callback logic.'
             : 'Request submitted but not yet fulfilled. Poll again in a few seconds.',
-        }, 'magicblock_getRandomnessResult');
+        };
+        return success(result, 'magicblock_getRandomnessResult');
       } catch (e) { return handleError('magicblock_getRandomnessResult', e); }
     },
   );
