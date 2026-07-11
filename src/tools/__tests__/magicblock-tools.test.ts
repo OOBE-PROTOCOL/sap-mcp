@@ -179,4 +179,26 @@ describe('MagicBlock tools registration', () => {
     const mbHandlerNames = Object.keys(handlers).filter((n) => n.startsWith('magicblock_'));
     expect(mbHandlerNames).toHaveLength(20);
   });
+
+  it('VRF tools have real descriptions without not-yet-implemented', () => {
+    const server = createServer();
+    registerMagicBlockTools(server, createMockContext());
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools = (server as any).tools ?? [];
+    const vrfTools = tools.filter((t: { name: string }) =>
+      t.name === 'magicblock_requestRandomness' || t.name === 'magicblock_getRandomnessResult',
+    );
+    expect(vrfTools).toHaveLength(2);
+    for (const t of vrfTools) {
+      expect(t.description).not.toContain('not yet implemented');
+      expect(t.description).not.toContain('Requires @magicblock-labs');
+    }
+    // requestRandomness must reference the VRF program ID
+    const reqTool = vrfTools.find((t: { name: string }) => t.name === 'magicblock_requestRandomness');
+    expect(reqTool?.description).toContain('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
+    // getRandomnessResult must reference on-chain account reading
+    const resTool = vrfTools.find((t: { name: string }) => t.name === 'magicblock_getRandomnessResult');
+    expect(resTool?.description).toContain('RandomnessRequest');
+  });
 });

@@ -8,7 +8,7 @@ All notable changes to this project are documented in this file.
 
 New `magicblock-tools.ts` module registering 20 MagicBlock tools with the
 MCP server, covering ER Router (JSON-RPC), Private Payment API (REST),
-and Solana VRF (scaffolded).
+and Solana VRF (on-chain via @solana/web3.js).
 
 **Tools added:**
 

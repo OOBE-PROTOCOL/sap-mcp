@@ -12,8 +12,10 @@ API surfaces:
 1. **ER Router** — JSON-RPC 2.0 at `https://(devnet-)router.magicblock.app`
 2. **Private Payment API** — REST at `https://payments.magicblock.app`
 
-A third protocol (VRF) is scaffolded but requires the
-`@magicblock-labs/ephemeral-vrf-sdk` package for full implementation.
+A third protocol (VRF) is implemented on-chain using `@solana/web3.js` —
+it builds unsigned transactions that invoke the VRF program
+(`Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz`) and reads
+`RandomnessRequest` accounts to check fulfillment.
 
 All tools are registered automatically when the MCP server starts — no
 additional configuration needed.
@@ -84,12 +86,12 @@ includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
 | `magicblock_initializeMint` | $0.05 | Build unsigned mint transfer queue init tx |
 | `magicblock_isMintInitialized` | $0.01 | Check if a mint's transfer queue exists |
 
-### VRF (2 — scaffolded)
+### VRF (2 — on-chain via @solana/web3.js)
 
 | Tool | Price | Description |
 |------|-------|-------------|
-| `magicblock_requestRandomness` | $0.05 | Request provably fair on-chain randomness |
-| `magicblock_getRandomnessResult` | $0.01 | Check if a VRF request is fulfilled |
+| `magicblock_requestRandomness` | $0.05 | Build unsigned tx invoking request_randomness on the VRF program (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz) |
+| `magicblock_getRandomnessResult` | $0.01 | Read the RandomnessRequest account on-chain to check fulfillment and retrieve random bytes |
 
 ---
 

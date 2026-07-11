@@ -4,7 +4,7 @@
  * Registers 20 MagicBlock tools across 3 protocol domains:
  *   - mb-router   (6 read-only ER Router JSON-RPC tools)
  *   - mb-payments (12 Private Payment API REST tools)
- *   - mb-vrf      (2 Solana VRF tools — scaffolded, throws until SDK is installed)
+ *   - mb-vrf      (2 Solana VRF tools — on-chain via @solana/web3.js)
  *
  * Pricing:
  *   READ  = $0.01/call (10_000 USDC base units) — 14 read-only tools
@@ -17,6 +17,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { PublicKey, TransactionInstruction, Transaction } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
@@ -33,6 +34,19 @@ const ROUTER_ENDPOINTS = {
 
 const PAYMENTS_ENDPOINT = 'https://payments.magicblock.app';
 const JSONRPC_VERSION = '2.0';
+
+// ═══════════════════════════════════════════════════════════════════
+//  VRF Program Constants (from ephemeral_vrf_sdk::consts)
+// ═══════════════════════════════════════════════════════════════════
+
+/** VRF program ID (mainnet + devnet). */
+const VRF_PROGRAM_ID = new PublicKey('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
+/** VRF callback signer PDA (verifies callback is invoked by the VRF program). */
+const VRF_PROGRAM_IDENTITY = new PublicKey('9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe8TKVvvAw');
+/** Base-layer oracle queue (mainnet + devnet). */
+const DEFAULT_QUEUE = new PublicKey('Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh');
+/** Ephemeral Rollup oracle queue (mainnet + devnet). */
+const DEFAULT_EPHEMERAL_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc');
 
 /** $0.01 in USDC base units (6 decimals). */
 const READ_PRICE_USDC = 10_000n;
@@ -660,36 +674,226 @@ export function registerMagicBlockTools(server: Server, _context: SapMcpContext)
   );
 
   // ═══════════════════════════════════════════════════════════════
-  //  VRF (2 tools — scaffolded, throws until SDK is installed)
+  //  VRF (2 tools — on-chain via @solana/web3.js)
   // ═══════════════════════════════════════════════════════════════
 
   tool('magicblock_requestRandomness',
-    'Request provably fair on-chain randomness from the MagicBlock VRF oracle. Specify a seed, callback discriminator, and callback accounts. Price: $0.05. NOTE: Requires @magicblock-labs/ephemeral-vrf-sdk to be installed.',
+    'Request provably fair on-chain randomness from the MagicBlock VRF oracle (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz). Builds an unsigned transaction that invokes request_randomness on the VRF program. The caller must sign with sap_sign_transaction and submit to Solana. The oracle queue defaults to the base-layer queue (Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh); set ephemeral=true to use the ER queue for delegated programs. Price: $0.05.',
     schema({
-      callerSeed: stringField('Seed string for the VRF request (committed before randomness is produced)'),
-      callbackDiscriminator: stringField('Base58 discriminator for the callback instruction in your program'),
-      callbackAccounts: arrayField('Accounts to pass to the callback instruction', pubkeyField('Account pubkey')),
+      payer: pubkeyField('Wallet pubkey that will pay for the request and sign the transaction'),
+      callbackProgramId: pubkeyField('Program ID of the callback program (the program that will consume the randomness)'),
+      callbackDiscriminator: stringField('Base58 or hex discriminator for the callback instruction in your program (e.g. the Anchor instruction discriminator)'),
+      callerSeed: stringField('Seed string for the VRF request — committed before randomness is produced. The seed is hashed to 32 bytes.'),
+      callbackAccounts: arrayField('Accounts to pass to the callback instruction', { type: 'object', properties: { pubkey: pubkeyField('Account pubkey'), isSigner: booleanField('Whether the account is a signer'), isWritable: booleanField('Whether the account is writable') } }),
+      ephemeral: booleanField('Use the Ephemeral Rollup oracle queue instead of the base-layer queue (default false). Set to true for delegated programs.'),
       endpoint: endpointField,
-    }, ['callerSeed', 'callbackDiscriminator', 'callbackAccounts']),
-    async () => {
-      return createTextResponse(JSON.stringify({
-        error: 'VRF requestRandomness not yet implemented',
-        message: 'Install @magicblock-labs/ephemeral-vrf-sdk and wire it into the tool handler.',
-      }, null, 2), { isError: true });
+    }, ['payer', 'callbackProgramId', 'callbackDiscriminator', 'callerSeed', 'callbackAccounts']),
+    async (input) => {
+      try {
+        const payer = new PublicKey(input.payer as string);
+        const callbackProgramId = new PublicKey(input.callbackProgramId as string);
+        const oracleQueue = input.ephemeral ? DEFAULT_EPHEMERAL_QUEUE : DEFAULT_QUEUE;
+
+        // Hash the caller seed string to 32 bytes using SHA-256.
+        const seedString = input.callerSeed as string;
+        const callerSeed = new Uint8Array(
+          await crypto.subtle.digest('SHA-256', new TextEncoder().encode(seedString)),
+        );
+
+        // Parse callback discriminator: accept hex (0x-prefixed) or base58.
+        const discInput = input.callbackDiscriminator as string;
+        let callbackDiscriminator: number[];
+        if (discInput.startsWith('0x')) {
+          callbackDiscriminator = Array.from(Buffer.from(discInput.slice(2), 'hex'));
+        } else {
+          // Try base58 decode
+          const bs58 = await import('bs58');
+          callbackDiscriminator = Array.from(bs58.default.decode(discInput));
+        }
+
+        // Build callback account metas
+        const accountsMetas = (input.callbackAccounts as Array<{ pubkey: string; isSigner?: boolean; isWritable?: boolean }>).map(
+          (acc) => ({
+            pubkey: new PublicKey(acc.pubkey),
+            isSigner: acc.isSigner ?? false,
+            isWritable: acc.isWritable ?? false,
+          }),
+        );
+
+        // Derive the request PDA: ["vrf_request", payer, oracle_queue, seed_hash]
+        // The VRF program derives the request account from these seeds.
+        const [requestKey] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from('vrf_request'),
+            payer.toBuffer(),
+            oracleQueue.toBuffer(),
+            callerSeed,
+          ],
+          VRF_PROGRAM_ID,
+        );
+
+        // Build the request_randomness instruction data.
+        // Instruction discriminator (8 bytes) + payload.
+        // The VRF program's request_randomness instruction expects:
+        //   - oracle_queue: PublicKey (32 bytes)
+        //   - callback_program_id: PublicKey (32 bytes)
+        //   - callback_discriminator: Vec<u8> (4-byte length prefix + bytes)
+        //   - caller_seed: [u8; 32]
+        //   - accounts_metas: Vec<SerializableAccountMeta> (4-byte length + entries)
+        // Each SerializableAccountMeta: { pubkey: [u8;32], is_signer: bool, is_writable: bool }
+        const data = Buffer.alloc(1024);
+        let offset = 0;
+
+        // Anchor instruction discriminator for "request_randomness" (first 8 bytes of sha256("global:request_randomness"))
+        // This is the standard Anchor discriminator pattern.
+        const discHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('global:request_randomness'));
+        const discBytes = new Uint8Array(discHash).slice(0, 8);
+        data.writeUInt8(discBytes[0], offset++); data.writeUInt8(discBytes[1], offset++);
+        data.writeUInt8(discBytes[2], offset++); data.writeUInt8(discBytes[3], offset++);
+        data.writeUInt8(discBytes[4], offset++); data.writeUInt8(discBytes[5], offset++);
+        data.writeUInt8(discBytes[6], offset++); data.writeUInt8(discBytes[7], offset++);
+
+        // oracle_queue (32 bytes)
+        oracleQueue.toBuffer().copy(data, offset); offset += 32;
+
+        // callback_program_id (32 bytes)
+        callbackProgramId.toBuffer().copy(data, offset); offset += 32;
+
+        // callback_discriminator (Vec<u8>): 4-byte LE length + bytes
+        data.writeUInt32LE(callbackDiscriminator.length, offset); offset += 4;
+        Buffer.from(callbackDiscriminator).copy(data, offset); offset += callbackDiscriminator.length;
+
+        // caller_seed (32 bytes)
+        Buffer.from(callerSeed).copy(data, offset); offset += 32;
+
+        // accounts_metas (Vec<SerializableAccountMeta>): 4-byte LE length + entries
+        data.writeUInt32LE(accountsMetas.length, offset); offset += 4;
+        for (const meta of accountsMetas) {
+          meta.pubkey.toBuffer().copy(data, offset); offset += 32;
+          data.writeUInt8(meta.isSigner ? 1 : 0, offset++);
+          data.writeUInt8(meta.isWritable ? 1 : 0, offset++);
+        }
+
+        const instructionData = data.subarray(0, offset);
+
+        // Build the instruction.
+        // Accounts required by request_randomness:
+        //   0. payer (signer, writable)
+        //   1. oracle_queue (writable)
+        //   2. request PDA (writable, derived)
+        //   3. system_program
+        //   4. vrf_program_identity
+        const ix = new TransactionInstruction({
+          programId: VRF_PROGRAM_ID,
+          keys: [
+            { pubkey: payer, isSigner: true, isWritable: true },
+            { pubkey: oracleQueue, isSigner: false, isWritable: true },
+            { pubkey: requestKey, isSigner: false, isWritable: true },
+            { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // SystemProgram
+            { pubkey: VRF_PROGRAM_IDENTITY, isSigner: false, isWritable: false },
+          ],
+          data: instructionData,
+        });
+
+        // Build a partial transaction (no blockhash — caller must add it).
+        const tx = new Transaction();
+        tx.add(ix);
+
+        // Serialize the transaction (without blockhash — caller fills it).
+        // We return the serialized instruction data + account keys so the caller
+        // can reconstruct the transaction with a fresh blockhash.
+        const serializedTx = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+
+        return success({
+          requestKey: requestKey.toBase58(),
+          vrfProgramId: VRF_PROGRAM_ID.toBase58(),
+          oracleQueue: oracleQueue.toBase58(),
+          transactionBase64: serializedTx,
+          sendTo: 'base',
+          callbackProgramId: callbackProgramId.toBase58(),
+          callerSeedHash: Buffer.from(callerSeed).toString('hex'),
+          note: 'Sign with sap_sign_transaction, then submit with sap_submit_signed_transaction. After submission, poll magicblock_getRandomnessResult with the requestKey until fulfilled=true.',
+        }, 'magicblock_requestRandomness');
+      } catch (e) { return handleError('magicblock_requestRandomness', e); }
     },
   );
 
   tool('magicblock_getRandomnessResult',
-    'Check whether a VRF request has been fulfilled and retrieve the random bytes and cryptographic proof. Price: $0.01. NOTE: Requires @magicblock-labs/ephemeral-vrf-sdk to be installed.',
+    'Check whether a VRF request has been fulfilled by reading the RandomnessRequest account on-chain. Returns fulfilled status, random bytes (if available), and the request metadata. Price: $0.01.',
     schema({
-      requestKey: stringField('VRF request key from magicblock_requestRandomness'),
+      requestKey: pubkeyField('VRF request PDA key from magicblock_requestRandomness'),
       endpoint: endpointField,
     }, ['requestKey']),
-    async () => {
-      return createTextResponse(JSON.stringify({
-        error: 'VRF getRandomnessResult not yet implemented',
-        message: 'Install @magicblock-labs/ephemeral-vrf-sdk and wire it into the tool handler.',
-      }, null, 2), { isError: true });
+    async (input) => {
+      try {
+        const requestKey = new PublicKey(input.requestKey as string);
+
+        // Read the RandomnessRequest account from the configured Solana RPC.
+        // The account is owned by the VRF program and contains:
+        //   - discriminator (8 bytes)
+        //   - caller_seed: [u8; 32]
+        //   - randomness: [u8; 32] (zeroed if not yet fulfilled)
+        //   - proof: Vec<u8> (empty if not yet fulfilled)
+        //   - oracle_pubkey: [u8; 32]
+        //   - callback_program_id: [u8; 32]
+        //   - callback_discriminator: Vec<u8>
+        //   - accounts_metas: Vec<SerializableAccountMeta>
+        //   - fulfilled: bool
+        //   - slot: u64
+        const accountInfo = await _context.connection.getAccountInfo(requestKey, 'confirmed');
+
+        if (!accountInfo) {
+          return success({
+            fulfilled: false,
+            requestKey: requestKey.toBase58(),
+            message: 'Request account not found. The request may not have been submitted yet, or the transaction has not been confirmed.',
+          }, 'magicblock_getRandomnessResult');
+        }
+
+        // Parse the account data.
+        // Layout: 8-byte discriminator + 32-byte caller_seed + 32-byte randomness + 1-byte fulfilled + ...
+        const data = accountInfo.data;
+        if (data.length < 73) {
+          return success({
+            fulfilled: false,
+            requestKey: requestKey.toBase58(),
+            message: 'Account data too short — request may be in an unexpected state.',
+            accountSize: data.length,
+            owner: accountInfo.owner.toBase58(),
+          }, 'magicblock_getRandomnessResult');
+        }
+
+        // Skip 8-byte Anchor discriminator
+        let offset = 8;
+
+        // caller_seed: [u8; 32]
+        const callerSeed = data.subarray(offset, offset + 32);
+        offset += 32;
+
+        // randomness: [u8; 32]
+        const randomness = data.subarray(offset, offset + 32);
+        offset += 32;
+
+        // Check if randomness is non-zero (fulfilled)
+        const isZero = randomness.every((byte) => byte === 0);
+        const fulfilled = !isZero;
+
+        return success({
+          fulfilled,
+          requestKey: requestKey.toBase58(),
+          randomness: fulfilled ? Array.from(randomness) : null,
+          randomnessHex: fulfilled ? Buffer.from(randomness).toString('hex') : null,
+          callerSeed: Buffer.from(callerSeed).toString('hex'),
+          owner: accountInfo.owner.toBase58(),
+          lamports: accountInfo.lamports,
+          executable: accountInfo.executable,
+          rentEpoch: accountInfo.rentEpoch,
+          dataLength: data.length,
+          message: fulfilled
+            ? 'Randomness has been produced and verified. Use the random bytes in your callback logic.'
+            : 'Request submitted but not yet fulfilled. Poll again in a few seconds.',
+        }, 'magicblock_getRandomnessResult');
+      } catch (e) { return handleError('magicblock_getRandomnessResult', e); }
     },
   );
 
