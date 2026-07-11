@@ -21,6 +21,7 @@ interface X402PaidCallToolInput {
   };
   profileName?: string;
   maxPriceUsd?: number;
+  maxAttempts?: number;
   confirm?: boolean;
 }
 
@@ -60,6 +61,10 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
           type: 'number',
           description: 'Maximum accepted x402 payment amount in USD. The call aborts if the challenge exceeds this cap.',
         },
+        maxAttempts: {
+          type: 'number',
+          description: 'Optional retry count for transient x402/RPC failures such as BlockhashNotFound. Defaults to 3; max 5.',
+        },
         confirm: {
           type: 'boolean',
           description: 'Must be true. Confirms the user allows this helper to sign an x402 payment payload.',
@@ -95,6 +100,7 @@ function parseInput(input: unknown): X402PaidCallInput {
     body: record.body,
     profileName: record.profileName,
     maxPriceUsd: record.maxPriceUsd,
+    maxAttempts: record.maxAttempts,
     confirm: record.confirm === true,
   };
 }

@@ -303,6 +303,8 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 - Prefer \`PAYMENT-SIGNATURE\` for the payment proof header; accept \`X-PAYMENT\` only when the client runtime requires it.
 - Capture \`PAYMENT-RESPONSE\` or \`X-PAYMENT-RESPONSE\` as the settlement receipt bound to the tool output.
 - x402/pay.sh payment payloads must be signed by the user's wizard-created SAP profile wallet or external signer, never by the hosted server.
+- If x402 returns \`BlockhashNotFound\`, \`transaction_simulation_failed\`, \`node is behind\`, or another retryable facilitator/RPC error, do not declare SAP MCP down and do not reuse the old signed payment payload. Re-run the local \`sap_x402_paid_call\` helper or create a fresh payment challenge/payload with the same MCP method and params.
+- Prefer the local \`sap_x402_paid_call\` bridge with \`maxAttempts\` for hosted paid/write tools when the runtime cannot natively replay x402 challenges.
 - If the current client runtime cannot produce x402 payment headers, report that limitation and ask the user to run the wizard/signing bridge. Do not call the local free server as an implicit substitute.
 
 `;

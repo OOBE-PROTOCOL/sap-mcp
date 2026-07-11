@@ -15,6 +15,9 @@ import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 const DEFAULT_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const MCP_PROTOCOL_VERSION = '2025-06-18';
+const DEFAULT_MAX_ATTEMPTS = 3;
+const MAX_ALLOWED_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 500;
 
 /**
  * @name X402PaidCallInput
@@ -27,6 +30,7 @@ export interface X402PaidCallInput {
   body?: JsonRpcRequest;
   profileName?: string;
   maxPriceUsd: number;
+  maxAttempts?: number;
   confirm: boolean;
 }
 
@@ -47,6 +51,8 @@ export interface X402PaidCallResult {
   };
   settlement?: SettleResponse;
   response: unknown;
+  attempts: number;
+  transientRetries: readonly string[];
 }
 
 interface JsonRpcRequest {
@@ -63,6 +69,7 @@ interface ParsedCliArgs {
   bodyJson?: string;
   profileName?: string;
   maxPriceUsd?: number;
+  maxAttempts?: number;
   confirm: boolean;
 }
 
@@ -83,22 +90,60 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
   const httpClient = createHttpPaymentClient(signer);
   const sessionId = await initializeMcpSession(endpoint);
   const requestBody = input.body ?? buildToolCallRequest(input.toolName ?? '', input.arguments);
+  const maxAttempts = normalizeMaxAttempts(input.maxAttempts);
+  const transientRetries: string[] = [];
 
-  const unpaid = await postMcp(endpoint, requestBody, sessionId);
-  const paymentRequired = httpClient.getPaymentRequiredResponse(
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await executePaidAttempt({
+        endpoint,
+        sessionId,
+        signerAddress: String(signer.address),
+        httpClient,
+        requestBody,
+        maxPriceUsd: input.maxPriceUsd,
+        attempt,
+        transientRetries,
+      });
+    } catch (error) {
+      const retry = classifyPaidCallRetry(error);
+      if (!retry.retryable || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      transientRetries.push(retry.reason);
+      await sleep(RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+
+  throw new Error('x402 paid call exhausted retries.');
+}
+
+async function executePaidAttempt(options: {
+  endpoint: string;
+  sessionId: string;
+  signerAddress: string;
+  httpClient: x402HTTPClient;
+  requestBody: JsonRpcRequest;
+  maxPriceUsd: number;
+  attempt: number;
+  transientRetries: readonly string[];
+}): Promise<X402PaidCallResult> {
+  const unpaid = await postMcp(options.endpoint, options.requestBody, options.sessionId);
+  const paymentRequired = options.httpClient.getPaymentRequiredResponse(
     name => unpaid.response.headers.get(name),
     unpaid.body,
   );
-  const selectedRequirements = selectSingleRequirement(paymentRequired, input.maxPriceUsd);
+  const selectedRequirements = selectSingleRequirement(paymentRequired, options.maxPriceUsd);
   const amountUsd = paymentRequirementsAmountUsd(selectedRequirements);
 
-  const paymentPayload = await httpClient.createPaymentPayload({
+  const paymentPayload = await options.httpClient.createPaymentPayload({
     ...paymentRequired,
     accepts: [selectedRequirements],
   });
-  const paymentHeaders = httpClient.encodePaymentSignatureHeader(paymentPayload);
-  const paid = await postMcp(endpoint, requestBody, sessionId, paymentHeaders);
-  const paymentResult = await httpClient.processPaymentResult(
+  const paymentHeaders = options.httpClient.encodePaymentSignatureHeader(paymentPayload);
+  const paid = await postMcp(options.endpoint, options.requestBody, options.sessionId, paymentHeaders);
+  const paymentResult = await options.httpClient.processPaymentResult(
     paymentPayload,
     name => paid.response.headers.get(name),
     paid.response.status,
@@ -114,9 +159,9 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
 
   return {
     success: true,
-    endpoint,
-    sessionId,
-    signerAddress: String(signer.address),
+    endpoint: options.endpoint,
+    sessionId: options.sessionId,
+    signerAddress: options.signerAddress,
     payment: {
       amountUsd,
       network: selectedRequirements.network,
@@ -125,6 +170,8 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
     },
     settlement: paymentResult.settleResponse,
     response: paid.body,
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
   };
 }
 
@@ -279,6 +326,59 @@ function paymentRequirementsAmountUsd(requirements: PaymentRequirements): number
   return amount / 1_000_000;
 }
 
+function normalizeMaxAttempts(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_MAX_ATTEMPTS;
+  }
+  if (!Number.isInteger(value) || value < 1 || value > MAX_ALLOWED_ATTEMPTS) {
+    throw new Error(`maxAttempts must be an integer between 1 and ${MAX_ALLOWED_ATTEMPTS}.`);
+  }
+  return value;
+}
+
+function classifyPaidCallRetry(error: unknown): { retryable: boolean; reason: string } {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  const retryable = containsAny(normalized, [
+    'blockhashnotfound',
+    'blockhash not found',
+    'transaction_simulation_failed',
+    'smart_wallet_simulation_failed',
+    '"retryable":true',
+    '"category":"facilitator_rpc"',
+    '"category":"facilitator_unavailable"',
+    'facilitator_unavailable',
+    'node is behind',
+    'minimum context slot',
+    'slot was skipped',
+    'fetch failed',
+    'gateway timeout',
+    'service unavailable',
+    'too many requests',
+    'rate limit',
+  ]);
+
+  return {
+    retryable,
+    reason: retryable ? summarizeRetryReason(message) : 'not_retryable',
+  };
+}
+
+function summarizeRetryReason(message: string): string {
+  if (message.length <= 240) {
+    return message;
+  }
+  return `${message.slice(0, 237)}...`;
+}
+
+function containsAny(value: string, needles: readonly string[]): boolean {
+  return needles.some(needle => value.includes(needle));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function isJsonRpcError(value: unknown): value is { error: unknown } {
   return value !== null && typeof value === 'object' && 'error' in value;
 }
@@ -306,6 +406,9 @@ function parseCliArgs(argv: string[]): ParsedCliArgs {
     } else if (arg === '--max-usd' && next) {
       parsed.maxPriceUsd = Number(next);
       index += 1;
+    } else if (arg === '--max-attempts' && next) {
+      parsed.maxAttempts = Number(next);
+      index += 1;
     } else if (arg === '--confirm' || arg === '--yes') {
       parsed.confirm = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -330,6 +433,7 @@ function buildInputFromCli(args: ParsedCliArgs): X402PaidCallInput {
     body: parsedBody,
     profileName: args.profileName,
     maxPriceUsd: args.maxPriceUsd ?? 0,
+    maxAttempts: args.maxAttempts,
     confirm: args.confirm,
   };
 }
@@ -353,6 +457,7 @@ function printUsageAndExit(exitCode: number): never {
     '  --body <json>       Full JSON-RPC request object. Alternative to --tool.',
     '  --profile <name>    SAP MCP profile name. Defaults to active profile.',
     '  --max-usd <n>       Maximum allowed payment in USD.',
+    '  --max-attempts <n>  Retry transient x402/RPC failures with fresh payment payloads. Defaults to 3; max 5.',
     '  --confirm           Required. Acknowledges that the helper signs a payment payload.',
   ].join('\n');
   console.log(usage);
