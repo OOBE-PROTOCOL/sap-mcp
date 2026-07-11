@@ -238,7 +238,10 @@ describe('MCP monetization gate readiness', () => {
       const next = vi.fn();
 
       await gate.handle(
-        createRequest(body, { 'content-type': 'application/json' }),
+        createRequest(body, {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        }),
         response.response,
         next,
         {
@@ -256,6 +259,122 @@ describe('MCP monetization gate readiness', () => {
       expect(response.headers['payment-required']).toBeUndefined();
       expect(fetchCalls).toHaveLength(1);
       expect(fetchCalls[0]).toBe('http://127.0.0.1:8788/facilitator/supported');
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('returns a standard 402 challenge to non-MCP scanners before session validation', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-scanner-test-'));
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      if (String(input).endsWith('/supported')) {
+        return new Response(JSON.stringify({
+          kinds: [{
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+            extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+          }],
+          signers: {
+            'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': ['FeePayer111111111111111111111111111111111'],
+          },
+          extensions: [],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 8,
+        method: 'tools/call',
+        params: {
+          name: 'sap_list_all_agents',
+          arguments: { limit: 5 },
+        },
+      }));
+      const response = createResponse();
+      const next = vi.fn();
+
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        }),
+        response.response,
+        next,
+        {
+          validatePaidRequest: () => ({
+            code: -32010,
+            message: 'mcp_session_required',
+            data: { requiredHeader: 'mcp-session-id' },
+          }),
+        },
+      );
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(402);
+      expect(response.headers['payment-required']).toBeDefined();
+      expect(response.body).toContain('x402Version');
+      expect(response.body).toContain('accepts');
+      expect(response.body).not.toContain('mcp_session_required');
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('returns a standard 402 challenge to GET discovery probes', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-get-probe-test-'));
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      if (String(input).endsWith('/supported')) {
+        return new Response(JSON.stringify({
+          kinds: [{
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+            extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+          }],
+          signers: {
+            'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': ['FeePayer111111111111111111111111111111111'],
+          },
+          extensions: [],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const request = createRequest(Buffer.alloc(0), { accept: 'application/json' });
+      request.method = 'GET';
+      const response = createResponse();
+
+      await gate.handle(request, response.response, vi.fn());
+
+      expect(response.statusCode).toBe(402);
+      expect(response.headers['payment-required']).toBeDefined();
+      expect(response.body).toContain('x402Version');
+      expect(response.body).toContain('accepts');
     } finally {
       if (previousXdgDataHome === undefined) {
         delete process.env.XDG_DATA_HOME;

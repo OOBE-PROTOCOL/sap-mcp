@@ -239,6 +239,21 @@ export class McpMonetizationGate {
     }
 
     const requiredDecision = decision as Extract<PaymentDecision, { required: true }>;
+    const requestHash = hashPaymentRequest(rawBody, parsedBody);
+    const virtualPath = buildPaidVirtualPath(decision, requestHash);
+
+    // Standard x402 scanners and non-MCP HTTP clients must see a normal HTTP
+    // 402 challenge before MCP transport/session validation runs. MCP SDK
+    // clients are the only callers that need the JSON-RPC compatible 200 error.
+    const paymentHeader =
+      (request.headers['payment-signature'] as string | undefined) ??
+      (request.headers['x-payment'] as string | undefined);
+
+    if (!paymentHeader && !isMcpSdkClient) {
+      await this.returnX402Challenge(request, response, parsedBody, virtualPath);
+      return;
+    }
+
     const validationFailure = options.validatePaidRequest?.({
       request,
       parsedBody,
@@ -255,8 +270,6 @@ export class McpMonetizationGate {
       return;
     }
 
-    const requestHash = hashPaymentRequest(rawBody, parsedBody);
-    const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
     await this.usageLedger.recordDecision(metadata, decision);
     logger.info('Payment required', {
@@ -267,10 +280,6 @@ export class McpMonetizationGate {
     });
 
     // ── Fast path: Payment-Signature header present ────────────────────────
-    const paymentHeader =
-      (request.headers['payment-signature'] as string | undefined) ??
-      (request.headers['x-payment'] as string | undefined);
-
     if (paymentHeader) {
       await this.handleSignedPayment({
         request,
@@ -588,6 +597,7 @@ export class McpMonetizationGate {
     request: http.IncomingMessage,
     parsedBody: unknown,
     virtualPath: string,
+    method = request.method ?? 'POST',
   ): HTTPRequestContext {
     const adapter = new NativeHttpAdapter({
       request,
@@ -598,7 +608,7 @@ export class McpMonetizationGate {
     return {
       adapter,
       path: virtualPath,
-      method: request.method ?? 'POST',
+      method,
       paymentHeader: adapter.getHeader('payment-signature') ?? adapter.getHeader('x-payment'),
     };
   }
@@ -614,11 +624,11 @@ export class McpMonetizationGate {
     request: http.IncomingMessage,
     response: http.ServerResponse,
     parsedBody: unknown,
+    virtualPath = '/mcp/paid/read-premium/x402scan-probe/tools/list',
   ): Promise<void> {
     // Use a path that matches the PAID_ROUTE_PATTERN ('POST /mcp/paid/*')
     // so the x402 resource server generates a payment challenge.
-    const probePath = '/mcp/paid/read-premium/x402scan-probe/tools/list';
-    const context = this.buildRequestContext(request, parsedBody, probePath);
+    const context = this.buildRequestContext(request, parsedBody, virtualPath, 'POST');
     const paymentResult = await this.httpResourceServer.processHTTPRequest(context, {
       appName: 'SAP MCP Server',
       currentUrl: context.adapter.getUrl(),
