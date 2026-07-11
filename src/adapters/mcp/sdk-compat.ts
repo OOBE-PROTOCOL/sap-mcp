@@ -32,6 +32,7 @@ import {
 import { logger } from '../../core/logger.js';
 import type { SapMcpContext } from '../../core/types.js';
 import { checkToolPermissions, privateKeyGuard } from '../../security/index.js';
+import { canonicalizeToolName } from '../../tools/tool-aliases.js';
 
 // Track which handlers have been registered to avoid duplicates
 const handlerRegistry = new WeakMap<Server, {
@@ -458,13 +459,14 @@ export function registerTool<TInput = unknown>(
     // Register tools/call handler
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name: toolName, arguments: args } = request.params;
-      logger.debug('Handling tools/call', { tool: toolName, args });
+      const canonicalToolName = canonicalizeToolName(toolName);
+      logger.debug('Handling tools/call', { tool: toolName, canonicalTool: canonicalToolName, args });
       
       const handlers = withRegistrationStore(server).toolHandlers || {};
-      const handler = handlers[toolName];
+      const handler = handlers[canonicalToolName];
       
       if (!handler) {
-        logger.error('Tool not found', { tool: toolName });
+        logger.error('Tool not found', { tool: toolName, canonicalTool: canonicalToolName });
         throw new Error(`Tool not found: ${toolName}`);
       }
       
@@ -473,32 +475,32 @@ export function registerTool<TInput = unknown>(
         if (context) {
           const keyGuard = privateKeyGuard(args || {});
           if (!keyGuard.safe) {
-            logger.warn('Tool call blocked by private key guard', { tool: toolName, reason: keyGuard.reason });
+            logger.warn('Tool call blocked by private key guard', { tool: canonicalToolName, requestedTool: toolName, reason: keyGuard.reason });
             throw new Error(keyGuard.reason || 'Potential private key detected');
           }
 
-          const permission = checkToolPermissions(context, toolName);
+          const permission = checkToolPermissions(context, canonicalToolName);
           if (!permission.allowed) {
-            logger.warn('Tool call blocked by permissions', { tool: toolName, reason: permission.reason });
-            throw new Error(permission.reason || `Tool '${toolName}' is not allowed`);
+            logger.warn('Tool call blocked by permissions', { tool: canonicalToolName, requestedTool: toolName, reason: permission.reason });
+            throw new Error(permission.reason || `Tool '${canonicalToolName}' is not allowed`);
           }
 
-          const policy = await context.policyEngine.checkPermission(toolName, {
-            toolName,
+          const policy = await context.policyEngine.checkPermission(canonicalToolName, {
+            toolName: canonicalToolName,
             args: isPlainObject(args) ? args : {},
             user: context.signer?.publicKey.toBase58() || context.session?.agentId || 'local-mcp-client',
           });
           if (!policy.allowed) {
-            logger.warn('Tool call blocked by policy', { tool: toolName, reason: policy.reason });
-            throw new Error(policy.reason || `Tool '${toolName}' is blocked by policy`);
+            logger.warn('Tool call blocked by policy', { tool: canonicalToolName, requestedTool: toolName, reason: policy.reason });
+            throw new Error(policy.reason || `Tool '${canonicalToolName}' is blocked by policy`);
           }
         }
 
         const result = await handler(args || {});
-        logger.debug('Tool call completed', { tool: toolName });
+        logger.debug('Tool call completed', { tool: canonicalToolName, requestedTool: toolName });
         return toToolCallResult(result);
       } catch (error) {
-        logger.error('Tool call failed', { tool: toolName, error });
+        logger.error('Tool call failed', { tool: canonicalToolName, requestedTool: toolName, error });
         throw error;
       }
     });

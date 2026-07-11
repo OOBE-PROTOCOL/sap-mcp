@@ -275,6 +275,7 @@ function buildContextMessage(options: {
 
 ### 🔗 Solana Protocol Tool Routing
 Some MCP clients display tool names as \`mcp_sap_<tool>\`; inside this server the callable names omit that client prefix.
+Use the exact names returned by \`tools/list\`. Do not replace hyphens with underscores: for example, the SPL token tools are named \`spl-token_*\`, not \`spl_token_*\`.
 
 | Need | Preferred Tools |
 | --- | --- |

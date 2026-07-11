@@ -71,6 +71,20 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_skills_install')).toBe('free');
   });
 
+  it('canonicalizes client-normalized tool aliases before pricing', () => {
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'spl_token_getTokenAccounts',
+        arguments: { owner: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    expect(parsed.toolCalls[0]?.toolName).toBe('spl-token_getTokenAccounts');
+  });
+
   it('prices enriched discovery as read premium', () => {
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',

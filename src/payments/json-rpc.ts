@@ -3,6 +3,8 @@
  * @description Small JSON-RPC helpers used by the remote monetization gate without coupling payment logic to MCP tools.
  */
 
+import { canonicalizeToolName } from '../tools/tool-aliases.js';
+
 /**
  * @name JsonRpcId
  * @description JSON-RPC request identifier shape accepted by MCP clients.
@@ -84,7 +86,7 @@ export function parseJsonRpcBody(body: unknown): ParsedMcpRequest {
 
     toolCalls.push({
       id: request.id,
-      toolName,
+      toolName: canonicalizeToolName(toolName),
       arguments: request.params.arguments,
     });
   }
