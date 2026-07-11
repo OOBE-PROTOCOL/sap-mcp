@@ -52,7 +52,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(249);
+    expect(names).toHaveLength(269);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');

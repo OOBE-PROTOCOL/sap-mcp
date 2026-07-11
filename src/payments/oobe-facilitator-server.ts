@@ -36,9 +36,21 @@ const SOLANA_TESTNET_CAIP2 = 'solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z';
 const DEFAULT_FACILITATOR_PORT = 8788;
 const DEFAULT_FACILITATOR_HOST = '127.0.0.1';
 const MAX_JSON_BYTES = 2 * 1024 * 1024;
-const DEFAULT_MAINNET_RPC_URL = 'https://api.mainnet-beta.solana.com';
 const DEFAULT_DEVNET_RPC_URL = 'https://api.devnet.solana.com';
 const DEFAULT_TESTNET_RPC_URL = 'https://api.testnet.solana.com';
+
+/**
+ * Public Solana mainnet RPC endpoints used as built-in fallbacks.
+ * These are free, rate-limited endpoints — round-robin distributes load
+ * across all of them so no single endpoint gets hammered.
+ * Order doesn't matter — round-robin rotates through all of them.
+ */
+const PUBLIC_MAINNET_RPC_FALLBACKS: readonly string[] = [
+  'https://api.mainnet-beta.solana.com',
+  'https://solana-api.projectserum.com',
+  'https://rpc.ankr.com/solana',
+  'https://solana-rpc.publicnode.com',
+];
 
 type LegacyCompatiblePaymentRequirements = PaymentRequirements & {
   maxAmountRequired?: string;
@@ -347,7 +359,10 @@ function buildFacilitatorRpcEndpoints(
 function defaultRpcUrlsForNetwork(network: Network): string[] {
   const normalized = normalizeNetworkAlias(network);
   if (normalized === SOLANA_MAINNET_CAIP2) {
-    return [DEFAULT_MAINNET_RPC_URL];
+    // Include all public mainnet endpoints — round-robin will distribute load.
+    // The configured rpcUrl (if any) is prepended in buildFacilitatorRpcUrls,
+    // so these serve as fallbacks when the primary is slow or rate-limited.
+    return [...PUBLIC_MAINNET_RPC_FALLBACKS];
   }
   if (normalized === SOLANA_DEVNET_CAIP2) {
     return [DEFAULT_DEVNET_RPC_URL];
