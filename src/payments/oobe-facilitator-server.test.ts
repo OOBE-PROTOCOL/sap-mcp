@@ -118,6 +118,7 @@ describe('OOBE x402 facilitator configuration', () => {
 
     expect(isTransientRpcError(new Error('fetch failed'))).toBe(true);
     expect(isTransientRpcError(new Error('Node is behind by 48 slots'))).toBe(true);
+    expect(isTransientRpcError(new Error('Solana RPC statusCode=403 message=Forbidden'))).toBe(true);
     expect(isTransientRpcError(new Error('Simulation failed: {"InstructionError":[1,{"Custom":1}]}'))).toBe(false);
   });
 });

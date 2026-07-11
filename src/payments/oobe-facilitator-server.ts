@@ -47,8 +47,6 @@ const DEFAULT_TESTNET_RPC_URL = 'https://api.testnet.solana.com';
  */
 const PUBLIC_MAINNET_RPC_FALLBACKS: readonly string[] = [
   'https://api.mainnet-beta.solana.com',
-  'https://solana-api.projectserum.com',
-  'https://rpc.ankr.com/solana',
   'https://solana-rpc.publicnode.com',
 ];
 
