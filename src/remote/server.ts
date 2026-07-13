@@ -33,6 +33,7 @@ const X402_PAID_CALL_ADDON_PATH = '~/.config/mcp-sap/addons/x402-paid-call';
 const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
 const USDC_MAINNET_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const MCP_REGISTRY_AUTH_PATH = '/.well-known/mcp-registry-auth';
 let logoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 
@@ -551,6 +552,65 @@ function isPublicReadMethod(method: string | undefined): boolean {
  */
 function isHeadMethod(method: string | undefined): boolean {
   return method === 'HEAD';
+}
+
+/**
+ * @name resolveMcpRegistryAuthRecord
+ * @description Resolves the MCP Registry HTTP ownership proof from a public env value or a private file path.
+ */
+function resolveMcpRegistryAuthRecord(): string | undefined {
+  const inlineRecord = process.env.SAP_MCP_REGISTRY_AUTH_RECORD?.trim();
+  if (inlineRecord) {
+    return inlineRecord;
+  }
+
+  const recordPath = process.env.SAP_MCP_REGISTRY_AUTH_FILE?.trim();
+  if (!recordPath) {
+    return undefined;
+  }
+
+  try {
+    if (!existsSync(recordPath)) {
+      return undefined;
+    }
+
+    const fileRecord = readFileSync(recordPath, 'utf8').trim();
+    return fileRecord || undefined;
+  } catch (error) {
+    logger.warn('Failed to read MCP Registry auth record', {
+      path: recordPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
+/**
+ * @name writeMcpRegistryAuthRecord
+ * @description Writes the MCP Registry HTTP ownership proof without exposing private signing material.
+ */
+function writeMcpRegistryAuthRecord(res: http.ServerResponse, omitBody: boolean): void {
+  const record = resolveMcpRegistryAuthRecord();
+  if (!record) {
+    writeText(
+      res,
+      404,
+      'MCP Registry auth record is not configured.\n',
+      'text/plain; charset=utf-8',
+      { 'Cache-Control': 'no-store' },
+      omitBody,
+    );
+    return;
+  }
+
+  writeText(
+    res,
+    200,
+    `${record}\n`,
+    'text/plain; charset=utf-8',
+    { 'Cache-Control': 'public, max-age=60' },
+    omitBody,
+  );
 }
 
 /**
@@ -1824,6 +1884,11 @@ export class RemoteMCPServer {
           transport: 'streamable-http',
           timestamp: new Date().toISOString(),
         }, {}, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === MCP_REGISTRY_AUTH_PATH) {
+        writeMcpRegistryAuthRecord(res, isHeadMethod(req.method));
         return;
       }
 

@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.OOBE-PROTOCOL/sap-mcp",
+  "name": "ai.oobeprotocol.sap.mcp/sap-mcp",
   "title": "SAP MCP Server",
   "description": "Solana-native MCP gateway for SAP, DeFi tools, SNS identity, and x402 payments.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "websiteUrl": "https://mcp.sap.oobeprotocol.ai/",
   "repository": {
     "url": "https://github.com/OOBE-PROTOCOL/sap-mcp",
@@ -29,7 +29,7 @@
     {
       "registryType": "npm",
       "identifier": "@oobe-protocol-labs/sap-mcp-server",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "transport": {
         "type": "stdio"
       },
@@ -45,7 +45,7 @@
         },
         {
           "type": "positional",
-          "value": "@oobe-protocol-labs/sap-mcp-server@0.7.0"
+          "value": "@oobe-protocol-labs/sap-mcp-server@0.7.1"
         },
         {
           "type": "positional",

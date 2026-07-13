@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-## 0.7.0 - 2026-07-13
+## 0.7.1 - 2026-07-13
 
 ### Highlights
 
@@ -14,11 +14,15 @@ that was previously staged under `Unreleased`.
 
 ### Added — MCP Registry
 
-- Added `mcpName: io.github.OOBE-PROTOCOL/sap-mcp` to package metadata so
-  the npm package can be verified by the MCP Registry.
+- Added `mcpName: ai.oobeprotocol.sap.mcp/sap-mcp` to package metadata so
+  the npm package can be verified by the MCP Registry through OOBE Protocol's
+  domain ownership.
 - Added root `server.json` using the official MCP Registry server schema,
   with hosted `streamable-http` remote metadata for
   `https://mcp.sap.oobeprotocol.ai/mcp` and local npm stdio package metadata.
+- Added `GET /.well-known/mcp-registry-auth` support for MCP Registry
+  HTTP domain authentication via `SAP_MCP_REGISTRY_AUTH_RECORD` or
+  `SAP_MCP_REGISTRY_AUTH_FILE`.
 - Added repository, homepage, bugs, and packaged `server.json` metadata to
   the npm package for registry and client discovery.
 
