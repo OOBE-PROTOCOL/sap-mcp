@@ -1,16 +1,23 @@
-/**
- * Server metadata
- */
+import {
+  MCP_SERVER_DESCRIPTION,
+  MCP_SERVER_ICON_URL,
+  MCP_SERVER_NAME,
+  MCP_SERVER_TITLE,
+  MCP_SERVER_VERSION,
+  MCP_SERVER_WEBSITE_URL,
+} from '../core/constants.js';
 
 export const SERVER_METADATA = {
-  name: 'sap-mcp-server',
-  version: '0.2.1',
-  description: 'Official MCP gateway for OOBE Protocol SAP',
+  name: MCP_SERVER_NAME,
+  title: MCP_SERVER_TITLE,
+  version: MCP_SERVER_VERSION,
+  description: MCP_SERVER_DESCRIPTION,
   author: 'OOBE Protocol Labs',
   license: 'MIT',
-  homepage: 'https://github.com/oobe-protocol/sap-mcp-server',
-  repository: 'https://github.com/oobe-protocol/sap-mcp-server',
-  bugs: 'https://github.com/oobe-protocol/sap-mcp-server/issues',
+  homepage: MCP_SERVER_WEBSITE_URL,
+  repository: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
+  bugs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/issues',
+  icon: MCP_SERVER_ICON_URL,
 };
 
 /**

@@ -16,6 +16,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { 
   Tool, 
+  ToolAnnotations,
   Resource, 
   ResourceTemplate, 
   Prompt 
@@ -65,6 +66,14 @@ type ResourceContent = {
 type ToolContent = {
   type: string;
   text?: string;
+};
+type ToolCallResult = {
+  content: ToolContent[];
+  isError?: boolean;
+  structuredContent?: {
+    content: ToolContent[];
+    isError?: boolean;
+  };
 };
 
 interface RegisteredMcpServer extends Server {
@@ -134,7 +143,7 @@ function toResourceReadResult(
  * @name isToolCallResult
  * @description Detects handlers that already return an MCP tools/call result.
  */
-function isToolCallResult(value: unknown): value is { content: ToolContent[]; isError?: boolean } {
+function isToolCallResult(value: unknown): value is ToolCallResult {
   if (!isPlainObject(value) || !Array.isArray(value.content)) {
     return false;
   }
@@ -150,18 +159,243 @@ function isToolCallResult(value: unknown): value is { content: ToolContent[]; is
  * @name toToolCallResult
  * @description Normalizes legacy tool handler returns and native MCP tool results.
  */
-function toToolCallResult(result: unknown): { content: ToolContent[]; isError?: boolean } {
+function toToolCallResult(result: unknown): ToolCallResult {
   if (isToolCallResult(result)) {
-    return result;
+    return {
+      ...result,
+      structuredContent: result.structuredContent ?? {
+        content: result.content,
+        isError: result.isError,
+      },
+    };
   }
 
+  const content: ToolContent[] = [
+    {
+      type: 'text',
+      text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+    },
+  ];
+
   return {
-    content: [
-      {
-        type: 'text',
-        text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+    content,
+    structuredContent: { content },
+  };
+}
+
+/**
+ * @name defaultToolOutputSchema
+ * @description Describes the normalized MCP tool result shape returned by this compatibility layer.
+ */
+function defaultToolOutputSchema(): NonNullable<Tool['outputSchema']> {
+  return {
+    type: 'object',
+    properties: {
+      content: {
+        type: 'array',
+        description: 'MCP content blocks returned to the caller.',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: 'MCP content block type, usually text.' },
+            text: { type: 'string', description: 'Human-readable JSON or text returned by the tool.' },
+          },
+          required: ['type'],
+        },
       },
-    ],
+      isError: { type: 'boolean', description: 'True when the tool result represents an application-level error.' },
+    },
+    required: ['content'],
+  };
+}
+
+/**
+ * @name inferToolAnnotations
+ * @description Builds conservative MCP tool annotations from the tool name and title.
+ */
+function inferToolAnnotations(name: string, title?: string): ToolAnnotations {
+  const lower = name.toLowerCase();
+  const readOnlyPrefixes = [
+    'get',
+    'list',
+    'fetch',
+    'find',
+    'search',
+    'check',
+    'resolve',
+    'validate',
+    'estimate',
+    'calculate',
+    'preview',
+    'decode',
+    'current',
+    'show',
+  ];
+  const destructiveTerms = [
+    'close',
+    'deactivate',
+    'revoke',
+    'cancel',
+    'withdraw',
+    'delete',
+    'remove',
+    'submit',
+    'swap',
+    'execute',
+    'buy',
+    'sell',
+    'bridge',
+    'settle',
+  ];
+
+  const firstSegment = lower.split(/[_-]/)[0] ?? lower;
+  const readOnlyHint = readOnlyPrefixes.includes(firstSegment)
+    || lower.includes('_get')
+    || lower.includes('_list')
+    || lower.includes('_fetch')
+    || lower.includes('_check')
+    || lower.includes('_resolve')
+    || lower.includes('_search');
+  const destructiveHint = !readOnlyHint && destructiveTerms.some((term) => lower.includes(term));
+
+  return {
+    title,
+    readOnlyHint,
+    destructiveHint,
+    idempotentHint: readOnlyHint,
+    openWorldHint: lower.startsWith('sap_profile') || lower.startsWith('sap_skills') ? false : true,
+  };
+}
+
+/**
+ * @name formatToolTitle
+ * @description Converts machine tool names into stable human-readable titles for MCP registries and clients.
+ */
+function formatToolTitle(name: string): string {
+  return name
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bSap\b/g, 'SAP')
+    .replace(/\bSns\b/g, 'SNS')
+    .replace(/\bRpc\b/g, 'RPC')
+    .replace(/\bNft\b/g, 'NFT')
+    .replace(/\bUsdc\b/g, 'USDC')
+    .replace(/\bX402\b/g, 'x402');
+}
+
+/**
+ * @name formatParameterLabel
+ * @description Converts a machine parameter name into a readable label used only in generated descriptions.
+ */
+function formatParameterLabel(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bRpc\b/g, 'RPC')
+    .replace(/\bUrl\b/g, 'URL')
+    .replace(/\bUri\b/g, 'URI')
+    .replace(/\bId\b/g, 'ID')
+    .replace(/\bPda\b/g, 'PDA')
+    .replace(/\bSns\b/g, 'SNS')
+    .replace(/\bUsdc\b/g, 'USDC');
+}
+
+/**
+ * @name inferParameterDescription
+ * @description Provides precise fallback descriptions for third-party schemas that omit parameter descriptions.
+ */
+function inferParameterDescription(toolTitle: string, parameterName: string): string {
+  const lower = parameterName.toLowerCase();
+  const label = formatParameterLabel(parameterName);
+
+  if (lower.includes('wallet') || lower.includes('owner')) {
+    return `${label} address used by ${toolTitle}.`;
+  }
+  if (lower.includes('mint') || lower.includes('token')) {
+    return `${label} mint, symbol, or token identifier used by ${toolTitle}.`;
+  }
+  if (lower.includes('agent') && (lower.includes('pubkey') || lower.includes('publickey'))) {
+    return `${label} for the SAP agent account used by ${toolTitle}.`;
+  }
+  if (lower.includes('pubkey') || lower.includes('publickey') || lower.includes('address')) {
+    return `${label} public key or address used by ${toolTitle}.`;
+  }
+  if (lower.includes('amount') || lower.includes('lamports') || lower.includes('quantity')) {
+    return `${label} value to use for ${toolTitle}.`;
+  }
+  if (lower.includes('limit')) {
+    return `${label} controlling the maximum number of results returned by ${toolTitle}.`;
+  }
+  if (lower.includes('offset') || lower.includes('cursor') || lower.includes('page')) {
+    return `${label} pagination control for ${toolTitle}.`;
+  }
+  if (lower.includes('network') || lower.includes('cluster')) {
+    return `${label} Solana network or cluster selector for ${toolTitle}.`;
+  }
+  if (lower.includes('rpc')) {
+    return `${label} endpoint or RPC selector used by ${toolTitle}.`;
+  }
+  if (lower.includes('slippage')) {
+    return `${label} tolerance for price movement while building the transaction.`;
+  }
+  if (lower.includes('transaction') || lower === 'tx' || lower.includes('txbase64')) {
+    return `${label} transaction payload used by ${toolTitle}.`;
+  }
+  if (lower.includes('signature')) {
+    return `${label} transaction or message signature used by ${toolTitle}.`;
+  }
+  if (lower.includes('domain') || lower.includes('name')) {
+    return `${label} name or domain value used by ${toolTitle}.`;
+  }
+  if (lower.includes('confirm')) {
+    return `${label} confirmation flag required before ${toolTitle} performs a local write.`;
+  }
+
+  return `${label} parameter for ${toolTitle}.`;
+}
+
+/**
+ * @name enrichSchemaDescriptions
+ * @description Adds missing JSON Schema descriptions without changing validation semantics.
+ */
+function enrichSchemaDescriptions(schema: Tool['inputSchema'], toolTitle: string): Tool['inputSchema'] {
+  const enrichProperty = (propertyName: string, propertySchema: object): object => {
+    const schemaRecord = propertySchema as Record<string, unknown>;
+    const enriched: Record<string, unknown> = { ...schemaRecord };
+
+    if (typeof enriched.description !== 'string' && typeof enriched.title !== 'string') {
+      enriched.description = inferParameterDescription(toolTitle, propertyName);
+    }
+
+    if (isPlainObject(enriched.properties)) {
+      enriched.properties = Object.fromEntries(
+        Object.entries(enriched.properties).map(([childName, childSchema]) => [
+          childName,
+          isPlainObject(childSchema) ? enrichProperty(childName, childSchema) : childSchema,
+        ])
+      );
+    }
+
+    if (isPlainObject(enriched.items)) {
+      enriched.items = enrichProperty(propertyName, enriched.items);
+    }
+
+    return enriched;
+  };
+
+  const properties = isPlainObject(schema.properties)
+    ? Object.fromEntries(
+      Object.entries(schema.properties).map(([propertyName, propertySchema]) => [
+        propertyName,
+        isPlainObject(propertySchema) ? enrichProperty(propertyName, propertySchema) : propertySchema,
+      ])
+    )
+    : schema.properties;
+
+  return {
+    ...schema,
+    properties,
   };
 }
 
@@ -386,6 +620,25 @@ function normalizeInputSchema(inputSchema: unknown): Tool['inputSchema'] {
 }
 
 /**
+ * Converts a property map or full JSON Schema object into the MCP `Tool.outputSchema` shape.
+ */
+function normalizeOutputSchema(outputSchema: unknown): NonNullable<Tool['outputSchema']> {
+  const sanitized = sanitizeJsonSchema(outputSchema);
+  const raw = isPlainObject(sanitized) ? sanitized : undefined;
+
+  if (raw && (raw.type === 'object' || raw.properties || raw.required)) {
+    return {
+      ...raw,
+      type: 'object',
+      properties: toMcpProperties(raw.properties),
+      required: Array.isArray(raw.required) ? raw.required.filter((item: unknown) => typeof item === 'string') : undefined,
+    };
+  }
+
+  return defaultToolOutputSchema();
+}
+
+/**
  * Initialize handler tracking for a server
  */
 function ensureHandlerRegistry(server: Server) {
@@ -425,17 +678,26 @@ export function registerTool<TInput = unknown>(
     title?: string;
     description: string;
     inputSchema: unknown;
+    outputSchema?: unknown;
+    annotations?: ToolAnnotations;
   },
   handler: (input: TInput) => Promise<unknown>
 ) {
   logger.debug('Registering tool', { name });
   const store = withRegistrationStore(server);
+  const title = definition.title ?? formatToolTitle(name);
   
   // Store tool definition
   const tool: Tool = {
     name,
+    title,
     description: definition.description,
-    inputSchema: normalizeInputSchema(definition.inputSchema),
+    inputSchema: enrichSchemaDescriptions(normalizeInputSchema(definition.inputSchema), title),
+    outputSchema: normalizeOutputSchema(definition.outputSchema),
+    annotations: {
+      ...inferToolAnnotations(name, title),
+      ...definition.annotations,
+    },
   };
   
   // Initialize server storage if needed

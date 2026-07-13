@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SapMcpConfig } from '../config/env.js';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 import {
   buildA2AAgentCard,
   buildDocsHtml,
@@ -22,6 +23,7 @@ const originalAuthSecret = process.env.SAP_MCP_AUTH_SECRET;
 const originalStateless = process.env.SAP_MCP_HTTP_STATELESS;
 const originalRemoteRateLimit = process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE;
 const originalFacilitatorPublicKey = process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY;
+const githubReleaseBaseUrl = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
 
 const appConfig: SapMcpConfig = {
   mode: 'hosted-api',
@@ -255,9 +257,9 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
-    expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.1/SAP-MCP-Wizard-Setup-0.7.1-x64.exe');
-    expect(info.downloads.desktopWizard.macosArm64Dmg).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.1/SAP-MCP-Wizard-0.7.1-arm64.dmg');
-    expect(info.downloads.desktopWizard.linuxX64TarGz).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.1/sap-mcp-wizard-0.7.1-x64.tar.gz');
+    expect(info.downloads.desktopWizard.windowsX64Setup).toBe(`${githubReleaseBaseUrl}/SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`);
+    expect(info.downloads.desktopWizard.macosArm64Dmg).toBe(`${githubReleaseBaseUrl}/SAP-MCP-Wizard-${MCP_SERVER_VERSION}-arm64.dmg`);
+    expect(info.downloads.desktopWizard.linuxX64TarGz).toBe(`${githubReleaseBaseUrl}/sap-mcp-wizard-${MCP_SERVER_VERSION}-x64.tar.gz`);
     expect(info.payments).toEqual(paymentDiscovery);
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
     expect(info.security.keypairBytesExposed).toBe(false);
@@ -317,7 +319,7 @@ describe('remote MCP server config', () => {
     };
     const wellKnown = buildX402DiscoveryDocument(req, publicRemoteConfig);
 
-    expect(openApi.info.version).toBe('0.7.1');
+    expect(openApi.info.version).toBe(MCP_SERVER_VERSION);
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
     expect(openApi['x-discovery'].openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
@@ -394,9 +396,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
     expect(root).toContain('Native Downloads');
-    expect(root).toContain('SAP-MCP-Wizard-Setup-0.7.1-x64.exe');
-    expect(root).toContain('SAP-MCP-Wizard-0.7.1-arm64.dmg');
-    expect(root).toContain('sap-mcp-wizard-0.7.1-x64.tar.gz');
+    expect(root).toContain(`SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`);
+    expect(root).toContain(`SAP-MCP-Wizard-${MCP_SERVER_VERSION}-arm64.dmg`);
+    expect(root).toContain(`sap-mcp-wizard-${MCP_SERVER_VERSION}-x64.tar.gz`);
     expect(root).toContain('/wizard/downloads.json');
     expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
     expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');

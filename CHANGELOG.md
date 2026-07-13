@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.2 - 2026-07-13
+
+### Changed
+
+- Improved MCP registry and Smithery metadata by exposing a stable server title,
+  public description, homepage URL, and hosted icon directly through MCP
+  `serverInfo` metadata.
+- Added MCP tool `outputSchema` metadata for every registered tool using the
+  normalized tool result shape returned by the compatibility layer.
+- Added conservative MCP tool annotations for read-only, destructive,
+  idempotent, and open-world hints without changing tool names or runtime
+  behavior.
+- Added human-readable tool titles for discovery clients and registries while
+  preserving every existing public tool name for backward compatibility.
+- Enriched missing third-party input parameter descriptions at registration
+  time so imported SDK tools expose reviewable JSON Schema metadata.
+- Aligned `server.json` with the hosted SAP MCP identity and npm package
+  version for MCP Registry distribution.
+
+### Verification
+
+- `CI=true pnpm run typecheck`
+- `CI=true pnpm test -- --run src/server/create-server.test.ts`
+- `CI=true pnpm run build`
+
 ## 0.7.1 - 2026-07-13
 
 ### Highlights

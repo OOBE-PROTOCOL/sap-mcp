@@ -6,7 +6,14 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { logger } from '../core/logger.js';
-import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from '../core/constants.js';
+import {
+  MCP_SERVER_DESCRIPTION,
+  MCP_SERVER_ICON_URL,
+  MCP_SERVER_NAME,
+  MCP_SERVER_TITLE,
+  MCP_SERVER_VERSION,
+  MCP_SERVER_WEBSITE_URL,
+} from '../core/constants.js';
 import type { SapMcpConfig, SapMcpContext } from '../core/types.js';
 import { createSapClient } from '../sap/sap-client-manager.js';
 import { resolveSigner } from '../signer/signer-resolver.js';
@@ -25,7 +32,17 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
   const server = new Server(
     {
       name: MCP_SERVER_NAME,
+      title: MCP_SERVER_TITLE,
       version: MCP_SERVER_VERSION,
+      description: MCP_SERVER_DESCRIPTION,
+      websiteUrl: MCP_SERVER_WEBSITE_URL,
+      icons: [
+        {
+          src: MCP_SERVER_ICON_URL,
+          mimeType: 'image/png',
+          sizes: ['512x512'],
+        },
+      ],
     },
     {
       // Declare all capabilities upfront

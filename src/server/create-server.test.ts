@@ -10,7 +10,20 @@ import { getPermissionMappedTools, getRequiredPermission } from '../security/too
 
 interface ToolDefinitionForTest {
   name: string;
+  title?: string;
   description?: string;
+  inputSchema?: {
+    type?: string;
+    properties?: Record<string, { description?: string; title?: string }>;
+  };
+  outputSchema?: unknown;
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
 }
 
 interface ToolResponseForTest {
@@ -116,6 +129,32 @@ describe('createSapMcpServer', () => {
     expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('sap_register_agent');
     expect(toolsByName.get('sap_register_agent')?.description).toContain('primary on-chain SAP agent registration');
     expect(toolsByName.get('sap_register_agent')?.description).toContain('metaplex-nft_*');
+  });
+
+  it('exposes registry-grade tool metadata for discovery clients', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const tools = server.tools ?? [];
+
+    expect(tools.length).toBeGreaterThan(0);
+    for (const tool of tools) {
+      expect(tool.title, `${tool.name} title`).toBeTruthy();
+      expect(tool.description, `${tool.name} description`).toBeTruthy();
+      expect(tool.inputSchema, `${tool.name} inputSchema`).toMatchObject({ type: 'object' });
+      expect(tool.outputSchema, `${tool.name} outputSchema`).toMatchObject({ type: 'object' });
+      for (const [parameterName, parameterSchema] of Object.entries(tool.inputSchema?.properties ?? {})) {
+        expect(
+          parameterSchema.description ?? parameterSchema.title,
+          `${tool.name}.${parameterName} parameter description`
+        ).toBeTruthy();
+      }
+      expect(tool.annotations, `${tool.name} annotations`).toMatchObject({
+        title: tool.title,
+        readOnlyHint: expect.any(Boolean),
+        destructiveHint: expect.any(Boolean),
+        idempotentHint: expect.any(Boolean),
+        openWorldHint: expect.any(Boolean),
+      });
+    }
   });
 
   it('maps bridge and Metaplex AgentKit writes to transaction permissions', async () => {

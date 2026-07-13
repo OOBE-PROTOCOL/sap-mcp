@@ -51,9 +51,25 @@ export const DEFAULT_SESSION_EXPIRATION_MS = 24 * 60 * 60 * 1000;
  */
 export const MCP_SERVER_NAME = 'sap-mcp-server';
 /**
+ * Human-readable MCP server title shown by registry and client UIs.
+ */
+export const MCP_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
+/**
+ * Public MCP server description shown by registries and hosted discovery surfaces.
+ */
+export const MCP_SERVER_DESCRIPTION = 'Solana-native MCP gateway for Synapse Agent Protocol tools, DeFi protocols, SNS identity, x402/pay.sh payments, and user-controlled agent operations.';
+/**
+ * Public homepage for hosted SAP MCP documentation and runtime onboarding.
+ */
+export const MCP_SERVER_WEBSITE_URL = 'https://mcp.sap.oobeprotocol.ai/';
+/**
+ * Public PNG icon used by MCP clients and registries.
+ */
+export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png';
+/**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.7.1';
+export const MCP_SERVER_VERSION = '0.7.2';
 
 /**
  * Tool categories
