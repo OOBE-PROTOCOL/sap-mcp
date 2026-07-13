@@ -944,30 +944,10 @@ export function buildOpenApiSpec(
       { url: baseUrl, description: 'SAP MCP Hosted Server' },
     ],
     paths: {
-      '/pay/provider.yml': {
-        get: {
-          operationId: 'getPayShProviderYaml',
-          summary: 'Read the public pay.sh provider YAML for hosted SAP MCP.',
-          tags: ['Discovery', 'Payments'],
-          responses: {
-            '200': {
-              description: 'pay.sh provider YAML for the hosted SAP MCP gateway.',
-              content: {
-                'application/yaml': {
-                  schema: { type: 'string' },
-                },
-                'text/yaml': {
-                  schema: { type: 'string' },
-                },
-              },
-            },
-          },
-        },
-      },
       '/mcp': {
         post: {
           operationId: 'mcpCall',
-          summary: 'Execute SAP MCP JSON-RPC request',
+          summary: 'Fetch SAP MCP JSON-RPC response',
           tags: ['MCP'],
           'x-payment-info': {
             price: {

@@ -280,11 +280,6 @@ describe('remote MCP server config', () => {
       };
       'x-pay-sh': { providerYaml: string };
       paths: {
-        '/pay/provider.yml': {
-          get: {
-            responses: Record<string, unknown>;
-          };
-        };
         '/mcp': {
           post: {
             'x-payment-info': {
@@ -329,7 +324,7 @@ describe('remote MCP server config', () => {
     expect(openApi['x-discovery'].payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-pay-sh'].providerYaml).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-discovery'].payments).toEqual(paymentDiscovery);
-    expect(openApi.paths['/pay/provider.yml'].get.responses['200']).toBeDefined();
+    expect(openApi.paths).not.toHaveProperty('/pay/provider.yml');
     expect(openApi.paths['/mcp'].post['x-payment-info'].protocols).toEqual(['x402']);
     expect(openApi.paths['/mcp'].post['x-payment-info'].network).toBe(paymentDiscovery.network);
     expect(openApi.paths['/mcp'].post['x-payment-info'].asset).toBe(paymentDiscovery.asset);
