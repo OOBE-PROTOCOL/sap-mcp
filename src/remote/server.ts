@@ -26,6 +26,7 @@ const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..'
 const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
 const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
 const PAYMENT_STATS_CACHE_MS = 15_000;
+const SERVER_CARD_CACHE_MS = 300_000;
 const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
 const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
 const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
@@ -36,6 +37,7 @@ const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 const MCP_REGISTRY_AUTH_PATH = '/.well-known/mcp-registry-auth';
 let logoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
+let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
 /**
  * @name PublicLogoAsset
@@ -164,6 +166,7 @@ export interface PublicServerInfo {
     serverInfo: string;
     openApi: string;
     x402Discovery: string;
+    smitheryServerCard: string;
     payShProvider: string;
     agentCard: string;
     wizardDescriptor: string;
@@ -204,6 +207,54 @@ export interface PublicServerInfo {
     github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
     userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
   };
+}
+
+/**
+ * @name StaticServerCard
+ * @description Smithery-compatible static MCP server card served from /.well-known/mcp/server-card.json.
+ */
+export interface StaticServerCard {
+  serverInfo: {
+    name: 'sap-mcp-server';
+    displayName: string;
+    title: string;
+    version: string;
+    description: string;
+    homepage: string;
+    websiteUrl: string;
+    icon: string;
+    icons: ReadonlyArray<{
+      src: string;
+      mimeType: 'image/png';
+      sizes: readonly ['512x512'];
+    }>;
+  };
+  authentication: {
+    required: boolean;
+    schemes: readonly ('none' | 'x402' | 'Bearer')[];
+  };
+  transport: {
+    type: 'streamable-http';
+    url: string;
+  };
+  tools: readonly unknown[];
+  resources: readonly unknown[];
+  resourceTemplates: readonly unknown[];
+  prompts: readonly unknown[];
+}
+
+interface StaticServerCardCapabilities {
+  tools: readonly unknown[];
+  resources: readonly unknown[];
+  resourceTemplates: readonly unknown[];
+  prompts: readonly unknown[];
+}
+
+interface RegisteredServerSnapshot {
+  tools?: readonly unknown[];
+  resources?: readonly unknown[];
+  resourceTemplates?: readonly unknown[];
+  prompts?: readonly unknown[];
 }
 
 /**
@@ -890,6 +941,7 @@ export function buildPublicServerInfo(
       serverInfo: `${baseUrl}/server.json`,
       openApi: `${baseUrl}/openapi.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
+      smitheryServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
       payShProvider: `${baseUrl}/pay/provider.yml`,
       agentCard: `${baseUrl}/.well-known/agent-card.json`,
       wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
@@ -930,6 +982,74 @@ export function buildPublicServerInfo(
       github: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
       userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS',
     },
+  };
+}
+
+/**
+ * @name getStaticServerCardCapabilities
+ * @description Reads capabilities from the real MCP registration store so static metadata never drifts from tools/list.
+ */
+async function getStaticServerCardCapabilities(appConfig: SapMcpConfig): Promise<StaticServerCardCapabilities> {
+  const now = Date.now();
+  if (serverCardCapabilitiesCache && serverCardCapabilitiesCache.expiresAt > now) {
+    return serverCardCapabilitiesCache.capabilities;
+  }
+
+  const server = await createSapMcpServer(appConfig);
+  const snapshot = server as RegisteredServerSnapshot;
+  const capabilities: StaticServerCardCapabilities = {
+    tools: snapshot.tools ?? [],
+    resources: snapshot.resources ?? [],
+    resourceTemplates: snapshot.resourceTemplates ?? [],
+    prompts: snapshot.prompts ?? [],
+  };
+  serverCardCapabilitiesCache = {
+    expiresAt: now + SERVER_CARD_CACHE_MS,
+    capabilities,
+  };
+  return capabilities;
+}
+
+/**
+ * @name buildStaticServerCard
+ * @description Builds the static server card consumed by registries that need metadata outside initialize.
+ */
+export async function buildStaticServerCard(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+  appConfig: SapMcpConfig,
+): Promise<StaticServerCard> {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  const capabilities = await getStaticServerCardCapabilities(appConfig);
+  const authRequired = config.auth.type !== 'none';
+
+  return {
+    serverInfo: {
+      name: 'sap-mcp-server',
+      displayName: PUBLIC_SERVER_TITLE,
+      title: PUBLIC_SERVER_TITLE,
+      version: MCP_SERVER_VERSION,
+      description: PUBLIC_SERVER_DESCRIPTION,
+      homepage: `${baseUrl}/`,
+      websiteUrl: `${baseUrl}/`,
+      icon: `${baseUrl}/favicon.png`,
+      icons: [
+        {
+          src: `${baseUrl}/favicon.png`,
+          mimeType: 'image/png',
+          sizes: ['512x512'],
+        },
+      ],
+    },
+    authentication: {
+      required: authRequired,
+      schemes: authRequired ? ['Bearer'] : ['none', 'x402'],
+    },
+    transport: {
+      type: 'streamable-http',
+      url: `${baseUrl}/mcp`,
+    },
+    ...capabilities,
   };
 }
 
@@ -1889,6 +2009,13 @@ export class RemoteMCPServer {
 
       if (isPublicReadMethod(req.method) && url.pathname === MCP_REGISTRY_AUTH_PATH) {
         writeMcpRegistryAuthRecord(res, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/.well-known/mcp/server-card.json') {
+        writeJson(res, 200, await buildStaticServerCard(req, this.config, this.appConfig), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
         return;
       }
 

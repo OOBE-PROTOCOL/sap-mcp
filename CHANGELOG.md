@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.3 - 2026-07-13
+
+### Added
+
+- Added `GET /.well-known/mcp/server-card.json`, a Smithery-compatible static
+  MCP server card generated from the real SAP MCP registration store.
+- Included public server metadata, hosted Streamable HTTP transport details,
+  authentication modes, tools, resources, resource templates, and prompts in
+  the static card so registry crawlers can score metadata even when they do not
+  consume extended `initialize.serverInfo` fields.
+- Added the static server-card URL to `/server.json` endpoint metadata.
+
+### Verification
+
+- `CI=true pnpm run verify:release`
+
 ## 0.7.2 - 2026-07-13
 
 ### Changed

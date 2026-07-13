@@ -8,6 +8,7 @@ import {
   buildLandingHtml,
   buildPublicPayShProviderYaml,
   buildPublicServerInfo,
+  buildStaticServerCard,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
   buildOpenApiSpec,
@@ -254,6 +255,7 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
+    expect(info.endpoints.smitheryServerCard).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/mcp/server-card.json');
     expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
@@ -266,6 +268,47 @@ describe('remote MCP server config', () => {
     expect(info.security.rpcSecretsExposed).toBe(false);
     expect(JSON.stringify(info)).not.toContain('api_key=');
     expect(JSON.stringify(info)).not.toContain('/Users/keepeeto');
+  });
+
+  it('publishes a Smithery-compatible static MCP server card', async () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const card = await buildStaticServerCard(req, publicRemoteConfig, appConfig);
+    const firstTool = card.tools[0] as {
+      title?: string;
+      outputSchema?: unknown;
+      annotations?: unknown;
+    };
+
+    expect(card.serverInfo).toMatchObject({
+      name: 'sap-mcp-server',
+      displayName: 'SAP MCP Server | OOBE Protocol',
+      title: 'SAP MCP Server | OOBE Protocol',
+      version: MCP_SERVER_VERSION,
+      description: expect.stringContaining('Solana-native MCP gateway'),
+      homepage: 'https://mcp.sap.oobeprotocol.ai/',
+      websiteUrl: 'https://mcp.sap.oobeprotocol.ai/',
+      icon: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+    });
+    expect(card.serverInfo.icons[0]).toMatchObject({
+      src: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      mimeType: 'image/png',
+      sizes: ['512x512'],
+    });
+    expect(card.authentication).toEqual({ required: false, schemes: ['none', 'x402'] });
+    expect(card.transport).toEqual({
+      type: 'streamable-http',
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+    });
+    expect(card.tools).toHaveLength(268);
+    expect(card.prompts.length).toBeGreaterThan(0);
+    expect(firstTool.title).toBeTruthy();
+    expect(firstTool.outputSchema).toMatchObject({ type: 'object' });
+    expect(firstTool.annotations).toMatchObject({
+      readOnlyHint: expect.any(Boolean),
+      destructiveHint: expect.any(Boolean),
+      idempotentHint: expect.any(Boolean),
+      openWorldHint: expect.any(Boolean),
+    });
   });
 
   it('publishes x402scan-compatible discovery metadata', () => {
