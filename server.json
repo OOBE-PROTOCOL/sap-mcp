@@ -1,0 +1,71 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.OOBE-PROTOCOL/sap-mcp",
+  "title": "SAP MCP Server",
+  "description": "Solana-native MCP gateway for SAP, DeFi tools, SNS identity, and x402 payments.",
+  "version": "0.7.0",
+  "websiteUrl": "https://mcp.sap.oobeprotocol.ai/",
+  "repository": {
+    "url": "https://github.com/OOBE-PROTOCOL/sap-mcp",
+    "source": "github",
+    "id": "1283972695"
+  },
+  "icons": [
+    {
+      "src": "https://mcp.sap.oobeprotocol.ai/favicon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@oobe-protocol-labs/sap-mcp-server",
+      "version": "0.7.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "npx",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "--yes"
+        },
+        {
+          "type": "positional",
+          "value": "--package"
+        },
+        {
+          "type": "positional",
+          "value": "@oobe-protocol-labs/sap-mcp-server@0.7.0"
+        },
+        {
+          "type": "positional",
+          "value": "sap-mcp-server"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE",
+          "description": "Keep SAP MCP pointed at the active profile manager instead of stale client env overrides.",
+          "format": "boolean",
+          "value": "false"
+        },
+        {
+          "name": "SAP_LOG_LEVEL",
+          "description": "Runtime log level for local SAP MCP stdio sessions.",
+          "format": "string",
+          "default": "info"
+        }
+      ]
+    }
+  ]
+}

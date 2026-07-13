@@ -1,6 +1,7 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.6.0",
+  "version": "0.7.0",
+  "mcpName": "io.github.OOBE-PROTOCOL/sap-mcp",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
   "main": "dist/index.js",
@@ -25,6 +26,7 @@
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
+    "server.json",
     ".env.example",
     "config.example.json",
     "config.secure-example.json",
@@ -72,6 +74,14 @@
   ],
   "author": "OOBE Protocol Labs",
   "license": "MIT",
+  "homepage": "https://mcp.sap.oobeprotocol.ai/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OOBE-PROTOCOL/sap-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OOBE-PROTOCOL/sap-mcp/issues"
+  },
   "dependencies": {
     "@bonfida/spl-name-service": "3.0.9",
     "@coral-xyz/anchor": "^0.30.1",

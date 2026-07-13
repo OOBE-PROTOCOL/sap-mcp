@@ -255,9 +255,9 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
-    expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
-    expect(info.downloads.desktopWizard.macosArm64Dmg).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-0.6.0-arm64.dmg');
-    expect(info.downloads.desktopWizard.linuxX64TarGz).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/sap-mcp-wizard-0.6.0-x64.tar.gz');
+    expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.0/SAP-MCP-Wizard-Setup-0.7.0-x64.exe');
+    expect(info.downloads.desktopWizard.macosArm64Dmg).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.0/SAP-MCP-Wizard-0.7.0-arm64.dmg');
+    expect(info.downloads.desktopWizard.linuxX64TarGz).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.7.0/sap-mcp-wizard-0.7.0-x64.tar.gz');
     expect(info.payments).toEqual(paymentDiscovery);
     expect(info.capabilities.payments).toEqual(['x402', 'pay.sh']);
     expect(info.security.keypairBytesExposed).toBe(false);
@@ -317,7 +317,7 @@ describe('remote MCP server config', () => {
     };
     const wellKnown = buildX402DiscoveryDocument(req, publicRemoteConfig);
 
-    expect(openApi.info.version).toBe('0.6.0');
+    expect(openApi.info.version).toBe('0.7.0');
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
     expect(openApi['x-discovery'].openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
@@ -394,9 +394,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
     expect(root).toContain('Native Downloads');
-    expect(root).toContain('SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
-    expect(root).toContain('SAP-MCP-Wizard-0.6.0-arm64.dmg');
-    expect(root).toContain('sap-mcp-wizard-0.6.0-x64.tar.gz');
+    expect(root).toContain('SAP-MCP-Wizard-Setup-0.7.0-x64.exe');
+    expect(root).toContain('SAP-MCP-Wizard-0.7.0-arm64.dmg');
+    expect(root).toContain('sap-mcp-wizard-0.7.0-x64.tar.gz');
     expect(root).toContain('/wizard/downloads.json');
     expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
     expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');

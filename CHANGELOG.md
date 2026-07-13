@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.0 - 2026-07-13
+
+### Highlights
+
+Publishes SAP MCP as a registry-ready MCP server with official metadata for
+the Model Context Protocol Registry, while shipping the MagicBlock tool suite
+that was previously staged under `Unreleased`.
+
+### Added — MCP Registry
+
+- Added `mcpName: io.github.OOBE-PROTOCOL/sap-mcp` to package metadata so
+  the npm package can be verified by the MCP Registry.
+- Added root `server.json` using the official MCP Registry server schema,
+  with hosted `streamable-http` remote metadata for
+  `https://mcp.sap.oobeprotocol.ai/mcp` and local npm stdio package metadata.
+- Added repository, homepage, bugs, and packaged `server.json` metadata to
+  the npm package for registry and client discovery.
+
 ### Added — MagicBlock Tools (20 tools, 3 protocols)
 
 New `magicblock-tools.ts` module registering 20 MagicBlock tools with the
