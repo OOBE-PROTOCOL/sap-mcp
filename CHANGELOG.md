@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.4 - 2026-07-13
+
+### Changed
+
+- Added top-level metadata aliases to `/server.json` and
+  `/.well-known/mcp/server-card.json` for registry crawlers that score
+  description, homepage, icon, and display name outside nested MCP
+  `serverInfo` fields.
+- Kept all metadata values derived from the canonical hosted SAP MCP title,
+  public description, homepage, and favicon without adding synthetic registry
+  data.
+
+### Verification
+
+- `CI=true pnpm run verify:release`
+
 ## 0.7.3 - 2026-07-13
 
 ### Added

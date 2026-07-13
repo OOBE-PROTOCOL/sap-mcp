@@ -251,6 +251,22 @@ describe('remote MCP server config', () => {
     );
 
     expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.displayName).toBe('SAP MCP Server | OOBE Protocol');
+    expect(info.display_name).toBe('SAP MCP Server | OOBE Protocol');
+    expect(info.description).toContain('Solana-native MCP gateway');
+    expect(info.homepage).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.websiteUrl).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.website_url).toBe('https://mcp.sap.oobeprotocol.ai/');
+    expect(info.icon).toBe('https://mcp.sap.oobeprotocol.ai/favicon.png');
+    expect(info.iconUrl).toBe('https://mcp.sap.oobeprotocol.ai/favicon.png');
+    expect(info.icon_url).toBe('https://mcp.sap.oobeprotocol.ai/favicon.png');
+    expect(info.image).toBe('https://mcp.sap.oobeprotocol.ai/favicon.png');
+    expect(info.logo).toBe('https://mcp.sap.oobeprotocol.ai/favicon.png');
+    expect(info.icons[0]).toMatchObject({
+      src: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      mimeType: 'image/png',
+      sizes: ['512x512'],
+    });
     expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
@@ -279,15 +295,42 @@ describe('remote MCP server config', () => {
       annotations?: unknown;
     };
 
-    expect(card.serverInfo).toMatchObject({
+    expect(card).toMatchObject({
       name: 'sap-mcp-server',
       displayName: 'SAP MCP Server | OOBE Protocol',
+      display_name: 'SAP MCP Server | OOBE Protocol',
       title: 'SAP MCP Server | OOBE Protocol',
       version: MCP_SERVER_VERSION,
       description: expect.stringContaining('Solana-native MCP gateway'),
       homepage: 'https://mcp.sap.oobeprotocol.ai/',
       websiteUrl: 'https://mcp.sap.oobeprotocol.ai/',
+      website_url: 'https://mcp.sap.oobeprotocol.ai/',
       icon: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      iconUrl: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      icon_url: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      image: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      logo: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+    });
+    expect(card.icons[0]).toMatchObject({
+      src: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      mimeType: 'image/png',
+      sizes: ['512x512'],
+    });
+    expect(card.serverInfo).toMatchObject({
+      name: 'sap-mcp-server',
+      displayName: 'SAP MCP Server | OOBE Protocol',
+      display_name: 'SAP MCP Server | OOBE Protocol',
+      title: 'SAP MCP Server | OOBE Protocol',
+      version: MCP_SERVER_VERSION,
+      description: expect.stringContaining('Solana-native MCP gateway'),
+      homepage: 'https://mcp.sap.oobeprotocol.ai/',
+      websiteUrl: 'https://mcp.sap.oobeprotocol.ai/',
+      website_url: 'https://mcp.sap.oobeprotocol.ai/',
+      icon: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      iconUrl: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      icon_url: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      image: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
+      logo: 'https://mcp.sap.oobeprotocol.ai/favicon.png',
     });
     expect(card.serverInfo.icons[0]).toMatchObject({
       src: 'https://mcp.sap.oobeprotocol.ai/favicon.png',

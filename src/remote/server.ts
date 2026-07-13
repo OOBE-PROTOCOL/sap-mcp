@@ -150,8 +150,23 @@ export interface WizardInstallDescriptor {
 export interface PublicServerInfo {
   name: 'sap-mcp-server';
   title: string;
+  displayName: string;
+  display_name: string;
   description: string;
   version: string;
+  homepage: string;
+  websiteUrl: string;
+  website_url: string;
+  icon: string;
+  iconUrl: string;
+  icon_url: string;
+  image: string;
+  logo: string;
+  icons: ReadonlyArray<{
+    src: string;
+    mimeType: 'image/png';
+    sizes: readonly ['512x512'];
+  }>;
   status: 'online';
   protocol: {
     primary: 'mcp';
@@ -217,18 +232,43 @@ export interface StaticServerCard {
   serverInfo: {
     name: 'sap-mcp-server';
     displayName: string;
+    display_name: string;
     title: string;
     version: string;
     description: string;
     homepage: string;
     websiteUrl: string;
+    website_url: string;
     icon: string;
+    iconUrl: string;
+    icon_url: string;
+    image: string;
+    logo: string;
     icons: ReadonlyArray<{
       src: string;
       mimeType: 'image/png';
       sizes: readonly ['512x512'];
     }>;
   };
+  name: 'sap-mcp-server';
+  displayName: string;
+  display_name: string;
+  title: string;
+  version: string;
+  description: string;
+  homepage: string;
+  websiteUrl: string;
+  website_url: string;
+  icon: string;
+  iconUrl: string;
+  icon_url: string;
+  image: string;
+  logo: string;
+  icons: ReadonlyArray<{
+    src: string;
+    mimeType: 'image/png';
+    sizes: readonly ['512x512'];
+  }>;
   authentication: {
     required: boolean;
     schemes: readonly ('none' | 'x402' | 'Bearer')[];
@@ -922,11 +962,31 @@ export function buildPublicServerInfo(
 ): PublicServerInfo {
   const baseUrl = buildPublicBaseUrl(req, config);
   const authRequired = config.auth.type !== 'none';
+  const homepage = `${baseUrl}/`;
+  const iconUrl = `${baseUrl}/favicon.png`;
+  const icons = [
+    {
+      src: iconUrl,
+      mimeType: 'image/png' as const,
+      sizes: ['512x512'] as const,
+    },
+  ];
   return {
     name: 'sap-mcp-server',
     title: PUBLIC_SERVER_TITLE,
+    displayName: PUBLIC_SERVER_TITLE,
+    display_name: PUBLIC_SERVER_TITLE,
     description: PUBLIC_SERVER_DESCRIPTION,
     version: MCP_SERVER_VERSION,
+    homepage,
+    websiteUrl: homepage,
+    website_url: homepage,
+    icon: iconUrl,
+    iconUrl,
+    icon_url: iconUrl,
+    image: iconUrl,
+    logo: iconUrl,
+    icons,
     status: 'online',
     protocol: {
       primary: 'mcp',
@@ -1022,24 +1082,48 @@ export async function buildStaticServerCard(
   const baseUrl = buildPublicBaseUrl(req, config);
   const capabilities = await getStaticServerCardCapabilities(appConfig);
   const authRequired = config.auth.type !== 'none';
+  const homepage = `${baseUrl}/`;
+  const iconUrl = `${baseUrl}/favicon.png`;
+  const icons = [
+    {
+      src: iconUrl,
+      mimeType: 'image/png' as const,
+      sizes: ['512x512'] as const,
+    },
+  ];
 
   return {
+    name: 'sap-mcp-server',
+    displayName: PUBLIC_SERVER_TITLE,
+    display_name: PUBLIC_SERVER_TITLE,
+    title: PUBLIC_SERVER_TITLE,
+    version: MCP_SERVER_VERSION,
+    description: PUBLIC_SERVER_DESCRIPTION,
+    homepage,
+    websiteUrl: homepage,
+    website_url: homepage,
+    icon: iconUrl,
+    iconUrl,
+    icon_url: iconUrl,
+    image: iconUrl,
+    logo: iconUrl,
+    icons,
     serverInfo: {
       name: 'sap-mcp-server',
       displayName: PUBLIC_SERVER_TITLE,
+      display_name: PUBLIC_SERVER_TITLE,
       title: PUBLIC_SERVER_TITLE,
       version: MCP_SERVER_VERSION,
       description: PUBLIC_SERVER_DESCRIPTION,
-      homepage: `${baseUrl}/`,
-      websiteUrl: `${baseUrl}/`,
-      icon: `${baseUrl}/favicon.png`,
-      icons: [
-        {
-          src: `${baseUrl}/favicon.png`,
-          mimeType: 'image/png',
-          sizes: ['512x512'],
-        },
-      ],
+      homepage,
+      websiteUrl: homepage,
+      website_url: homepage,
+      icon: iconUrl,
+      iconUrl,
+      icon_url: iconUrl,
+      image: iconUrl,
+      logo: iconUrl,
+      icons,
     },
     authentication: {
       required: authRequired,
