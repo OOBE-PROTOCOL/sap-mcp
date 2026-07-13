@@ -5,6 +5,7 @@ import {
   buildA2AAgentCard,
   buildDocsHtml,
   buildLandingHtml,
+  buildPublicPayShProviderYaml,
   buildPublicServerInfo,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
@@ -249,6 +250,9 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.landing).toBe('https://mcp.sap.oobeprotocol.ai/');
     expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
+    expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
+    expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
     expect(info.downloads.desktopWizard.windowsX64Setup).toBe('https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/0.6.0/SAP-MCP-Wizard-Setup-0.6.0-x64.exe');
@@ -267,8 +271,20 @@ describe('remote MCP server config', () => {
 
     const openApi = buildOpenApiSpec(req, publicRemoteConfig) as {
       info: { version: string };
-      'x-discovery': { resources: string[]; payments: typeof paymentDiscovery };
+      'x-discovery': {
+        resources: string[];
+        openApi: string;
+        x402Discovery: string;
+        payShProvider: string;
+        payments: typeof paymentDiscovery;
+      };
+      'x-pay-sh': { providerYaml: string };
       paths: {
+        '/pay/provider.yml': {
+          get: {
+            responses: Record<string, unknown>;
+          };
+        };
         '/mcp': {
           post: {
             'x-payment-info': {
@@ -278,7 +294,21 @@ describe('remote MCP server config', () => {
               payTo: string;
               facilitator: typeof paymentDiscovery.facilitator;
             };
-            responses: Record<string, unknown>;
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    oneOf: unknown[];
+                  };
+                };
+              };
+            };
+            responses: {
+              '200': {
+                content: Record<string, unknown>;
+              };
+              '402': unknown;
+            };
           };
         };
       };
@@ -287,12 +317,19 @@ describe('remote MCP server config', () => {
 
     expect(openApi.info.version).toBe('0.6.0');
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
+    expect(openApi['x-discovery'].openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
+    expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
+    expect(openApi['x-discovery'].payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
+    expect(openApi['x-pay-sh'].providerYaml).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-discovery'].payments).toEqual(paymentDiscovery);
+    expect(openApi.paths['/pay/provider.yml'].get.responses['200']).toBeDefined();
     expect(openApi.paths['/mcp'].post['x-payment-info'].protocols).toEqual(['x402']);
     expect(openApi.paths['/mcp'].post['x-payment-info'].network).toBe(paymentDiscovery.network);
     expect(openApi.paths['/mcp'].post['x-payment-info'].asset).toBe(paymentDiscovery.asset);
     expect(openApi.paths['/mcp'].post['x-payment-info'].payTo).toBe(paymentDiscovery.payTo);
     expect(openApi.paths['/mcp'].post['x-payment-info'].facilitator).toEqual(paymentDiscovery.facilitator);
+    expect(openApi.paths['/mcp'].post.requestBody.content['application/json'].schema.oneOf.length).toBe(2);
+    expect(openApi.paths['/mcp'].post.responses['200'].content['text/event-stream']).toBeDefined();
     expect(openApi.paths['/mcp'].post.responses['402']).toBeDefined();
     expect(wellKnown).toEqual({
       version: 1,
@@ -300,6 +337,30 @@ describe('remote MCP server config', () => {
       payments: paymentDiscovery,
       instructions: expect.stringContaining('Probe POST /mcp'),
     });
+  });
+
+  it('publishes a public pay.sh provider YAML without RPC secrets or signer paths', () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const yaml = buildPublicPayShProviderYaml(req, publicRemoteConfig, {
+      ...appConfig,
+      rpcUrl: 'https://private-rpc.example/rpc?api_key=super-secret',
+    });
+
+    expect(yaml).toContain("name: 'oobe-sap-mcp'");
+    expect(yaml).toContain("subdomain: 'oobe-sap-mcp'");
+    expect(yaml).toContain('routing:');
+    expect(yaml).toContain("  url: 'https://mcp.sap.oobeprotocol.ai/'");
+    expect(yaml).toContain('operator:');
+    expect(yaml).toContain('  network: devnet');
+    expect(yaml).toContain("  recipient: '11111111111111111111111111111111'");
+    expect(yaml).toContain("    path: 'mcp'");
+    expect(yaml).toContain('    metering:');
+    expect(yaml).toContain('            - price_usd: 0.008');
+    expect(yaml).not.toContain('api_key=');
+    expect(yaml).not.toContain('super-secret');
+    expect(yaml).not.toContain('rpc_url:');
+    expect(yaml).not.toContain('signer:');
+    expect(yaml).not.toContain('/Users/keepeeto');
   });
 
   it('renders professional Open Graph metadata for root and MCP URL previews', () => {
@@ -323,6 +384,8 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<link rel="icon" type="image/x-icon" href="/favicon.ico">');
     expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
     expect(root).toContain('href="/docs"');
+    expect(root).toContain('href="/openapi.json"');
+    expect(root).toContain('href="/pay/provider.yml"');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
@@ -338,6 +401,7 @@ describe('remote MCP server config', () => {
     expect(root).toContain('npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call');
     expect(root).toContain('<strong>x402:</strong>');
     expect(root).toContain('<strong>pay.sh:</strong>');
+    expect(root).toContain('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(mcp).toContain('SAP MCP Streamable HTTP Endpoint | OOBE Protocol');
     expect(mcp).toContain('Accept: application/json, text/event-stream');
   });

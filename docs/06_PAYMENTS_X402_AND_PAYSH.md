@@ -175,6 +175,16 @@ The facilitator retries only transient RPC failures such as transport failures, 
 
 ## 06.10 Generate pay.sh Provider YAML
 
+The hosted OOBE deployment publishes a public, secret-free provider catalog at:
+
+```text
+https://mcp.sap.oobeprotocol.ai/pay/provider.yml
+```
+
+Use that URL for catalog discovery and pay.sh proxy configuration. It intentionally omits private RPC URLs, signer paths, facilitator auth tokens, and VPS-local paths.
+
+For private operator files, generate a provider YAML locally:
+
 ```bash
 npx sap-mcp-pay-sh-spec \
   --out sap-mcp-pay-sh.yml \
@@ -199,6 +209,8 @@ Options:
 | `--subdomain <slug>` | pay.sh provider slug. |
 | `--title <text>` | pay.sh provider title. |
 | `--no-fee-payer` | Disable operator fee-payer sponsorship. |
+
+Do not publish generated YAML files that include `--rpc-url` or `--signer-path`.
 
 ## 06.11 Usage Ledger
 

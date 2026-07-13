@@ -159,6 +159,9 @@ GET     /server.json
 GET     /favicon.png
 GET     /favicon.ico
 GET     /health
+GET     /openapi.json
+GET     /.well-known/x402
+GET     /pay/provider.yml
 GET     /.well-known/agent-card.json
 GET     /.well-known/sap-mcp-wizard.json
 GET     /wizard/install.sh
@@ -203,6 +206,9 @@ npx sap-mcp-facilitator start
 ```
 
 Generate a pay.sh provider YAML:
+
+The hosted public catalog is available at `https://mcp.sap.oobeprotocol.ai/pay/provider.yml`.
+It is secret-free and intended for pay.sh catalog/proxy discovery.
 
 ```bash
 npx sap-mcp-pay-sh-spec \

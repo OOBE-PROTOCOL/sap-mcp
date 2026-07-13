@@ -16,6 +16,7 @@ import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
 import { McpMonetizationGate, resolvePaymentNetwork } from '../payments/index.js';
+import { generatePayShProviderYaml } from '../payments/pay-sh-spec.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 
@@ -67,6 +68,7 @@ export interface RemoteMCPConfig {
   stateless: boolean;
   rateLimit: RemoteRateLimitConfig;
   paymentDiscovery?: PublicPaymentDiscovery;
+  paymentPriceRange?: PublicPaymentPriceRange;
 }
 
 /**
@@ -159,6 +161,9 @@ export interface PublicServerInfo {
     mcp: string;
     health: string;
     serverInfo: string;
+    openApi: string;
+    x402Discovery: string;
+    payShProvider: string;
     agentCard: string;
     wizardDescriptor: string;
     wizardDownloads: string;
@@ -223,6 +228,15 @@ export interface PublicPaymentDiscovery {
     paymentSignature: 'PAYMENT-SIGNATURE';
     paymentResponse: 'PAYMENT-RESPONSE';
   };
+}
+
+/**
+ * @name PublicPaymentPriceRange
+ * @description Public-safe hosted payment price range for discovery documents.
+ */
+export interface PublicPaymentPriceRange {
+  minUsd: number;
+  maxUsd: number;
 }
 
 /**
@@ -300,6 +314,10 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
     stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, false),
     rateLimit: buildRemoteRateLimitConfigFromEnv(appConfig.rateLimitPerMinute),
     paymentDiscovery: buildPublicPaymentDiscovery(appConfig),
+    paymentPriceRange: {
+      minUsd: appConfig.monetization.prices.minUsd,
+      maxUsd: appConfig.monetization.prices.maxUsd,
+    },
   };
 
   if (authType === 'none') {
@@ -389,6 +407,10 @@ function resolvePublicPaymentAsset(network: string): string {
   return USDC_MAINNET_MINT;
 }
 
+function formatOpenApiUsd(value: number): string {
+  return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 function parseRemoteBoolean(raw: string | undefined, fallback: boolean): boolean {
   if (raw === undefined) {
     return fallback;
@@ -414,6 +436,28 @@ function writeJson(
     ...headers,
   });
   res.end(omitBody ? undefined : serialized);
+}
+
+/**
+ * @name writeText
+ * @description Writes a cacheable text response with an explicit content type.
+ */
+function writeText(
+  res: http.ServerResponse,
+  status: number,
+  body: string,
+  contentType: string,
+  headers: http.OutgoingHttpHeaders = {},
+  omitBody = false,
+): void {
+  res.writeHead(status, {
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=300',
+    'Content-Length': Buffer.byteLength(body),
+    'X-Content-Type-Options': 'nosniff',
+    ...headers,
+  });
+  res.end(omitBody ? undefined : body);
 }
 
 /**
@@ -784,6 +828,9 @@ export function buildPublicServerInfo(
       mcp: `${baseUrl}/mcp`,
       health: `${baseUrl}/health`,
       serverInfo: `${baseUrl}/server.json`,
+      openApi: `${baseUrl}/openapi.json`,
+      x402Discovery: `${baseUrl}/.well-known/x402`,
+      payShProvider: `${baseUrl}/pay/provider.yml`,
       agentCard: `${baseUrl}/.well-known/agent-card.json`,
       wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
       wizardDownloads: `${baseUrl}/wizard/downloads.json`,
@@ -827,6 +874,29 @@ export function buildPublicServerInfo(
 }
 
 /**
+ * @name buildPublicPayShProviderYaml
+ * @description Builds a public pay.sh provider catalog for the hosted SAP MCP endpoint without RPC secrets or signer paths.
+ */
+export function buildPublicPayShProviderYaml(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+  appConfig: SapMcpConfig,
+): string {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  return generatePayShProviderYaml(appConfig, {
+    name: 'oobe-sap-mcp',
+    subdomain: 'oobe-sap-mcp',
+    title: 'OOBE SAP MCP Server',
+    description: PUBLIC_SERVER_DESCRIPTION,
+    version: MCP_SERVER_VERSION,
+    upstreamUrl: baseUrl,
+    recipient: config.paymentDiscovery?.payTo ?? appConfig.monetization.payTo,
+    rpcUrl: undefined,
+    signerPath: undefined,
+  });
+}
+
+/**
  * @name buildOpenApiSpec
  * @description OpenAPI 3.1 spec for x402scan discovery. Describes the /mcp endpoint
  * with x-payment-info so x402scan can discover and register the API.
@@ -836,6 +906,7 @@ export function buildOpenApiSpec(
   config: RemoteMCPConfig,
 ): Record<string, unknown> {
   const baseUrl = buildPublicBaseUrl(req, config);
+  const priceRange = config.paymentPriceRange ?? { minUsd: 0.001, maxUsd: 100 };
 
   return {
     openapi: '3.1.0',
@@ -852,12 +923,47 @@ export function buildOpenApiSpec(
     },
     'x-discovery': {
       resources: [`${baseUrl}/mcp`],
+      openApi: `${baseUrl}/openapi.json`,
+      x402Discovery: `${baseUrl}/.well-known/x402`,
+      payShProvider: `${baseUrl}/pay/provider.yml`,
       ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
+    },
+    'x-pay-sh': {
+      providerYaml: `${baseUrl}/pay/provider.yml`,
+      routing: {
+        type: 'proxy',
+        upstream: `${baseUrl}/`,
+      },
+      monetization: {
+        mode: 'metered',
+        unit: 'requests',
+        sourceOfTruth: 'SAP MCP per-tool x402 pricing remains authoritative after proxy forwarding.',
+      },
     },
     servers: [
       { url: baseUrl, description: 'SAP MCP Hosted Server' },
     ],
     paths: {
+      '/pay/provider.yml': {
+        get: {
+          operationId: 'getPayShProviderYaml',
+          summary: 'Read the public pay.sh provider YAML for hosted SAP MCP.',
+          tags: ['Discovery', 'Payments'],
+          responses: {
+            '200': {
+              description: 'pay.sh provider YAML for the hosted SAP MCP gateway.',
+              content: {
+                'application/yaml': {
+                  schema: { type: 'string' },
+                },
+                'text/yaml': {
+                  schema: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+      },
       '/mcp': {
         post: {
           operationId: 'mcpCall',
@@ -867,8 +973,8 @@ export function buildOpenApiSpec(
             price: {
               mode: 'dynamic',
               currency: 'USD',
-              min: '0.008',
-              max: '0.20',
+              min: formatOpenApiUsd(priceRange.minUsd),
+              max: formatOpenApiUsd(priceRange.maxUsd),
             },
             protocols: ['x402'],
             ...(config.paymentDiscovery
@@ -887,25 +993,42 @@ export function buildOpenApiSpec(
             content: {
               'application/json': {
                 schema: {
-                  type: 'object',
-                  properties: {
-                    jsonrpc: { type: 'string', const: '2.0' },
-                    id: { type: 'integer', description: 'JSON-RPC request ID' },
-                    method: {
-                      type: 'string',
-                      description: 'MCP method: tools/call, tools/list, initialize, etc.',
-                      examples: ['tools/call', 'initialize'],
-                    },
-                    params: {
+                  oneOf: [
+                    {
                       type: 'object',
+                      description: 'General MCP JSON-RPC request such as initialize, tools/list, prompts/list, resources/list, or ping.',
                       properties: {
-                        name: { type: 'string', description: 'Tool name (e.g. jupiter_getPrice)' },
-                        arguments: { type: 'object', description: 'Tool arguments' },
+                        jsonrpc: { type: 'string', const: '2.0' },
+                        id: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'JSON-RPC request ID' },
+                        method: {
+                          type: 'string',
+                          description: 'MCP method.',
+                          examples: ['initialize', 'tools/list', 'prompts/list', 'resources/list', 'ping'],
+                        },
+                        params: { type: 'object', additionalProperties: true },
                       },
-                      required: ['name', 'arguments'],
+                      required: ['jsonrpc', 'id', 'method'],
                     },
-                  },
-                  required: ['jsonrpc', 'id', 'method', 'params'],
+                    {
+                      type: 'object',
+                      description: 'MCP tools/call request. Paid tool calls may require x402 payment before execution.',
+                      properties: {
+                        jsonrpc: { type: 'string', const: '2.0' },
+                        id: { oneOf: [{ type: 'integer' }, { type: 'string' }], description: 'JSON-RPC request ID' },
+                        method: { type: 'string', const: 'tools/call' },
+                        params: {
+                          type: 'object',
+                          properties: {
+                            name: { type: 'string', description: 'Tool name (e.g. jupiter_getPrice)' },
+                            arguments: { type: 'object', description: 'Tool arguments', additionalProperties: true },
+                          },
+                          required: ['name'],
+                          additionalProperties: true,
+                        },
+                      },
+                      required: ['jsonrpc', 'id', 'method', 'params'],
+                    },
+                  ],
                 },
               },
             },
@@ -936,6 +1059,12 @@ export function buildOpenApiSpec(
                         },
                       },
                     },
+                  },
+                },
+                'text/event-stream': {
+                  schema: {
+                    type: 'string',
+                    description: 'Streamable HTTP MCP event stream containing JSON-RPC response events.',
                   },
                 },
               },
@@ -1192,6 +1321,8 @@ export function buildLandingHtml(
           <a class="button secondary" href="/wizard/downloads.json">Downloads</a>
           <a class="button secondary" href="/docs">Docs</a>
           <a class="button secondary" href="/server.json">Server JSON</a>
+          <a class="button secondary" href="/openapi.json">OpenAPI</a>
+          <a class="button secondary" href="/pay/provider.yml">pay.sh YAML</a>
           <a class="button secondary" href="/.well-known/agent-card.json">Agent card</a>
         </div>
       </div>
@@ -1238,7 +1369,7 @@ export function buildLandingHtml(
         <h2>Payments</h2>
         <ul class="list">
           <li><strong>x402:</strong> paid MCP tool calls return HTTP 402 with payment requirements, then settle through the OOBE facilitator.</li>
-          <li><strong>pay.sh:</strong> supports pay-per-use and subscription specs for agents or dashboards that prefer checkout flows.</li>
+          <li><strong>pay.sh:</strong> public provider YAML is available at <a href="${escapeHtml(info.endpoints.payShProvider)}">/pay/provider.yml</a> for catalog and proxy workflows.</li>
           <li><strong>Local stdio:</strong> free by default; monetization applies to hosted remote usage.</li>
         </ul>
       </section>
@@ -1257,6 +1388,9 @@ export function buildLandingHtml(
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.docs)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.health)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.serverInfo)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.openApi)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.x402Discovery)}</code></div>
+          <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.payShProvider)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.agentCard)}</code></div>
           <div class="endpoint-row"><span class="method">GET</span><code>${escapeHtml(info.endpoints.wizardDescriptor)}</code></div>
         </div>
@@ -1734,6 +1868,12 @@ export class RemoteMCPServer {
         writeJson(res, 200, buildOpenApiSpec(req, this.config), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/pay/provider.yml') {
+        const providerYaml = buildPublicPayShProviderYaml(req, this.config, this.appConfig);
+        writeText(res, 200, providerYaml, 'application/yaml; charset=utf-8', {}, isHeadMethod(req.method));
         return;
       }
 

@@ -8,6 +8,9 @@
 | `GET` | `/docs` | Docsify-powered public documentation site for install, start, configuration, hosted remote MCP, x402/pay.sh, and client setup. | Public. |
 | `GET` | `/docs/*.md` | Read-only markdown files used by the docs site. Supports `docs/` and `USER_DOCS/` through `/docs/user/*.md`. | Public. |
 | `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
+| `GET` | `/openapi.json` | OpenAPI 3.1 discovery document for the hosted MCP endpoint, x402 metadata, and pay.sh catalog link. | Public. |
+| `GET` | `/.well-known/x402` | x402 discovery document for paid hosted MCP resources. | Public. |
+| `GET` | `/pay/provider.yml` | Secret-free pay.sh provider YAML for the hosted SAP MCP catalog/proxy workflow. | Public. |
 | `GET` | `/favicon.png` | SAP MCP favicon/social preview asset. | Public. |
 | `GET` | `/favicon.ico` | Browser favicon compatibility route at the API root. | Public. |
 | `GET` | `/health` | Health check. | No, unless reverse proxy requires it. |
@@ -18,7 +21,7 @@
 | `GET` | `/mcp` | Streamable HTTP session stream. Browser-style `Accept: text/html` receives a public preview page instead. | Same as `POST /mcp`. |
 | `DELETE` | `/mcp` | Streamable HTTP session cleanup. | Same as `POST /mcp`. |
 
-The public HTML and JSON endpoints must remain secret-free. Do not expose RPC query parameters, private VPS paths, keypair file paths, bearer tokens, facilitator auth tokens, or wallet bytes through these routes.
+The public HTML, JSON, and YAML endpoints must remain secret-free. Do not expose RPC query parameters, private VPS paths, keypair file paths, bearer tokens, facilitator auth tokens, or wallet bytes through these routes.
 
 ## 07.2 Facilitator Endpoints
 

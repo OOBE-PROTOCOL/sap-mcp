@@ -104,6 +104,14 @@ Security boundaries:
 
 pay.sh pay-per-use uses a provider YAML with `metering:` on paid endpoints. The pay.sh docs describe this as stablecoin-gated HTTP where the first request receives a `402`, the client signs proof locally, and the gateway settles before forwarding upstream.
 
+The hosted SAP MCP deployment publishes the public pay.sh catalog here:
+
+```text
+https://mcp.sap.oobeprotocol.ai/pay/provider.yml
+```
+
+That hosted YAML is safe to share. It contains the provider name, proxy routing target, network, revenue recipient, and metered `/mcp` endpoint, but not RPC API keys, signer paths, facilitator auth tokens, or wallet bytes.
+
 References:
 
 - https://pay.sh/docs/building-with-pay/getting-started
@@ -119,6 +127,8 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-pay-sh-sp
   --network mainnet \
   --recipient <OOBE_REVENUE_WALLET>
 ```
+
+Only publish YAML generated this way if it does not include private `--rpc-url` or `--signer-path` values.
 
 Example metered block:
 
