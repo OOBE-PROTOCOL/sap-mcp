@@ -967,7 +967,7 @@ export function buildOpenApiSpec(
       '/mcp': {
         post: {
           operationId: 'mcpCall',
-          summary: 'Execute an MCP tool call (JSON-RPC 2.0). Payment required for paid tools.',
+          summary: 'Execute SAP MCP JSON-RPC request',
           tags: ['MCP'],
           'x-payment-info': {
             price: {
@@ -1018,6 +1018,7 @@ export function buildOpenApiSpec(
                         method: { type: 'string', const: 'tools/call' },
                         params: {
                           type: 'object',
+                          description: 'MCP tools/call parameters containing the target tool name and optional tool arguments.',
                           properties: {
                             name: { type: 'string', description: 'Tool name (e.g. jupiter_getPrice)' },
                             arguments: { type: 'object', description: 'Tool arguments', additionalProperties: true },
