@@ -40,7 +40,8 @@ hosted calls still proceed through x402/pay.sh plus the user's local SAP profile
 or external signer.
 
 - Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
-  `sap_get_network_overview`.
+  `sap_get_network_overview`, `sol_get_balance`, `spl-token_getBalance`, and
+  `spl-token_getTokenAccounts`.
 - Read premium: `sap_list_all_agents`, indexed discovery, network stats,
   protocol/capability indexes.
 - Builder: batch SNS/domain checks, analytics, transaction builders.
@@ -65,6 +66,10 @@ For fast x402 execution:
 6. If the client runtime cannot sign or attach x402 payment headers itself, use
    the local SAP MCP `sap_payments_call_paid_tool` bridge configured by the SAP
    MCP wizard instead of falling back to local stdio automatically.
+
+Do not use x402 for basic balance reads. `sol_get_balance`,
+`spl-token_getBalance`, and `spl-token_getTokenAccounts` are free hosted tools
+and should be called directly through the remote SAP MCP connection.
 
 When available locally, call `sap_payments_call_paid_tool` with `toolName`,
 `arguments`, `maxPriceUsd`, and `confirm: true`. It initializes the hosted MCP

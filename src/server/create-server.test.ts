@@ -188,9 +188,22 @@ describe('createSapMcpServer', () => {
 
     const response = await server.toolHandlers?.sap_profile_current({});
     const profile = JSON.parse(response?.content[0]?.text ?? '{}') as {
+      loadedProfile?: string | null;
+      activeProfile?: string | null;
+      accountModel?: string;
       runtime?: { signerConfigured?: boolean };
+      profile?: {
+        name?: string | null;
+        configPath?: string | null;
+        accountModel?: string;
+        localProfileVisibility?: string;
+        localProfileTool?: string;
+      };
       hostedRemote?: {
         canonicalEndpoint?: string;
+        accountModel?: string;
+        localProfileVisibility?: string;
+        localProfileTool?: string;
         serverStoresUserKeypairs?: boolean;
         signerStatus?: string;
         writeAccess?: string;
@@ -200,9 +213,22 @@ describe('createSapMcpServer', () => {
       };
     };
 
+    expect(profile.loadedProfile).toBeNull();
+    expect(profile.activeProfile).toBeNull();
+    expect(profile.accountModel).toBe('hosted-remote-accountless');
     expect(profile.runtime?.signerConfigured).toBe(false);
+    expect(profile.profile).toMatchObject({
+      name: null,
+      configPath: null,
+      accountModel: 'hosted-remote-accountless',
+      localProfileVisibility: 'not-visible-to-hosted-server',
+      localProfileTool: 'sap_payments.sap_profile_current',
+    });
     expect(profile.hostedRemote).toMatchObject({
       canonicalEndpoint: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      accountModel: 'hosted-remote-accountless',
+      localProfileVisibility: 'not-visible-to-hosted-server',
+      localProfileTool: 'sap_payments.sap_profile_current',
       serverStoresUserKeypairs: false,
       signerStatus: 'server-non-custodial-user-signer-required',
       writeAccess: 'available-after-user-signature-and-payment-proof',

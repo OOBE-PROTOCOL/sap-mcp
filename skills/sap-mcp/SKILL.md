@@ -122,6 +122,18 @@ a hosted call requires x402 payment or because the hosted server does not hold
 the user's signer. Use the hosted x402 flow first; ask the user before using a
 local stdio fallback.
 
+Hosted remote is accountless. If `sap_profile_current` returns
+`accountModel: hosted-remote-accountless`, do not describe `default` as the
+user's profile and do not infer the user's wallet from the hosted server. To
+inspect the local user profile, wallet, or signer status, call the local
+`sap_payments.sap_profile_current` bridge when it is configured.
+
+Basic wallet reads are free on hosted SAP MCP. Call `sol_get_balance`,
+`spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on the hosted
+server. Do not send these balance checks through `sap_payments_call_paid_tool`,
+and do not summarize a balance read as a facilitator `BlockhashNotFound`
+problem unless a paid tool actually returned that error.
+
 If a hosted paid tool returns `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is
 behind`, `minimum context slot`, `fetch failed`, `gateway timeout`, or a

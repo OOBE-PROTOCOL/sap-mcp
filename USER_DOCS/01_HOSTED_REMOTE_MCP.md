@@ -89,6 +89,8 @@ Read-only discovery can connect directly to the hosted MCP URL. Any agent that n
 
 If `sap_profile_current` reports `runtime.signerConfigured: false` on the hosted server, read it as a non-custodial guarantee: OOBE is not holding the user's wallet. It is not a reason to switch to local stdio automatically. Paid hosted tools should complete the x402/pay.sh payment flow from the user's local SAP profile or external signer. Use local stdio only when the user explicitly chooses local execution or the client cannot support remote Streamable HTTP/x402.
 
+Hosted remote is accountless. If `sap_profile_current` returns `accountModel: hosted-remote-accountless`, the hosted server cannot see the user's local `~/.config/mcp-sap` profile and should not be summarized as profile `default`. Use the local `sap_payments.sap_profile_current` bridge to inspect the user's real profile, wallet, and signer status.
+
 Agent-facing summary should say: "Hosted SAP MCP is connected. OOBE is non-custodial; user signatures come from the local SAP profile or external signer." Avoid "signer not configured", "read-only only", or "writes unavailable" unless a specific tool call returns that exact error.
 
 ## 3. Install And Configure

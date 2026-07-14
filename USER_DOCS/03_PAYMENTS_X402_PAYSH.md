@@ -96,6 +96,8 @@ The wizard can also write a local reference bundle under:
 
 Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
 
+Basic wallet reads do not require x402. Call `sol_get_balance`, `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on hosted SAP MCP. They should not be routed through the local payment bridge and should not depend on the facilitator.
+
 Security boundaries:
 
 - keypair bytes stay local and are never included in MCP client config;

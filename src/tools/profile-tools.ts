@@ -52,6 +52,34 @@ interface ProfileSummary {
 }
 
 /**
+ * @name HostedAccountlessProfileSummary
+ * @description Hosted remote profile metadata for the non-custodial gateway, which cannot see local user profiles.
+ */
+interface HostedAccountlessProfileSummary {
+  name: null;
+  configPath: null;
+  exists: false;
+  isActive: false;
+  isLoaded: false;
+  mode: 'hosted-api';
+  rpcUrl?: string;
+  network?: string;
+  programId?: string;
+  agentPubkey: null;
+  signerConfigured: false;
+  accountModel: 'hosted-remote-accountless';
+  localProfileVisibility: 'not-visible-to-hosted-server';
+  localProfileTool: 'sap_payments.sap_profile_current';
+  secretMaterial: 'never-exposed';
+}
+
+/**
+ * @name CurrentProfileSummary
+ * @description Profile summary returned by profile tools for local or hosted accountless runtimes.
+ */
+type CurrentProfileSummary = ProfileSummary | HostedAccountlessProfileSummary;
+
+/**
  * @name PolicyRuntimeSummary
  * @description Redacted runtime policy status safe to expose to MCP clients.
  */
@@ -79,6 +107,9 @@ interface IdentityConsistencySummary {
  */
 interface HostedRemoteRuntimeSummary {
   canonicalEndpoint: string;
+  accountModel: 'hosted-remote-accountless';
+  localProfileVisibility: 'not-visible-to-hosted-server';
+  localProfileTool: 'sap_payments.sap_profile_current';
   serverRole: 'mcp-transport-payment-verifier-tool-executor';
   serverStoresUserKeypairs: false;
   serverSignerConfigured: boolean;
@@ -111,6 +142,14 @@ interface ProfileSwitchResponse {
  */
 function getLoadedProfileName(): string {
   return process.env.SAP_MCP_PROFILE || getActiveProfile();
+}
+
+/**
+ * @name isHostedAccountlessRuntime
+ * @description Returns true when the hosted remote server is operating as a non-custodial accountless gateway.
+ */
+function isHostedAccountlessRuntime(context: SapMcpContext): boolean {
+  return context.config.mode === 'hosted-api' && !context.signer;
 }
 
 /**
@@ -167,6 +206,40 @@ function buildProfileSummary(profileName: string, context: SapMcpContext): Profi
 }
 
 /**
+ * @name buildHostedAccountlessProfileSummary
+ * @description Builds explicit accountless hosted profile metadata so agents do not report a fake default local profile.
+ */
+function buildHostedAccountlessProfileSummary(context: SapMcpContext): HostedAccountlessProfileSummary {
+  return {
+    name: null,
+    configPath: null,
+    exists: false,
+    isActive: false,
+    isLoaded: false,
+    mode: 'hosted-api',
+    rpcUrl: redactSensitiveString(context.config.rpcUrl),
+    network: getNetworkFromRpcUrl(context.config.rpcUrl),
+    programId: context.config.programId,
+    agentPubkey: null,
+    signerConfigured: false,
+    accountModel: 'hosted-remote-accountless',
+    localProfileVisibility: 'not-visible-to-hosted-server',
+    localProfileTool: 'sap_payments.sap_profile_current',
+    secretMaterial: 'never-exposed',
+  };
+}
+
+/**
+ * @name buildCurrentProfileSummary
+ * @description Returns local profile metadata or hosted accountless metadata for the current runtime.
+ */
+function buildCurrentProfileSummary(context: SapMcpContext): CurrentProfileSummary {
+  return isHostedAccountlessRuntime(context)
+    ? buildHostedAccountlessProfileSummary(context)
+    : buildProfileSummary(getLoadedProfileName(), context);
+}
+
+/**
  * @name writeRuntimeProfileEnv
  * @description Pins the current process to the selected profile for subsequent config/resource reads.
  */
@@ -212,6 +285,9 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
 
   return {
     canonicalEndpoint: HOSTED_MCP_URL,
+    accountModel: 'hosted-remote-accountless',
+    localProfileVisibility: 'not-visible-to-hosted-server',
+    localProfileTool: 'sap_payments.sap_profile_current',
     serverRole: 'mcp-transport-payment-verifier-tool-executor',
     serverStoresUserKeypairs: false,
     serverSignerConfigured: Boolean(context.signer),
@@ -231,7 +307,7 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
       'writes unavailable',
       'remote MCP broken',
     ],
-    agentInstruction: 'When connected to hosted SAP MCP, report that OOBE does not custody user keys. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
+    agentInstruction: 'When connected to hosted SAP MCP, report that the hosted server is accountless and OOBE does not custody user keys. Do not report profile "default" as the user local profile. If the user asks for their local profile, wallet, or signer status, call the local sap_payments.sap_profile_current bridge when available. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
   };
 }
 
@@ -287,33 +363,39 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
       description: 'Return the currently loaded SAP MCP profile and redacted signer/config metadata.',
       inputSchema: {},
     },
-    async () => createTextResponse(JSON.stringify({
-      loadedProfile: getLoadedProfileName(),
-      activeProfile: getActiveProfile(),
-      runtime: {
-        mode: context.config.mode,
-        rpcUrl: redactSensitiveString(context.config.rpcUrl),
-        network: getNetworkFromRpcUrl(context.config.rpcUrl),
-        programId: context.config.programId,
-        signerPublicKey: context.signer?.publicKey.toBase58(),
-        signerConfigured: Boolean(context.signer),
-        signerStatus: context.config.mode === 'hosted-api' && !context.signer
-          ? 'server-non-custodial-user-signer-required'
-          : context.signer
-            ? 'server-signer-configured'
-            : 'no-signer-configured',
-        writeAccess: context.config.mode === 'hosted-api'
-          ? 'available-through-user-signed-x402-pay.sh-and-tool-specific-signing-flows'
-          : context.signer
-            ? 'available-through-configured-signer-and-policy'
-            : 'not-available-without-configured-signer',
-        secretMaterial: 'never-exposed',
-      },
-      identityConsistency: buildIdentityConsistency(context),
-      hostedRemote: buildHostedRemoteRuntime(context),
-      policy: context.policyEngine.getRuntimeStatus() satisfies PolicyRuntimeSummary,
-      profile: buildProfileSummary(getLoadedProfileName(), context),
-    }, null, 2))
+    async () => {
+      const hostedAccountless = isHostedAccountlessRuntime(context);
+      return createTextResponse(JSON.stringify({
+        loadedProfile: hostedAccountless ? null : getLoadedProfileName(),
+        activeProfile: hostedAccountless ? null : getActiveProfile(),
+        accountModel: hostedAccountless ? 'hosted-remote-accountless' : 'local-profile-managed',
+        runtime: {
+          mode: context.config.mode,
+          rpcUrl: redactSensitiveString(context.config.rpcUrl),
+          network: getNetworkFromRpcUrl(context.config.rpcUrl),
+          programId: context.config.programId,
+          signerPublicKey: context.signer?.publicKey.toBase58(),
+          signerConfigured: Boolean(context.signer),
+          signerStatus: hostedAccountless
+            ? 'server-non-custodial-user-signer-required'
+            : context.signer
+              ? 'server-signer-configured'
+              : 'no-signer-configured',
+          writeAccess: context.config.mode === 'hosted-api'
+            ? 'available-through-user-signed-x402-pay.sh-and-tool-specific-signing-flows'
+            : context.signer
+              ? 'available-through-configured-signer-and-policy'
+              : 'not-available-without-configured-signer',
+          localProfileVisibleToHostedServer: !hostedAccountless,
+          localProfileTool: hostedAccountless ? 'sap_payments.sap_profile_current' : undefined,
+          secretMaterial: 'never-exposed',
+        },
+        identityConsistency: buildIdentityConsistency(context),
+        hostedRemote: buildHostedRemoteRuntime(context),
+        policy: context.policyEngine.getRuntimeStatus() satisfies PolicyRuntimeSummary,
+        profile: buildCurrentProfileSummary(context),
+      }, null, 2));
+    }
   );
 
   registerTool(
@@ -324,11 +406,24 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
       description: 'List available SAP MCP profiles with redacted signer metadata and no wallet paths.',
       inputSchema: {},
     },
-    async () => createTextResponse(JSON.stringify({
-      loadedProfile: getLoadedProfileName(),
-      activeProfile: getActiveProfile(),
-      profiles: listProfiles().map((profile) => buildProfileSummary(profile.name, context)),
-    }, null, 2))
+    async () => {
+      if (isHostedAccountlessRuntime(context)) {
+        return createTextResponse(JSON.stringify({
+          loadedProfile: null,
+          activeProfile: null,
+          accountModel: 'hosted-remote-accountless',
+          profiles: [],
+          hostedRemote: buildHostedRemoteRuntime(context),
+          instruction: 'Hosted SAP MCP cannot see the caller local profiles. Use the local sap_payments.sap_profile_current bridge to inspect the user SAP profile, wallet, and signer status.',
+        }, null, 2));
+      }
+
+      return createTextResponse(JSON.stringify({
+        loadedProfile: getLoadedProfileName(),
+        activeProfile: getActiveProfile(),
+        profiles: listProfiles().map((profile) => buildProfileSummary(profile.name, context)),
+      }, null, 2));
+    }
   );
 
   registerTool(
@@ -346,6 +441,22 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
     },
     async (input: unknown) => {
       try {
+        if (isHostedAccountlessRuntime(context)) {
+          return createTextResponse(JSON.stringify({
+            profileName: null,
+            agentPubkey: null,
+            configured: false,
+            mode: context.config.mode,
+            rpcUrl: redactSensitiveString(context.config.rpcUrl),
+            network: getNetworkFromRpcUrl(context.config.rpcUrl),
+            accountModel: 'hosted-remote-accountless',
+            localProfileVisibility: 'not-visible-to-hosted-server',
+            localProfileTool: 'sap_payments.sap_profile_current',
+            instruction: 'Hosted SAP MCP is non-custodial and cannot read the caller local profile public key. Call the local sap_payments.sap_profile_current bridge for the user wallet and agent public key.',
+            secretMaterial: 'never-exposed',
+          }, null, 2));
+        }
+
         const profileName = parseInput(input).profileName || getLoadedProfileName();
         assertProfileName(profileName);
         const profile = buildProfileSummary(profileName, context);

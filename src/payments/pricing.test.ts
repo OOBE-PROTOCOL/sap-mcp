@@ -85,6 +85,26 @@ describe('SAP MCP monetization pricing', () => {
     expect(parsed.toolCalls[0]?.toolName).toBe('spl-token_getTokenAccounts');
   });
 
+  it('keeps basic SOL and SPL balance reads free', () => {
+    expect(classifyTool('sol_get_balance')).toBe('free');
+    expect(classifyTool('spl-token_getBalance')).toBe('free');
+    expect(classifyTool('spl-token_getTokenAccounts')).toBe('free');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'spl_token_getTokenAccounts',
+        arguments: { owner: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+
+    expect(decision.required).toBe(false);
+  });
+
   it('prices enriched discovery as read premium', () => {
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',

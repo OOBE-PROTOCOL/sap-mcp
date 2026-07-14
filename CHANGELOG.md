@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.7 - 2026-07-14
+
+### Changed
+
+- Updated hosted profile tools to report the remote server as an explicit
+  accountless, non-custodial gateway instead of exposing a misleading
+  `default` profile from the VPS runtime.
+- Added agent-facing guidance that local user profile, wallet, and signer
+  status must be read through the local `sap_payments.sap_profile_current`
+  bridge when the caller is connected to hosted remote MCP.
+- Moved basic wallet balance reads (`sol_get_balance`,
+  `spl-token_getBalance`, and `spl-token_getTokenAccounts`) into the free
+  hosted tier so balance checks no longer depend on x402 facilitator
+  settlement or blockhash simulation.
+
+### Verification
+
+- `CI=true pnpm run typecheck`
+- `CI=true pnpm test -- --run src/payments/pricing.test.ts`
+
 ## 0.7.6 - 2026-07-14
 
 ### Changed
