@@ -11,6 +11,12 @@ All notable changes to this project are documented in this file.
   with direct references to `/docs` pages for desktop setup, client configs, and
   x402/pay.sh payments.
 
+### Fixed
+
+- Fixed landing page setup-step layout on desktop and mobile by moving long CLI
+  commands out of numbered steps, making command blocks horizontally scrollable,
+  and preventing equal-height cards from stretching the stepper content.
+
 ## 0.8.0 - 2026-07-14
 
 ### Changed

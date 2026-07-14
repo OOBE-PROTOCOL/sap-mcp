@@ -1471,7 +1471,7 @@ export function buildLandingHtml(
     a:focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 6px; }
     code {
       color: #e9fcff;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size: .92em;
     }
@@ -1518,7 +1518,25 @@ export function buildLandingHtml(
     .warning { color: var(--warning); }
     .list { padding-left: 18px; margin: 0; color: var(--muted); }
     .list li + li { margin-top: 8px; }
-    .command { margin-top: 12px; border: 1px solid rgba(255,255,255,.10); border-radius: 8px; background: rgba(0,0,0,.28); padding: 13px; }
+    .command {
+      max-width: 100%;
+      margin-top: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 8px;
+      background: rgba(0,0,0,.28);
+      padding: 13px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .command.compact { margin-top: 0; }
+    .command code {
+      display: block;
+      width: max-content;
+      min-width: 100%;
+      white-space: pre;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
     .download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
     .download-link {
       display: grid;
@@ -1534,11 +1552,12 @@ export function buildLandingHtml(
     }
     .download-link strong { color: var(--aqua); }
     .download-link span { color: var(--muted); font-size: .88rem; }
-    .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+    .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; margin-top: 14px; }
     .choice-card {
-      display: grid;
-      grid-template-rows: auto auto 1fr auto;
+      display: flex;
+      flex-direction: column;
       gap: 12px;
+      min-width: 0;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: rgba(0,0,0,.16);
@@ -1560,14 +1579,17 @@ export function buildLandingHtml(
       text-transform: uppercase;
       letter-spacing: 0;
     }
-    .steps { display: grid; gap: 10px; counter-reset: setup-step; margin-top: 2px; }
+    .steps { display: grid; gap: 10px; align-content: start; counter-reset: setup-step; margin-top: 2px; }
     .step {
       display: grid;
       grid-template-columns: 32px 1fr;
       gap: 10px;
       align-items: start;
+      min-width: 0;
       color: var(--muted);
     }
+    .step strong { color: var(--ink); font-weight: 750; }
+    .step code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
     .step::before {
       counter-increment: setup-step;
       content: counter(setup-step);
@@ -1663,7 +1685,7 @@ export function buildLandingHtml(
               <div class="step">Download the Windows, macOS, or Linux wizard from the native downloads below.</div>
               <div class="step">Open the wizard and choose <strong>Full hosted SAP MCP setup</strong>.</div>
               <div class="step">Select detected runtimes such as Codex, Claude, Hermes, or OpenClaw.</div>
-              <div class="step">Restart the agent and connect to <code>https://mcp.sap.oobeprotocol.ai/mcp</code>.</div>
+              <div class="step">Restart the agent and connect to the hosted <code>/mcp</code> endpoint.</div>
             </div>
             <div class="doc-links">
               <a class="doc-link" href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop wizard docs</a>
@@ -1674,11 +1696,12 @@ export function buildLandingHtml(
             <div class="choice-label"><strong>CLI Wizard</strong><span class="pill">Developer path</span></div>
             <p class="caption">Best for terminal users, servers, and developers who want deterministic setup from npm without manually editing client config files.</p>
             <div class="steps" aria-label="CLI wizard setup steps">
-              <div class="step">Run <code>${escapeHtml(wizardCommand)}</code>.</div>
+              <div class="step">Run the CLI wizard command below.</div>
               <div class="step">Accept the default <strong>hosted-api</strong> mode for remote SAP MCP.</div>
               <div class="step">Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</div>
               <div class="step">Use <code>sap_payments_call_paid_tool</code> when a hosted tool requires x402 payment.</div>
             </div>
+            <div class="command compact"><code>${escapeHtml(wizardCommand)}</code></div>
             <div class="doc-links">
               <a class="doc-link" href="/docs/#/user/00_START_HERE">Start here</a>
               <a class="doc-link" href="/docs/#/user/04_CLIENT_CONFIGS">Client configs</a>
