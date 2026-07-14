@@ -16,6 +16,10 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Fixed the packaged Windows desktop wizard startup by converting the internal
+  `dist/wizard-core` module path to a `file://` URL before dynamic ESM import.
+  This prevents `ERR_UNSUPPORTED_ESM_URL_SCHEME` when the app is installed under
+  a `C:\...` path.
 - Fixed desktop wizard responsiveness on narrower macOS and Windows windows by
   removing page-level horizontal overflow, collapsing the setup chooser before
   it clips, and constraining long paths/URLs inside cards.

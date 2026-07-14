@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { appendFileSync, mkdirSync } from 'node:fs';
 
@@ -11,7 +11,8 @@ const rendererDir = join(__dirname, 'dist-renderer');
 let mainWindow = null;
 
 async function loadWizardCore() {
-  return await import(join(repoRoot, 'dist', 'wizard-core', 'desktop-flow.js'));
+  const modulePath = join(repoRoot, 'dist', 'wizard-core', 'desktop-flow.js');
+  return await import(pathToFileURL(modulePath).href);
 }
 
 function writeDesktopLog(message, data) {
