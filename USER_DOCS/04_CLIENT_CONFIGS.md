@@ -154,15 +154,15 @@ Run:
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
-## 8. x402 Paid-Call Addon
+## 8. Local SAP MCP Payment Bridge
 
-Hosted SAP MCP paid tools return an x402 challenge. Some agent runtimes expose remote MCP tools but do not yet have a native x402 replay path. The wizard can install a local addon bundle for Hermes, Claude, Codex, OpenClaw, or custom runtimes:
+Hosted SAP MCP paid tools return an x402 challenge. Some agent runtimes expose remote MCP tools but do not yet have a native x402 replay path. The wizard configures a local `sap_payments` MCP bridge for Hermes, Claude, Codex, OpenClaw, or custom runtimes. It can also install a reference bundle for repair/custom clients:
 
 ```txt
 ~/.config/mcp-sap/addons/x402-paid-call
 ```
 
-The addon command is:
+Normal agents should call `sap_payments_call_paid_tool` through the local `sap_payments` bridge. The standalone command is a terminal/custom-wrapper fallback:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
@@ -176,6 +176,10 @@ For Codex, the recommended runtime integration is the local `sap_payments` MCP
 bridge shown above. It exposes only:
 
 ```txt
+sap_payments_call_paid_tool
+sap_payments_prepare_challenge
+sap_payments_sign_challenge
+sap_payments_verify_receipt
 sap_x402_paid_call
 sap_profile_current
 sap_x402_estimate_cost
@@ -192,7 +196,7 @@ Set `SAP_ALLOWED_TOOLS=sap_payments_call_paid_tool,sap_payments_prepare_challeng
 in the local bridge environment if your Claude runtime exposes environment
 configuration. This keeps the local bridge focused on payment retries.
 
-Hermes plugin/addon concept:
+Legacy Hermes command-wrapper concept:
 
 ```json
 {
@@ -209,11 +213,11 @@ Hermes plugin/addon concept:
 }
 ```
 
-Local MCP tool alternative:
+Preferred local MCP tool call:
 
 ```json
 {
-  "name": "sap_x402_paid_call",
+  "name": "sap_payments_call_paid_tool",
   "arguments": {
     "toolName": "sap_list_all_agents",
     "arguments": { "limit": 5 },
@@ -223,4 +227,4 @@ Local MCP tool alternative:
 }
 ```
 
-Do not add wallet paths, keypair bytes, RPC API keys, or profile-specific overrides to hosted MCP client config. Hosted MCP config points to `https://mcp.sap.oobeprotocol.ai/mcp`; the local addon/profile signs only the payment payload on the user's machine.
+Do not add wallet paths, keypair bytes, RPC API keys, or profile-specific overrides to hosted MCP client config. Hosted MCP config points to `https://mcp.sap.oobeprotocol.ai/mcp`; the local `sap_payments` bridge signs only the payment payload on the user's machine.

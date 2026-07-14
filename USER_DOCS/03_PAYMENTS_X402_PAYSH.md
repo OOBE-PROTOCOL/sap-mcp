@@ -54,9 +54,15 @@ Hosted SAP MCP accepts payment proof headers used by the x402/payment flow and e
 
 The payment receipt should be treated as part of the tool output provenance. For paid hosted tools, agents should bind the receipt to the canonical request hash, tool name, method params, and returned result. The canonical hash ignores JSON-RPC `id`, so normal agent retries do not invalidate the receipt.
 
-## 3. Local x402 Paid-Call Addon
+## 3. Local SAP MCP Payment Bridge
 
-Most agent runtimes can connect to hosted SAP MCP directly, but not every runtime can automatically sign an x402 challenge and replay the paid MCP request. SAP MCP ships a local helper for that gap:
+Most agent runtimes can connect to hosted SAP MCP directly, but not every runtime can automatically sign an x402 challenge and replay the paid MCP request. The recommended fix is the local `sap_payments` MCP bridge created by the wizard. Agents should call:
+
+```txt
+sap_payments_call_paid_tool
+```
+
+The standalone CLI helper remains available as a terminal/custom-wrapper fallback:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
@@ -76,13 +82,13 @@ The helper:
 5. retries the same MCP method and params with `PAYMENT-SIGNATURE`;
 6. returns the hosted MCP response plus the settlement receipt.
 
-Install or print addon snippets from the wizard:
+Install or repair runtime bridge config from the wizard:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
-The wizard writes the addon bundle under:
+The wizard can also write a local reference bundle under:
 
 ```txt
 ~/.config/mcp-sap/addons/x402-paid-call

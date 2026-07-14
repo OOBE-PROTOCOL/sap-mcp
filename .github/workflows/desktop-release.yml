@@ -57,18 +57,54 @@ jobs:
             echo "::warning::macOS release mode: unsigned internal/public artifact. Browser downloads may be blocked by Gatekeeper until the user removes quarantine or opens through documented manual steps."
           fi
 
+      - name: Report Windows signing mode
+        if: matrix.os == 'windows-2025' && github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK }}
+          WINDOWS_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if ($env:WINDOWS_CSC_LINK -and $env:WINDOWS_CSC_KEY_PASSWORD) {
+            "Windows release mode: Authenticode signed installer."
+          } else {
+            "::warning::Windows release mode: unsigned installer. SmartScreen may warn users until a code signing certificate and reputation are available."
+          }
+
+      - name: Select desktop signing credentials
+        shell: bash
+        env:
+          MACOS_CSC_LINK: ${{ secrets.MACOS_CSC_LINK || secrets.CSC_LINK }}
+          MACOS_CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD || secrets.CSC_KEY_PASSWORD }}
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK || secrets.WIN_CSC_LINK }}
+          WINDOWS_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            {
+              echo "CSC_LINK=$MACOS_CSC_LINK"
+              echo "CSC_KEY_PASSWORD=$MACOS_CSC_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            {
+              echo "CSC_LINK=$WINDOWS_CSC_LINK"
+              echo "CSC_KEY_PASSWORD=$WINDOWS_CSC_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Build desktop artifacts
         run: pnpm run desktop:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.MACOS_CSC_LINK || secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD || secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Verify packaged desktop renderer
         run: pnpm run desktop:verify-artifact
+
+      - name: Generate desktop artifact checksums
+        shell: bash
+        run: |
+          node scripts/generate-desktop-checksums.mjs
 
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
@@ -81,6 +117,7 @@ jobs:
             release/desktop/*.tar.gz
             release/desktop/*.blockmap
             release/desktop/latest*.yml
+            release/desktop/SHA256SUMS.txt
           if-no-files-found: error
 
       - name: Attach artifacts to GitHub release
@@ -97,3 +134,4 @@ jobs:
             release/desktop/*.tar.gz
             release/desktop/*.blockmap
             release/desktop/latest*.yml
+            release/desktop/SHA256SUMS.txt

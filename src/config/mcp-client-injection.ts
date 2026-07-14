@@ -93,7 +93,7 @@ export interface ManualMcpClientSnippet {
 
 /**
  * @name McpClientAddonInstallResult
- * @description Files written when the wizard installs a local client addon bundle.
+ * @description Files written when the wizard installs a local payment bridge reference bundle.
  */
 export interface McpClientAddonInstallResult {
   addonId: 'x402-paid-call';
@@ -331,7 +331,7 @@ export function createNpxPaymentBridgeServerConfig(): McpServerInjectionConfig {
 
 /**
  * @name createX402PaidCallAddonSnippets
- * @description Builds manual plugin/addon snippets for clients that can call a local x402 payment helper.
+ * @description Builds manual snippets for clients that can call the native local SAP MCP payment bridge.
  */
 export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
   const paymentBridge = createNpxPaymentBridgeServerConfig();
@@ -343,12 +343,12 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
     },
     {
       title: 'Claude Code Payment Bridge Commands',
-      description: 'Use the official Claude Code MCP CLI flow: add hosted SAP MCP over HTTP, then add this local stdio bridge for x402 payment retries.',
+      description: 'Use the official Claude Code MCP CLI flow: add hosted SAP MCP over HTTP, then add this native local stdio bridge for x402 payment retries.',
       content: [
         `claude mcp add --transport http ${SAP_SERVER_NAME} ${HOSTED_SAP_MCP_URL}`,
         `claude mcp add --transport stdio ${SAP_PAYMENT_BRIDGE_SERVER_NAME} -- ${paymentBridge.command} ${paymentBridge.args.map(shellQuote).join(' ')}`,
         '',
-        'Then ask Claude to call sap_payments.sap_x402_paid_call for hosted paid/write SAP MCP tools.',
+        'Then ask Claude to call sap_payments.sap_payments_call_paid_tool for hosted paid/write SAP MCP tools.',
         '',
       ].join('\n'),
     },
@@ -367,7 +367,7 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
     },
     {
       title: 'Hermes Payment Bridge YAML',
-      description: 'Use this inside Hermes profile config.yaml under mcp_servers when Hermes does not already have the x402 plugin installed.',
+      description: 'Use this inside Hermes profile config.yaml under mcp_servers when Hermes cannot natively replay hosted x402 challenges.',
       content: [
         'mcp_servers:',
         `  ${SAP_SERVER_NAME}:`,
@@ -411,8 +411,8 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
       }),
     },
     {
-      title: 'Hermes Addon: x402_paid_call',
-      description: 'Use this concept for Hermes plugin/addon registries that expose local command-backed tools.',
+      title: 'Hermes Command Wrapper: x402_paid_call',
+      description: 'Legacy fallback for Hermes plugin/addon registries that expose local command-backed tools. Prefer the sap_payments MCP bridge when possible.',
       content: formatJson({
         plugins: {
           x402_paid_call: {
@@ -427,8 +427,8 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
       }),
     },
     {
-      title: 'Claude/Codex/OpenClaw Addon Command',
-      description: 'Use this command from a local tool/plugin wrapper when the client supports command-backed addons.',
+      title: 'Claude/Codex/OpenClaw Command Fallback',
+      description: 'Use this command only from a custom local wrapper when the client cannot add the sap_payments MCP bridge.',
       content: [
         `${X402_PAID_CALL_COMMAND} \\`,
         '  --tool sap_list_all_agents \\',
@@ -440,9 +440,9 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
     },
     {
       title: 'Local MCP Tool Alternative',
-      description: 'When the local SAP MCP stdio server is installed, agents can call sap_x402_paid_call instead of using a runtime-specific plugin.',
+      description: 'When the local SAP MCP stdio bridge is installed, agents should call sap_payments_call_paid_tool. The sap_x402_paid_call alias is legacy.',
       content: formatJson({
-        name: 'sap_x402_paid_call',
+        name: 'sap_payments_call_paid_tool',
         arguments: {
           toolName: 'sap_list_all_agents',
           arguments: { limit: 5 },
@@ -456,7 +456,7 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
 
 /**
  * @name installX402PaidCallAddon
- * @description Installs a portable local addon bundle with manifest and client snippets.
+ * @description Installs a portable local reference bundle with manifest and client snippets for bridge repair/custom clients.
  */
 export function installX402PaidCallAddon(
   targetDir = join(homedir(), '.config', 'mcp-sap', 'addons', X402_PAID_CALL_ADDON_ID),
@@ -470,11 +470,11 @@ export function installX402PaidCallAddon(
 
   writeFileSync(manifestPath, formatJson({
     id: X402_PAID_CALL_ADDON_ID,
-    name: 'SAP MCP x402 Paid Call',
+    name: 'SAP MCP Local Payment Bridge',
     command: X402_PAID_CALL_COMMAND,
     toolName: 'x402_paid_call',
     localMcpToolName: 'sap_x402_paid_call',
-    description: 'Local payment helper for hosted SAP MCP paid tools. It signs x402 payment payloads with the user-controlled SAP MCP profile signer.',
+    description: 'Native local SAP MCP payment bridge reference bundle for hosted paid tools. The sap_payments MCP server signs x402 payloads with the user-controlled SAP MCP profile signer.',
     security: {
       readsLocalKeypairFileForSigning: true,
       printsKeypairBytes: false,
@@ -485,17 +485,17 @@ export function installX402PaidCallAddon(
   }), { encoding: 'utf-8', mode: 0o600 });
 
   writeFileSync(readmePath, [
-    '# SAP MCP x402 Paid Call Addon',
+    '# SAP MCP Local Payment Bridge',
     '',
-    'This addon lets local agent runtimes pay hosted SAP MCP x402 tool challenges without giving OOBE or the hosted server user keypair bytes.',
+    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_call_paid_tool`.',
     '',
-    'Use the command directly from a runtime-specific plugin wrapper:',
+    'Legacy command fallback for custom wrappers:',
     '',
     '```bash',
     `${X402_PAID_CALL_COMMAND} --tool sap_list_all_agents --arguments '{"limit":5}' --max-usd 0.02 --confirm`,
     '```',
     '',
-    'Or call the local SAP MCP tool `sap_x402_paid_call` when local stdio SAP MCP is available.',
+    'Prefer calling the local SAP MCP tool `sap_payments_call_paid_tool` when the `sap_payments` MCP bridge is available. `sap_x402_paid_call` remains a backward-compatible alias.',
     '',
     'Security rules:',
     '',

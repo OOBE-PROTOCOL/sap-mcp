@@ -72,8 +72,8 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
   --confirm
 ```
 
-The wizard can install addon metadata and snippets for Hermes, Claude, Codex,
-OpenClaw, or custom runtimes:
+The wizard can install local bridge reference metadata and snippets for Hermes,
+Claude, Codex, OpenClaw, or custom runtimes:
 
 ```text
 ~/.config/mcp-sap/addons/x402-paid-call

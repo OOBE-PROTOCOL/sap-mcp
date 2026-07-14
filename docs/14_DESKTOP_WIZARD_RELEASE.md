@@ -45,10 +45,10 @@ The desktop wizard supports two setup modes:
 
 | Mode | Behavior |
 | --- | --- |
-| Full SAP MCP setup | Creates or updates the local SAP MCP profile, wallet boundary, policy limits, hosted MCP runtime entries, and x402 bridge. |
-| x402 payment client only | Skips profile/wallet writes and only installs or repairs hosted MCP plus local `sap_payments` runtime entries. |
+| Full SAP MCP setup | Creates or updates the local SAP MCP profile, wallet boundary, policy limits, hosted MCP runtime entries, and native local payment bridge. |
+| Payment bridge repair | Skips profile/wallet writes and only installs or repairs hosted MCP plus local `sap_payments` runtime entries. |
 
-The x402-only mode is for users who already ran a wizard, can see hosted SAP MCP tools, but cannot execute paid/write calls because their runtime does not yet attach payment proofs.
+Payment bridge repair mode is for users who already ran a wizard, can see hosted SAP MCP tools, but cannot execute paid/write calls because their runtime does not yet attach payment proofs.
 
 ### 14.4.1 Codex
 
@@ -205,6 +205,15 @@ For signed tagged GitHub release builds, the macOS job uses these secrets when t
 | `APPLE_ID` | Apple Developer account email used for notarization. |
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for notarization. |
 | `APPLE_TEAM_ID` | Apple Developer Team ID. |
+
+For signed Windows tagged release builds, the Windows job uses these secrets when they are configured:
+
+| Secret | Purpose |
+| --- | --- |
+| `WINDOWS_CSC_LINK` or `WIN_CSC_LINK` | Base64-encoded `.pfx/.p12` Authenticode certificate, or a secure URL supported by Electron Builder. |
+| `WINDOWS_CSC_KEY_PASSWORD` or `WIN_CSC_KEY_PASSWORD` | Password for the Windows code signing certificate bundle. |
+
+Every desktop build publishes `SHA256SUMS.txt` next to the DMG/ZIP/EXE/tar.gz artifacts.
 
 The Electron Builder macOS config uses:
 

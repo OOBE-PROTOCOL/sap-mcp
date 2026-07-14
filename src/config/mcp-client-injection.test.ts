@@ -211,7 +211,7 @@ describe('MCP client injection', () => {
     });
   });
 
-  it('provides x402 paid-call addon snippets and installs the addon bundle', () => {
+  it('provides local payment bridge snippets and installs the reference bundle', () => {
     const tempDir = makeTempDir();
     const snippets = createX402PaidCallAddonSnippets();
     const install = installX402PaidCallAddon(join(tempDir, 'x402-paid-call'));
@@ -220,7 +220,7 @@ describe('MCP client injection', () => {
     expect(snippets.map(snippet => snippet.title)).toContain('Claude Code Payment Bridge Commands');
     expect(snippets.map(snippet => snippet.title)).toContain('OpenClaw Payment Bridge JSON');
     expect(snippets.map(snippet => snippet.title)).toContain('Generic Payment Bridge JSON');
-    expect(snippets.map(snippet => snippet.title)).toContain('Hermes Addon: x402_paid_call');
+    expect(snippets.map(snippet => snippet.title)).toContain('Hermes Command Wrapper: x402_paid_call');
     expect(snippets.map(snippet => snippet.title)).toContain('Local MCP Tool Alternative');
     expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('[mcp_servers.sap_payments]');
     expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]');
@@ -229,7 +229,7 @@ describe('MCP client injection', () => {
     expect(snippets.find(snippet => snippet.title === 'OpenClaw Payment Bridge JSON')?.content).toContain('"servers"');
     expect(install.addonId).toBe('x402-paid-call');
     expect(readFileSync(join(tempDir, 'x402-paid-call', 'manifest.json'), 'utf-8')).toContain('sap-mcp-x402-paid-call');
-    expect(readFileSync(join(tempDir, 'x402-paid-call', 'README.md'), 'utf-8')).toContain('sap_x402_paid_call');
+    expect(readFileSync(join(tempDir, 'x402-paid-call', 'README.md'), 'utf-8')).toContain('sap_payments_call_paid_tool');
     expect(readFileSync(join(tempDir, 'x402-paid-call', 'client-snippets.json'), 'utf-8')).toContain('x402_paid_call');
   });
 

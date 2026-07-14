@@ -18,8 +18,8 @@ The first screen lets you choose one of two modes:
 
 | Mode | Use It When |
 | --- | --- |
-| **Full SAP MCP setup** | You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and x402 payment bridge. |
-| **Install x402 payment client only** | You already have `~/.config/mcp-sap` configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
+| **Full SAP MCP setup** | You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and native local payment bridge. |
+| **Payment bridge repair** | You already have `~/.config/mcp-sap` configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
 
 ## 2. When To Use It
 
@@ -71,14 +71,14 @@ Do not paste wallet/keypair material into support chats while troubleshooting in
 
 The desktop wizard walks through:
 
-1. **Setup**: choose full setup or x402 payment-client-only repair.
+1. **Setup**: choose full setup or payment bridge repair.
 2. **Profile**: choose a real profile name; the wizard refuses ambiguous `default` profiles.
 3. **Wallet**: create a dedicated SAP MCP wallet or point to an existing dedicated keypair path.
 4. **Policy**: set max transaction value, daily limits, log level, and optional Bento Guard settings.
 5. **Runtimes**: detect local agent runtimes and configure hosted SAP MCP plus local `sap_payments`.
 6. **Review**: show config path, wallet boundary, hosted MCP endpoint, and runtime actions before writing.
 
-In x402 payment-client-only mode, the wizard skips profile, wallet, and policy steps. It only installs or repairs runtime MCP client entries and the optional addon bundle.
+In payment bridge repair mode, the wizard skips profile, wallet, and policy steps. It only installs or repairs runtime MCP client entries and the optional local payment bridge reference bundle.
 
 The renderer never receives keypair bytes. Wallet creation and file writes happen in the local main process.
 
@@ -210,15 +210,17 @@ OpenClaw MCP JSON uses the same root `mcpServers` structure as generic MCP clien
 
 On Windows, command-backed bridge entries use `npx.cmd`.
 
-## 7. x402 Client Addon
+## 7. Local Payment Bridge Reference Bundle
 
-The GUI can also install the x402 addon bundle under:
+The GUI can also install a local bridge reference bundle under:
 
 ```txt
 ~/.config/mcp-sap/addons/x402-paid-call
 ```
 
-Direct helper command:
+Normal agents should use the local `sap_payments` MCP bridge and call
+`sap_payments_call_paid_tool`. The standalone command remains available only as
+a terminal/custom-wrapper fallback:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
@@ -228,7 +230,8 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid
   --confirm
 ```
 
-Use the helper when your agent runtime can see hosted tools but cannot natively sign and replay x402 challenges.
+Use the command fallback only when your runtime cannot add the local
+`sap_payments` MCP bridge.
 
 ## 8. CLI Fallback
 

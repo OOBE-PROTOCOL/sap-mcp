@@ -41,7 +41,7 @@ function App() {
 
       const timeout = new Promise<never>((_, reject) => {
         window.setTimeout(() => {
-          reject(new Error('SAP MCP Wizard startup timed out while detecting local agent runtimes. Check the desktop wizard log and try the payment-client-only setup if you already have a profile.'));
+          reject(new Error('SAP MCP Wizard startup timed out while detecting local agent runtimes. Check the desktop wizard log and try payment bridge repair if you already have a profile.'));
         }, initialStateTimeoutMs);
       });
 
@@ -82,7 +82,7 @@ function App() {
     const errors: string[] = [];
     if (draft.setupMode === 'payments-only') {
       if (draft.configureRuntimes.length === 0 && !draft.installAddonBundle) {
-        errors.push('Choose at least one runtime or install the local addon bundle.');
+        errors.push('Choose at least one runtime or install the local bridge reference bundle.');
       }
       return errors;
     }
@@ -158,7 +158,7 @@ function App() {
         <div>
           <p className="eyebrow">OOBE Protocol</p>
           <h1>SAP MCP Wizard</h1>
-          <p className="sidebar-copy">Create a local SAP profile, connect hosted MCP, and install the local x402 payment bridge.</p>
+          <p className="sidebar-copy">Create a local SAP profile, connect hosted MCP, and configure the native payment bridge.</p>
         </div>
         <ol className="step-list">
           {visibleSteps.map((item, index) => (
@@ -212,7 +212,7 @@ function App() {
               </button>
             ) : (
               <button type="button" className="primary-button" disabled={saving || validation.length > 0} onClick={save} aria-busy={saving}>
-                {saving ? 'Saving...' : draft.setupMode === 'payments-only' ? 'Install Payment Client' : 'Create Profile'}
+                {saving ? 'Saving...' : draft.setupMode === 'payments-only' ? 'Repair Payment Bridge' : 'Create Profile'}
               </button>
             )}
           </footer>
@@ -270,7 +270,7 @@ function StepContent({
             <div className="setup-bullets">
               <span>Profile under ~/.config/mcp-sap</span>
               <span>Native runtime config repair</span>
-              <span>x402 paid-call bridge</span>
+              <span>Native sap_payments bridge</span>
             </div>
             <div className="info-strip">
               <strong>Non-custodial by design</strong>
@@ -280,13 +280,13 @@ function StepContent({
           <div className="setup-options">
             <ToggleCard
               title="Full SAP MCP setup"
-              copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the local x402 payment bridge."
+              copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the native sap_payments bridge."
               checked={draft.setupMode === 'full'}
               onChange={() => update({ setupMode: 'full' })}
             />
             <ToggleCard
-              title="Install x402 payment client only"
-              copy="Keep the existing SAP profile and only install or repair the local sap_payments bridge for Codex, Claude, Hermes, OpenClaw, or compatible agents."
+              title="Repair payment bridge only"
+              copy="Keep the existing SAP profile and only install or repair the local sap_payments MCP entry for Codex, Claude, Hermes, OpenClaw, or compatible agents."
               checked={draft.setupMode === 'payments-only'}
               onChange={() => update({ setupMode: 'payments-only' })}
             />
@@ -381,8 +381,8 @@ function StepContent({
     return (
       <>
         <PanelHeader
-          title="Install hosted MCP and x402 payment bridge"
-          copy="Select the agent runtimes to repair. The wizard writes hosted sap plus local sap_payments entries using each runtime's native config structure."
+          title="Connect runtimes to SAP MCP"
+          copy="Select the agent runtimes to configure. The wizard writes hosted sap plus local sap_payments entries using each runtime's native config structure."
         />
         <div className="runtime-grid">
           {runtimes.map((runtime) => (
@@ -405,8 +405,8 @@ function StepContent({
         <label className="switch-row" htmlFor={fieldId('installAddonBundle')}>
           <input id={fieldId('installAddonBundle')} type="checkbox" checked={draft.installAddonBundle} onChange={(event) => update({ installAddonBundle: event.target.checked })} />
           <span>
-            <strong>Install x402 addon bundle</strong>
-            <small>Writes runtime snippets under ~/.config/mcp-sap/addons/x402-paid-call.</small>
+            <strong>Install local bridge reference bundle</strong>
+            <small>Writes runtime snippets under ~/.config/mcp-sap/addons/x402-paid-call for inspection, repair, and custom clients.</small>
           </span>
         </label>
       </>
@@ -417,13 +417,13 @@ function StepContent({
     <>
       <PanelHeader title="Review install plan" copy="Nothing is sent to OOBE. The hosted MCP URL is public; signing remains local." />
       <div className="review-grid">
-        <ReviewItem label="Install mode" value={draft.setupMode === 'payments-only' ? 'x402 payment client only' : 'Full SAP MCP setup'} />
+        <ReviewItem label="Install mode" value={draft.setupMode === 'payments-only' ? 'Payment bridge repair only' : 'Full SAP MCP setup'} />
         {draft.setupMode === 'full' && <ReviewItem label="Profile" value={normalizeProfileName(draft.profileName)} />}
         {draft.setupMode === 'full' && <ReviewItem label="Mode" value={draft.mode} />}
         {draft.setupMode === 'full' && <ReviewItem label="RPC" value={draft.rpcUrl} />}
         {draft.setupMode === 'full' && <ReviewItem label="Wallet" value={draft.createNewWallet ? 'Create dedicated SAP MCP keypair' : draft.walletPath ?? 'Missing path'} />}
         <ReviewItem label="Runtime configs" value={draft.configureRuntimes.length > 0 ? draft.configureRuntimes.join(', ') : 'Skip'} />
-        <ReviewItem label="x402 addon" value={draft.installAddonBundle ? 'Install local addon bundle' : 'Skip'} />
+        <ReviewItem label="Bridge bundle" value={draft.installAddonBundle ? 'Install local reference bundle' : 'Skip'} />
       </div>
       {validation.length > 0 && <StatusBanner tone="error" title="Fix before saving" text={validation.join('\n')} />}
     </>
@@ -505,7 +505,7 @@ function DoneState({ result }: { result: WizardResult }) {
   return (
     <section className="done-state" aria-labelledby="done-title">
       <div className="done-icon" aria-hidden="true">✓</div>
-      <h2 id="done-title">{result.setupMode === 'payments-only' ? 'x402 payment client is installed' : 'SAP MCP is configured'}</h2>
+      <h2 id="done-title">{result.setupMode === 'payments-only' ? 'Payment bridge is configured' : 'SAP MCP is configured'}</h2>
       <p>Restart your agent runtime. Hosted SAP MCP can use the local sap_payments bridge for x402 paid/write tools without exposing keypair bytes.</p>
       {setup && (
         <div className="review-grid">
@@ -524,7 +524,7 @@ function DoneState({ result }: { result: WizardResult }) {
           </article>
         ))}
       </div>
-      <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_x402_paid_call when a hosted SAP MCP tool returns payment_required." />
+      <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_payments_call_paid_tool when a hosted SAP MCP tool returns payment_required." />
     </section>
   );
 }

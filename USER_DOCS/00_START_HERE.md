@@ -27,7 +27,7 @@ For non-technical users, download the Desktop GUI Wizard from GitHub releases:
 https://github.com/OOBE-PROTOCOL/sap-mcp/releases
 ```
 
-The Desktop GUI Wizard creates the same profile and signer setup as the CLI wizard, then can configure hosted MCP plus the local x402 payment bridge for supported agent runtimes.
+The Desktop GUI Wizard creates the same profile and signer setup as the CLI wizard, then can configure hosted MCP plus the local SAP MCP `sap_payments` bridge for supported agent runtimes.
 
 Show the active profile:
 
@@ -149,4 +149,4 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config au
 | `03_PAYMENTS_X402_PAYSH.md` | x402, pay.sh pay-per-use, and pay.sh subscriptions |
 | `04_CLIENT_CONFIGS.md` | Claude, Hermes, Codex, OpenClaw config examples |
 | `05_SKILLS_AND_TOOLS.md` | Skills, tool selection, and security behavior |
-| `06_DESKTOP_GUI_WIZARD.md` | Desktop GUI wizard install, hosted setup, x402 client addon, and runtime behavior |
+| `06_DESKTOP_GUI_WIZARD.md` | Desktop GUI wizard install, hosted setup, local payment bridge, and runtime behavior |

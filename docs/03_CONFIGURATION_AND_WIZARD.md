@@ -74,7 +74,7 @@ Desktop flow:
 2. Create or import a dedicated SAP MCP wallet.
 3. Set policy limits and optional Bento Guard metadata.
 4. Detect local agent runtimes.
-5. Configure hosted MCP and the local x402 paid-call bridge where supported.
+5. Configure hosted MCP and the local SAP MCP `sap_payments` bridge where supported.
 6. Show a final review before writing files.
 
 Release artifacts are produced as macOS DMG/ZIP, Windows NSIS EXE, and Linux tar.gz. See [14. Desktop Wizard Release](14_DESKTOP_WIZARD_RELEASE.md).

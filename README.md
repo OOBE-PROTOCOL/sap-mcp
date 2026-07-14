@@ -256,7 +256,7 @@ Installed binaries:
 | `sap-signing-proxy` | Local signing proxy |
 | `sap-mcp-facilitator` | Self-hosted x402 SVM facilitator |
 | `sap-mcp-pay-sh-spec` | pay.sh provider YAML generator |
-| `sap-mcp-x402-paid-call` | Local x402 payment helper for hosted paid MCP tools |
+| `sap-mcp-x402-paid-call` | Legacy terminal/custom-wrapper fallback for hosted x402 paid MCP tools |
 
 ## 8. Documentation
 

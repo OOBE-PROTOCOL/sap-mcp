@@ -124,7 +124,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('codex')?.length),
       paths: byRuntime.get('codex')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Recommended: configure hosted SAP MCP plus local sap_payments bridge automatically.',
+      recommendation: 'Recommended: configure hosted SAP MCP plus native local sap_payments bridge automatically.',
     },
     {
       id: 'claude',
@@ -132,7 +132,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('claude')?.length),
       paths: byRuntime.get('claude')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in Claude Desktop JSON.',
+      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in Claude Desktop JSON.',
     },
     {
       id: 'hermes',
@@ -140,7 +140,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('hermes')?.length),
       paths: byRuntime.get('hermes')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in Hermes global/profile config.',
+      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in Hermes global/profile config.',
     },
     {
       id: 'openclaw',
@@ -148,7 +148,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('openclaw')?.length),
       paths: byRuntime.get('openclaw')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus local sap_payments bridge in OpenClaw MCP JSON.',
+      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in OpenClaw MCP JSON.',
     },
   ];
 }
@@ -161,7 +161,7 @@ export function validateDesktopWizardDraft(draft: DesktopWizardDraft): string[] 
   const errors: string[] = [];
   if (draft.setupMode === 'payments-only') {
     if (draft.configureRuntimes.length === 0 && !draft.configureCodex && !draft.installAddonBundle) {
-      errors.push('Choose at least one runtime or install the local addon bundle.');
+      errors.push('Choose at least one runtime or install the local bridge reference bundle.');
     }
     return errors;
   }
@@ -247,10 +247,10 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
   if (draft.installAddonBundle) {
     const addon = installX402PaidCallAddon();
     runtimeActions.push({
-      runtime: 'x402 paid-call addon',
+      runtime: 'SAP MCP payment bridge bundle',
       status: 'installed',
       path: addon.targetDir,
-      message: `Installed ${addon.addonId} addon bundle.`,
+      message: `Installed ${addon.addonId} reference bundle.`,
     });
   }
 

@@ -70,7 +70,9 @@ Hosted paid tools use x402 and pay.sh:
 - builders: batch/domain/enriched operations
 - value flows: fixed or percentage pricing only where it is operationally appropriate
 
-For agents that cannot replay x402 challenges natively, install the optional paid-call helper:
+For agents that cannot replay x402 challenges natively, configure the local
+`sap_payments` MCP bridge and call `sap_payments_call_paid_tool`. The standalone
+helper remains available as a terminal/custom-wrapper fallback:
 
 ```bash
 npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call \

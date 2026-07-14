@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.6 - 2026-07-14
+
+### Changed
+
+- Renamed desktop wizard and CLI wizard language from separate x402
+  plugin/addon setup to the native local SAP MCP `sap_payments` bridge.
+- Updated user docs, runtime snippets, and skills to make
+  `sap_payments_call_paid_tool` the default hosted paid-tool path, with the
+  standalone `sap-mcp-x402-paid-call` command documented only as a legacy
+  terminal/custom-wrapper fallback.
+- Prepared desktop release automation for signed macOS and Windows artifacts by
+  selecting OS-specific certificate secrets and publishing `SHA256SUMS.txt`
+  alongside DMG/ZIP/EXE/tar.gz outputs.
+
+### Verification
+
+- `CI=true pnpm run verify:release`
+
 ## 0.7.5 - 2026-07-14
 
 ### Added

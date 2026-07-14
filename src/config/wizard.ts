@@ -1119,13 +1119,13 @@ function printHostedMcpJsonSnippet(canonical = createCanonicalServerConfig(proce
 }
 
 /**
- * Prints manual x402 paid-call addon snippets for agent runtimes.
+ * Prints manual local payment bridge snippets for agent runtimes.
  */
 function printX402PaidCallAddonSnippets(titleFilter?: (title: string) => boolean): void {
   console.log('');
-  printSection('x402 Paid-Call Addon Snippets');
-  printLead('Use these snippets when your agent runtime supports local command-backed plugins or custom tools.');
-  printInfo('The addon signs x402 payment payloads locally with the SAP MCP profile wallet. It never sends keypair bytes to the hosted server.');
+  printSection('SAP MCP Local Payment Bridge Snippets');
+  printLead('Use these snippets when your agent runtime can connect to hosted SAP MCP but cannot natively replay x402 challenges.');
+  printInfo('The sap_payments bridge signs x402 payment payloads locally with the SAP MCP profile wallet or external signer. It never sends keypair bytes to the hosted server.');
   printWarning('Every paid call must set a max USD cap and explicit confirmation.');
   console.log('');
 
@@ -1139,15 +1139,15 @@ function printX402PaidCallAddonSnippets(titleFilter?: (title: string) => boolean
 }
 
 /**
- * Runs the optional local x402 paid-call addon setup step.
+ * Runs the optional local x402 payment bridge setup step.
  */
 async function wizardX402PaidCallAddon(): Promise<void> {
   console.log('');
-  printSection('Optional x402 Paid-Call Addon');
-  printLead('Hosted paid tools need a local payment helper so agents can sign x402 payloads with the user-controlled SAP MCP profile.');
+  printSection('Optional SAP MCP Payment Bridge');
+  printLead('Hosted paid tools need a local sap_payments MCP bridge when the agent runtime cannot sign and replay x402 challenges by itself.');
   printInfo('Recommended for Hermes, Claude, Codex, OpenClaw, or custom agents that will call paid hosted tools.');
-  printInfo('If a runtime cannot load addons directly, it can call the local MCP tool sap_x402_paid_call or invoke sap-mcp-x402-paid-call.');
-  printWarning('This addon does not store or print keypair bytes. It uses the active SAP MCP profile at call time.');
+  printInfo('Preferred tool: sap_payments_call_paid_tool. The sap_x402_paid_call name is only a backward-compatible alias.');
+  printWarning('This bridge does not store or print keypair bytes. It uses the active SAP MCP profile at call time.');
   printControlHints();
   console.log('');
 
@@ -1158,22 +1158,22 @@ async function wizardX402PaidCallAddon(): Promise<void> {
       'Print Claude Code / Claude Desktop payment bridge instructions',
       'Print Hermes payment bridge instructions',
       'Print OpenClaw / generic payment bridge instructions',
-      `${paint('Install addon bundle and print all runtime snippets', 'aqua', 'bold')}`,
-      'Skip addon setup',
+      `${paint('Install local bridge reference bundle and print all runtime snippets', 'aqua', 'bold')}`,
+      'Skip payment bridge setup',
     ],
     0,
     [
-      'Writes ~/.codex/config.toml with the remote SAP MCP endpoint and a local MCP payment bridge exposing sap_x402_paid_call.',
+      'Writes ~/.codex/config.toml with the remote SAP MCP endpoint and a local MCP payment bridge exposing sap_payments_call_paid_tool.',
       'Shows the official Claude MCP CLI flow plus Claude-style JSON config.',
-      'Shows Hermes profile/global config options and the x402_paid_call addon concept.',
+      'Shows Hermes profile/global config options for hosted sap plus local sap_payments.',
       'Shows JSON snippets for runtimes with mcpServers support.',
-      'Writes manifest, README, and client snippets for runtime-specific plugin wrappers.',
+      'Writes manifest, README, and client snippets for repair/custom clients.',
       'Skip if this profile will only use free/read-only hosted tools.',
     ],
   );
 
   if (choice === 5) {
-    printInfo('Skipped x402 paid-call addon setup.');
+    printInfo('Skipped local payment bridge setup.');
     return;
   }
 
@@ -1199,11 +1199,11 @@ async function wizardX402PaidCallAddon(): Promise<void> {
     if (codexResult.backupPath) {
       printBullet(`Backup: ${codexResult.backupPath}`);
     }
-    printInfo('Restart Codex completely, then ask it to use sap_payments.sap_x402_paid_call for hosted paid/write SAP MCP tools.');
+    printInfo('Restart Codex completely, then ask it to use sap_payments.sap_payments_call_paid_tool for hosted paid/write SAP MCP tools.');
   }
 
   const result = installX402PaidCallAddon();
-  printSuccess(`Installed ${result.addonId} addon bundle to ${result.targetDir}`);
+  printSuccess(`Installed ${result.addonId} bridge reference bundle to ${result.targetDir}`);
   for (const file of result.files) {
     printBullet(file);
   }

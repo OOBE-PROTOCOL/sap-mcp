@@ -10,8 +10,8 @@ TUI wizards. It does not keep an independent configuration model.
 - creates a named SAP MCP profile under `~/.config/mcp-sap`;
 - creates or imports a dedicated SAP MCP wallet path;
 - keeps keypair bytes out of the renderer and out of hosted MCP config;
-- configures Codex with hosted `sap` plus local `sap_payments`;
-- installs the local x402 paid-call addon bundle.
+- configures Codex, Claude, Hermes, and OpenClaw with hosted `sap` plus local `sap_payments`;
+- installs an optional local payment bridge reference bundle for repair/custom clients.
 
 ## Development
 
@@ -50,7 +50,7 @@ GitHub releases so signing, notarization, and final notes can be reviewed before
 publishing.
 
 macOS signing and notarization require Apple Developer ID credentials.
-Windows SmartScreen-friendly builds require a code signing certificate.
+Windows SmartScreen-friendly builds require an Authenticode code signing certificate.
 
 Tagged macOS release builds require:
 
@@ -59,6 +59,14 @@ Tagged macOS release builds require:
 - `APPLE_ID`
 - `APPLE_APP_SPECIFIC_PASSWORD`
 - `APPLE_TEAM_ID`
+
+Tagged Windows release builds require:
+
+- `WINDOWS_CSC_LINK` or `WIN_CSC_LINK`
+- `WINDOWS_CSC_KEY_PASSWORD` or `WIN_CSC_KEY_PASSWORD`
+
+The workflow generates `SHA256SUMS.txt` for every desktop artifact attached to
+the release.
 
 Unsigned macOS artifacts are for internal testing only. A browser-downloaded
 unsigned DMG can be blocked by Gatekeeper with an "app is damaged" message.
