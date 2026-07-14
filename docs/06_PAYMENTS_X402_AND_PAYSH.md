@@ -46,10 +46,22 @@ The retry must preserve the initialized `mcp-session-id` and the same MCP method
 and params that produced the challenge. JSON-RPC `id` is not part of the
 canonical paid request hash.
 
-## 06.4 Local x402 Paid-Call Addon
+## 06.4 Local x402 Challenge Toolchain
 
 Some clients can connect to hosted Streamable HTTP MCP but cannot yet sign and
-replay x402 challenges natively. SAP MCP ships a local helper for that case:
+replay x402 challenges natively. SAP MCP ships a local challenge toolchain for
+that case. The recommended high-level MCP tool is:
+
+```text
+sap_payments_call_paid_tool
+```
+
+It obtains the hosted x402 challenge, validates the price and payment
+coordinates, signs locally, retries the exact hosted MCP request, and returns
+the tool result plus receipt. The legacy alias `sap_x402_paid_call` remains for
+existing runtimes.
+
+CLI equivalent:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-x402-paid-call \
@@ -73,9 +85,19 @@ the hosted call, and prints the settlement receipt. It does not send keypair
 bytes to the hosted server. It fails closed when the active profile has no
 supported local payment signer.
 
-Local stdio SAP MCP may expose `sap_x402_paid_call` when the process has a
-user-controlled wallet profile. The public hosted server should not advertise
-that helper in non-custodial mode because signing belongs on the user's machine.
+Local stdio SAP MCP may expose these free payment bridge tools when the process
+has a user-controlled wallet profile:
+
+| Tool | Purpose |
+| --- | --- |
+| `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
+| `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
+| `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
+| `sap_payments_verify_receipt` | Decode a payment response/receipt header for inspection. |
+| `sap_x402_paid_call` | Backward-compatible alias for the high-level paid-call tool. |
+
+The public hosted server should not advertise the signing helpers in
+non-custodial mode because signing belongs on the user's machine.
 
 Transient settlement errors such as `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is

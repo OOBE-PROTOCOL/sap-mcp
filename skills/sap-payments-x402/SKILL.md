@@ -7,6 +7,10 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 
 - `sap_x402_prepare_payment`
 - `sap_x402_get_balance`
+- `sap_payments_call_paid_tool`
+- `sap_payments_prepare_challenge`
+- `sap_payments_sign_challenge`
+- `sap_payments_verify_receipt`
 - `sap_x402_paid_call`
 - `sap_create_subscription`
 - `sap_fund_subscription`
@@ -58,16 +62,30 @@ For fast x402 execution:
 4. Cache free `tools/list`, `prompts/list`, and `resources/list` locally rather
    than paying or re-fetching repeatedly.
 5. Treat `PAYMENT-RESPONSE` as the receipt bound to the tool output.
-6. If the client runtime cannot sign or attach x402 payment headers, ask the
-   user to run the SAP MCP wizard and install the local `x402_paid_call` addon
-   instead of falling back to local stdio automatically.
+6. If the client runtime cannot sign or attach x402 payment headers itself, use
+   the local SAP MCP `sap_payments_call_paid_tool` bridge configured by the SAP
+   MCP wizard instead of falling back to local stdio automatically.
 
-When available locally, call `sap_x402_paid_call` with `toolName`, `arguments`,
-`maxPriceUsd`, and `confirm: true`. It initializes the hosted MCP session,
-signs the x402 payment with the user SAP MCP profile wallet, retries the hosted
-tool call, and returns the settlement receipt. The OOBE hosted server should
-not expose this helper when it has no local user wallet because payment signing
-belongs on the user's machine.
+When available locally, call `sap_payments_call_paid_tool` with `toolName`,
+`arguments`, `maxPriceUsd`, and `confirm: true`. It initializes the hosted MCP
+session, obtains the x402 challenge, signs with the user SAP MCP profile wallet
+or external signer, retries the hosted tool call, and returns the settlement
+receipt. Do not ask the user to install a separate x402 plugin when the local
+SAP MCP `sap_payments` bridge is already configured. The legacy
+`sap_x402_paid_call` alias is acceptable only when a runtime has not refreshed
+to the new tool name.
+
+Use low-level helpers only for custom clients:
+
+- `sap_payments_prepare_challenge` returns the parsed hosted x402 challenge
+  without signing.
+- `sap_payments_sign_challenge` signs a parsed challenge and returns a one-time
+  payment header. Treat that header as authorization material.
+- `sap_payments_verify_receipt` decodes a `PAYMENT-RESPONSE` or
+  `X-PAYMENT-RESPONSE` receipt.
+
+The OOBE hosted server should not expose local signing helpers when it has no
+local user wallet because payment signing belongs on the user's machine.
 
 ## Transient Settlement Errors
 
@@ -81,8 +99,8 @@ reuse the old signed payment payload.
 
 Correct recovery:
 
-1. Call the local `sap_x402_paid_call` bridge again with the same `toolName`
-   and `arguments`.
+1. Call the local `sap_payments_call_paid_tool` bridge again with the same
+   `toolName` and `arguments`.
 2. Set `maxAttempts: 5` when the runtime supports it.
 3. Let the helper create a fresh x402 challenge and payment payload for each
    attempt.

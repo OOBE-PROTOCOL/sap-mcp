@@ -1178,7 +1178,7 @@ export function buildOpenApiSpec(
       title: 'SAP MCP Server',
       version: MCP_SERVER_VERSION,
       description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments. 248 tools across Jupiter, Drift, Metaplex, Pump.fun, Raydium, Orca, and more.',
-      'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use x402_paid_call or npx sap-mcp-x402-paid-call to self-pay and retry.',
+      'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use the local sap_payments_call_paid_tool bridge or npx sap-mcp-x402-paid-call to self-pay and retry.',
       contact: {
         name: 'OOBE Protocol Labs',
         url: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
@@ -1620,8 +1620,8 @@ export function buildLandingHtml(
       </section>
 
       <section class="card strong span-12">
-        <h2>x402 Paid-Call Plugin For Agents</h2>
-        <p>Agents that can reach hosted MCP but cannot replay x402 challenges natively can install the wizard addon or invoke the local paid-call helper directly. The helper signs the payment payload locally and retries the hosted tool call without sending keypair bytes to OOBE.</p>
+        <h2>x402 Challenge Tools For Agents</h2>
+        <p>Agents that can reach hosted MCP but cannot replay x402 challenges natively can install the wizard addon and call <code>sap_payments_call_paid_tool</code>. The local bridge obtains the challenge, signs with the user's SAP MCP profile, retries the hosted tool call, and returns the receipt without sending keypair bytes to OOBE.</p>
         <div class="command"><code>Addon path: ${escapeHtml(X402_PAID_CALL_ADDON_PATH)}</code></div>
         <div class="command"><code>${escapeHtml(x402PaidCallCommand)}</code></div>
       </section>

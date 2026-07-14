@@ -109,6 +109,10 @@ const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
 const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
 const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
 const X402_PAYMENT_BRIDGE_TOOLS = [
+  'sap_payments_call_paid_tool',
+  'sap_payments_prepare_challenge',
+  'sap_payments_sign_challenge',
+  'sap_payments_verify_receipt',
   'sap_x402_paid_call',
   'sap_profile_current',
   'sap_x402_estimate_cost',

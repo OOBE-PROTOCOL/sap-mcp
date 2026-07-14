@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.7.5 - 2026-07-14
+
+### Added
+
+- Added native SAP MCP x402 challenge tools for agent runtimes:
+  `sap_payments_call_paid_tool`, `sap_payments_prepare_challenge`,
+  `sap_payments_sign_challenge`, and `sap_payments_verify_receipt`.
+- Kept `sap_x402_paid_call` as a backward-compatible alias while making
+  `sap_payments_call_paid_tool` the recommended high-level path for hosted
+  paid/write tool calls.
+- Added local receipt inspection coverage for `PAYMENT-RESPONSE` and
+  `X-PAYMENT-RESPONSE` headers.
+
+### Changed
+
+- Updated runtime injection snippets so the local `sap_payments` bridge exposes
+  the complete payment challenge toolchain instead of only the legacy helper.
+- Updated SAP MCP skills, prompts, and payment docs to teach agents the native
+  x402 challenge flow and avoid terminal/direct-RPC bypasses.
+
+### Verification
+
+- `CI=true pnpm run verify:release`
+
 ## 0.7.4 - 2026-07-13
 
 ### Changed

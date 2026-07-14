@@ -93,12 +93,12 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 [mcp_servers.sap_payments]
 command = "npx"
 args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
-enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
 tool_timeout_sec = 300
 
 [mcp_servers.sap_payments.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
-SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
 SAP_LOG_LEVEL = "info"
 ```
 
@@ -126,7 +126,7 @@ Claude Desktop uses a root `mcpServers` JSON object:
       "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
-        "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+        "SAP_ALLOWED_TOOLS": "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
         "SAP_LOG_LEVEL": "info"
       }
     }
@@ -157,7 +157,7 @@ Hermes global `mcp.json` uses flat server entries:
     "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
     "env": {
       "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
-      "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+      "SAP_ALLOWED_TOOLS": "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
       "SAP_LOG_LEVEL": "info"
     }
   }
@@ -180,7 +180,7 @@ mcp_servers:
       - sap-mcp-server
     env:
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"
-      SAP_ALLOWED_TOOLS: sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost
+      SAP_ALLOWED_TOOLS: sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost
       SAP_LOG_LEVEL: info
 ```
 
@@ -200,7 +200,7 @@ OpenClaw MCP JSON uses the same root `mcpServers` structure as generic MCP clien
       "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
-        "SAP_ALLOWED_TOOLS": "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
+        "SAP_ALLOWED_TOOLS": "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost",
         "SAP_LOG_LEVEL": "info"
       }
     }

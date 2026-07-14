@@ -88,7 +88,7 @@ The wizard writes the addon bundle under:
 ~/.config/mcp-sap/addons/x402-paid-call
 ```
 
-Local stdio SAP MCP also exposes `sap_x402_paid_call` when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise this helper in non-custodial mode because payment signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
+Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
 
 Security boundaries:
 

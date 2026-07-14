@@ -65,7 +65,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(269);
+    expect(names).toHaveLength(273);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -105,6 +105,10 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_skills_bundle');
     expect(names).toContain('sap_skills_install');
     expect(names).toContain('sap_x402_estimate_cost');
+    expect(names).toContain('sap_payments_call_paid_tool');
+    expect(names).toContain('sap_payments_prepare_challenge');
+    expect(names).toContain('sap_payments_sign_challenge');
+    expect(names).toContain('sap_payments_verify_receipt');
     expect(names).toContain('sap_x402_paid_call');
     expect(names).toContain('sap_x402_build_headers_from_escrow');
     expect(names).toContain('sap_x402_fetch_escrow');
@@ -207,7 +211,12 @@ describe('createSapMcpServer', () => {
     });
     expect(profile.hostedRemote?.doNotSummarizeAs).toContain('signer not configured');
     expect(profile.hostedRemote?.doNotSummarizeAs).toContain('read-only only');
-    expect((server.tools ?? []).map((tool) => tool.name)).not.toContain('sap_x402_paid_call');
+    const toolNames = (server.tools ?? []).map((tool) => tool.name);
+    expect(toolNames).not.toContain('sap_payments_call_paid_tool');
+    expect(toolNames).not.toContain('sap_payments_prepare_challenge');
+    expect(toolNames).not.toContain('sap_payments_sign_challenge');
+    expect(toolNames).not.toContain('sap_payments_verify_receipt');
+    expect(toolNames).not.toContain('sap_x402_paid_call');
   });
 
   it('previews and signs a Solana transaction with the dedicated local keypair signer', async () => {

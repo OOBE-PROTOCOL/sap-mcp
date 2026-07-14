@@ -106,12 +106,16 @@ Do not inject keypair bytes, hard-coded legacy wallet paths, or stale RPC overri
 For hosted paid/write tools, clients may also need a local `sap_payments` bridge that exposes only:
 
 ```txt
+sap_payments_call_paid_tool
+sap_payments_prepare_challenge
+sap_payments_sign_challenge
+sap_payments_verify_receipt
 sap_x402_paid_call
 sap_profile_current
 sap_x402_estimate_cost
 ```
 
-This bridge signs x402 payment proofs locally with the active SAP MCP profile and retries the hosted tool call.
+This bridge obtains x402 challenges, signs payment proofs locally with the active SAP MCP profile, retries hosted tool calls, and inspects receipts.
 
 ## 03.7 Config CLI
 

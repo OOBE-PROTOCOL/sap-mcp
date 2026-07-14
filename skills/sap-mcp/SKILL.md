@@ -107,10 +107,13 @@ payments, SAP transactions, Solana transactions, SNS operations, or settlement
 actions. The hosted MCP server is not a wallet custodian.
 
 For hosted paid tools, use the native x402 flow. If the client runtime cannot
-attach `PAYMENT-SIGNATURE` itself, use the local `x402_paid_call` addon installed
-by the wizard or the local MCP helper `sap_x402_paid_call`. That helper signs
-payment payloads with the user's local SAP MCP profile and retries the hosted
-tool call. It must not be treated as a remote hosted signing service.
+attach `PAYMENT-SIGNATURE` itself, use the local SAP MCP `sap_payments` bridge
+and call `sap_payments_call_paid_tool`. This is not a separate hosted signing
+plugin: it is the local SAP MCP process using the user's configured SAP profile
+wallet or external signer to sign the x402 payment payload, retry the hosted
+tool call, and return the receipt. `sap_x402_paid_call` is a backward-compatible
+alias only for older runtime snippets. Neither helper must be treated as a
+remote hosted signing service.
 
 When connected to hosted SAP MCP, `signerConfigured: false` on the remote
 server means the hosted server is non-custodial. It does not mean the remote
@@ -125,9 +128,10 @@ behind`, `minimum context slot`, `fetch failed`, `gateway timeout`, or a
 response marked `retryable: true`, treat it as a transient x402/Solana RPC
 settlement error. Do not claim that SAP MCP is down unless `/health` also
 fails. Do not bypass the paid hosted path with terminal/direct RPC. Retry
-through the local `sap_x402_paid_call` bridge with the same tool name and
-arguments, `confirm: true`, and `maxAttempts: 5` so a fresh payment payload is
-created.
+through the local `sap_payments_call_paid_tool` bridge with the same tool name
+and arguments, `confirm: true`, and `maxAttempts: 5` so a fresh payment payload
+is created. Use `sap_x402_paid_call` only when a runtime still exposes the
+legacy alias.
 
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or

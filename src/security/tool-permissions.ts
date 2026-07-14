@@ -88,6 +88,8 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_revoke_attestation',
   ],
   'payments:read': [
+    'sap_payments_prepare_challenge',
+    'sap_payments_verify_receipt',
     'sap_x402_estimate_cost',
     'sap_x402_calculate_cost',
     'sap_x402_build_payment_headers',
@@ -98,6 +100,8 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_x402_get_balance',
   ],
   'payments:write': [
+    'sap_payments_call_paid_tool',
+    'sap_payments_sign_challenge',
     'sap_x402_paid_call',
     'sap_x402_settle',
     'sap_x402_settle_batch',

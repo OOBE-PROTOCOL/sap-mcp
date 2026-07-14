@@ -46,12 +46,12 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 [mcp_servers.sap_payments]
 command = "npx.cmd"
 args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
-enabled_tools = ["sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
 tool_timeout_sec = 300
 
 [mcp_servers.sap_payments.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
-SAP_ALLOWED_TOOLS = "sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
 SAP_LOG_LEVEL = "info"
 ```
 
@@ -188,7 +188,7 @@ claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp
 claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-server
 ```
 
-Set `SAP_ALLOWED_TOOLS=sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost`
+Set `SAP_ALLOWED_TOOLS=sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost`
 in the local bridge environment if your Claude runtime exposes environment
 configuration. This keeps the local bridge focused on payment retries.
 

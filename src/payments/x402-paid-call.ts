@@ -6,14 +6,14 @@
 
 import { readFileSync } from 'fs';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
-import type { PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
+import type { PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import { registerExactSvmScheme } from '@x402/svm/exact/client';
 import { createKeyPairSignerFromBytes } from '@solana/kit';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { getProfileConfigPath } from '../config/profiles.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 
-const DEFAULT_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
+export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_ALLOWED_ATTEMPTS = 5;
@@ -32,6 +32,79 @@ export interface X402PaidCallInput {
   maxPriceUsd: number;
   maxAttempts?: number;
   confirm: boolean;
+}
+
+/**
+ * @name X402ChallengeProbeInput
+ * @description Request shape for obtaining a hosted MCP x402 challenge without signing it.
+ */
+export interface X402ChallengeProbeInput {
+  endpoint?: string;
+  toolName?: string;
+  arguments?: unknown;
+  body?: JsonRpcRequest;
+  maxPriceUsd?: number;
+}
+
+/**
+ * @name X402ChallengeProbeResult
+ * @description Parsed x402 challenge returned by the hosted MCP server before local signing.
+ */
+export interface X402ChallengeProbeResult {
+  endpoint: string;
+  sessionId: string;
+  requestBody: JsonRpcRequest;
+  paymentRequired: PaymentRequired;
+  selectedRequirements: PaymentRequirements;
+  amountUsd: number;
+  instructions: {
+    signer: 'local-sap-mcp-profile-or-external-signer';
+    retryHeader: 'Payment-Signature';
+    settlementHeader: 'Payment-Response';
+    requestBinding: 'json-rpc-method-and-params';
+    recommendedTool: 'sap_payments_call_paid_tool';
+  };
+}
+
+/**
+ * @name X402ChallengeSignInput
+ * @description Request shape for signing a previously obtained x402 challenge without executing the paid call.
+ */
+export interface X402ChallengeSignInput {
+  paymentRequired: PaymentRequired;
+  selectedIndex?: number;
+  profileName?: string;
+  maxPriceUsd: number;
+  confirm: boolean;
+}
+
+/**
+ * @name X402ChallengeSignResult
+ * @description One-time payment header generated from a challenge and a local SAP MCP profile signer.
+ */
+export interface X402ChallengeSignResult {
+  signerAddress: string;
+  amountUsd: number;
+  payment: {
+    network: string;
+    asset: string;
+    payTo: string;
+  };
+  headers: Record<string, string>;
+  payload: PaymentPayload;
+  warning: string;
+}
+
+/**
+ * @name X402ReceiptInspectionResult
+ * @description Parsed x402 settlement receipt header or structured settlement response.
+ */
+export interface X402ReceiptInspectionResult {
+  validJson: boolean;
+  decoded: unknown;
+  txSignature?: string;
+  network?: string;
+  warning?: string;
 }
 
 /**
@@ -84,7 +157,7 @@ type PaymentRequirementsWithLegacyAmount = PaymentRequirements & {
 export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X402PaidCallResult> {
   validateInput(input);
 
-  const endpoint = input.endpoint ?? DEFAULT_ENDPOINT;
+  const endpoint = input.endpoint ?? DEFAULT_X402_PAID_CALL_ENDPOINT;
   const config = loadPaymentProfile(input.profileName);
   const signer = await loadClientSigner(config);
   const httpClient = createHttpPaymentClient(signer);
@@ -119,6 +192,99 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
   throw new Error('x402 paid call exhausted retries.');
 }
 
+/**
+ * @name probeX402PaymentChallenge
+ * @description Initializes hosted MCP and returns a parsed x402 challenge for one unpaid tool call without signing.
+ */
+export async function probeX402PaymentChallenge(input: X402ChallengeProbeInput): Promise<X402ChallengeProbeResult> {
+  const endpoint = input.endpoint ?? DEFAULT_X402_PAID_CALL_ENDPOINT;
+  const sessionId = await initializeMcpSession(endpoint);
+  const requestBody = input.body ?? buildToolCallRequest(input.toolName ?? '', input.arguments);
+  if (!input.body && !input.toolName) {
+    throw new Error('Provide either body or toolName.');
+  }
+
+  const unpaid = await postMcp(endpoint, requestBody, sessionId);
+  const paymentRequired = extractPaymentRequired(unpaid.response, unpaid.body);
+  const selectedRequirements = selectSingleRequirement(paymentRequired, input.maxPriceUsd ?? Number.POSITIVE_INFINITY);
+
+  return {
+    endpoint,
+    sessionId,
+    requestBody,
+    paymentRequired,
+    selectedRequirements,
+    amountUsd: paymentRequirementsAmountUsd(selectedRequirements),
+    instructions: {
+      signer: 'local-sap-mcp-profile-or-external-signer',
+      retryHeader: 'Payment-Signature',
+      settlementHeader: 'Payment-Response',
+      requestBinding: 'json-rpc-method-and-params',
+      recommendedTool: 'sap_payments_call_paid_tool',
+    },
+  };
+}
+
+/**
+ * @name signX402PaymentChallenge
+ * @description Signs a parsed x402 challenge with the active SAP MCP profile signer and returns a one-time payment header.
+ */
+export async function signX402PaymentChallenge(input: X402ChallengeSignInput): Promise<X402ChallengeSignResult> {
+  if (!input.confirm) {
+    throw new Error('Signing an x402 challenge requires confirm: true because it creates a payment authorization.');
+  }
+  if (!Number.isFinite(input.maxPriceUsd) || input.maxPriceUsd <= 0) {
+    throw new Error('Signing an x402 challenge requires a positive maxPriceUsd spending cap.');
+  }
+
+  const selectedRequirements = selectRequirementByIndex(input.paymentRequired, input.selectedIndex ?? 0, input.maxPriceUsd);
+  const config = loadPaymentProfile(input.profileName);
+  const signer = await loadClientSigner(config);
+  const httpClient = createHttpPaymentClient(signer);
+  const paymentPayload = await httpClient.createPaymentPayload({
+    ...input.paymentRequired,
+    accepts: [selectedRequirements],
+  });
+
+  return {
+    signerAddress: String(signer.address),
+    amountUsd: paymentRequirementsAmountUsd(selectedRequirements),
+    payment: {
+      network: selectedRequirements.network,
+      asset: selectedRequirements.asset,
+      payTo: selectedRequirements.payTo,
+    },
+    headers: httpClient.encodePaymentSignatureHeader(paymentPayload),
+    payload: paymentPayload,
+    warning: 'Treat this payment header as one-time authorization material. Prefer sap_payments_call_paid_tool for normal agent use.',
+  };
+}
+
+/**
+ * @name inspectX402Receipt
+ * @description Decodes a PAYMENT-RESPONSE or X-PAYMENT-RESPONSE header for agent-readable receipt inspection.
+ */
+export function inspectX402Receipt(receiptHeader: string): X402ReceiptInspectionResult {
+  const decoded = decodeMaybeBase64Json(receiptHeader);
+  if (!decoded.validJson) {
+    return {
+      validJson: false,
+      decoded: decoded.value,
+      warning: 'Receipt header is not JSON or base64-encoded JSON.',
+    };
+  }
+
+  const record = isRecord(decoded.value) ? decoded.value : {};
+  const txSignature = firstString(record, ['txSignature', 'signature', 'transactionSignature', 'transaction']);
+  const network = firstString(record, ['network', 'chain', 'chainId']);
+  return {
+    validJson: true,
+    decoded: decoded.value,
+    ...(txSignature ? { txSignature } : {}),
+    ...(network ? { network } : {}),
+  };
+}
+
 async function executePaidAttempt(options: {
   endpoint: string;
   sessionId: string;
@@ -130,10 +296,7 @@ async function executePaidAttempt(options: {
   transientRetries: readonly string[];
 }): Promise<X402PaidCallResult> {
   const unpaid = await postMcp(options.endpoint, options.requestBody, options.sessionId);
-  const paymentRequired = options.httpClient.getPaymentRequiredResponse(
-    name => unpaid.response.headers.get(name),
-    unpaid.body,
-  );
+  const paymentRequired = getPaymentRequiredResponse(options.httpClient, unpaid.response, unpaid.body);
   const selectedRequirements = selectSingleRequirement(paymentRequired, options.maxPriceUsd);
   const amountUsd = paymentRequirementsAmountUsd(selectedRequirements);
 
@@ -283,6 +446,45 @@ async function postMcp(
   };
 }
 
+function getPaymentRequiredResponse(
+  httpClient: x402HTTPClient,
+  response: Response,
+  body: unknown,
+): PaymentRequired {
+  return httpClient.getPaymentRequiredResponse(
+    name => response.headers.get(name),
+    body,
+  );
+}
+
+function extractPaymentRequired(response: Response, body: unknown): PaymentRequired {
+  const header = response.headers.get('payment-required') ?? response.headers.get('PAYMENT-REQUIRED');
+  if (header) {
+    const decoded = decodeMaybeBase64Json(header);
+    if (decoded.validJson && isPaymentRequired(decoded.value)) {
+      return decoded.value;
+    }
+  }
+
+  if (isPaymentRequired(body)) {
+    return body;
+  }
+
+  if (isRecord(body) && isRecord(body.error) && isRecord(body.error.data)) {
+    const data = body.error.data;
+    const requirements = data.paymentRequirements;
+    if (Array.isArray(requirements)) {
+      return {
+        x402Version: 2,
+        error: 'Payment required',
+        accepts: requirements as PaymentRequirements[],
+      } as PaymentRequired;
+    }
+  }
+
+  throw new Error(`Hosted MCP response did not contain an x402 challenge: ${JSON.stringify(body)}`);
+}
+
 function parseMcpHttpBody(text: string, contentType: string): unknown {
   if (!text.trim()) {
     return null;
@@ -309,6 +511,26 @@ function selectSingleRequirement(paymentRequired: PaymentRequired, maxPriceUsd: 
   }
 
   const selected = paymentRequired.accepts[0];
+  const amountUsd = paymentRequirementsAmountUsd(selected);
+  if (amountUsd > maxPriceUsd) {
+    throw new Error(`Payment amount $${amountUsd.toFixed(6)} exceeds maxPriceUsd $${maxPriceUsd.toFixed(6)}.`);
+  }
+  return selected;
+}
+
+function selectRequirementByIndex(
+  paymentRequired: PaymentRequired,
+  selectedIndex: number,
+  maxPriceUsd: number,
+): PaymentRequirements {
+  if (!Array.isArray(paymentRequired.accepts) || paymentRequired.accepts.length === 0) {
+    throw new Error('Payment challenge did not include accepted payment requirements.');
+  }
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= paymentRequired.accepts.length) {
+    throw new Error(`selectedIndex must be between 0 and ${paymentRequired.accepts.length - 1}.`);
+  }
+
+  const selected = paymentRequired.accepts[selectedIndex];
   const amountUsd = paymentRequirementsAmountUsd(selected);
   if (amountUsd > maxPriceUsd) {
     throw new Error(`Payment amount $${amountUsd.toFixed(6)} exceeds maxPriceUsd $${maxPriceUsd.toFixed(6)}.`);
@@ -446,12 +668,54 @@ function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
     && typeof (value as Record<string, unknown>).method === 'string';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isPaymentRequired(value: unknown): value is PaymentRequired {
+  return isRecord(value)
+    && Array.isArray(value.accepts)
+    && value.accepts.every(isPaymentRequirements);
+}
+
+function isPaymentRequirements(value: unknown): value is PaymentRequirements {
+  return isRecord(value)
+    && typeof value.network === 'string'
+    && typeof value.asset === 'string'
+    && typeof value.payTo === 'string';
+}
+
+function decodeMaybeBase64Json(value: string): { validJson: true; value: unknown } | { validJson: false; value: string } {
+  const candidates = [
+    value,
+    Buffer.from(value, 'base64').toString('utf-8'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      return { validJson: true, value: JSON.parse(candidate) as unknown };
+    } catch {
+      continue;
+    }
+  }
+  return { validJson: false, value };
+}
+
+function firstString(record: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function printUsageAndExit(exitCode: number): never {
   const usage = [
     'sap-mcp-x402-paid-call --tool <tool> --arguments <json> --max-usd <n> --confirm',
     '',
     'Options:',
-    '  --endpoint <url>    Hosted MCP endpoint. Defaults to https://mcp.sap.oobeprotocol.ai/mcp',
+    `  --endpoint <url>    Hosted MCP endpoint. Defaults to ${DEFAULT_X402_PAID_CALL_ENDPOINT}`,
     '  --tool <name>       Remote MCP tool name to call.',
     '  --arguments <json>  JSON object passed as tools/call arguments.',
     '  --body <json>       Full JSON-RPC request object. Alternative to --tool.',

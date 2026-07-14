@@ -488,7 +488,8 @@ describe('remote MCP server config', () => {
     expect(root).toContain('/wizard/downloads.json');
     expect(root).toContain('curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh');
     expect(root).toContain('npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard');
-    expect(root).toContain('x402 Paid-Call Plugin For Agents');
+    expect(root).toContain('x402 Challenge Tools For Agents');
+    expect(root).toContain('sap_payments_call_paid_tool');
     expect(root).toContain('~/.config/mcp-sap/addons/x402-paid-call');
     expect(root).toContain('npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call');
     expect(root).toContain('<strong>x402:</strong>');
