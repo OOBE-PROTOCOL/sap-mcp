@@ -89,7 +89,7 @@ export function createDefaultDesktopWizardDraft(): DesktopWizardDraft {
   const profileName = 'my-sap-agent';
   return {
     profileName,
-    mode: 'local-dev-keypair',
+    mode: 'hosted-api',
     rpcUrl: defaults.rpcUrl,
     createNewWallet: true,
     walletPath: defaultGeneratedWalletPath(profileName),
@@ -124,7 +124,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('codex')?.length),
       paths: byRuntime.get('codex')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Recommended: configure hosted SAP MCP plus native local sap_payments bridge automatically.',
+      recommendation: 'Recommended: hosted SAP MCP plus local sap_payments bridge.',
     },
     {
       id: 'claude',
@@ -132,7 +132,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('claude')?.length),
       paths: byRuntime.get('claude')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in Claude Desktop JSON.',
+      recommendation: 'Hosted SAP MCP plus local sap_payments bridge in Claude Desktop JSON.',
     },
     {
       id: 'hermes',
@@ -140,7 +140,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('hermes')?.length),
       paths: byRuntime.get('hermes')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in Hermes global/profile config.',
+      recommendation: 'Hosted SAP MCP plus local sap_payments bridge in Hermes global/profile config.',
     },
     {
       id: 'openclaw',
@@ -148,7 +148,7 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       detected: Boolean(byRuntime.get('openclaw')?.length),
       paths: byRuntime.get('openclaw')?.map((target) => target.path) ?? [],
       autoConfigurable: true,
-      recommendation: 'Configure hosted SAP MCP plus native local sap_payments bridge in OpenClaw MCP JSON.',
+      recommendation: 'Hosted SAP MCP plus local sap_payments bridge in OpenClaw MCP JSON.',
     },
   ];
 }

@@ -80,7 +80,12 @@ or from source:
 node dist/cli.js
 ```
 
-Hosted customers connect their agents to `https://mcp.sap.oobeprotocol.ai/mcp`, but signing remains user-controlled. Any user who wants to pay x402/pay.sh charges, register or operate a SAP identity, or execute value-moving Solana/SAP tools should run the wizard first and keep the dedicated wallet under `~/.config/mcp-sap/keypairs/` or behind an external signer. Read-only hosted discovery can use the remote URL without a local signer.
+Hosted customers connect their agents to `https://mcp.sap.oobeprotocol.ai/mcp`, but signing remains user-controlled. The recommended setup for most users is the wizard-managed pair of MCP entries:
+
+- `sap`: hosted Streamable HTTP SAP MCP at `https://mcp.sap.oobeprotocol.ai/mcp`;
+- `sap_payments`: local non-custodial payment bridge for x402/pay.sh paid/write calls.
+
+Any user who wants to pay x402/pay.sh charges, register or operate a SAP identity, or execute value-moving Solana/SAP tools should run the wizard first and keep the dedicated wallet under `~/.config/mcp-sap/keypairs/` or behind an external signer. Read-only hosted discovery can use the remote URL without a local signer.
 
 ## 4. Local Client Config
 

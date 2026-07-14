@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## 0.8.0 - 2026-07-14
+
+### Changed
+
+- Made the normal wizard path hosted-first: `hosted-api` is now the default
+  recommended mode because agents should connect to
+  `https://mcp.sap.oobeprotocol.ai/mcp` while signatures and x402 proofs stay
+  local through the user SAP MCP profile.
+- Promoted the native `sap_payments` MCP bridge from an optional add-on style
+  step to the recommended hosted paid/write setup for Claude, Hermes, Codex,
+  OpenClaw, and compatible runtimes.
+- Updated the desktop wizard default draft to use hosted SAP MCP plus local
+  signing, added clearer normie-friendly setup copy, and added runtime actions
+  for selecting detected or all supported agent runtimes.
+- Updated README and user docs to describe the recommended two-entry runtime
+  configuration: hosted `sap` plus local non-custodial `sap_payments`.
+
+### Verification
+
+- `CI=true pnpm run typecheck`
+- `CI=true pnpm test -- --run src/payments/pricing.test.ts src/server/create-server.test.ts src/config/mcp-client-injection.test.ts src/wizard-core/desktop-flow.test.ts`
+- `CI=true pnpm run lint`
+- `CI=true pnpm run build`
+- `CI=true pnpm run desktop:renderer:build`
+
 ## 0.7.7 - 2026-07-14
 
 ### Changed

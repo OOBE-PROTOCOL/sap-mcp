@@ -26,9 +26,11 @@ import {
   createX402PaidCallAddonSnippets,
   discoverMcpClientTargets,
   installCodexHostedPaymentBridgeConfig,
+  installHostedPaymentBridgeConfigs,
   installX402PaidCallAddon,
   planMcpClientInjection,
   type McpClientInjectionMode,
+  type McpClientId,
   type McpClientTarget,
 } from './mcp-client-injection.js';
 
@@ -686,38 +688,39 @@ async function wizardMode(): Promise<SapMcpMode> {
   printSapLogo();
   printHeader('Step 2: Connection & Signing Mode', 'Where should this SAP MCP profile operate?');
   
-  printLead('Choose how your agent will use SAP MCP. For the hosted OOBE server, select hosted-api: it connects clients to https://mcp.sap.oobeprotocol.ai/mcp while signatures remain user-controlled.');
+  printLead('For most users, choose the hosted SAP MCP Server: agents connect to https://mcp.sap.oobeprotocol.ai/mcp while payments and signatures stay on this machine through the local sap_payments bridge.');
   console.log('');
   printLabel('Mode guidance');
-  printBullet('Choose readonly if the agent only needs discovery, analytics, profile context, or registry reads.');
-  printBullet('Choose external-signer for production signing, hardware wallets, custody systems, or the local signing proxy.');
-  printBullet('Choose local-dev-keypair only when this machine should hold the dedicated SAP MCP wallet file.');
-  printBullet('Choose hosted-api for the public SAP MCP Server at https://mcp.sap.oobeprotocol.ai/mcp. This does not start a server on your machine.');
+  printBullet('Choose hosted-api for the public SAP MCP Server. This is recommended for Claude, Hermes, OpenClaw, Codex, and most users.');
+  printBullet('Choose local-dev-keypair only for local stdio development or offline testing.');
+  printBullet('Choose external-signer for hardware wallets, custody systems, or a local signing proxy.');
+  printBullet('Choose readonly if the profile must never sign or pay.');
   console.log('');
-  printLabel('SAP MCP Hosted Server');
+  printLabel('Recommended architecture');
   printField('URL', paint('https://mcp.sap.oobeprotocol.ai/mcp', 'aqua'));
-  printField('Use case', 'Claude, Hermes, OpenClaw, Codex, or agents connecting to OOBE hosted MCP');
-  printField('Signing', 'Your local profile wallet or external signer; OOBE never receives keypair bytes');
+  printField('Remote server', 'Lists and executes SAP MCP hosted tools');
+  printField('Local bridge', 'sap_payments signs x402 proofs locally and retries paid/write tools');
+  printField('Keys', 'Your profile wallet or external signer; OOBE never receives keypair bytes');
   console.log('');
   printControlHints();
   console.log('');
   
   const choices = [
-    `${paint('readonly', 'aqua', 'bold')} ${paint('[safest]', 'green')} - Read tools only; no transaction signing.`,
-    `${paint('local-dev-keypair', 'aqua', 'bold')} ${paint('[local wallet]', 'yellow')} - Signs with this profile's dedicated keypair file.`,
-    `${paint('external-signer', 'aqua', 'bold')} ${paint('[production]', 'green')} - Sends signing requests to Ledger, Fireblocks, or signing proxy.`,
-    `${paint('delegated-session', 'aqua', 'bold')} ${paint('[limited session]', 'blue')} - Uses session-scoped permissions and spending limits.`,
-    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[SAP MCP SERVER]', 'green', 'bold')} - Use OOBE hosted MCP at https://mcp.sap.oobeprotocol.ai/mcp.`,
+    `${paint('hosted-api', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')} - Connect agents to OOBE hosted MCP; keep signing local.`,
+    `${paint('local-dev-keypair', 'aqua', 'bold')} ${paint('[local stdio/dev]', 'yellow')} - Run local tools with this profile's dedicated keypair file.`,
+    `${paint('external-signer', 'aqua', 'bold')} ${paint('[production signer]', 'green')} - Use Ledger, Fireblocks, or signing proxy.`,
+    `${paint('readonly', 'aqua', 'bold')} ${paint('[read-only]', 'blue')} - Read tools only; no payment or transaction signing.`,
+    `${paint('delegated-session', 'aqua', 'bold')} ${paint('[advanced]', 'blue')} - Session-scoped permissions and spending limits.`,
   ];
   
   const index = await askChoice(paint('Select operating mode:', 'aqua', 'bold'), choices, 0, [
-    'readonly is recommended when you only need discovery and read tools.',
-    'local-dev-keypair signs with the dedicated profile wallet, never Solana CLI id.json.',
-    'external-signer is preferred for production signing.',
-    'hosted-api is the OOBE SAP MCP Server path: clients connect to mcp.sap.oobeprotocol.ai while your local profile or external signer authorizes payments and transactions.',
+    'hosted-api is the normal hosted path: remote tools plus local sap_payments signing.',
+    'local-dev-keypair is for developers who intentionally run local stdio tools.',
+    'external-signer is preferred when a production custody layer owns signing.',
+    'readonly is for discovery-only users.',
   ]);
   
-  const modes: SapMcpMode[] = ['readonly', 'local-dev-keypair', 'external-signer', 'delegated-session', 'hosted-api'];
+  const modes: SapMcpMode[] = ['hosted-api', 'local-dev-keypair', 'external-signer', 'readonly', 'delegated-session'];
   return modes[index];
 }
 
@@ -1139,22 +1142,48 @@ function printX402PaidCallAddonSnippets(titleFilter?: (title: string) => boolean
 }
 
 /**
+ * Installs hosted SAP MCP plus local sap_payments bridge configs for the normal hosted path.
+ */
+function installRecommendedPaymentBridgeConfigs(): void {
+  const runtimeIds: McpClientId[] = ['codex', 'claude', 'hermes', 'openclaw'];
+  const results = installHostedPaymentBridgeConfigs(runtimeIds);
+  if (results.length === 0) {
+    printWarning('No supported MCP client config target was detected or createable on this machine.');
+    printX402PaidCallAddonSnippets();
+    return;
+  }
+
+  for (const result of results) {
+    printSuccess(result.message);
+    printBullet(result.target.path);
+    if (result.backupPath) {
+      printBullet(`Backup: ${result.backupPath}`);
+    }
+  }
+
+  const bundle = installX402PaidCallAddon();
+  printSuccess(`Installed ${bundle.addonId} bridge reference bundle to ${bundle.targetDir}`);
+  printInfo('Restart your agent runtime, then use sap_payments.sap_payments_call_paid_tool for hosted paid/write SAP MCP tools.');
+}
+
+/**
  * Runs the optional local x402 payment bridge setup step.
  */
 async function wizardX402PaidCallAddon(): Promise<void> {
   console.log('');
-  printSection('Optional SAP MCP Payment Bridge');
-  printLead('Hosted paid tools need a local sap_payments MCP bridge when the agent runtime cannot sign and replay x402 challenges by itself.');
-  printInfo('Recommended for Hermes, Claude, Codex, OpenClaw, or custom agents that will call paid hosted tools.');
+  printSection('SAP MCP Local Payment Bridge');
+  printLead('This is the recommended hosted setup: the agent connects to remote SAP MCP, while sap_payments signs x402 proofs locally with your SAP profile.');
+  printInfo('Use it for Hermes, Claude, Codex, OpenClaw, or custom agents that will call paid hosted tools.');
   printInfo('Preferred tool: sap_payments_call_paid_tool. The sap_x402_paid_call name is only a backward-compatible alias.');
   printWarning('This bridge does not store or print keypair bytes. It uses the active SAP MCP profile at call time.');
   printControlHints();
   console.log('');
 
   const choice = await askChoice(
-    'How should the local x402 payment bridge be installed?',
+    'How should hosted paid/write tools be enabled?',
     [
-      `${paint('Configure Codex automatically: hosted sap + local sap_payments bridge', 'aqua', 'bold')} ${paint('[RECOMMENDED FOR CODEX]', 'green', 'bold')}`,
+      `${paint('Configure supported runtimes automatically: hosted sap + local sap_payments', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
+      `${paint('Configure Codex automatically only', 'aqua', 'bold')}`,
       'Print Claude Code / Claude Desktop payment bridge instructions',
       'Print Hermes payment bridge instructions',
       'Print OpenClaw / generic payment bridge instructions',
@@ -1163,7 +1192,8 @@ async function wizardX402PaidCallAddon(): Promise<void> {
     ],
     0,
     [
-      'Writes ~/.codex/config.toml with the remote SAP MCP endpoint and a local MCP payment bridge exposing sap_payments_call_paid_tool.',
+      'Writes native config for supported runtimes so hosted sap and local sap_payments are both available.',
+      'Writes ~/.codex/config.toml only.',
       'Shows the official Claude MCP CLI flow plus Claude-style JSON config.',
       'Shows Hermes profile/global config options for hosted sap plus local sap_payments.',
       'Shows JSON snippets for runtimes with mcpServers support.',
@@ -1172,27 +1202,32 @@ async function wizardX402PaidCallAddon(): Promise<void> {
     ],
   );
 
-  if (choice === 5) {
+  if (choice === 6) {
     printInfo('Skipped local payment bridge setup.');
     return;
   }
 
-  if (choice === 1) {
-    printX402PaidCallAddonSnippets((title) => title.startsWith('Claude'));
+  if (choice === 0) {
+    installRecommendedPaymentBridgeConfigs();
     return;
   }
 
   if (choice === 2) {
-    printX402PaidCallAddonSnippets((title) => title.startsWith('Hermes'));
+    printX402PaidCallAddonSnippets((title) => title.startsWith('Claude'));
     return;
   }
 
   if (choice === 3) {
+    printX402PaidCallAddonSnippets((title) => title.startsWith('Hermes'));
+    return;
+  }
+
+  if (choice === 4) {
     printX402PaidCallAddonSnippets((title) => title.startsWith('OpenClaw') || title.includes('Local MCP Tool'));
     return;
   }
 
-  if (choice === 0) {
+  if (choice === 1) {
     const codexResult = installCodexHostedPaymentBridgeConfig();
     printSuccess(codexResult.message);
     printBullet(codexResult.target.path);
@@ -1211,16 +1246,16 @@ async function wizardX402PaidCallAddon(): Promise<void> {
 }
 
 /**
- * Runs the optional MCP client injection step after profile config has been saved.
+ * Runs the recommended MCP client setup step after profile config has been saved.
  */
 async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void> {
   clearConsole();
   printSapLogo();
-  printHeader('Optional MCP Client Setup', 'Connect agents to hosted or local SAP MCP');
+  printHeader('Recommended MCP Client Setup', 'Hosted tools plus local payments bridge');
 
   printLead('Choose how Claude, Hermes, OpenClaw, Codex, or another MCP client should reach SAP MCP.');
-  printInfo('For most users, run this wizard to create the SAP profile/signer, then connect the agent to https://mcp.sap.oobeprotocol.ai/mcp.');
-  printInfo('Injected client config does not pin wallet paths, RPC overrides, profile names, or keypair bytes.');
+  printInfo('Recommended: connect the agent to hosted SAP MCP and add the local sap_payments bridge for x402 paid/write tools.');
+  printInfo('Injected hosted config does not pin wallet paths, RPC overrides, profile names, or keypair bytes.');
   console.log('');
   printField('Agent public key', result.config.agentPubkey ?? 'not configured');
   printField('Config path', result.configPath);
@@ -1231,36 +1266,43 @@ async function wizardMcpClientInjection(result: WizardSetupResult): Promise<void
   const setupMode = await askChoice(
     'How do you want to configure MCP clients?',
     [
-      `${paint('Print hosted SAP MCP config snippets for Claude, Hermes, Codex, OpenClaw', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
+      `${paint('Automatically configure hosted sap + local sap_payments for supported runtimes', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
+      'Print hosted SAP MCP config snippets for Claude, Hermes, Codex, OpenClaw',
       'Print all manual config snippets for hosted and local setup',
-      'Automatically inject local active-profile config into detected client files',
-      'Skip MCP client configuration',
+      'Advanced: inject local active-profile stdio config into detected client files',
+      'Skip all runtime configuration',
     ],
     0,
     [
-      'Hosted agents should use https://mcp.sap.oobeprotocol.ai/mcp, but signing still requires the wizard-created user SAP profile.',
+      'Recommended for most users: hosted remote tools plus local payment/signing bridge.',
+      'Use snippets when you want to paste config manually.',
       'Manual snippets are useful when configuring an unknown client or comparing hosted and local setup.',
-      'Automatic injection updates known local config files after preview and confirmation.',
+      'Advanced local stdio is for developers who intentionally do not want hosted remote MCP.',
+      'Use this only if you will configure MCP clients later.',
     ]
   );
 
   const canonical = createCanonicalServerConfig(process.cwd());
 
   if (setupMode === 0) {
+    installRecommendedPaymentBridgeConfigs();
+    return;
+  }
+
+  if (setupMode === 1) {
     printHostedMcpJsonSnippet(canonical);
     await wizardX402PaidCallAddon();
     return;
   }
 
-  if (setupMode === 1) {
+  if (setupMode === 2) {
     printManualMcpJsonSnippets(canonical);
     await wizardX402PaidCallAddon();
     return;
   }
 
-  if (setupMode === 3) {
-    printInfo('Skipped MCP client injection.');
-    await wizardX402PaidCallAddon();
+  if (setupMode === 4) {
+    printInfo('Skipped MCP client and local payment bridge configuration.');
     return;
   }
 

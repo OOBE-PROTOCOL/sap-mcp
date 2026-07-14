@@ -10,7 +10,7 @@ It creates the same real SAP MCP profile as the CLI/TUI wizard:
 - a dedicated local SAP MCP wallet or external signer boundary;
 - conservative policy limits;
 - hosted MCP config for `https://mcp.sap.oobeprotocol.ai/mcp`;
-- optional local x402 paid-call bridge for agent runtimes.
+- native local `sap_payments` bridge for hosted paid/write agent calls.
 
 The desktop app is not a mock installer. It calls the same setup modules used by `sap-mcp-config wizard`.
 
@@ -18,8 +18,15 @@ The first screen lets you choose one of two modes:
 
 | Mode | Use It When |
 | --- | --- |
-| **Full SAP MCP setup** | You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and native local payment bridge. |
+| **Full hosted SAP MCP setup** | **Recommended.** You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and native local payment bridge. |
 | **Payment bridge repair** | You already have `~/.config/mcp-sap` configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
+
+The default full setup path configures two MCP entries for supported runtimes:
+
+- `sap`: the hosted Streamable HTTP server at `https://mcp.sap.oobeprotocol.ai/mcp`;
+- `sap_payments`: a local stdio bridge that signs x402 payment proofs with the user's SAP MCP profile or external signer.
+
+This is the normal path for non-technical users and the recommended production path for technical users. Local stdio-only SAP MCP is still available for development, but it is not the default hosted onboarding flow.
 
 ## 2. When To Use It
 
@@ -71,11 +78,11 @@ Do not paste wallet/keypair material into support chats while troubleshooting in
 
 The desktop wizard walks through:
 
-1. **Setup**: choose full setup or payment bridge repair.
+1. **Setup**: choose recommended full hosted setup or payment bridge repair.
 2. **Profile**: choose a real profile name; the wizard refuses ambiguous `default` profiles.
 3. **Wallet**: create a dedicated SAP MCP wallet or point to an existing dedicated keypair path.
 4. **Policy**: set max transaction value, daily limits, log level, and optional Bento Guard settings.
-5. **Runtimes**: detect local agent runtimes and configure hosted SAP MCP plus local `sap_payments`.
+5. **Runtimes**: detect local agent runtimes and configure hosted SAP MCP plus local `sap_payments` using native JSON, TOML, or YAML for each runtime.
 6. **Review**: show config path, wallet boundary, hosted MCP endpoint, and runtime actions before writing.
 
 In payment bridge repair mode, the wizard skips profile, wallet, and policy steps. It only installs or repairs runtime MCP client entries and the optional local payment bridge reference bundle.

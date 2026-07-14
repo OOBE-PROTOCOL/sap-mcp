@@ -51,7 +51,15 @@ function App() {
     loadInitialState()
       .then((state) => {
         if (!mounted) return;
-        setDraft(state.draft);
+        const recommendedRuntimes = state.runtimes
+          .filter((runtime) => runtime.detected)
+          .map((runtime) => runtime.id);
+        const defaultRuntimes = recommendedRuntimes.length > 0 ? recommendedRuntimes : state.draft.configureRuntimes;
+        setDraft({
+          ...state.draft,
+          configureRuntimes: defaultRuntimes,
+          configureCodex: defaultRuntimes.includes('codex'),
+        });
         setRuntimes(state.runtimes);
       })
       .catch((cause: unknown) => {
@@ -257,35 +265,37 @@ function StepContent({
     return (
       <>
         <PanelHeader
-          title="Choose what you want to install"
-          copy="Use full setup for a new SAP MCP profile. Use payment client repair when your profile already exists but hosted x402 paid/write tools still return payment_required."
+          title="Choose the SAP MCP setup path"
+          copy="Recommended for most users: hosted SAP MCP tools, a local SAP profile signer, and the native sap_payments bridge for x402 paid/write calls."
         />
         <div className="setup-layout">
           <div className="setup-summary">
             <div className="setup-kicker">
-              <span>Hosted MCP</span>
+              <span>Recommended hosted endpoint</span>
               <code>{hostedUrl}</code>
             </div>
-            <h3>Remote tools. Local signatures. No key custody.</h3>
+            <h3>Remote tools. Local signatures. Smooth payments.</h3>
             <div className="setup-bullets">
-              <span>Profile under ~/.config/mcp-sap</span>
-              <span>Native runtime config repair</span>
-              <span>Native sap_payments bridge</span>
+              <span>Hosted SAP MCP exposes the full remote tool surface.</span>
+              <span>Your profile under ~/.config/mcp-sap owns signing.</span>
+              <span>sap_payments handles x402 challenges locally.</span>
             </div>
             <div className="info-strip">
-              <strong>Non-custodial by design</strong>
-              <span>The payment client signs x402 proofs locally with the user-controlled SAP profile or external signer.</span>
+              <strong>Default trust boundary</strong>
+              <span>OOBE never receives keypair bytes. Paid/write hosted calls are authorized by the local SAP profile or external signer.</span>
             </div>
           </div>
           <div className="setup-options">
             <ToggleCard
-              title="Full SAP MCP setup"
+              title="Full hosted SAP MCP setup"
+              badge="Recommended"
               copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the native sap_payments bridge."
               checked={draft.setupMode === 'full'}
               onChange={() => update({ setupMode: 'full' })}
             />
             <ToggleCard
               title="Repair payment bridge only"
+              badge="Already configured"
               copy="Keep the existing SAP profile and only install or repair the local sap_payments MCP entry for Codex, Claude, Hermes, OpenClaw, or compatible agents."
               checked={draft.setupMode === 'payments-only'}
               onChange={() => update({ setupMode: 'payments-only' })}
@@ -314,13 +324,14 @@ function StepContent({
             value={draft.mode}
             onChange={(value) => update({ mode: value as WizardDraft['mode'] })}
             options={[
-              ['local-dev-keypair', 'Local signer profile'],
+              ['hosted-api', 'Hosted SAP MCP + local signer (recommended)'],
+              ['local-dev-keypair', 'Local stdio/dev signer profile'],
               ['readonly', 'Read-only profile'],
               ['external-signer', 'External signer'],
               ['delegated-session', 'Delegated session'],
             ]}
           />
-          <TextField id="rpcUrl" label="Solana RPC URL" value={draft.rpcUrl} onChange={(value) => update({ rpcUrl: value })} helper="Use mainnet for hosted SAP MCP unless you are testing." />
+          <TextField id="rpcUrl" label="Local profile RPC URL" value={draft.rpcUrl} onChange={(value) => update({ rpcUrl: value })} helper="Hosted tools run at mcp.sap.oobeprotocol.ai; this RPC is for local profile reads, payment signing context, and local fallback flows." />
         </div>
       </>
     );
@@ -382,8 +393,23 @@ function StepContent({
       <>
         <PanelHeader
           title="Connect runtimes to SAP MCP"
-          copy="Select the agent runtimes to configure. The wizard writes hosted sap plus local sap_payments entries using each runtime's native config structure."
+          copy="Select the agent runtimes to configure. The wizard writes hosted sap plus local sap_payments entries using each runtime's native JSON, TOML, or YAML structure."
         />
+        <div className="runtime-actions">
+          <button type="button" className="secondary-button" onClick={() => {
+            const detected = runtimes.filter((runtime) => runtime.detected).map((runtime) => runtime.id);
+            const configureRuntimes = detected.length > 0 ? detected : ['codex'];
+            update({ configureRuntimes, configureCodex: configureRuntimes.includes('codex') });
+          }}>
+            Select Detected
+          </button>
+          <button type="button" className="secondary-button" onClick={() => {
+            const configureRuntimes = runtimes.map((runtime) => runtime.id);
+            update({ configureRuntimes, configureCodex: configureRuntimes.includes('codex') });
+          }}>
+            Select All Supported
+          </button>
+        </div>
         <div className="runtime-grid">
           {runtimes.map((runtime) => (
             <button
@@ -473,10 +499,13 @@ function SelectField({ id, label, value, options, onChange }: { id: string; labe
   );
 }
 
-function ToggleCard({ title, copy, checked, onChange }: { title: string; copy: string; checked: boolean; onChange: () => void }) {
+function ToggleCard({ title, copy, badge, checked, onChange }: { title: string; copy: string; badge?: string; checked: boolean; onChange: () => void }) {
   return (
     <button type="button" className={checked ? 'toggle-card selected' : 'toggle-card'} onClick={onChange} aria-pressed={checked}>
-      <strong>{title}</strong>
+      <span className="toggle-heading">
+        <strong>{title}</strong>
+        {badge && <em>{badge}</em>}
+      </span>
       <span>{copy}</span>
     </button>
   );

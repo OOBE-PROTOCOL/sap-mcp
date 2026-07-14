@@ -358,6 +358,24 @@ h1 {
   line-height: 1.5;
 }
 
+.toggle-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text) !important;
+}
+
+.toggle-heading em {
+  border: 1px solid rgba(124, 247, 188, 0.35);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
 .toggle-card.selected {
   border-color: var(--aqua);
   background: linear-gradient(145deg, rgba(24, 212, 223, 0.17), rgba(16, 37, 43, 0.74));
@@ -405,6 +423,13 @@ h1 {
 .runtime-card.selected {
   border-color: rgba(24, 212, 223, 0.76);
   background: linear-gradient(145deg, rgba(24, 212, 223, 0.13), rgba(13, 26, 31, 0.82));
+}
+
+.runtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -6px 0 14px;
 }
 
 .info-strip {
