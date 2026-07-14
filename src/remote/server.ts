@@ -1547,6 +1547,8 @@ export function buildLandingHtml(
       -webkit-overflow-scrolling: touch;
     }
     .command.compact { margin-top: 0; }
+    .command-row { display: grid; gap: 8px; margin-top: 14px; }
+    .command-label { color: var(--subtle); font-size: .78rem; font-weight: 800; text-transform: uppercase; }
     .command code {
       display: block;
       width: max-content;
@@ -1555,7 +1557,7 @@ export function buildLandingHtml(
       overflow-wrap: normal;
       word-break: normal;
     }
-    .download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+    .download-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
     .download-link {
       display: grid;
       grid-template-columns: 38px minmax(0, 1fr);
@@ -1578,6 +1580,21 @@ export function buildLandingHtml(
     .download-link .platform-icon { grid-area: icon; }
     .download-link strong { grid-area: title; color: var(--aqua); align-self: end; }
     .download-link > span:not(.platform-icon) { grid-area: detail; color: var(--muted); font-size: .88rem; align-self: start; }
+    .install-card, .download-card { min-height: 0; }
+    .card-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .card-title-row h2 { margin: 0; }
+    .release-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 3px 9px;
+      color: var(--aqua);
+      text-decoration: none;
+      font-size: .8rem;
+      font-weight: 800;
+    }
     .integration-card { padding: 20px; overflow: hidden; }
     .section-head {
       display: flex;
@@ -1657,7 +1674,7 @@ export function buildLandingHtml(
     .step-copy { display: grid; gap: 2px; min-width: 0; color: var(--muted); }
     .step-copy strong { color: var(--ink); font-weight: 760; }
     .step-copy span { display: block; }
-    .platform-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .platform-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
     .platform-button {
       display: grid;
       grid-template-columns: 34px minmax(0, 1fr);
@@ -1839,16 +1856,28 @@ export function buildLandingHtml(
         </div>
       </section>
 
-      <section class="card span-7">
-        <h2>Install Wizard</h2>
+      <section class="card span-7 install-card">
+        <div class="card-title-row">
+          <h2>Install Wizard</h2>
+          <a class="release-link" href="${escapeHtml(info.downloads.release)}">Release ${escapeHtml(MCP_SERVER_VERSION)}</a>
+        </div>
         <p>Create a local SAP MCP profile, signer, policy limits, and hosted client config. For a guided explanation, start with <a href="/docs/#/user/00_START_HERE">the user docs</a>.</p>
-        <div class="command"><code>${escapeHtml(installScriptCommand)}</code></div>
-        <div class="command"><code>${escapeHtml(wizardCommand)}</code></div>
+        <div class="command-row">
+          <span class="command-label">One-line installer</span>
+          <div class="command compact"><code>${escapeHtml(installScriptCommand)}</code></div>
+        </div>
+        <div class="command-row">
+          <span class="command-label">Direct npm wizard</span>
+          <div class="command compact"><code>${escapeHtml(wizardCommand)}</code></div>
+        </div>
       </section>
 
-      <section class="card span-5">
-        <h2>Native Downloads</h2>
-        <p>Use the desktop wizard when you want a guided setup without touching config files by hand. See <a href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop GUI Wizard docs</a>.</p>
+      <section class="card span-5 download-card">
+        <div class="card-title-row">
+          <h2>Native Downloads</h2>
+          <a class="release-link" href="${escapeHtml(info.downloads.release)}">${escapeHtml(MCP_SERVER_VERSION)} assets</a>
+        </div>
+        <p>Use the desktop wizard when you want a guided setup without touching config files by hand. These installers are pinned to <a href="${escapeHtml(info.downloads.release)}">release ${escapeHtml(MCP_SERVER_VERSION)}</a>.</p>
         <div class="download-grid">
           <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}"><span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.4 10.7 4v7.2H3V5.4Zm9-1.62L21 2.2v9h-9V3.78ZM3 12.8h7.7V20L3 18.66V12.8Zm9 0h9v9l-9-1.58V12.8Z"/></svg></span><strong>Windows</strong><span>x64 setup .exe</span></a>
           <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}"><span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 2.6c.04 1.2-.42 2.36-1.24 3.2-.78.82-2.08 1.46-3.18 1.36-.12-1.16.46-2.38 1.2-3.14.84-.88 2.28-1.54 3.22-1.42ZM20.1 17.36c-.56 1.26-.84 1.82-1.56 2.94-1 1.54-2.4 3.46-4.14 3.48-1.54.02-1.94-1-4.04-.98-2.1.02-2.54 1.02-4.08 1-1.74-.02-3.08-1.76-4.08-3.3-2.78-4.3-3.08-9.34-1.36-12.02 1.22-1.9 3.14-3.02 4.96-3.02 1.86 0 3.02 1.02 4.56 1.02 1.48 0 2.38-1.02 4.52-1.02 1.62 0 3.34.88 4.56 2.4-4 2.2-3.34 7.92.66 9.5Z"/></svg></span><strong>macOS</strong><span>Apple Silicon .dmg</span></a>

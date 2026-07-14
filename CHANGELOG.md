@@ -19,6 +19,9 @@ All notable changes to this project are documented in this file.
 - Fixed landing page setup-step layout on desktop and mobile by moving long CLI
   commands out of numbered steps, making command blocks horizontally scrollable,
   and preventing equal-height cards from stretching the stepper content.
+- Refined the public install and native download cards so the release badge,
+  platform cards, and direct installer links clearly target the current 0.8.0
+  desktop wizard assets.
 
 ## 0.8.0 - 2026-07-14
 
