@@ -31,6 +31,11 @@ All notable changes to this project are documented in this file.
 - Refined the public install and native download cards so the release badge,
   platform cards, and direct installer links clearly target the current 0.8.0
   desktop wizard assets.
+- Added the missing OpenAPI description for generic JSON-RPC `params` so
+  x402/pay.sh catalog validators and agent indexers can explain every required
+  request-body field.
+- Removed MagicBlock `mock` authentication switches from public MCP tool schemas
+  and request forwarding so production tools expose only real API flows.
 
 ## 0.8.0 - 2026-07-14
 

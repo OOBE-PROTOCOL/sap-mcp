@@ -216,8 +216,8 @@ interface AccountsInput { readonly accounts: readonly string[]; readonly endpoin
 interface SignaturesInput { readonly signatures: readonly string[]; readonly endpoint?: RouterEndpoint }
 interface AccountInfoInput { readonly account: string; readonly encoding?: Encoding; readonly endpoint?: RouterEndpoint }
 
-interface ChallengeInput { readonly pubkey: string; readonly cluster?: string; readonly mock?: boolean }
-interface LoginInput { readonly pubkey: string; readonly challenge: string; readonly signature: string; readonly cluster?: string; readonly mock?: boolean }
+interface ChallengeInput { readonly pubkey: string; readonly cluster?: string }
+interface LoginInput { readonly pubkey: string; readonly challenge: string; readonly signature: string; readonly cluster?: string }
 interface BalanceInput { readonly address: string; readonly mint: string; readonly cluster?: string }
 interface PrivateBalanceInput { readonly address: string; readonly mint: string; readonly cluster?: string; readonly authToken: string }
 
@@ -614,12 +614,12 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
 
   register<ChallengeInput>('magicblock_challenge',
     'Generate a challenge string for the wallet to sign (step 1 of the PER auth flow). Price: $0.01.',
-    schema({ pubkey: f.pubkey('Wallet pubkey that will sign the challenge'), cluster: clusterField, mock: f.boolean('Use a mock challenge for testing (default false)') }, ['pubkey']),
+    schema({ pubkey: f.pubkey('Wallet pubkey that will sign the challenge'), cluster: clusterField }, ['pubkey']),
     async (raw) => {
       try {
-        const { pubkey, cluster, mock } = parseInput<ChallengeInput>(raw);
+        const { pubkey, cluster } = parseInput<ChallengeInput>(raw);
         const result = await apiGet<ChallengeResponse>('/v1/spl/challenge', {
-          pubkey, cluster: cluster ?? undefined, mock: mock ? 'true' : undefined,
+          pubkey, cluster: cluster ?? undefined,
         });
         return success(result, 'magicblock_challenge');
       } catch (e) { return handleError('magicblock_challenge', e); }
@@ -628,12 +628,12 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
 
   register<LoginInput>('magicblock_login',
     'Exchange a signed challenge for a bearer token (step 2 of PER auth flow). The token is used for private-balance and private transfers. Price: $0.01.',
-    schema({ pubkey: f.pubkey('Wallet pubkey that signed the challenge'), challenge: f.string('Challenge string from magicblock_challenge'), signature: f.string('Wallet signature over the challenge string'), cluster: clusterField, mock: f.boolean('Use mock login flow (default false)') }, ['pubkey', 'challenge', 'signature']),
+    schema({ pubkey: f.pubkey('Wallet pubkey that signed the challenge'), challenge: f.string('Challenge string from magicblock_challenge'), signature: f.string('Wallet signature over the challenge string'), cluster: clusterField }, ['pubkey', 'challenge', 'signature']),
     async (raw) => {
       try {
-        const { pubkey, challenge, signature, cluster, mock } = parseInput<LoginInput>(raw);
+        const { pubkey, challenge, signature, cluster } = parseInput<LoginInput>(raw);
         const result = await apiPost<LoginResponse>('/v1/spl/login', {
-          pubkey, challenge, signature, cluster: cluster ?? undefined, mock: mock || undefined,
+          pubkey, challenge, signature, cluster: cluster ?? undefined,
         });
         return success(result, 'magicblock_login');
       } catch (e) { return handleError('magicblock_login', e); }

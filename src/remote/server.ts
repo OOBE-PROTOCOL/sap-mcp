@@ -1249,7 +1249,11 @@ export function buildOpenApiSpec(
                           description: 'MCP method.',
                           examples: ['initialize', 'tools/list', 'prompts/list', 'resources/list', 'ping'],
                         },
-                        params: { type: 'object', additionalProperties: true },
+                        params: {
+                          type: 'object',
+                          description: 'JSON-RPC parameters for the requested MCP method. Use an empty object when the method has no parameters.',
+                          additionalProperties: true,
+                        },
                       },
                       required: ['jsonrpc', 'id', 'method'],
                     },

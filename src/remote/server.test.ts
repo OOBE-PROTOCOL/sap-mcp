@@ -419,8 +419,10 @@ describe('remote MCP server config', () => {
     expect(openApi.paths['/mcp'].post['x-payment-info'].payTo).toBe(paymentDiscovery.payTo);
     expect(openApi.paths['/mcp'].post['x-payment-info'].facilitator).toEqual(paymentDiscovery.facilitator);
     expect(openApi.paths['/mcp'].post.summary.length).toBeLessThanOrEqual(63);
-    expect(openApi.paths['/mcp'].post.requestBody.content['application/json'].schema.oneOf.length).toBe(2);
-    expect(openApi.paths['/mcp'].post.requestBody.content['application/json'].schema.oneOf[1]?.properties?.params?.description).toContain('MCP tools/call parameters');
+    const requestBodySchemas = openApi.paths['/mcp'].post.requestBody.content['application/json'].schema.oneOf;
+    expect(requestBodySchemas.length).toBe(2);
+    expect(requestBodySchemas[0]?.properties?.params?.description).toContain('JSON-RPC parameters');
+    expect(requestBodySchemas[1]?.properties?.params?.description).toContain('MCP tools/call parameters');
     expect(openApi.paths['/mcp'].post.responses['200'].content['text/event-stream']).toBeDefined();
     expect(openApi.paths['/mcp'].post.responses['402']).toBeDefined();
     expect(wellKnown).toEqual({
