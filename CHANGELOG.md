@@ -10,6 +10,9 @@ All notable changes to this project are documented in this file.
   paths: native desktop download for normal users and CLI wizard for developers,
   with direct references to `/docs` pages for desktop setup, client configs, and
   x402/pay.sh payments.
+- Redesigned the hosted landing page navigation and integration path as a
+  server-rendered glass navigation bar plus shadcn-inspired setup cards with
+  native Windows, macOS, and Linux download actions.
 
 ### Fixed
 

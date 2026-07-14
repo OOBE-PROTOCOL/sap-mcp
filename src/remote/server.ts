@@ -1476,21 +1476,39 @@ export function buildLandingHtml(
       font-size: .92em;
     }
     .badge { display: inline-flex; align-items: center; gap: 8px; color: var(--aqua); font-weight: 750; text-transform: uppercase; font-size: .78rem; letter-spacing: 0; }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: fit-content;
+      max-width: calc(100% - 20px);
+      margin: 24px 10px 0;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      background: rgba(8,13,18,.58);
+      box-shadow: 0 18px 70px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter: blur(18px) saturate(135%);
+      -webkit-backdrop-filter: blur(18px) saturate(135%);
+    }
     .button {
       display: inline-flex;
       min-height: 42px;
       align-items: center;
       justify-content: center;
-      border: 1px solid var(--line-strong);
-      border-radius: 8px;
-      padding: 9px 14px;
-      background: var(--aqua-soft);
+      gap: 8px;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 9px 13px;
+      background: rgba(255,255,255,.045);
       color: var(--ink);
       font-weight: 700;
       text-decoration: none;
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
     }
-    .button.secondary { background: transparent; border-color: var(--line); color: var(--aqua); }
+    .button:first-child { background: var(--aqua-soft); border-color: var(--line-strong); }
+    .button:hover { transform: translateY(-1px); border-color: var(--line-strong); background: rgba(40,216,232,.10); }
+    .button.secondary { color: var(--aqua); }
     .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; margin-top: 28px; }
     .card {
       min-height: 148px;
@@ -1540,32 +1558,75 @@ export function buildLandingHtml(
     .download-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
     .download-link {
       display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      grid-template-areas:
+        "icon title"
+        "icon detail";
       min-height: 74px;
-      align-content: center;
-      gap: 4px;
+      align-items: center;
+      column-gap: 10px;
+      row-gap: 2px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: rgba(0,0,0,.18);
       padding: 12px;
       color: var(--ink);
       text-decoration: none;
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
     }
-    .download-link strong { color: var(--aqua); }
-    .download-link span { color: var(--muted); font-size: .88rem; }
-    .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; margin-top: 14px; }
-    .choice-card {
+    .download-link:hover { transform: translateY(-1px); border-color: var(--line-strong); background: rgba(40,216,232,.08); }
+    .download-link .platform-icon { grid-area: icon; }
+    .download-link strong { grid-area: title; color: var(--aqua); align-self: end; }
+    .download-link > span:not(.platform-icon) { grid-area: detail; color: var(--muted); font-size: .88rem; align-self: start; }
+    .integration-card { padding: 20px; overflow: hidden; }
+    .section-head {
       display: flex;
-      flex-direction: column;
-      gap: 12px;
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(0,0,0,.16);
-      padding: 16px;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 16px;
     }
-    .choice-card.recommended { border-color: var(--line-strong); background: rgba(40,216,232,.075); }
-    .choice-label { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .choice-label strong { font-size: 1.05rem; }
+    .section-head p { max-width: 760px; }
+    .section-kicker {
+      color: var(--aqua);
+      font-size: .78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .setup-path-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; margin-top: 12px; }
+    .path-card {
+      display: flex;
+      min-width: 0;
+      min-height: 100%;
+      flex-direction: column;
+      gap: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(8,13,18,.54);
+      padding: 18px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .path-card.recommended {
+      border-color: var(--line-strong);
+      background:
+        linear-gradient(180deg, rgba(40,216,232,.105), rgba(8,13,18,.42)),
+        rgba(8,13,18,.54);
+    }
+    .path-header { display: flex; gap: 12px; align-items: flex-start; }
+    .path-icon {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: 13px;
+      background: rgba(40,216,232,.12);
+      color: var(--aqua);
+    }
+    .path-icon svg, .platform-icon svg { width: 22px; height: 22px; display: block; }
+    .path-title-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .path-title-row strong { font-size: 1.08rem; color: var(--ink); }
     .pill {
       display: inline-flex;
       align-items: center;
@@ -1579,30 +1640,51 @@ export function buildLandingHtml(
       text-transform: uppercase;
       letter-spacing: 0;
     }
-    .steps { display: grid; gap: 10px; align-content: start; counter-reset: setup-step; margin-top: 2px; }
-    .step {
-      display: grid;
-      grid-template-columns: 32px 1fr;
-      gap: 10px;
-      align-items: start;
-      min-width: 0;
-      color: var(--muted);
-    }
-    .step strong { color: var(--ink); font-weight: 750; }
-    .step code { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
-    .step::before {
-      counter-increment: setup-step;
-      content: counter(setup-step);
+    .step-list { display: grid; gap: 11px; }
+    .step-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+    .step-number {
       display: inline-grid;
       place-items: center;
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       border: 1px solid var(--line-strong);
       border-radius: 999px;
       color: var(--aqua);
       font-weight: 800;
       line-height: 1;
+      background: rgba(40,216,232,.08);
     }
+    .step-copy { display: grid; gap: 2px; min-width: 0; color: var(--muted); }
+    .step-copy strong { color: var(--ink); font-weight: 760; }
+    .step-copy span { display: block; }
+    .platform-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .platform-button {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-height: 72px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0,0,0,.22);
+      padding: 10px;
+      color: var(--ink);
+      text-decoration: none;
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+    .platform-button:hover { transform: translateY(-1px); border-color: var(--line-strong); background: rgba(40,216,232,.08); }
+    .platform-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      color: var(--aqua);
+      background: rgba(40,216,232,.10);
+    }
+    .platform-button > span:not(.platform-icon) { display: block; min-width: 0; }
+    .platform-button strong { display: block; color: var(--aqua); font-size: .95rem; }
+    .platform-button > span:not(.platform-icon) > span { display: block; color: var(--muted); font-size: .82rem; }
     .doc-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .doc-link {
       display: inline-flex;
@@ -1620,11 +1702,23 @@ export function buildLandingHtml(
     .method { color: var(--success); font: 700 .78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .footer { margin-top: 26px; color: var(--muted); font-size: .94rem; }
     @media (max-width: 860px) {
+      main { width: min(100% - 20px, 1180px); padding-top: 32px; }
       header { grid-template-columns: 1fr; }
       img.logo { width: 76px; height: 76px; border-radius: 20px; }
+      h1 { font-size: clamp(2.15rem, 13vw, 3.8rem); }
+      .hero-actions {
+        width: calc(100% - 20px);
+        max-width: calc(100% - 20px);
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+      .button { flex: 0 0 auto; }
       .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
       .download-grid { grid-template-columns: 1fr; }
-      .choice-grid { grid-template-columns: 1fr; }
+      .setup-path-grid { grid-template-columns: 1fr; }
+      .section-head { display: grid; }
+      .platform-actions { grid-template-columns: 1fr; }
     }
     @media (min-width: 861px) and (max-width: 1120px) {
       .span-3, .span-4 { grid-column: span 6; }
@@ -1643,7 +1737,7 @@ export function buildLandingHtml(
         <span class="badge">OOBE Protocol • ${escapeHtml(endpointLabel)}</span>
         <h1>${escapeHtml(title)}</h1>
         <p>${escapeHtml(info.description)}</p>
-        <div class="hero-actions">
+        <nav class="hero-actions" aria-label="SAP MCP public navigation">
           <a class="button" href="/wizard/install.sh">Install wizard</a>
           <a class="button secondary" href="/wizard/downloads.json">Downloads</a>
           <a class="button secondary" href="/docs">Docs</a>
@@ -1651,7 +1745,7 @@ export function buildLandingHtml(
           <a class="button secondary" href="/openapi.json">OpenAPI</a>
           <a class="button secondary" href="/pay/provider.yml">pay.sh YAML</a>
           <a class="button secondary" href="/.well-known/agent-card.json">Agent card</a>
-        </div>
+        </nav>
       </div>
     </header>
 
@@ -1674,40 +1768,74 @@ export function buildLandingHtml(
         <p class="caption"><span class="status">${escapeHtml(formatInteger(paymentStats.totalVerifiedPayments))}</span> verified, <span class="warning">${escapeHtml(formatInteger(paymentStats.totalFailedSettlements))}</span> failed settlements.</p>
       </section>
 
-      <section class="card strong span-12">
-        <h2>Fast Integration Path</h2>
-        <p>Choose the setup path that matches the user. Both paths end with the same production model: hosted SAP MCP tools at <code>/mcp</code>, plus a local non-custodial <code>sap_payments</code> bridge for paid/write calls.</p>
-        <div class="choice-grid">
-          <div class="choice-card recommended">
-            <div class="choice-label"><strong>Native Download</strong><span class="pill">Recommended for most users</span></div>
-            <p class="caption">Best when the user wants a guided desktop installer for profile creation, wallet isolation, runtime detection, and payment bridge repair.</p>
-            <div class="steps" aria-label="Native download setup steps">
-              <div class="step">Download the Windows, macOS, or Linux wizard from the native downloads below.</div>
-              <div class="step">Open the wizard and choose <strong>Full hosted SAP MCP setup</strong>.</div>
-              <div class="step">Select detected runtimes such as Codex, Claude, Hermes, or OpenClaw.</div>
-              <div class="step">Restart the agent and connect to the hosted <code>/mcp</code> endpoint.</div>
+      <section class="card strong span-12 integration-card">
+        <div class="section-head">
+          <div>
+            <span class="section-kicker">Recommended onboarding</span>
+            <h2>Fast Integration Path</h2>
+            <p>Pick the path that matches the user. Both configure the same production shape: hosted SAP MCP tools at <code>/mcp</code>, plus a local non-custodial <code>sap_payments</code> bridge for paid/write calls.</p>
+          </div>
+          <a class="button secondary" href="/docs/#/user/00_START_HERE">Read full guide</a>
+        </div>
+        <div class="setup-path-grid">
+          <article class="path-card recommended">
+            <div class="path-header">
+              <div class="path-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v7A2.5 2.5 0 0 1 17.5 17H14l1 2h2.25a.75.75 0 0 1 0 1.5H6.75a.75.75 0 0 1 0-1.5H9l1-2H6.5A2.5 2.5 0 0 1 4 14.5v-7Z" stroke="currentColor" stroke-width="1.7"/><path d="M7 8h10M7 11h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="path-title-row"><strong>Native Download</strong><span class="pill">Best for most users</span></div>
+                <p class="caption">Guided desktop setup for profile creation, wallet isolation, runtime detection, and payment bridge repair.</p>
+              </div>
+            </div>
+            <div class="platform-actions" aria-label="Native wizard downloads">
+              <a class="platform-button" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}">
+                <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.4 10.7 4v7.2H3V5.4Zm9-1.62L21 2.2v9h-9V3.78ZM3 12.8h7.7V20L3 18.66V12.8Zm9 0h9v9l-9-1.58V12.8Z"/></svg></span>
+                <span><strong>Windows</strong><span>x64 setup .exe</span></span>
+              </a>
+              <a class="platform-button" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}">
+                <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 2.6c.04 1.2-.42 2.36-1.24 3.2-.78.82-2.08 1.46-3.18 1.36-.12-1.16.46-2.38 1.2-3.14.84-.88 2.28-1.54 3.22-1.42ZM20.1 17.36c-.56 1.26-.84 1.82-1.56 2.94-1 1.54-2.4 3.46-4.14 3.48-1.54.02-1.94-1-4.04-.98-2.1.02-2.54 1.02-4.08 1-1.74-.02-3.08-1.76-4.08-3.3-2.78-4.3-3.08-9.34-1.36-12.02 1.22-1.9 3.14-3.02 4.96-3.02 1.86 0 3.02 1.02 4.56 1.02 1.48 0 2.38-1.02 4.52-1.02 1.62 0 3.34.88 4.56 2.4-4 2.2-3.34 7.92.66 9.5Z"/></svg></span>
+                <span><strong>macOS</strong><span>Apple Silicon .dmg</span></span>
+              </a>
+              <a class="platform-button" href="${escapeHtml(info.downloads.desktopWizard.linuxX64TarGz)}">
+                <span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3.2 0 5.8 2.5 5.8 5.6v3.8l2 3.5c.7 1.2-.18 2.7-1.56 2.7H5.76c-1.38 0-2.26-1.5-1.56-2.7l2-3.5V8.6C6.2 5.5 8.8 3 12 3Z" stroke="currentColor" stroke-width="1.6"/><path d="M9.2 10.3h.01M14.8 10.3h.01M9 15c1.8 1 4.2 1 6 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                <span><strong>Linux</strong><span>x64 tar.gz</span></span>
+              </a>
+            </div>
+            <div class="step-list" aria-label="Native download setup steps">
+              <div class="step-item"><span class="step-number">1</span><span class="step-copy"><strong>Download the desktop wizard.</strong><span>Choose Windows, macOS, or Linux above.</span></span></div>
+              <div class="step-item"><span class="step-number">2</span><span class="step-copy"><strong>Select Full hosted SAP MCP setup.</strong><span>The wizard creates the local profile and signer boundary.</span></span></div>
+              <div class="step-item"><span class="step-number">3</span><span class="step-copy"><strong>Choose detected runtimes.</strong><span>Codex, Claude, Hermes, OpenClaw, or compatible clients.</span></span></div>
+              <div class="step-item"><span class="step-number">4</span><span class="step-copy"><strong>Restart the agent.</strong><span>It connects to hosted <code>/mcp</code> and uses local <code>sap_payments</code>.</span></span></div>
             </div>
             <div class="doc-links">
               <a class="doc-link" href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop wizard docs</a>
               <a class="doc-link" href="/wizard/downloads.json">Downloads JSON</a>
             </div>
-          </div>
-          <div class="choice-card">
-            <div class="choice-label"><strong>CLI Wizard</strong><span class="pill">Developer path</span></div>
-            <p class="caption">Best for terminal users, servers, and developers who want deterministic setup from npm without manually editing client config files.</p>
-            <div class="steps" aria-label="CLI wizard setup steps">
-              <div class="step">Run the CLI wizard command below.</div>
-              <div class="step">Accept the default <strong>hosted-api</strong> mode for remote SAP MCP.</div>
-              <div class="step">Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</div>
-              <div class="step">Use <code>sap_payments_call_paid_tool</code> when a hosted tool requires x402 payment.</div>
+          </article>
+          <article class="path-card">
+            <div class="path-header">
+              <div class="path-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11Z" stroke="currentColor" stroke-width="1.7"/><path d="m8 9 3 3-3 3M13 15h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div>
+                <div class="path-title-row"><strong>CLI Wizard</strong><span class="pill">Developer path</span></div>
+                <p class="caption">Deterministic npm setup for terminal users, servers, and builders who want exact runtime config.</p>
+              </div>
             </div>
             <div class="command compact"><code>${escapeHtml(wizardCommand)}</code></div>
+            <div class="step-list" aria-label="CLI wizard setup steps">
+              <div class="step-item"><span class="step-number">1</span><span class="step-copy"><strong>Run the command.</strong><span>It launches the same profile manager used by the desktop wizard.</span></span></div>
+              <div class="step-item"><span class="step-number">2</span><span class="step-copy"><strong>Keep hosted-api selected.</strong><span>Remote tools stay hosted; signatures remain local.</span></span></div>
+              <div class="step-item"><span class="step-number">3</span><span class="step-copy"><strong>Install runtime config.</strong><span>The wizard writes hosted <code>sap</code> plus local <code>sap_payments</code>.</span></span></div>
+              <div class="step-item"><span class="step-number">4</span><span class="step-copy"><strong>Use paid tools smoothly.</strong><span>Agents call <code>sap_payments_call_paid_tool</code> for x402 challenges.</span></span></div>
+            </div>
             <div class="doc-links">
               <a class="doc-link" href="/docs/#/user/00_START_HERE">Start here</a>
               <a class="doc-link" href="/docs/#/user/04_CLIENT_CONFIGS">Client configs</a>
               <a class="doc-link" href="/docs/#/user/03_PAYMENTS_X402_PAYSH">Payments</a>
             </div>
-          </div>
+          </article>
         </div>
       </section>
 
@@ -1722,9 +1850,9 @@ export function buildLandingHtml(
         <h2>Native Downloads</h2>
         <p>Use the desktop wizard when you want a guided setup without touching config files by hand. See <a href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop GUI Wizard docs</a>.</p>
         <div class="download-grid">
-          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}"><strong>Windows</strong><span>x64 setup .exe</span></a>
-          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}"><strong>macOS</strong><span>Apple Silicon .dmg</span></a>
-          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.linuxX64TarGz)}"><strong>Linux</strong><span>x64 tar.gz</span></a>
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}"><span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.4 10.7 4v7.2H3V5.4Zm9-1.62L21 2.2v9h-9V3.78ZM3 12.8h7.7V20L3 18.66V12.8Zm9 0h9v9l-9-1.58V12.8Z"/></svg></span><strong>Windows</strong><span>x64 setup .exe</span></a>
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}"><span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 2.6c.04 1.2-.42 2.36-1.24 3.2-.78.82-2.08 1.46-3.18 1.36-.12-1.16.46-2.38 1.2-3.14.84-.88 2.28-1.54 3.22-1.42ZM20.1 17.36c-.56 1.26-.84 1.82-1.56 2.94-1 1.54-2.4 3.46-4.14 3.48-1.54.02-1.94-1-4.04-.98-2.1.02-2.54 1.02-4.08 1-1.74-.02-3.08-1.76-4.08-3.3-2.78-4.3-3.08-9.34-1.36-12.02 1.22-1.9 3.14-3.02 4.96-3.02 1.86 0 3.02 1.02 4.56 1.02 1.48 0 2.38-1.02 4.52-1.02 1.62 0 3.34.88 4.56 2.4-4 2.2-3.34 7.92.66 9.5Z"/></svg></span><strong>macOS</strong><span>Apple Silicon .dmg</span></a>
+          <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.linuxX64TarGz)}"><span class="platform-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c3.2 0 5.8 2.5 5.8 5.6v3.8l2 3.5c.7 1.2-.18 2.7-1.56 2.7H5.76c-1.38 0-2.26-1.5-1.56-2.7l2-3.5V8.6C6.2 5.5 8.8 3 12 3Z" stroke="currentColor" stroke-width="1.6"/><path d="M9.2 10.3h.01M14.8 10.3h.01M9 15c1.8 1 4.2 1 6 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><strong>Linux</strong><span>x64 tar.gz</span></a>
         </div>
         <p class="caption">Machine-readable links: <a href="${escapeHtml(info.endpoints.wizardDownloads)}">/wizard/downloads.json</a>.</p>
       </section>
