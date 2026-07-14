@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added homepage and docs quick-start steppers for the two supported integration
+  paths: native desktop download for normal users and CLI wizard for developers,
+  with direct references to `/docs` pages for desktop setup, client configs, and
+  x402/pay.sh payments.
+
 ## 0.8.0 - 2026-07-14
 
 ### Changed

@@ -15,19 +15,45 @@ Use one of two deployment modes:
 
 Hosted MCP still requires a local SAP MCP profile when the agent needs to sign payments or value-moving transactions. The hosted server never receives keypair bytes. The user's machine or external signer owns the trust boundary.
 
+Choose one setup path:
+
+| Path | Best For | What It Does |
+| --- | --- | --- |
+| Native Desktop Wizard | Non-technical users and first-time setup | Downloads a guided GUI, creates the local SAP profile, detects runtimes, and configures hosted `sap` plus local `sap_payments`. |
+| CLI Wizard | Developers, terminal users, servers | Runs the same setup from npm and can print or inject runtime config. |
+
+### Native Desktop Wizard
+
+1. Download the wizard from GitHub releases or from the hosted downloads descriptor.
+2. Open the wizard and choose **Full hosted SAP MCP setup**.
+3. Select detected runtimes such as Codex, Claude, Hermes, or OpenClaw.
+4. Restart the agent runtime and connect to hosted SAP MCP.
+
+Release downloads:
+
+```txt
+https://github.com/OOBE-PROTOCOL/sap-mcp/releases
+https://mcp.sap.oobeprotocol.ai/wizard/downloads.json
+```
+
+More details:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/docs/#/user/06_DESKTOP_GUI_WIZARD
+```
+
+### CLI Wizard
+
 Run the wizard:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
-For non-technical users, download the Desktop GUI Wizard from GitHub releases:
-
-```txt
-https://github.com/OOBE-PROTOCOL/sap-mcp/releases
-```
-
-The Desktop GUI Wizard creates the same profile and signer setup as the CLI wizard, then can configure hosted MCP plus the local SAP MCP `sap_payments` bridge for supported agent runtimes.
+1. Accept the default **hosted-api** mode for hosted SAP MCP.
+2. Create or import the dedicated local SAP MCP wallet profile.
+3. Let the wizard configure hosted `sap` plus local `sap_payments` for supported runtimes.
+4. Use `sap_payments_call_paid_tool` when a hosted tool requires x402 payment.
 
 Show the active profile:
 
@@ -45,6 +71,18 @@ Hosted documentation:
 
 ```txt
 https://mcp.sap.oobeprotocol.ai/docs
+```
+
+Client config docs:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/docs/#/user/04_CLIENT_CONFIGS
+```
+
+Payment docs:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/docs/#/user/03_PAYMENTS_X402_PAYSH
 ```
 
 Wizard descriptor:

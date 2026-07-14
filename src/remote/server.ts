@@ -1534,6 +1534,65 @@ export function buildLandingHtml(
     }
     .download-link strong { color: var(--aqua); }
     .download-link span { color: var(--muted); font-size: .88rem; }
+    .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+    .choice-card {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0,0,0,.16);
+      padding: 16px;
+    }
+    .choice-card.recommended { border-color: var(--line-strong); background: rgba(40,216,232,.075); }
+    .choice-label { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .choice-label strong { font-size: 1.05rem; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--aqua);
+      font-size: .73rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+    .steps { display: grid; gap: 10px; counter-reset: setup-step; margin-top: 2px; }
+    .step {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      gap: 10px;
+      align-items: start;
+      color: var(--muted);
+    }
+    .step::before {
+      counter-increment: setup-step;
+      content: counter(setup-step);
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--aqua);
+      font-weight: 800;
+      line-height: 1;
+    }
+    .doc-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .doc-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: var(--aqua);
+      text-decoration: none;
+      font-size: .9rem;
+    }
     .endpoint-list { display: grid; gap: 10px; margin-top: 10px; }
     .endpoint-row { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: baseline; }
     .method { color: var(--success); font: 700 .78rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -1543,6 +1602,7 @@ export function buildLandingHtml(
       img.logo { width: 76px; height: 76px; border-radius: 20px; }
       .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
       .download-grid { grid-template-columns: 1fr; }
+      .choice-grid { grid-template-columns: 1fr; }
     }
     @media (min-width: 861px) and (max-width: 1120px) {
       .span-3, .span-4 { grid-column: span 6; }
@@ -1592,16 +1652,52 @@ export function buildLandingHtml(
         <p class="caption"><span class="status">${escapeHtml(formatInteger(paymentStats.totalVerifiedPayments))}</span> verified, <span class="warning">${escapeHtml(formatInteger(paymentStats.totalFailedSettlements))}</span> failed settlements.</p>
       </section>
 
+      <section class="card strong span-12">
+        <h2>Fast Integration Path</h2>
+        <p>Choose the setup path that matches the user. Both paths end with the same production model: hosted SAP MCP tools at <code>/mcp</code>, plus a local non-custodial <code>sap_payments</code> bridge for paid/write calls.</p>
+        <div class="choice-grid">
+          <div class="choice-card recommended">
+            <div class="choice-label"><strong>Native Download</strong><span class="pill">Recommended for most users</span></div>
+            <p class="caption">Best when the user wants a guided desktop installer for profile creation, wallet isolation, runtime detection, and payment bridge repair.</p>
+            <div class="steps" aria-label="Native download setup steps">
+              <div class="step">Download the Windows, macOS, or Linux wizard from the native downloads below.</div>
+              <div class="step">Open the wizard and choose <strong>Full hosted SAP MCP setup</strong>.</div>
+              <div class="step">Select detected runtimes such as Codex, Claude, Hermes, or OpenClaw.</div>
+              <div class="step">Restart the agent and connect to <code>https://mcp.sap.oobeprotocol.ai/mcp</code>.</div>
+            </div>
+            <div class="doc-links">
+              <a class="doc-link" href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop wizard docs</a>
+              <a class="doc-link" href="/wizard/downloads.json">Downloads JSON</a>
+            </div>
+          </div>
+          <div class="choice-card">
+            <div class="choice-label"><strong>CLI Wizard</strong><span class="pill">Developer path</span></div>
+            <p class="caption">Best for terminal users, servers, and developers who want deterministic setup from npm without manually editing client config files.</p>
+            <div class="steps" aria-label="CLI wizard setup steps">
+              <div class="step">Run <code>${escapeHtml(wizardCommand)}</code>.</div>
+              <div class="step">Accept the default <strong>hosted-api</strong> mode for remote SAP MCP.</div>
+              <div class="step">Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</div>
+              <div class="step">Use <code>sap_payments_call_paid_tool</code> when a hosted tool requires x402 payment.</div>
+            </div>
+            <div class="doc-links">
+              <a class="doc-link" href="/docs/#/user/00_START_HERE">Start here</a>
+              <a class="doc-link" href="/docs/#/user/04_CLIENT_CONFIGS">Client configs</a>
+              <a class="doc-link" href="/docs/#/user/03_PAYMENTS_X402_PAYSH">Payments</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="card span-7">
         <h2>Install Wizard</h2>
-        <p>Create a local SAP MCP profile, signer, policy limits, and optional client injection. Hosted users still sign x402/pay.sh and value-moving operations from their own machine or external signer.</p>
+        <p>Create a local SAP MCP profile, signer, policy limits, and hosted client config. For a guided explanation, start with <a href="/docs/#/user/00_START_HERE">the user docs</a>.</p>
         <div class="command"><code>${escapeHtml(installScriptCommand)}</code></div>
         <div class="command"><code>${escapeHtml(wizardCommand)}</code></div>
       </section>
 
       <section class="card span-5">
         <h2>Native Downloads</h2>
-        <p>Use the desktop wizard when you want a guided setup without touching config files by hand.</p>
+        <p>Use the desktop wizard when you want a guided setup without touching config files by hand. See <a href="/docs/#/user/06_DESKTOP_GUI_WIZARD">Desktop GUI Wizard docs</a>.</p>
         <div class="download-grid">
           <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.windowsX64Setup)}"><strong>Windows</strong><span>x64 setup .exe</span></a>
           <a class="download-link" href="${escapeHtml(info.downloads.desktopWizard.macosArm64Dmg)}"><strong>macOS</strong><span>Apple Silicon .dmg</span></a>
@@ -1615,13 +1711,13 @@ export function buildLandingHtml(
         <ul class="list">
           <li><strong>x402:</strong> paid MCP tool calls return HTTP 402 with payment requirements, then settle through the OOBE facilitator.</li>
           <li><strong>pay.sh:</strong> public provider YAML is available at <a href="${escapeHtml(info.endpoints.payShProvider)}">/pay/provider.yml</a> for catalog and proxy workflows.</li>
-          <li><strong>Local stdio:</strong> free by default; monetization applies to hosted remote usage.</li>
+          <li><strong>Local bridge:</strong> hosted paid/write calls should use <code>sap_payments_call_paid_tool</code>. Read more in <a href="/docs/#/user/03_PAYMENTS_X402_PAYSH">payments docs</a>.</li>
         </ul>
       </section>
 
       <section class="card strong span-12">
         <h2>x402 Challenge Tools For Agents</h2>
-        <p>Agents that can reach hosted MCP but cannot replay x402 challenges natively can install the wizard addon and call <code>sap_payments_call_paid_tool</code>. The local bridge obtains the challenge, signs with the user's SAP MCP profile, retries the hosted tool call, and returns the receipt without sending keypair bytes to OOBE.</p>
+        <p>Agents that can reach hosted MCP but cannot replay x402 challenges natively should use the wizard-managed local <code>sap_payments</code> bridge and call <code>sap_payments_call_paid_tool</code>. The bridge obtains the challenge, signs with the user's SAP MCP profile, retries the hosted tool call, and returns the receipt without sending keypair bytes to OOBE. See <a href="/docs/#/user/04_CLIENT_CONFIGS">runtime config docs</a>.</p>
         <div class="command"><code>Addon path: ${escapeHtml(X402_PAID_CALL_ADDON_PATH)}</code></div>
         <div class="command"><code>${escapeHtml(x402PaidCallCommand)}</code></div>
       </section>

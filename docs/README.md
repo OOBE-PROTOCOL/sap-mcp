@@ -14,6 +14,13 @@ Use this documentation when you need to install the wizard, connect Claude/Herme
 
 Most users should connect agents to the hosted remote MCP server while keeping signing local and user-controlled.
 
+Choose one integration path:
+
+| Path | Best For | Steps |
+| --- | --- | --- |
+| Native Desktop Wizard | Non-technical users and first-time setup | Download the app, choose **Full hosted SAP MCP setup**, select detected runtimes, then restart the agent. |
+| CLI Wizard | Developers and terminal users | Run the npm command, accept hosted `hosted-api`, and let the wizard install hosted `sap` plus local `sap_payments`. |
+
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
@@ -24,7 +31,13 @@ Users who prefer a GUI can download the Desktop Wizard from GitHub releases:
 https://github.com/OOBE-PROTOCOL/sap-mcp/releases
 ```
 
-The desktop wizard creates the same local SAP MCP profile, signer boundary, hosted MCP client config, and optional x402 paid-call bridge as the CLI wizard.
+The desktop wizard creates the same local SAP MCP profile, signer boundary, hosted MCP client config, and local `sap_payments` bridge as the CLI wizard.
+
+Native download metadata:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/wizard/downloads.json
+```
 
 The wizard creates an isolated SAP MCP profile under:
 
@@ -44,6 +57,12 @@ Then configure your MCP client with:
   }
 }
 ```
+
+For paid/write hosted tools, also configure the local `sap_payments` bridge. The wizard does this automatically for supported runtimes. See:
+
+- [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
+- [Client Configs](user/04_CLIENT_CONFIGS.md)
+- [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
 
 ## What The Hosted Server Provides
 
