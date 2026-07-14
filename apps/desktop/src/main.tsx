@@ -139,6 +139,18 @@ function App() {
     setDraft((current) => current ? { ...current, ...next } : current);
   }
 
+  function goHome() {
+    setResult(null);
+    setError(null);
+    setStep('Setup');
+  }
+
+  function goToStep(nextStep: StepName) {
+    setResult(null);
+    setError(null);
+    setStep(nextStep);
+  }
+
   async function save() {
     if (!draft || validation.length > 0) {
       setError(validation.join('\n'));
@@ -174,8 +186,9 @@ function App() {
               <button
                 type="button"
                 className={item === step ? 'step active' : index < stepIndex ? 'step done' : 'step'}
-                onClick={() => setStep(item)}
+                onClick={() => goToStep(item)}
                 disabled={saving}
+                aria-current={item === step ? 'step' : undefined}
               >
                 <span>{index + 1}</span>
                 {item}
@@ -183,6 +196,12 @@ function App() {
             </li>
           ))}
         </ol>
+        <div className="sidebar-actions">
+          <button type="button" className="sidebar-home-button" onClick={goHome} disabled={saving}>
+            <span aria-hidden="true">H</span>
+            Home
+          </button>
+        </div>
         <div className="hosted-card">
           <p>Hosted MCP</p>
           <code>{hostedUrl}</code>

@@ -57,10 +57,12 @@ function registerWizardHandler(channel, handler) {
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1120,
-    height: 780,
-    minWidth: 920,
-    minHeight: 680,
+    width: 1280,
+    height: 840,
+    minWidth: 760,
+    minHeight: 640,
+    center: true,
+    useContentSize: true,
     title: 'SAP MCP Wizard',
     backgroundColor: '#071114',
     webPreferences: {

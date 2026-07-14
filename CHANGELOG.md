@@ -16,6 +16,11 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Fixed desktop wizard responsiveness on narrower macOS and Windows windows by
+  removing page-level horizontal overflow, collapsing the setup chooser before
+  it clips, and constraining long paths/URLs inside cards.
+- Added a persistent Home action to the desktop wizard sidebar so users can
+  return to the initial setup choice after finishing a repair or full setup.
 - Fixed landing page setup-step layout on desktop and mobile by moving long CLI
   commands out of numbered steps, making command blocks horizontally scrollable,
   and preventing equal-height cards from stretching the stepper content.
