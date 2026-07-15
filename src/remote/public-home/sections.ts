@@ -29,6 +29,34 @@ function formatInteger(value: number): string {
 }
 
 /**
+ * @name renderOsIcon
+ * @description Renders inline platform marks for native wizard download cards.
+ */
+function renderOsIcon(platform: 'windows' | 'macos' | 'linux'): string {
+  if (platform === 'windows') {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 5.2 10.7 4v7.2H3V5.2Zm9.3-1.4L21 2.5v8.7h-8.7V3.8ZM3 12.8h7.7V20L3 18.8v-6Zm9.3 0H21v8.7l-8.7-1.3v-7.4Z" />
+      </svg>
+    `;
+  }
+
+  if (platform === 'macos') {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M16.7 2.4c.1 1.2-.4 2.4-1.2 3.3-.9 1-2.2 1.7-3.4 1.6-.2-1.2.4-2.4 1.2-3.2.9-1 2.3-1.7 3.4-1.7ZM20.2 17.4c-.5 1.2-.8 1.7-1.5 2.8-1 1.5-2.3 3.3-4 3.3-1.5 0-1.9-1-3.9-1s-2.5 1-4 1c-1.7 0-3-1.6-4-3.1-2.8-4.3-3.1-9.4-1.4-12.1 1.2-1.9 3-3 4.7-3 1.8 0 2.9 1 4.3 1 1.4 0 2.2-1 4.3-1 1.6 0 3.3.9 4.5 2.4-3.9 2.1-3.3 7.7 1 9.7Z" />
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.2c2.2 0 4 1.8 4 4v2.1c1.1.5 2 1.5 2.5 2.8l1.3 3.3c.4 1.1-.1 2.3-1.2 2.8l-1.1.5v1.2c0 1.6-1.3 2.9-2.9 2.9H9.4c-1.6 0-2.9-1.3-2.9-2.9v-1.2l-1.1-.5c-1.1-.5-1.6-1.7-1.2-2.8l1.3-3.3c.5-1.3 1.4-2.3 2.5-2.8V6.2c0-2.2 1.8-4 4-4Zm-2.2 16.2v.5c0 .4.3.7.7.7h3c.4 0 .7-.3.7-.7v-.5H9.8Zm2.2-14c-1 0-1.8.8-1.8 1.8v1.6h3.6V6.2c0-1-.8-1.8-1.8-1.8Zm-4.4 7.4-1.2 3.1 2.5 1.1h6.2l2.5-1.1-1.2-3.1c-.4-1-1.3-1.7-2.4-1.7H10c-1.1 0-2 .7-2.4 1.7Z" />
+    </svg>
+  `;
+}
+
+/**
  * @name renderTopNavigation
  * @description Renders the glass top navigation used by the hosted landing page.
  */
@@ -72,13 +100,12 @@ export function renderHero(model: LandingPageModel): string {
 
   return `
     <header class="hero" id="top">
-      <div>
+      <div class="hero-copy">
         <p class="eyebrow">OOBE Protocol · ${escapeHtml(endpointLabel)}</p>
-        <h1>Solana-native operations for agent runtimes.</h1>
+        <h1>Agent operations, wired into Solana.</h1>
         <p class="lead">
-          SAP MCP connects Codex, Claude, Hermes, OpenClaw and custom agents to Solana RPC,
-          DeFi protocol tools, Synapse Agent Protocol primitives, SNS identity, and paid
-          x402/pay.sh execution without OOBE ever receiving user keypair bytes.
+          SAP MCP is the hosted MCP surface for agents that need real Solana work:
+          protocol tools, registry state, identity, payments, policy, and local non-custodial signing.
         </p>
         <div class="hero-actions">
           <a class="button primary" href="#install">Start with the wizard</a>
@@ -90,26 +117,148 @@ export function renderHero(model: LandingPageModel): string {
           are authorized by the user-owned local <code>sap_payments</code> bridge or an external signer.
         </p>
       </div>
-      <div class="engine-card" data-engine-scene aria-label="Animated SAP MCP protocol engine">
-        <div class="engine-stage">
-          <div class="engine-core">
-            <div class="engine-ring"></div>
-            <div class="engine-ring"></div>
-            <div class="engine-ring"></div>
-            <div class="engine-trace"></div>
-            <div class="engine-dial">SAP</div>
-            <div class="engine-node node-a"><strong>MCP</strong>Tools</div>
-            <div class="engine-node node-b"><strong>x402</strong>Receipts</div>
-            <div class="engine-node node-c"><strong>SNS</strong>Identity</div>
-            <div class="engine-node node-d"><strong>RPC</strong>Solana</div>
-          </div>
+      <div class="hero-visual" data-engine-scene aria-label="Animated SAP MCP protocol engine">
+        <div class="terminal-strip">
+          <span></span><span></span><span></span>
+          <code>sap:mcp://remote</code>
         </div>
-        <div class="engine-caption">
-          <code>${escapeHtml(model.info.endpoints.mcp)}</code>
-          <p>One hosted gateway. Local signatures. Metered execution.</p>
+        <div class="orbital-engine">
+          <div class="orbit orbit-a"></div>
+          <div class="orbit orbit-b"></div>
+          <div class="orbit orbit-c"></div>
+          <div class="orbit-core">
+            <img src="/favicon.png" alt="" width="52" height="52">
+            <strong>SAP</strong>
+          </div>
+          <div class="orbit-chip chip-a"><b>MCP</b><span>Tools</span></div>
+          <div class="orbit-chip chip-b"><b>x402</b><span>Receipts</span></div>
+          <div class="orbit-chip chip-c"><b>SNS</b><span>Identity</span></div>
+          <div class="orbit-chip chip-d"><b>RPC</b><span>Solana</span></div>
+        </div>
+        <div class="hero-bento-mini">
+          <div><span>Tools</span><strong>268</strong></div>
+          <div><span>Transport</span><strong>HTTP</strong></div>
+          <div><span>Keys</span><strong>Local</strong></div>
         </div>
       </div>
     </header>
+  `;
+}
+
+/**
+ * @name renderHeroBento
+ * @description Renders the first bento grid with operational primitives and live stats.
+ */
+export function renderHeroBento(model: LandingPageModel): string {
+  const stats = model.paymentStats;
+  const cards = [
+    ['Solana DeFi Protocols', 'Jupiter, Raydium, Orca, Meteora, Drift, Pyth, DAS, Metaplex and more.', 'coral', 'protocols'],
+    ['Solana RPC Methods', 'Balances, token accounts, assets, simulation, programs, transactions and raw chain reads.', 'yellow', 'rpc'],
+    ['Synapse Agent Protocol', 'Registry, tools, reputation, attestations, escrow, settlement, memory, SNS identity.', 'green', 'sap'],
+    ['x402 / pay.sh Revenue', `${formatUsd(stats.totalVolumeUsd)} settled volume across ${formatInteger(stats.totalSettlements)} settlement events.`, 'aqua', 'payments'],
+  ] as const;
+
+  return `
+    <section class="bento-strip" aria-labelledby="bento-title">
+      <div class="bento-header">
+        <p class="eyebrow" id="bento-title">Agent coordination stack</p>
+        <h2>One gateway for discovery, execution, payment, and proof.</h2>
+      </div>
+      <div class="bento-grid">
+        ${cards.map(([title, body, tone, key], index) => `
+          <article class="bento-card bento-${escapeHtml(key)} ${index === 0 ? 'wide' : ''}" data-tone="${escapeHtml(tone)}">
+            <span>${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(body)}</p>
+          </article>
+        `).join('')}
+        <article class="bento-card tall" data-tone="blue">
+          <span>Live endpoint</span>
+          <h3>Streamable HTTP MCP</h3>
+          <code>${escapeHtml(model.info.endpoints.mcp)}</code>
+          <p>Free discovery. Paid tools return x402 challenges. Local signatures stay on the user's machine.</p>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * @name renderScrollMachine
+ * @description Renders the large scroll-driven protocol assembly scene.
+ */
+export function renderScrollMachine(model: LandingPageModel): string {
+  return `
+    <section class="machine-section" data-machine-section aria-labelledby="machine-title">
+      <div class="machine-copy">
+        <p class="eyebrow" id="machine-title">Scroll the coordination engine</p>
+        <h2>Hosted calls open into local authorization.</h2>
+        <p>
+          The remote server exposes the tool surface. The local profile owns signer state.
+          The payment bridge resolves x402 challenges and replays the exact call with a receipt.
+        </p>
+      </div>
+      <div class="machine-stage">
+        <div class="machine-part part-remote">
+          <span>01</span>
+          <strong>Remote MCP</strong>
+          <p>${escapeHtml(model.info.endpoints.mcp)}</p>
+        </div>
+        <div class="machine-part part-policy">
+          <span>02</span>
+          <strong>Policy</strong>
+          <p>Limits, approvals, Bento optional.</p>
+        </div>
+        <div class="machine-core">
+          <div class="machine-core-ring"></div>
+          <img src="/favicon.png" alt="" width="72" height="72">
+          <strong>SAP</strong>
+        </div>
+        <div class="machine-part part-payments">
+          <span>03</span>
+          <strong>x402/pay.sh</strong>
+          <p>Challenge, settlement, receipt.</p>
+        </div>
+        <div class="machine-part part-signer">
+          <span>04</span>
+          <strong>Local signer</strong>
+          <p>Keypair bytes never leave device.</p>
+        </div>
+        <div class="machine-rail rail-a"></div>
+        <div class="machine-rail rail-b"></div>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * @name renderDocsLaunchpad
+ * @description Renders a compact docs grid similar to a production documentation launchpad.
+ */
+export function renderDocsLaunchpad(model: LandingPageModel): string {
+  const docs = [
+    ['Getting started', `${model.info.endpoints.docs}/#/user/00_START_HERE`, 'coral'],
+    ['Hosted remote MCP', `${model.info.endpoints.docs}/#/user/01_HOSTED_REMOTE_MCP`, 'yellow'],
+    ['Client configs', `${model.info.endpoints.docs}/#/user/04_CLIENT_CONFIGS`, 'green'],
+    ['Desktop wizard', `${model.info.endpoints.docs}/#/user/06_DESKTOP_GUI_WIZARD`, 'blue'],
+    ['x402 and pay.sh', `${model.info.endpoints.docs}/#/user/03_PAYMENTS_X402_PAYSH`, 'aqua'],
+    ['Skills and tools', `${model.info.endpoints.docs}/#/user/05_SKILLS_AND_TOOLS`, 'green'],
+  ] as const;
+
+  return `
+    <section class="docs-launchpad" aria-labelledby="docs-launchpad-title">
+      <p class="eyebrow" id="docs-launchpad-title">Start operating</p>
+      <h2>Documentation that maps to the agent workflow.</h2>
+      <div class="docs-grid">
+        ${docs.map(([label, href, tone]) => `
+          <a class="doc-tile" data-tone="${escapeHtml(tone)}" href="${escapeHtml(href)}">
+            <span></span>
+            <strong>${escapeHtml(label)}</strong>
+            <b aria-hidden="true">→</b>
+          </a>
+        `).join('')}
+      </div>
+    </section>
   `;
 }
 
@@ -124,7 +273,7 @@ export function renderMetrics(model: LandingPageModel): string {
     : 'Ledger initializes after the first paid hosted call';
 
   return `
-    <section class="section" aria-labelledby="metrics-title">
+    <section class="section compact" aria-labelledby="metrics-title">
       <div class="section-head">
         <p class="eyebrow" id="metrics-title">Live hosted gateway</p>
         <h2>Payment-aware MCP infrastructure.</h2>
@@ -246,9 +395,9 @@ export function renderIntegrationPath(model: LandingPageModel): string {
  */
 export function renderDownloads(model: LandingPageModel): string {
   const downloads = [
-    ['Windows', 'x64 setup .exe', 'Win', model.info.downloads.desktopWizard.windowsX64Setup],
-    ['macOS', 'Apple Silicon .dmg', 'mac', model.info.downloads.desktopWizard.macosArm64Dmg],
-    ['Linux', 'x64 tar.gz', 'Lin', model.info.downloads.desktopWizard.linuxX64TarGz],
+    ['Windows', 'x64 setup .exe', 'windows', model.info.downloads.desktopWizard.windowsX64Setup],
+    ['macOS', 'Apple Silicon .dmg', 'macos', model.info.downloads.desktopWizard.macosArm64Dmg],
+    ['Linux', 'x64 tar.gz', 'linux', model.info.downloads.desktopWizard.linuxX64TarGz],
   ] as const;
 
   return `
@@ -266,9 +415,9 @@ export function renderDownloads(model: LandingPageModel): string {
           <h2>One-click desktop wizard.</h2>
           <p>Download directly from the GitHub release for v${escapeHtml(model.info.version)}. The public downloads manifest remains available at <a href="${escapeHtml(model.info.endpoints.wizardDownloads)}">/wizard/downloads.json</a>.</p>
           <div class="download-grid">
-            ${downloads.map(([label, caption, mark, href]) => `
+            ${downloads.map(([label, caption, platform, href]) => `
               <a class="download-card" href="${escapeHtml(href)}">
-                <span class="os-mark" aria-hidden="true">${escapeHtml(mark)}</span>
+                <span class="os-mark os-${escapeHtml(platform)}">${renderOsIcon(platform)}</span>
                 <span>
                   <strong>${escapeHtml(label)}</strong>
                   <span>${escapeHtml(caption)}</span>

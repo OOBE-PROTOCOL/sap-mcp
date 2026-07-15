@@ -1,13 +1,16 @@
 import { escapeHtml, escapeJsonForHtml } from './escape.js';
 import {
   renderDownloads,
+  renderDocsLaunchpad,
   renderEndpointMap,
   renderFeatureEngine,
   renderFooter,
   renderHero,
+  renderHeroBento,
   renderIntegrationPath,
   renderMetrics,
   renderPayments,
+  renderScrollMachine,
   renderTopNavigation,
 } from './sections.js';
 import { LANDING_SCRIPT } from './scripts.js';
@@ -53,11 +56,14 @@ export function renderLandingPage(model: LandingPageModel): string {
   ${renderTopNavigation(model)}
   <main class="page-shell">
     ${renderHero(model)}
+    ${renderHeroBento(model)}
     ${renderMetrics(model)}
+    ${renderScrollMachine(model)}
     ${renderFeatureEngine()}
     ${renderIntegrationPath(model)}
     ${renderDownloads(model)}
     ${renderPayments(model)}
+    ${renderDocsLaunchpad(model)}
     ${renderEndpointMap(model)}
     ${renderFooter(model)}
   </main>

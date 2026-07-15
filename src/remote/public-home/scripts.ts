@@ -5,7 +5,8 @@
 export const LANDING_SCRIPT = `
 (() => {
   const scene = document.querySelector('[data-engine-scene]');
-  if (!scene || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const machine = document.querySelector('[data-machine-section]');
+  if ((!scene && !machine) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     return;
   }
 
@@ -13,21 +14,27 @@ export const LANDING_SCRIPT = `
   let ticking = false;
 
   const update = () => {
-    const rect = scene.getBoundingClientRect();
-    const progress = clamp((window.innerHeight - rect.top) / (window.innerHeight + rect.height), 0, 1);
-    scene.style.setProperty('--engine-tilt', String(-10 + progress * 18) + 'deg');
-    scene.style.setProperty('--engine-spin', String(progress * 42) + 'deg');
-    scene.style.setProperty('--ring-a', String(progress * -90) + 'deg');
-    scene.style.setProperty('--ring-b', String(progress * 120) + 'deg');
-    scene.style.setProperty('--trace-opacity', String(.22 + progress * .55));
-    scene.style.setProperty('--node-a-x', String(10 - progress * 44) + 'px');
-    scene.style.setProperty('--node-a-y', String(16 - progress * 34) + 'px');
-    scene.style.setProperty('--node-b-x', String(8 - progress * 42) + 'px');
-    scene.style.setProperty('--node-b-y', String(44 - progress * 40) + 'px');
-    scene.style.setProperty('--node-c-x', String(44 - progress * 46) + 'px');
-    scene.style.setProperty('--node-c-y', String(4 - progress * 40) + 'px');
-    scene.style.setProperty('--node-d-x', String(34 - progress * 36) + 'px');
-    scene.style.setProperty('--node-d-y', String(34 - progress * 38) + 'px');
+    if (scene) {
+      const rect = scene.getBoundingClientRect();
+      const progress = clamp((window.innerHeight - rect.top) / (window.innerHeight + rect.height), 0, 1);
+      scene.style.setProperty('--engine-tilt', String(-12 + progress * 20) + 'deg');
+      scene.style.setProperty('--engine-spin', String(progress * 48) + 'deg');
+      scene.style.setProperty('--orbit-a', String(progress * -120) + 'deg');
+      scene.style.setProperty('--orbit-b', String(progress * 150) + 'deg');
+      scene.style.setProperty('--orbit-c', String(progress * 90) + 'deg');
+      scene.style.setProperty('--chip-spread', String(progress * 24) + 'px');
+      scene.style.setProperty('--hero-glow', String(.14 + progress * .34));
+    }
+
+    if (machine) {
+      const rect = machine.getBoundingClientRect();
+      const progress = clamp((window.innerHeight - rect.top) / (window.innerHeight + rect.height), 0, 1);
+      machine.style.setProperty('--machine-progress', progress.toFixed(3));
+      machine.style.setProperty('--machine-open', String(progress * 150) + 'px');
+      machine.style.setProperty('--machine-rotate', String(-8 + progress * 16) + 'deg');
+      machine.style.setProperty('--machine-fade', String(.18 + progress * .82));
+      machine.style.setProperty('--machine-rail-scale', String(.4 + progress * .6));
+    }
     ticking = false;
   };
 
