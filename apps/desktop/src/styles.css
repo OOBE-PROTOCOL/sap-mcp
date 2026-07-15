@@ -239,7 +239,7 @@ h1 {
 }
 
 .hosted-card,
-.profiles-panel,
+.active-profile-panel,
 .panel,
 .runtime-card,
 .status-banner,
@@ -249,7 +249,7 @@ h1 {
   background: rgba(13, 26, 31, 0.82);
 }
 
-.profiles-panel {
+.active-profile-panel {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -280,23 +280,14 @@ h1 {
   font-size: 0.75rem;
 }
 
-.profiles-panel p,
-.profile-card small,
-.profile-more {
+.active-profile-panel p,
+.active-profile-card small {
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.42;
 }
 
-.profile-list {
-  display: grid;
-  max-height: 260px;
-  gap: 8px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.profile-card {
+.active-profile-card {
   display: grid;
   gap: 6px;
   min-width: 0;
@@ -306,19 +297,24 @@ h1 {
   padding: 10px;
 }
 
-.profile-card.active {
+.active-profile-card.ready {
   border-color: rgba(24, 212, 223, 0.54);
   background: rgba(24, 212, 223, 0.08);
 }
 
-.profile-card > div {
+.active-profile-card.attention {
+  border-color: rgba(255, 205, 97, 0.42);
+  background: rgba(255, 205, 97, 0.06);
+}
+
+.active-profile-card > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.profile-card strong {
+.active-profile-card strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -327,7 +323,8 @@ h1 {
   white-space: nowrap;
 }
 
-.profile-card span {
+.active-profile-card span,
+.profile-status {
   border: 1px solid rgba(124, 247, 188, 0.32);
   border-radius: 999px;
   color: var(--success);
@@ -336,8 +333,22 @@ h1 {
   padding: 2px 6px;
 }
 
-.profile-card code {
+.active-profile-card code {
   font-size: 0.74rem;
+}
+
+.sidebar-profile-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(109, 235, 241, 0.28);
+  border-radius: 8px;
+  background: rgba(24, 212, 223, 0.08);
+  color: var(--aqua-2);
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .wallet-ok {
@@ -357,6 +368,180 @@ h1 {
   font-size: 0.66rem;
   font-weight: 850;
   padding: 2px 7px;
+}
+
+.profiles-page {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at top right, rgba(24, 212, 223, 0.12), transparent 26rem),
+    rgba(13, 26, 31, 0.82);
+  padding: 24px;
+  box-shadow: 0 16px 60px var(--shadow);
+}
+
+.profiles-page.empty-state {
+  min-height: 320px;
+  align-content: center;
+}
+
+.profiles-page.empty-state h3,
+.profiles-page-header h3 {
+  margin-bottom: 8px;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+}
+
+.profiles-page.empty-state p,
+.profiles-page-header p,
+.profile-detail-card dd,
+.profile-issues li {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.profiles-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 20px;
+  align-items: end;
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-stats span {
+  display: grid;
+  gap: 4px;
+  min-height: 74px;
+  align-content: center;
+  border: 1px solid rgba(109, 235, 241, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 21, 25, 0.58);
+  color: var(--muted);
+  padding: 10px;
+  font-size: 0.74rem;
+  overflow: hidden;
+}
+
+.profile-stats strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profiles-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 14px;
+}
+
+.profile-detail-card {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  border: 1px solid rgba(109, 235, 241, 0.18);
+  border-radius: 8px;
+  background: rgba(8, 21, 25, 0.66);
+  padding: 18px;
+}
+
+.profile-detail-card.active {
+  border-color: rgba(24, 212, 223, 0.62);
+  background: linear-gradient(145deg, rgba(24, 212, 223, 0.1), rgba(8, 21, 25, 0.66));
+}
+
+.profile-detail-card header {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-detail-card header > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-detail-card h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 1.28rem;
+}
+
+.profile-status {
+  width: fit-content;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.profile-status.attention {
+  border-color: rgba(255, 205, 97, 0.3);
+  color: var(--warning);
+}
+
+.profile-status.active {
+  border-color: rgba(109, 235, 241, 0.3);
+  color: var(--aqua-2);
+}
+
+.profile-detail-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.profile-detail-card dl > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border-top: 1px solid rgba(109, 235, 241, 0.12);
+  padding-top: 10px;
+}
+
+.profile-detail-card dt {
+  color: var(--aqua-2);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.profile-detail-card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.profile-detail-card code {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.profile-issues {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(255, 205, 97, 0.26);
+  border-radius: 8px;
+  background: rgba(255, 205, 97, 0.06);
+  padding: 12px;
+}
+
+.profile-issues strong {
+  color: var(--warning);
+}
+
+.profile-issues ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .hosted-card {
@@ -871,6 +1056,16 @@ button:disabled {
   .sidebar-home-button:hover {
     transform: translateY(-1px);
   }
+
+  .sidebar-profile-button {
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  }
+
+  .sidebar-profile-button:hover {
+    border-color: rgba(24, 212, 223, 0.62);
+    background: rgba(24, 212, 223, 0.13);
+    transform: translateY(-1px);
+  }
 }
 
 @keyframes spin {
@@ -912,10 +1107,6 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .profiles-panel {
-    max-height: none;
-  }
-
   .hosted-card {
     margin-top: 0;
   }
@@ -932,7 +1123,9 @@ button:disabled {
   .setup-options-row,
   .choice-row,
   .runtime-grid,
-  .review-grid {
+  .review-grid,
+  .profiles-page-header,
+  .profile-stats {
     grid-template-columns: 1fr;
   }
 

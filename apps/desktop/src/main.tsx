@@ -6,6 +6,7 @@ import './styles.css';
 const fullSteps = ['Setup', 'Profile', 'Wallet', 'Policy', 'Runtimes', 'Review'] as const;
 const paymentsOnlySteps = ['Setup', 'Runtimes', 'Review'] as const;
 type StepName = typeof fullSteps[number];
+type WorkspaceView = 'wizard' | 'profiles';
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const releaseUrl = 'https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/0.8.0';
@@ -29,6 +30,7 @@ function App() {
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([]);
   const [profiles, setProfiles] = useState<ProfileStatus[]>([]);
   const [step, setStep] = useState<StepName>('Setup');
+  const [view, setView] = useState<WorkspaceView>('wizard');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<WizardResult | null>(null);
@@ -146,13 +148,21 @@ function App() {
   function goHome() {
     setResult(null);
     setError(null);
+    setView('wizard');
     setStep('Setup');
   }
 
   function goToStep(nextStep: StepName) {
     setResult(null);
     setError(null);
+    setView('wizard');
     setStep(nextStep);
+  }
+
+  function openProfiles() {
+    setResult(null);
+    setError(null);
+    setView('profiles');
   }
 
   async function save() {
@@ -180,6 +190,9 @@ function App() {
           agentPubkey: saved.setup?.config.agentPubkey,
           walletPath: saved.setup?.walletPath,
           walletExists: Boolean(saved.setup?.walletPath),
+          externalSignerConfigured: false,
+          readiness: saved.readiness.status,
+          issues: saved.readiness.profileIssues,
         }));
       }
     } catch (cause) {
@@ -226,7 +239,7 @@ function App() {
             Home
           </button>
         </div>
-        <ProfilesPanel profiles={profiles} />
+        <ActiveProfileSummary profiles={profiles} onOpenProfiles={openProfiles} />
         <div className="hosted-card">
           <p>Hosted MCP</p>
           <code>{hostedUrl}</code>
@@ -236,8 +249,8 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Step {stepIndex + 1} of {visibleSteps.length}</p>
-            <h2>{step}</h2>
+            <p className="eyebrow">{view === 'profiles' ? 'Local SAP MCP' : `Step ${stepIndex + 1} of ${visibleSteps.length}`}</p>
+            <h2>{view === 'profiles' ? 'Profiles' : step}</h2>
           </div>
           <button type="button" className="ghost-button" onClick={() => window.sapMcpWizard.openExternal('https://mcp.sap.oobeprotocol.ai/docs')}>
             Docs
@@ -245,15 +258,16 @@ function App() {
         </header>
 
         {error && <StatusBanner tone="error" title="Setup needs attention" text={error} />}
-        {result && <DoneState result={result} />}
+        {view === 'profiles' && <ProfilesPage profiles={profiles} />}
+        {view === 'wizard' && result && <DoneState result={result} />}
 
-        {!result && (
+        {view === 'wizard' && !result && (
           <section className="panel" aria-labelledby="panel-title">
             <StepContent step={step} draft={draft} runtimes={runtimes} update={update} validation={validation} />
           </section>
         )}
 
-        {!result && (
+        {view === 'wizard' && !result && (
           <footer className="footer-actions">
             <button type="button" className="secondary-button" disabled={!canGoBack} onClick={() => setStep(visibleSteps[stepIndex - 1])}>
               Back
@@ -577,42 +591,134 @@ function ToggleCard({ title, copy, badge, checked, onChange }: { title: string; 
   );
 }
 
-function ProfilesPanel({ profiles }: { profiles: ProfileStatus[] }) {
+function ActiveProfileSummary({
+  profiles,
+  onOpenProfiles,
+}: {
+  profiles: ProfileStatus[];
+  onOpenProfiles: () => void;
+}) {
+  const activeProfile = profiles.find((profile) => profile.active);
   return (
-    <section className="profiles-panel" aria-label="Local SAP MCP profiles">
+    <section className="active-profile-panel" aria-label="Active local SAP MCP profile">
       <div className="profiles-heading">
-        <span>Profiles</span>
+        <span>Active profile</span>
         <strong>{profiles.length}</strong>
       </div>
-      {profiles.length === 0 ? (
-        <p>No local SAP profiles yet. Full setup will create one under the SAP MCP config directory.</p>
+      {activeProfile ? (
+        <article className={activeProfile.readiness === 'ready' ? 'active-profile-card ready' : 'active-profile-card attention'}>
+          <div>
+            <strong>{activeProfile.name}</strong>
+            <span>{activeProfile.readiness === 'ready' ? 'Ready' : 'Needs repair'}</span>
+          </div>
+          <small>{activeProfile.network ?? activeProfile.mode ?? 'configured'}</small>
+          {activeProfile.agentPubkey && <code>{shorten(activeProfile.agentPubkey)}</code>}
+          <small className={activeProfile.walletExists || activeProfile.externalSignerConfigured ? 'wallet-ok' : 'wallet-missing'}>
+            {profileSignerLabel(activeProfile)}
+          </small>
+        </article>
       ) : (
-        <div className="profile-list">
-          {profiles.slice(0, 5).map((profile) => (
-            <article className={profile.active ? 'profile-card active' : 'profile-card'} key={profile.path}>
-              <div>
-                <strong>{profile.name}</strong>
-                {profile.active && <span>Active</span>}
-              </div>
-              <small>{profile.network ?? profile.mode ?? 'configured'}</small>
-              {profile.agentPubkey && <code>{shorten(profile.agentPubkey)}</code>}
-              <small className={profile.walletExists ? 'wallet-ok' : 'wallet-missing'}>
-                {profile.externalSignerConfigured
-                  ? 'External signer configured'
-                  : profile.walletExists
-                    ? 'Wallet path exists'
-                    : profile.walletPath
-                      ? 'Wallet path missing'
-                      : 'No wallet path'}
-              </small>
-              {profile.readiness === 'needs-attention' && <small className="profile-warning">Needs repair</small>}
-            </article>
-          ))}
-          {profiles.length > 5 && <small className="profile-more">+{profiles.length - 5} more profiles</small>}
-        </div>
+        <p>No active local profile yet. Full setup will create one under the SAP MCP config directory.</p>
       )}
+      <button type="button" className="sidebar-profile-button" onClick={onOpenProfiles}>
+        View all profiles
+      </button>
     </section>
   );
+}
+
+function ProfilesPage({ profiles }: { profiles: ProfileStatus[] }) {
+  const readyCount = profiles.filter((profile) => profile.readiness === 'ready').length;
+  const activeProfile = profiles.find((profile) => profile.active);
+
+  if (profiles.length === 0) {
+    return (
+      <section className="profiles-page empty-state" aria-labelledby="profiles-title">
+        <div>
+          <p className="eyebrow">No local profiles</p>
+          <h3 id="profiles-title">Create a profile to connect local signing.</h3>
+          <p>Full hosted setup creates a named profile under the SAP MCP config directory and keeps wallet material local.</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="profiles-page" aria-labelledby="profiles-title">
+      <header className="profiles-page-header">
+        <div>
+          <p className="eyebrow">Profile manager</p>
+          <h3 id="profiles-title">Local SAP MCP profiles</h3>
+          <p>These profiles live on this machine. Hosted SAP MCP remains accountless; the local sap_payments bridge uses the active profile for x402 paid/write calls.</p>
+        </div>
+        <div className="profile-stats" aria-label="Profile counts">
+          <span><strong>{profiles.length}</strong> total</span>
+          <span><strong>{readyCount}</strong> ready</span>
+          <span><strong>{activeProfile?.name ?? 'none'}</strong> active</span>
+        </div>
+      </header>
+      <div className="profiles-page-grid">
+        {profiles.map((profile) => (
+          <article className={profile.active ? 'profile-detail-card active' : 'profile-detail-card'} key={profile.path}>
+            <header>
+              <div>
+                <span className={profile.readiness === 'ready' ? 'profile-status ready' : 'profile-status attention'}>
+                  {profile.readiness === 'ready' ? 'Ready' : 'Needs repair'}
+                </span>
+                {profile.active && <span className="profile-status active">Active</span>}
+              </div>
+              <h4>{profile.name}</h4>
+            </header>
+            <dl>
+              <div>
+                <dt>Mode</dt>
+                <dd>{profile.mode ?? 'Configured'}</dd>
+              </div>
+              <div>
+                <dt>Network</dt>
+                <dd>{profile.network ?? 'Unknown'}</dd>
+              </div>
+              <div>
+                <dt>Signer</dt>
+                <dd>{profileSignerLabel(profile)}</dd>
+              </div>
+              {profile.agentPubkey && (
+                <div>
+                  <dt>Agent public key</dt>
+                  <dd><code>{profile.agentPubkey}</code></dd>
+                </div>
+              )}
+              <div>
+                <dt>Config path</dt>
+                <dd><code>{profile.path}</code></dd>
+              </div>
+              {profile.walletPath && (
+                <div>
+                  <dt>Wallet path</dt>
+                  <dd><code>{profile.walletPath}</code></dd>
+                </div>
+              )}
+            </dl>
+            {(profile.issues ?? []).length > 0 && (
+              <div className="profile-issues">
+                <strong>Attention</strong>
+                <ul>
+                  {(profile.issues ?? []).map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function profileSignerLabel(profile: ProfileStatus): string {
+  if (profile.externalSignerConfigured) return 'External signer configured';
+  if (profile.walletExists) return 'Wallet path exists';
+  if (profile.walletPath) return 'Wallet path missing';
+  return 'No wallet path';
 }
 
 function shorten(value: string): string {
