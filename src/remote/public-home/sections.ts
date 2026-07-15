@@ -265,13 +265,13 @@ export function renderHeroBento(model: LandingPageModel): string {
     <section class="bento-strip bento-stack" aria-labelledby="bento-title">
       <div class="bento-grid">
         ${cards.map(([title, body, tone, key], index) => `
-          <article class="bento-card bento-${escapeHtml(key)} ${index === 0 ? 'wide' : ''}" data-tone="${escapeHtml(tone)}">
+          <article class="bento-card bento-${escapeHtml(key)} ${key === 'protocols' || key === 'rpc' ? 'wide' : ''}" data-tone="${escapeHtml(tone)}">
             <span>${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
             <h3>${escapeHtml(title)}</h3>
             <p>${escapeHtml(body)}</p>
           </article>
         `).join('')}
-        <article class="bento-card tall" data-tone="blue">
+        <article class="bento-card wide" data-tone="blue">
           <span>Live endpoint</span>
           <h3>Streamable HTTP MCP</h3>
           <code>${escapeHtml(model.info.endpoints.mcp)}</code>
