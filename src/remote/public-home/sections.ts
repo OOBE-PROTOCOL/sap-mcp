@@ -261,22 +261,25 @@ export function renderHeroBento(model: LandingPageModel): string {
     ['x402 / pay.sh Revenue', `${formatUsd(stats.totalVolumeUsd)} settled volume across ${formatInteger(stats.totalSettlements)} settlement events.`, 'aqua', 'payments'],
   ] as const;
 
+  const renderCard = ([title, body, tone, key]: typeof cards[number], index: number): string => `
+    <article class="bento-card bento-${escapeHtml(key)} wide" data-tone="${escapeHtml(tone)}">
+      <span>${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(body)}</p>
+    </article>
+  `;
+
   return `
     <section class="bento-strip bento-stack" aria-labelledby="bento-title">
       <div class="bento-grid">
-        ${cards.map(([title, body, tone, key], index) => `
-          <article class="bento-card bento-${escapeHtml(key)} ${key === 'protocols' || key === 'rpc' ? 'wide' : ''}" data-tone="${escapeHtml(tone)}">
-            <span>${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
-            <h3>${escapeHtml(title)}</h3>
-            <p>${escapeHtml(body)}</p>
-          </article>
-        `).join('')}
-        <article class="bento-card wide" data-tone="blue">
+        ${cards.slice(0, 2).map((card, index) => renderCard(card, index)).join('')}
+        <article class="bento-card full" data-tone="blue">
           <span>Live endpoint</span>
           <h3>Streamable HTTP MCP</h3>
           <code>${escapeHtml(model.info.endpoints.mcp)}</code>
           <p>Free discovery. Paid tools return x402 challenges. Local signatures stay on the user's machine.</p>
         </article>
+        ${cards.slice(2).map((card, index) => renderCard(card, index + 2)).join('')}
       </div>
       <aside class="bento-sticky-copy">
         <p class="eyebrow" id="bento-title">Agent coordination stack</p>

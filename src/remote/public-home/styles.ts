@@ -544,6 +544,10 @@ export const LANDING_CSS = `
   .bento-card[data-tone="green"]::after { background: var(--green); }
   .bento-card[data-tone="blue"]::after { background: var(--blue); }
   .bento-card.wide { grid-column: span 2; }
+  .bento-card.full {
+    grid-column: 1 / -1;
+    min-height: 220px;
+  }
   .bento-card.tall { grid-column: span 2; grid-row: span 2; }
   .bento-card span {
     color: var(--aqua);
@@ -1203,6 +1207,7 @@ export const LANDING_CSS = `
     }
     .bento-card,
     .bento-card.wide,
+    .bento-card.full,
     .bento-card.tall {
       grid-column: auto;
       grid-row: auto;
