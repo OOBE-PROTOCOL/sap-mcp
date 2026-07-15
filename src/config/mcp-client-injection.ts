@@ -133,6 +133,14 @@ const LEGACY_ENV_KEYS = new Set([
 ]);
 
 /**
+ * @name getNpxCommand
+ * @description Returns the platform-specific npx executable name used by MCP clients.
+ */
+function getNpxCommand(platform: SupportedPlatform): 'npx' | 'npx.cmd' {
+  return platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+/**
  * @name isRecord
  * @description Narrows unknown data to a JSON-like object.
  */
@@ -291,7 +299,15 @@ export function createManualMcpJsonSnippets(
  * @description Builds a portable Codex stdio config that works without a source checkout.
  */
 export function createNpxCodexServerConfig(): McpServerInjectionConfig {
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return createNpxCodexServerConfigForPlatform(process.platform);
+}
+
+/**
+ * @name createNpxCodexServerConfigForPlatform
+ * @description Builds a portable Codex stdio config for a specific host platform.
+ */
+function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
+  const command = getNpxCommand(platform);
   return {
     command,
     args: [
@@ -312,7 +328,15 @@ export function createNpxCodexServerConfig(): McpServerInjectionConfig {
  * @description Builds a portable local stdio MCP config that exposes only x402 payment helper tools.
  */
 export function createNpxPaymentBridgeServerConfig(): McpServerInjectionConfig {
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  return createNpxPaymentBridgeServerConfigForPlatform(process.platform);
+}
+
+/**
+ * @name createNpxPaymentBridgeServerConfigForPlatform
+ * @description Builds the local sap_payments bridge command for a specific host platform.
+ */
+function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
+  const command = getNpxCommand(platform);
   return {
     command,
     args: [
@@ -723,10 +747,11 @@ function hostedJsonServerConfig(target: Pick<McpClientTarget, 'id'>): JsonRecord
 function buildHostedPaymentBridgeJsonContent(
   content: string,
   target: McpClientTarget,
+  platform: SupportedPlatform,
 ): { nextContent: string; hadSapConfig: boolean } {
   const parsed: unknown = content.trim() ? JSON.parse(content) : {};
   const root = isRecord(parsed) ? parsed : {};
-  const paymentBridge = createNpxPaymentBridgeServerConfig();
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
 
   if (target.id === 'openclaw') {
     return buildOpenClawHostedPaymentBridgeJsonContent(root, paymentBridge);
@@ -931,9 +956,12 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
  * @name replaceYamlHostedPaymentBridgeBlocks
  * @description Replaces or appends hosted SAP MCP plus local x402 bridge blocks under mcp_servers.
  */
-function replaceYamlHostedPaymentBridgeBlocks(content: string): { nextContent: string; hadSapConfig: boolean } {
+function replaceYamlHostedPaymentBridgeBlocks(
+  content: string,
+  platform: SupportedPlatform,
+): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfig();
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
@@ -980,9 +1008,12 @@ function replaceYamlHostedPaymentBridgeBlocks(content: string): { nextContent: s
  * @name replaceOpenClawYamlHostedPaymentBridgeBlocks
  * @description Replaces or appends hosted SAP MCP plus local x402 bridge blocks under OpenClaw `mcp.servers`.
  */
-function replaceOpenClawYamlHostedPaymentBridgeBlocks(content: string): { nextContent: string; hadSapConfig: boolean } {
+function replaceOpenClawYamlHostedPaymentBridgeBlocks(
+  content: string,
+  platform: SupportedPlatform,
+): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfig();
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 4),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4),
@@ -1175,6 +1206,7 @@ function buildTomlContent(content: string, canonical: McpServerInjectionConfig):
 export function buildCodexHostedPaymentBridgeContent(
   content: string,
   hostedUrl = HOSTED_SAP_MCP_URL,
+  platform: SupportedPlatform = process.platform,
 ): { nextContent: string; hadSapConfig: boolean } {
   const stripped = removeTomlMcpServerSections(content, [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]);
   const hosted: HostedMcpServerConfig = {
@@ -1185,7 +1217,7 @@ export function buildCodexHostedPaymentBridgeContent(
   const nextContent = [
       prefix,
       hostedTomlServerBlock(hosted).trimEnd(),
-      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfig()).trimEnd(),
+      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfigForPlatform(platform)).trimEnd(),
     ].filter(Boolean).join('\n\n');
 
   return {
@@ -1198,7 +1230,10 @@ export function buildCodexHostedPaymentBridgeContent(
  * @name installCodexHostedPaymentBridgeConfig
  * @description Writes Codex config.toml with hosted SAP MCP and the local x402 payment bridge.
  */
-export function installCodexHostedPaymentBridgeConfig(homeDir = homedir()): McpClientInjectionResult {
+export function installCodexHostedPaymentBridgeConfig(
+  homeDir = homedir(),
+  platform: SupportedPlatform = process.platform,
+): McpClientInjectionResult {
   const target: McpClientTarget = {
     id: 'codex',
     label: 'Codex',
@@ -1207,7 +1242,7 @@ export function installCodexHostedPaymentBridgeConfig(homeDir = homedir()): McpC
     exists: existsSync(join(homeDir, '.codex', 'config.toml')),
   };
   const before = readTargetContent(target);
-  const built = buildCodexHostedPaymentBridgeContent(before);
+  const built = buildCodexHostedPaymentBridgeContent(before, HOSTED_SAP_MCP_URL, platform);
   const backupPath = target.exists ? `${target.path}.bak-${Date.now()}` : undefined;
 
   mkdirSync(dirname(target.path), { recursive: true });
@@ -1234,29 +1269,33 @@ export function installCodexHostedPaymentBridgeConfig(homeDir = homedir()): McpC
 export function buildHostedPaymentBridgeContent(
   target: McpClientTarget,
   content: string,
+  platform: SupportedPlatform = process.platform,
 ): { nextContent: string; hadSapConfig: boolean } {
   if (target.format === 'toml') {
-    return buildCodexHostedPaymentBridgeContent(content);
+    return buildCodexHostedPaymentBridgeContent(content, HOSTED_SAP_MCP_URL, platform);
   }
 
   if (target.format === 'json') {
-    return buildHostedPaymentBridgeJsonContent(content, target);
+    return buildHostedPaymentBridgeJsonContent(content, target, platform);
   }
 
   if (target.id === 'openclaw') {
-    return replaceOpenClawYamlHostedPaymentBridgeBlocks(content);
+    return replaceOpenClawYamlHostedPaymentBridgeBlocks(content, platform);
   }
 
-  return replaceYamlHostedPaymentBridgeBlocks(content);
+  return replaceYamlHostedPaymentBridgeBlocks(content, platform);
 }
 
 /**
  * @name installHostedPaymentBridgeConfig
  * @description Installs or repairs hosted SAP MCP plus local x402 bridge config for a concrete runtime target.
  */
-export function installHostedPaymentBridgeConfig(target: McpClientTarget): McpClientInjectionResult {
+export function installHostedPaymentBridgeConfig(
+  target: McpClientTarget,
+  platform: SupportedPlatform = process.platform,
+): McpClientInjectionResult {
   if (target.id === 'codex') {
-    return installCodexHostedPaymentBridgeConfig(dirname(dirname(target.path)));
+    return installCodexHostedPaymentBridgeConfig(dirname(dirname(target.path)), platform);
   }
 
   const currentTarget = {
@@ -1264,7 +1303,7 @@ export function installHostedPaymentBridgeConfig(target: McpClientTarget): McpCl
     exists: existsSync(target.path),
   };
   const before = readTargetContent(currentTarget);
-  const built = buildHostedPaymentBridgeContent(currentTarget, before);
+  const built = buildHostedPaymentBridgeContent(currentTarget, before, platform);
   const backupPath = currentTarget.exists ? `${currentTarget.path}.bak-${Date.now()}` : undefined;
 
   mkdirSync(dirname(currentTarget.path), { recursive: true, mode: 0o700 });
@@ -1297,7 +1336,7 @@ export function installHostedPaymentBridgeConfigs(
   const targets = discoverMcpClientTargets(homeDir, platform)
     .filter((target) => selected.has(target.id));
 
-  return targets.map((target) => installHostedPaymentBridgeConfig(target));
+  return targets.map((target) => installHostedPaymentBridgeConfig(target, platform));
 }
 
 /**

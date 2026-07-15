@@ -36,6 +36,9 @@ All notable changes to this project are documented in this file.
   request-body field.
 - Removed MagicBlock `mock` authentication switches from public MCP tool schemas
   and request forwarding so production tools expose only real API flows.
+- Made hosted `sap` plus local `sap_payments` runtime injection platform-aware
+  end to end, with Windows tests proving that Codex, Claude, Hermes, and
+  OpenClaw payment bridge configs use `npx.cmd` where required.
 
 ## 0.8.0 - 2026-07-14
 

@@ -288,6 +288,39 @@ describe('MCP client injection', () => {
     expect(parsed.sap_payments.command).toMatch(/^npx/);
   });
 
+  it('builds Windows hosted payment bridge commands for JSON, YAML, and TOML runtimes', () => {
+    const hermesJsonTarget: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Global MCP',
+      path: 'C:\\Users\\PC\\.hermes\\mcp.json',
+      format: 'json',
+      exists: true,
+    };
+    const hermesYamlTarget: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Profile: trader',
+      path: 'C:\\Users\\PC\\.hermes\\profiles\\trader\\config.yaml',
+      format: 'yaml',
+      exists: true,
+    };
+    const codexTarget: McpClientTarget = {
+      id: 'codex',
+      label: 'Codex',
+      path: 'C:\\Users\\PC\\.codex\\config.toml',
+      format: 'toml',
+      exists: true,
+    };
+
+    const hermesJson = JSON.parse(buildHostedPaymentBridgeContent(hermesJsonTarget, '{}', 'win32').nextContent);
+    const hermesYaml = buildHostedPaymentBridgeContent(hermesYamlTarget, 'mcp_servers:\n', 'win32').nextContent;
+    const codexToml = buildHostedPaymentBridgeContent(codexTarget, '', 'win32').nextContent;
+
+    expect(hermesJson.sap_payments.command).toBe('npx.cmd');
+    expect(hermesYaml).toContain('  sap_payments:\n    command: npx.cmd');
+    expect(codexToml).toContain('[mcp_servers.sap_payments]');
+    expect(codexToml).toContain('command = "npx.cmd"');
+  });
+
   it('builds Hermes YAML hosted MCP plus local payment bridge config', () => {
     const targetConfig: McpClientTarget = {
       id: 'hermes',
@@ -407,7 +440,31 @@ describe('MCP client injection', () => {
       type: 'http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(parsed.mcpServers.sap_payments.command).toMatch(/^npx/);
+    expect(parsed.mcpServers.sap_payments.command).toBe('npx.cmd');
+    expect(parsed.mcpServers.sap_payments.args).toEqual([
+      '--yes',
+      '--package',
+      '@oobe-protocol-labs/sap-mcp-server',
+      'sap-mcp-server',
+    ]);
+    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toContain('sap_payments_call_paid_tool');
+  });
+
+  it('installs Windows Codex hosted payment bridge config with npx.cmd', () => {
+    const tempDir = makeTempDir();
+    const results = installHostedPaymentBridgeConfigs(['codex'], tempDir, 'win32');
+    const codexPath = join(tempDir, '.codex', 'config.toml');
+    const written = readFileSync(codexPath, 'utf-8');
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.target.path).toBe(codexPath);
+    expect(written).toContain('[mcp_servers.sap]');
+    expect(written).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(written).toContain('[mcp_servers.sap_payments]');
+    expect(written).toContain('command = "npx.cmd"');
+    expect(written).toContain('SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool');
+    expect(written).not.toContain('SAP_WALLET_PATH');
+    expect(written).not.toContain('SAP_MCP_RPC_URL');
   });
 
   it('installs Codex hosted MCP plus local payment bridge config with backup', () => {
