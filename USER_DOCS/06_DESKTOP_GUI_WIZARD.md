@@ -99,7 +99,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.8.0", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -131,7 +131,7 @@ Claude Desktop uses a root `mcpServers` JSON object:
     },
     "sap_payments": {
       "command": "npx",
-      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.8.0", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
         "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",
@@ -163,7 +163,7 @@ Hermes global `mcp.json` uses flat server entries:
   },
   "sap_payments": {
     "command": "npx",
-    "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+    "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.8.0", "sap-mcp-server"],
     "env": {
       "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
       "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",
@@ -186,7 +186,7 @@ mcp_servers:
     args:
       - --yes
       - --package
-      - @oobe-protocol-labs/sap-mcp-server
+      - @oobe-protocol-labs/sap-mcp-server@0.8.0
       - sap-mcp-server
     env:
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"
@@ -208,7 +208,7 @@ OpenClaw MCP JSON uses the same root `mcpServers` structure as generic MCP clien
     },
     "sap_payments": {
       "command": "npx",
-      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"],
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.8.0", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
         "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",

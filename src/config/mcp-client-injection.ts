@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 /**
  * @name McpClientId
@@ -118,6 +119,7 @@ const SAP_SERVER_NAME = 'sap';
 const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
 const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
 const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
+const SAP_MCP_NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
 /**
  * @name HOSTED_SAP_MCP_URL
  * @description Public OOBE hosted SAP MCP Streamable HTTP endpoint used in manual client setup snippets.
@@ -314,7 +316,7 @@ function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): Mcp
     args: [
       '--yes',
       '--package',
-      '@oobe-protocol-labs/sap-mcp-server',
+      SAP_MCP_NPM_PACKAGE,
       'sap-mcp-server',
     ],
     env: {
@@ -343,7 +345,7 @@ function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatfo
     args: [
       '--yes',
       '--package',
-      '@oobe-protocol-labs/sap-mcp-server',
+      SAP_MCP_NPM_PACKAGE,
       'sap-mcp-server',
     ],
     env: {
@@ -1180,6 +1182,9 @@ export function validateHostedPaymentBridgeContent(
   }
   if (!content.includes('SAP_ALLOWED_TOOLS')) {
     issues.push('Missing SAP_ALLOWED_TOOLS allow-list for the local payment bridge.');
+  }
+  if (!content.includes(SAP_MCP_NPM_PACKAGE)) {
+    issues.push(`Local sap_payments bridge must pin ${SAP_MCP_NPM_PACKAGE}; unpinned npx can download an older npm latest.`);
   }
   const allowsAllTools = content.includes('SAP_ALLOWED_TOOLS = "all"')
     || content.includes('"SAP_ALLOWED_TOOLS": "all"')
