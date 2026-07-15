@@ -8,6 +8,7 @@ import {
   installCodexHostedPaymentBridgeConfig,
   installHostedPaymentBridgeConfigs,
   installX402PaidCallAddon,
+  validateHostedPaymentBridgeContent,
   type McpClientTarget,
 } from '../config/mcp-client-injection.js';
 import type { SapMcpMode } from '../config/env.js';
@@ -68,6 +69,25 @@ export interface DesktopProfileStatus {
   agentPubkey?: string;
   walletPath?: string;
   walletExists: boolean;
+  externalSignerConfigured: boolean;
+  readiness: 'ready' | 'needs-attention';
+  issues: string[];
+}
+
+/**
+ * @name DesktopWizardReadiness
+ * @description Post-save readiness audit used to avoid reporting success when local signing or runtime bridge config is broken.
+ */
+export interface DesktopWizardReadiness {
+  status: 'ready' | 'needs-attention';
+  profileName?: string;
+  profileIssues: string[];
+  runtimeIssues: Array<{
+    runtime: string;
+    path: string;
+    issues: string[];
+  }>;
+  nextSteps: string[];
 }
 
 /**
@@ -77,6 +97,7 @@ export interface DesktopProfileStatus {
 export interface DesktopWizardResult {
   setup?: WizardSetupResult;
   setupMode: DesktopWizardDraft['setupMode'];
+  readiness: DesktopWizardReadiness;
   runtimeActions: Array<{
     runtime: string;
     status: 'configured' | 'installed' | 'skipped';
@@ -194,6 +215,14 @@ export function getDesktopProfileStatuses(homeDir?: string): DesktopProfileStatu
     const walletPath = readStringField(config, 'walletPath');
     const rpcUrl = readStringField(config, 'rpcUrl');
     const mode = readModeField(config, 'mode');
+    const externalSignerConfigured = Boolean(readStringField(config, 'externalSignerUrl'));
+    const issues = buildProfileReadinessIssues({
+      name: profileName,
+      mode,
+      walletPath,
+      walletExists: Boolean(walletPath && existsSync(walletPath)),
+      externalSignerConfigured,
+    });
 
     profiles.push({
       name: profileName,
@@ -205,6 +234,9 @@ export function getDesktopProfileStatuses(homeDir?: string): DesktopProfileStatu
       agentPubkey: readStringField(config, 'agentPubkey'),
       walletPath,
       walletExists: Boolean(walletPath && existsSync(walletPath)),
+      externalSignerConfigured,
+      readiness: issues.length === 0 ? 'ready' : 'needs-attention',
+      issues,
     });
   }
 
@@ -214,6 +246,31 @@ export function getDesktopProfileStatuses(homeDir?: string): DesktopProfileStatu
     return a.name.localeCompare(b.name);
   });
   return profiles;
+}
+
+function buildProfileReadinessIssues(input: {
+  name: string;
+  mode?: SapMcpMode;
+  walletPath?: string;
+  walletExists: boolean;
+  externalSignerConfigured: boolean;
+}): string[] {
+  const issues: string[] = [];
+  if (!input.mode) {
+    issues.push(`Profile "${input.name}" has no valid mode.`);
+  }
+
+  const needsSigner = input.mode === 'hosted-api'
+    || input.mode === 'local-dev-keypair'
+    || input.mode === 'delegated-session';
+  if (needsSigner && !input.walletPath && !input.externalSignerConfigured) {
+    issues.push(`Profile "${input.name}" needs a local wallet path or external signer for payments/write tools.`);
+  }
+  if (needsSigner && input.walletPath && !input.walletExists) {
+    issues.push(`Profile "${input.name}" points to a missing wallet file.`);
+  }
+
+  return issues;
 }
 
 function profileNameFromConfigFile(file: string): string | undefined {
@@ -384,5 +441,90 @@ export async function saveDesktopWizardDraft(
     });
   }
 
-  return { setup, setupMode: draft.setupMode, runtimeActions };
+  const readiness = buildDesktopReadiness({
+    profileName: draft.setupMode === 'full' ? profileName : undefined,
+    selectedRuntimes: Array.from(selectedRuntimes),
+    runtimeActions,
+    homeDir,
+    platform,
+  });
+
+  return { setup, setupMode: draft.setupMode, readiness, runtimeActions };
+}
+
+function buildDesktopReadiness(input: {
+  profileName?: string;
+  selectedRuntimes: DesktopRuntimeId[];
+  runtimeActions: DesktopWizardResult['runtimeActions'];
+  homeDir?: string;
+  platform: NodeJS.Platform;
+}): DesktopWizardReadiness {
+  const profiles = getDesktopProfileStatuses(input.homeDir);
+  const activeProfile = input.profileName
+    ? profiles.find((profile) => profile.name === input.profileName)
+    : profiles.find((profile) => profile.active);
+  const profileIssues = activeProfile
+    ? activeProfile.issues
+    : ['No active local SAP MCP profile was found.'];
+  const runtimeIssues = collectRuntimeReadinessIssues(input);
+  const nextSteps = buildReadinessNextSteps(profileIssues, runtimeIssues);
+
+  return {
+    status: profileIssues.length === 0 && runtimeIssues.length === 0 ? 'ready' : 'needs-attention',
+    profileName: activeProfile?.name,
+    profileIssues,
+    runtimeIssues,
+    nextSteps,
+  };
+}
+
+function collectRuntimeReadinessIssues(input: {
+  selectedRuntimes: DesktopRuntimeId[];
+  runtimeActions: DesktopWizardResult['runtimeActions'];
+  homeDir?: string;
+  platform: NodeJS.Platform;
+}): DesktopWizardReadiness['runtimeIssues'] {
+  const targets = discoverMcpClientTargets(input.homeDir, input.platform);
+  const selected = new Set<DesktopRuntimeId>(input.selectedRuntimes.length > 0 ? input.selectedRuntimes : ['codex']);
+  const configuredPaths = new Set(input.runtimeActions.map((action) => action.path).filter((path): path is string => Boolean(path)));
+  const runtimeIssues: DesktopWizardReadiness['runtimeIssues'] = [];
+
+  for (const target of targets) {
+    const runtimeId = target.id as DesktopRuntimeId;
+    if (!selected.has(runtimeId) || !configuredPaths.has(target.path) || !existsSync(target.path)) {
+      continue;
+    }
+
+    const content = readFileSync(target.path, 'utf-8');
+    const issues = validateHostedPaymentBridgeContent(target, content, input.platform);
+    if (issues.length > 0) {
+      runtimeIssues.push({
+        runtime: target.label,
+        path: target.path,
+        issues,
+      });
+    }
+  }
+
+  return runtimeIssues;
+}
+
+function buildReadinessNextSteps(
+  profileIssues: string[],
+  runtimeIssues: DesktopWizardReadiness['runtimeIssues'],
+): string[] {
+  const nextSteps: string[] = [];
+  if (profileIssues.some((issue) => issue.includes('missing wallet file'))) {
+    nextSteps.push('Open Full hosted SAP MCP setup and create a new dedicated wallet, or update the profile to an existing wallet/external signer.');
+  }
+  if (profileIssues.some((issue) => issue.includes('No active local SAP MCP profile'))) {
+    nextSteps.push('Create a named SAP MCP profile with the wizard before using hosted paid/write tools.');
+  }
+  if (runtimeIssues.length > 0) {
+    nextSteps.push('Run Repair payment bridge only for the affected runtimes, then fully restart the agent runtime.');
+  }
+  if (nextSteps.length === 0) {
+    nextSteps.push('Restart the selected agent runtime so it reloads hosted sap plus local sap_payments.');
+  }
+  return nextSteps;
 }

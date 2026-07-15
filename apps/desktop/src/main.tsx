@@ -597,8 +597,15 @@ function ProfilesPanel({ profiles }: { profiles: ProfileStatus[] }) {
               <small>{profile.network ?? profile.mode ?? 'configured'}</small>
               {profile.agentPubkey && <code>{shorten(profile.agentPubkey)}</code>}
               <small className={profile.walletExists ? 'wallet-ok' : 'wallet-missing'}>
-                {profile.walletExists ? 'Wallet path exists' : profile.walletPath ? 'Wallet path missing' : 'No wallet path'}
+                {profile.externalSignerConfigured
+                  ? 'External signer configured'
+                  : profile.walletExists
+                    ? 'Wallet path exists'
+                    : profile.walletPath
+                      ? 'Wallet path missing'
+                      : 'No wallet path'}
               </small>
+              {profile.readiness === 'needs-attention' && <small className="profile-warning">Needs repair</small>}
             </article>
           ))}
           {profiles.length > 5 && <small className="profile-more">+{profiles.length - 5} more profiles</small>}
@@ -632,11 +639,14 @@ function StatusBanner({ tone, title, text }: { tone: 'error' | 'success'; title:
 
 function DoneState({ result }: { result: WizardResult }) {
   const setup = result.setup;
+  const ready = result.readiness.status === 'ready';
   return (
     <section className="done-state" aria-labelledby="done-title">
-      <div className="done-icon" aria-hidden="true">✓</div>
-      <h2 id="done-title">{result.setupMode === 'payments-only' ? 'Payment bridge is configured' : 'SAP MCP is configured'}</h2>
-      <p>Restart your agent runtime. Hosted SAP MCP can use the local sap_payments bridge for x402 paid/write tools without exposing keypair bytes.</p>
+      <div className={ready ? 'done-icon' : 'done-icon warning'} aria-hidden="true">{ready ? '✓' : '!'}</div>
+      <h2 id="done-title">{ready ? result.setupMode === 'payments-only' ? 'Payment bridge is configured' : 'SAP MCP is configured' : 'Setup needs attention'}</h2>
+      <p>{ready
+        ? 'Restart your agent runtime. Hosted SAP MCP can use the local sap_payments bridge for x402 paid/write tools without exposing keypair bytes.'
+        : 'The wizard wrote the config, but one or more local readiness checks failed. Fix these before relying on paid/write hosted tools.'}</p>
       {setup && (
         <div className="review-grid">
           <ReviewItem label="Config" value={setup.configPath} />
@@ -654,7 +664,33 @@ function DoneState({ result }: { result: WizardResult }) {
           </article>
         ))}
       </div>
-      <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_payments_profile_current for local profile checks and sap_payments.sap_payments_call_paid_tool when a hosted tool returns payment_required." />
+      {!ready && (
+        <div className="readiness-panel">
+          {result.readiness.profileIssues.length > 0 && (
+            <div>
+              <h3>Profile readiness</h3>
+              <ul>{result.readiness.profileIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+            </div>
+          )}
+          {result.readiness.runtimeIssues.length > 0 && (
+            <div>
+              <h3>Runtime config readiness</h3>
+              {result.readiness.runtimeIssues.map((runtime) => (
+                <article key={runtime.path}>
+                  <strong>{runtime.runtime}</strong>
+                  <code>{runtime.path}</code>
+                  <ul>{runtime.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+                </article>
+              ))}
+            </div>
+          )}
+          <div>
+            <h3>Next steps</h3>
+            <ul>{result.readiness.nextSteps.map((step) => <li key={step}>{step}</li>)}</ul>
+          </div>
+        </div>
+      )}
+      <StatusBanner tone={ready ? 'success' : 'error'} title={ready ? 'Next command for paid tools' : 'Do this before testing Codex'} text={ready ? 'Ask the agent to use sap_payments.sap_payments_profile_current for local profile checks and sap_payments.sap_payments_call_paid_tool when a hosted tool returns payment_required.' : 'Run Repair payment bridge only or Full hosted SAP MCP setup again, then restart Codex/Claude/Hermes/OpenClaw completely.'} />
     </section>
   );
 }

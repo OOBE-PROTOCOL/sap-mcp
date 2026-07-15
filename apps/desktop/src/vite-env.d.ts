@@ -19,6 +19,9 @@ type ProfileStatus = {
   agentPubkey?: string;
   walletPath?: string;
   walletExists: boolean;
+  externalSignerConfigured: boolean;
+  readiness: 'ready' | 'needs-attention';
+  issues: string[];
 };
 
 type WizardDraft = {
@@ -42,6 +45,17 @@ type WizardDraft = {
 
 type WizardResult = {
   setupMode: 'full' | 'payments-only';
+  readiness: {
+    status: 'ready' | 'needs-attention';
+    profileName?: string;
+    profileIssues: string[];
+    runtimeIssues: Array<{
+      runtime: string;
+      path: string;
+      issues: string[];
+    }>;
+    nextSteps: string[];
+  };
   setup?: {
     configPath: string;
     walletPath?: string;

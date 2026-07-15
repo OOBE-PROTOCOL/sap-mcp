@@ -216,10 +216,18 @@ describe('createSapMcpServer', () => {
 
     const response = await server.toolHandlers?.sap_profile_current({});
     const profile = JSON.parse(response?.content[0]?.text ?? '{}') as {
+      connectionSummary?: {
+        status?: string;
+        accountModel?: string;
+        localProfileStatus?: string;
+        localProfileVisibleToHostedServer?: boolean;
+        localProfileTool?: string;
+        userMessage?: string;
+      };
       loadedProfile?: string | null;
       activeProfile?: string | null;
       accountModel?: string;
-      runtime?: { signerConfigured?: boolean };
+      runtime?: { signerConfigured?: boolean; localProfileStatus?: string; important?: string };
       profile?: {
         name?: string | null;
         configPath?: string | null;
@@ -231,6 +239,7 @@ describe('createSapMcpServer', () => {
         canonicalEndpoint?: string;
         accountModel?: string;
         localProfileVisibility?: string;
+        localProfileStatus?: string;
         localProfileTool?: string;
         serverStoresUserKeypairs?: boolean;
         signerStatus?: string;
@@ -241,10 +250,20 @@ describe('createSapMcpServer', () => {
       };
     };
 
+    expect(profile.connectionSummary).toMatchObject({
+      status: 'connected',
+      accountModel: 'hosted-remote-accountless',
+      localProfileStatus: 'unknown-to-hosted-server-not-missing',
+      localProfileVisibleToHostedServer: false,
+      localProfileTool: 'sap_payments.sap_payments_profile_current',
+    });
+    expect(profile.connectionSummary?.userMessage).toContain('cannot prove whether the user local SAP profile exists');
     expect(profile.loadedProfile).toBeNull();
     expect(profile.activeProfile).toBeNull();
     expect(profile.accountModel).toBe('hosted-remote-accountless');
     expect(profile.runtime?.signerConfigured).toBe(false);
+    expect(profile.runtime?.localProfileStatus).toBe('unknown-to-hosted-server-not-missing');
+    expect(profile.runtime?.important).toContain('does not mean the user local SAP profile is missing');
     expect(profile.profile).toMatchObject({
       name: null,
       configPath: null,
@@ -256,6 +275,7 @@ describe('createSapMcpServer', () => {
       canonicalEndpoint: 'https://mcp.sap.oobeprotocol.ai/mcp',
       accountModel: 'hosted-remote-accountless',
       localProfileVisibility: 'not-visible-to-hosted-server',
+      localProfileStatus: 'unknown-to-hosted-server-not-missing',
       localProfileTool: 'sap_payments.sap_payments_profile_current',
       serverStoresUserKeypairs: false,
       signerStatus: 'server-non-custodial-user-signer-required',

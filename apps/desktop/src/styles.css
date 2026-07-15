@@ -348,6 +348,17 @@ h1 {
   color: var(--warning) !important;
 }
 
+.profile-warning {
+  width: fit-content;
+  border: 1px solid rgba(255, 205, 97, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 205, 97, 0.08);
+  color: var(--warning) !important;
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 2px 7px;
+}
+
 .hosted-card {
   margin-top: auto;
   padding: 14px;
@@ -798,6 +809,43 @@ button:disabled {
   color: var(--success);
   font-size: 1.7rem;
   font-weight: 900;
+}
+
+.done-icon.warning {
+  background: rgba(255, 205, 97, 0.14);
+  color: var(--warning);
+}
+
+.readiness-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 205, 97, 0.28);
+  border-radius: 16px;
+  background: rgba(255, 205, 97, 0.06);
+}
+
+.readiness-panel h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.readiness-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.readiness-panel article {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(7, 18, 21, 0.54);
 }
 
 @media (prefers-reduced-motion: no-preference) {

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -59,6 +59,9 @@ describe('desktop wizard flow', () => {
       expect(codex).toContain('SAP_ALLOWED_TOOLS = "all"');
       expect(codex).not.toContain('mcp-remote');
       expect(result.runtimeActions.some((action) => action.runtime === 'Codex' && action.status === 'configured')).toBe(true);
+      expect(result.readiness.status).toBe('ready');
+      expect(result.readiness.profileIssues).toEqual([]);
+      expect(result.readiness.runtimeIssues).toEqual([]);
 
       const profiles = getDesktopProfileStatuses(homeDir);
       expect(profiles[0]).toMatchObject({
@@ -69,6 +72,32 @@ describe('desktop wizard flow', () => {
         walletExists: true,
       });
       expect(profiles[0]?.walletPath).toBe(walletPath);
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports stale active profiles with missing wallet paths as needs attention', () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'sap-mcp-desktop-home-'));
+    const configDir = join(homeDir, '.config', 'mcp-sap');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, '.active-profile'), 'stevier', 'utf-8');
+    writeFileSync(join(configDir, 'config-stevier.json'), JSON.stringify({
+      mode: 'hosted-api',
+      rpcUrl: 'https://api.mainnet-beta.solana.com',
+      walletPath: join(homeDir, '.config', 'mcp-sap', 'keypairs', 'missing.json'),
+      agentPubkey: '11111111111111111111111111111111',
+    }), 'utf-8');
+
+    try {
+      const profiles = getDesktopProfileStatuses(homeDir);
+      expect(profiles[0]).toMatchObject({
+        name: 'stevier',
+        active: true,
+        readiness: 'needs-attention',
+        walletExists: false,
+      });
+      expect(profiles[0]?.issues).toContain('Profile "stevier" points to a missing wallet file.');
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }
