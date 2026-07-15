@@ -107,13 +107,15 @@ payments, SAP transactions, Solana transactions, SNS operations, or settlement
 actions. The hosted MCP server is not a wallet custodian.
 
 For hosted paid tools, use the native x402 flow. If the client runtime cannot
-attach `PAYMENT-SIGNATURE` itself, use the local SAP MCP `sap_payments` bridge
-and call `sap_payments_call_paid_tool`. This is not a separate hosted signing
-plugin: it is the local SAP MCP process using the user's configured SAP profile
-wallet or external signer to sign the x402 payment payload, retry the hosted
-tool call, and return the receipt. `sap_x402_paid_call` is a backward-compatible
-alias only for older runtime snippets. Neither helper must be treated as a
-remote hosted signing service.
+attach `PAYMENT-SIGNATURE` itself, use the local SAP MCP `sap_payments` bridge.
+Call `sap_payments_readiness` first to verify the active profile, signer,
+SOL/USDC balance, policy limits, and bridge status. Then call
+`sap_payments_call_paid_tool` for the hosted paid tool. This is not a separate
+hosted signing plugin: it is the local SAP MCP process using the user's
+configured SAP profile wallet or external signer to sign the x402 payment
+payload, retry the hosted tool call, and return the receipt.
+`sap_x402_paid_call` is a backward-compatible alias only for older runtime
+snippets. Neither helper must be treated as a remote hosted signing service.
 
 When connected to hosted SAP MCP, `signerConfigured: false` on the remote
 server means the hosted server is non-custodial. It does not mean the remote
@@ -125,8 +127,10 @@ local stdio fallback.
 Hosted remote is accountless. If `sap_profile_current` returns
 `accountModel: hosted-remote-accountless`, do not describe `default` as the
 user's profile and do not infer the user's wallet from the hosted server. To
-inspect the local user profile, wallet, or signer status, call the local
-`sap_payments.sap_payments_profile_current` bridge when it is configured.
+inspect the local user profile, wallet, signer status, and payment policy, call
+the local `sap_payments.sap_payments_readiness` bridge when it is configured.
+Use `sap_payments.sap_payments_profile_current` only as a narrower compatibility
+profile check.
 
 Basic wallet reads are free on hosted SAP MCP. Call `sol_get_balance`,
 `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on the hosted

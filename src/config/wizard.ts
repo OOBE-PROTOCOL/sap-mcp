@@ -1163,7 +1163,7 @@ function installRecommendedPaymentBridgeConfigs(): void {
 
   const bundle = installX402PaidCallAddon();
   printSuccess(`Installed ${bundle.addonId} bridge reference bundle to ${bundle.targetDir}`);
-  printInfo('Restart your agent runtime, then use sap_payments.sap_payments_call_paid_tool for hosted paid/write SAP MCP tools.');
+  printInfo('Restart your agent runtime, then call sap_payments.sap_payments_readiness before paid/write flows and sap_payments.sap_payments_call_paid_tool when a hosted tool requires x402 payment.');
 }
 
 /**
@@ -1174,7 +1174,7 @@ async function wizardX402PaidCallAddon(): Promise<void> {
   printSection('SAP MCP Local Payment Bridge');
   printLead('This is the recommended hosted setup: the agent connects to remote SAP MCP, while sap_payments signs x402 proofs locally with your SAP profile.');
   printInfo('Use it for Hermes, Claude, Codex, OpenClaw, or custom agents that will call paid hosted tools.');
-  printInfo('Preferred tool: sap_payments_call_paid_tool. The sap_x402_paid_call name is only a backward-compatible alias.');
+  printInfo('Preferred flow: sap_payments_readiness first, then sap_payments_call_paid_tool for the paid hosted call. The sap_x402_paid_call name is only a backward-compatible alias.');
   printWarning('This bridge does not store or print keypair bytes. It uses the active SAP MCP profile at call time.');
   printControlHints();
   console.log('');
@@ -1234,7 +1234,7 @@ async function wizardX402PaidCallAddon(): Promise<void> {
     if (codexResult.backupPath) {
       printBullet(`Backup: ${codexResult.backupPath}`);
     }
-    printInfo('Restart Codex completely, then ask it to use sap_payments.sap_payments_call_paid_tool for hosted paid/write SAP MCP tools.');
+    printInfo('Restart Codex completely, then ask it to use sap_payments.sap_payments_readiness. Use sap_payments.sap_payments_call_paid_tool when a hosted tool requires x402 payment.');
   }
 
   const result = installX402PaidCallAddon();

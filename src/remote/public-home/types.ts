@@ -67,6 +67,8 @@ export interface LandingPublicPaymentStats {
   totalPaymentRequests: number;
   totalVerifiedPayments: number;
   totalFailedSettlements: number;
+  uniqueRemoteCallers: number;
+  uniqueUserAgents: number;
   lastSettlementAt?: string;
   ledgerAvailable: boolean;
 }

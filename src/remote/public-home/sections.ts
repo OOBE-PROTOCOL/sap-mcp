@@ -454,9 +454,14 @@ export function renderMetrics(model: LandingPageModel): string {
           <p>${escapeHtml(lastSettlement)}</p>
         </article>
         <article class="metric">
-          <span>Payment Requests</span>
+          <span>x402 Challenges</span>
           <strong>${escapeHtml(formatInteger(stats.totalPaymentRequests))}</strong>
-          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} verified, ${escapeHtml(formatInteger(stats.totalFailedSettlements))} failed settlements.</p>
+          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} verified payments from ${escapeHtml(formatInteger(stats.uniqueRemoteCallers))} caller origins.</p>
+        </article>
+        <article class="metric">
+          <span>Caller Fingerprints</span>
+          <strong>${escapeHtml(formatInteger(stats.uniqueUserAgents))}</strong>
+          <p>Unique user-agent signatures observed in paid challenge traffic.</p>
         </article>
       </div>
     </section>
@@ -589,7 +594,7 @@ export function renderIntegrationPath(model: LandingPageModel): string {
             <li><b>1</b><span>Run the CLI wizard command.</span></li>
             <li><b>2</b><span>Accept the default <code>hosted-api</code> mode for remote SAP MCP.</span></li>
             <li><b>3</b><span>Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</span></li>
-            <li><b>4</b><span>Use <code>sap_payments_call_paid_tool</code> when hosted tools require x402 payment.</span></li>
+            <li><b>4</b><span>Call <code>sap_payments_readiness</code>, then use <code>sap_payments_call_paid_tool</code> when hosted tools require x402 payment.</span></li>
           </ol>
           <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
           <div class="inline-actions">
@@ -657,7 +662,7 @@ export function renderPayments(model: LandingPageModel): string {
         <article class="card">
           <h3>Agent-native paid call flow</h3>
           <div class="timeline">
-            <div class="timeline-item"><b>1</b><p>Agent calls hosted SAP MCP tool.</p></div>
+            <div class="timeline-item"><b>1</b><p>Agent checks <code>sap_payments_readiness</code> for local profile, signer, balance, and policy status.</p></div>
             <div class="timeline-item"><b>2</b><p>Paid tools return an x402 challenge with resource, amount, asset, and payTo.</p></div>
             <div class="timeline-item"><b>3</b><p>Local <code>sap_payments_call_paid_tool</code> signs payment proof and retries the call.</p></div>
             <div class="timeline-item"><b>4</b><p>Hosted MCP verifies settlement and returns the tool output plus receipt.</p></div>

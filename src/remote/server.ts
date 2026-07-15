@@ -355,6 +355,8 @@ export interface PublicPaymentStats {
   totalPaymentRequests: number;
   totalVerifiedPayments: number;
   totalFailedSettlements: number;
+  uniqueRemoteCallers: number;
+  uniqueUserAgents: number;
   lastSettlementAt?: string;
   ledgerAvailable: boolean;
 }
@@ -893,6 +895,8 @@ function readPaymentStatsFromLedger(): PublicPaymentStats {
     totalPaymentRequests: 0,
     totalVerifiedPayments: 0,
     totalFailedSettlements: 0,
+    uniqueRemoteCallers: 0,
+    uniqueUserAgents: 0,
     ledgerAvailable: false,
   };
 
@@ -903,11 +907,21 @@ function readPaymentStatsFromLedger(): PublicPaymentStats {
 
   stats.ledgerAvailable = true;
 
+  const remoteCallers = new Set<string>();
+  const userAgents = new Set<string>();
   const lines = readFileSync(ledgerPath, 'utf-8').split('\n');
   for (const line of lines) {
     const event = parsePaymentLedgerEvent(line);
     if (!event) {
       continue;
+    }
+
+    if (event.remoteAddress) {
+      remoteCallers.add(event.remoteAddress);
+    }
+
+    if (event.userAgent) {
+      userAgents.add(event.userAgent);
     }
 
     if (event.event === 'payment_required') {
@@ -928,6 +942,9 @@ function readPaymentStatsFromLedger(): PublicPaymentStats {
       stats.totalFailedSettlements += 1;
     }
   }
+
+  stats.uniqueRemoteCallers = remoteCallers.size;
+  stats.uniqueUserAgents = userAgents.size;
 
   return stats;
 }

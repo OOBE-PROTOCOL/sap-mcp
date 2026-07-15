@@ -106,6 +106,7 @@ Do not inject keypair bytes, hard-coded legacy wallet paths, or stale RPC overri
 For hosted paid/write tools, clients may also need a local `sap_payments` bridge that exposes only:
 
 ```txt
+sap_payments_readiness
 sap_payments_call_paid_tool
 sap_payments_prepare_challenge
 sap_payments_sign_challenge

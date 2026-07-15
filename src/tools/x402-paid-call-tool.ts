@@ -11,6 +11,7 @@ import type { SapMcpContext } from '../core/types.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import {
   executeX402PaidCall,
+  getX402PaymentReadiness,
   inspectX402Receipt,
   probeX402PaymentChallenge,
   signX402PaymentChallenge,
@@ -109,6 +110,7 @@ const paidCallOutputSchema = {
     response: { type: 'object', description: 'Remote MCP JSON-RPC response after successful paid retry.' },
     attempts: { type: 'number', description: 'Number of paid-call attempts used.' },
     transientRetries: { type: 'array', items: { type: 'string' }, description: 'Retryable errors encountered before success.' },
+    audit: { type: 'object', description: 'Agent-readable proof object with intent id, profile, payment receipt, settlement signature, attempts, and secret-material guarantee.' },
   },
 } as const;
 
@@ -150,6 +152,7 @@ function networkFromRpcUrl(value: string | undefined): string | undefined {
  */
 export function registerX402PaidCallTool(server: Server, _context: SapMcpContext): void {
   registerPaymentsProfileCurrentTool(server, _context);
+  registerPaymentsReadinessTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
@@ -210,8 +213,58 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
       hostedRemoteVisibility: 'not-visible-to-hosted-accountless-server',
       secretMaterial: 'keypair-bytes-never-returned',
       recommendedPaidTool: 'sap_payments_call_paid_tool',
-      agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. The hosted SAP MCP server is intentionally accountless.',
+      recommendedReadinessTool: 'sap_payments_readiness',
+      agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. For paid/write workflows call sap_payments_readiness first. The hosted SAP MCP server is intentionally accountless.',
     }, null, 2)),
+  );
+}
+
+function registerPaymentsReadinessTool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_readiness',
+    {
+      title: 'Check Hosted Payment Readiness',
+      description: 'Free local readiness check for hosted SAP MCP paid/write workflows. Verifies the local sap_payments bridge, active profile, signer public key, RPC reachability, SOL/USDC balances, and commerce policy limits without exposing keypair bytes. Agents should call this before paid tools, swaps, SNS registration, Metaplex minting, or SAP registry writes.',
+      inputSchema: {
+        profileName: {
+          type: 'string',
+          description: 'Optional SAP MCP profile name. Defaults to the active local profile.',
+        },
+        endpoint: {
+          type: 'string',
+          description: 'Hosted MCP endpoint. Defaults to https://mcp.sap.oobeprotocol.ai/mcp.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          hostedMcp: { type: 'object', description: 'Hosted remote MCP endpoint and accountless trust boundary.' },
+          localBridge: { type: 'object', description: 'Local sap_payments bridge status and preferred tools.' },
+          profile: { type: 'object', description: 'Redacted active profile, signer, RPC, and wallet path status.' },
+          balances: { type: 'object', description: 'SOL and USDC payment readiness when RPC checks are available.' },
+          policy: { type: 'object', description: 'Local agent commerce policy limits used before autopay or value-moving operations.' },
+          readiness: { type: 'object', description: 'Ready/degraded/not-ready result with issues and next action.' },
+          agentInstruction: { type: 'string', description: 'Operational instruction for MCP agents.' },
+        },
+        required: ['hostedMcp', 'localBridge', 'profile', 'balances', 'policy', 'readiness', 'agentInstruction'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input: unknown) => {
+      const record = input && typeof input === 'object' && !Array.isArray(input)
+        ? input as Record<string, unknown>
+        : {};
+      const profileName = typeof record.profileName === 'string' ? record.profileName : undefined;
+      const endpoint = typeof record.endpoint === 'string' ? record.endpoint : undefined;
+      const result = await getX402PaymentReadiness(profileName, endpoint);
+      return createTextResponse(JSON.stringify(result, null, 2));
+    },
   );
 }
 
@@ -484,8 +537,8 @@ function formatPaidCallError(error: unknown): string {
       ? 'This is a transient x402 settlement or Solana RPC failure, not proof that SAP MCP is down. Do not bypass hosted x402, do not switch to terminal/direct RPC, and do not reuse an old signed payment payload unless the user explicitly asks.'
       : 'The local x402 payment bridge could not complete the call. Fix the SAP MCP profile, wallet balance, maxPriceUsd, or runtime configuration before retrying.',
     nextAction: retryable
-      ? 'Retry sap_x402_paid_call with the same toolName and arguments, confirm: true, and maxAttempts: 5 so the helper creates a fresh x402 challenge and payment payload.'
-      : 'Run sap_profile_current and sap_x402_estimate_cost, then repair the local x402 payment bridge with sap-mcp-config wizard or the desktop wizard if needed.',
+      ? 'Retry sap_payments_call_paid_tool with the same toolName and arguments, confirm: true, and maxAttempts: 5 so the helper creates a fresh x402 challenge and payment payload.'
+      : 'Run sap_payments_readiness, then repair the local sap_payments bridge with sap-mcp-config wizard or the desktop wizard if needed.',
   };
 
   return JSON.stringify(payload, null, 2);

@@ -180,6 +180,7 @@ For Codex, the recommended runtime integration is the local `sap_payments` MCP
 bridge shown above. It exposes only:
 
 ```txt
+sap_payments_readiness
 sap_payments_call_paid_tool
 sap_payments_prepare_challenge
 sap_payments_sign_challenge

@@ -515,7 +515,7 @@ export function installX402PaidCallAddon(
   writeFileSync(readmePath, [
     '# SAP MCP Local Payment Bridge',
     '',
-    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_call_paid_tool`.',
+    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_readiness` and `sap_payments_call_paid_tool`.',
     '',
     'Legacy command fallback for custom wrappers:',
     '',
@@ -523,7 +523,7 @@ export function installX402PaidCallAddon(
     `${X402_PAID_CALL_COMMAND} --tool sap_list_all_agents --arguments '{"limit":5}' --max-usd 0.02 --confirm`,
     '```',
     '',
-    'Prefer calling the local SAP MCP tool `sap_payments_call_paid_tool` when the `sap_payments` MCP bridge is available. `sap_x402_paid_call` remains a backward-compatible alias.',
+    'Prefer calling `sap_payments_readiness` first, then `sap_payments_call_paid_tool` when the `sap_payments` MCP bridge is available. `sap_x402_paid_call` remains a backward-compatible alias.',
     '',
     'Security rules:',
     '',

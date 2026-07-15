@@ -59,8 +59,14 @@ The payment receipt should be treated as part of the tool output provenance. For
 Most agent runtimes can connect to hosted SAP MCP directly, but not every runtime can automatically sign an x402 challenge and replay the paid MCP request. The recommended fix is the local `sap_payments` MCP bridge created by the wizard. Agents should call:
 
 ```txt
+sap_payments_readiness
 sap_payments_call_paid_tool
 ```
+
+`sap_payments_readiness` is free. It verifies the hosted endpoint, local bridge,
+active profile, signer public key, SOL/USDC balance, and local commerce policy
+limits before the agent attempts a paid/write flow. It never returns keypair
+bytes.
 
 The standalone CLI helper remains available as a terminal/custom-wrapper fallback:
 
@@ -80,7 +86,9 @@ The helper:
 3. receives the x402 challenge for the requested hosted tool;
 4. signs the payment payload locally with the user's SAP MCP profile wallet;
 5. retries the same MCP method and params with `PAYMENT-SIGNATURE`;
-6. returns the hosted MCP response plus the settlement receipt.
+6. returns the hosted MCP response plus the settlement receipt and an audit
+   object containing the intent id, profile, signer public key, payment details,
+   receipt, attempts, and retry history.
 
 Install or repair runtime bridge config from the wizard:
 
@@ -103,6 +111,8 @@ Security boundaries:
 - keypair bytes stay local and are never included in MCP client config;
 - every paid call requires `--max-usd` / `maxPriceUsd`;
 - every paid call requires `--confirm` / `confirm: true`;
+- run `sap_payments_readiness` before paid/write workflows and respect the
+  returned local policy limits;
 - transient settlement failures such as `BlockhashNotFound`,
   `transaction_simulation_failed`, `node is behind`, or `fetch failed` should
   be retried with a fresh challenge using `--max-attempts 5`;

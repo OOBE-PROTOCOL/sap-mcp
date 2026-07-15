@@ -4,13 +4,15 @@
  * @description Local helper for paying and retrying hosted SAP MCP x402 tool calls with a user-controlled SAP profile signer.
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { createHash } from 'crypto';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import type { PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import { registerExactSvmScheme } from '@x402/svm/exact/client';
 import { createKeyPairSignerFromBytes } from '@solana/kit';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
-import { getProfileConfigPath } from '../config/profiles.js';
+import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
@@ -18,6 +20,8 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_ALLOWED_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 500;
+const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 
 /**
  * @name X402PaidCallInput
@@ -108,6 +112,69 @@ export interface X402ReceiptInspectionResult {
 }
 
 /**
+ * @name AgentCommercePolicySnapshot
+ * @description Redacted local policy limits used by agents before paying or moving value.
+ */
+export interface AgentCommercePolicySnapshot {
+  autoPayX402BelowUsd: number;
+  dailyX402LimitUsd?: number;
+  maxTradeUsd?: number;
+  maxSlippageBps: number;
+  requireConfirmationAboveUsd: number;
+  allowedProtocols: readonly string[];
+  maxAttempts: number;
+}
+
+/**
+ * @name X402PaymentReadinessResult
+ * @description Full local readiness snapshot for hosted paid/write SAP MCP workflows.
+ */
+export interface X402PaymentReadinessResult {
+  hostedMcp: {
+    endpoint: string;
+    accountModel: 'hosted-remote-accountless';
+    toolNamespace: 'sap';
+  };
+  localBridge: {
+    status: 'connected';
+    toolNamespace: 'sap_payments';
+    preferredTool: 'sap_payments_call_paid_tool';
+    readinessTool: 'sap_payments_readiness';
+  };
+  profile: {
+    activeProfile: string;
+    configPath: string;
+    mode: SapMcpConfig['mode'];
+    network: string;
+    rpcUrl: string;
+    programId: string;
+    walletPathConfigured: boolean;
+    walletFileExists: boolean;
+    signerConfigured: boolean;
+    signerPublicKey?: string;
+    agentPubkey?: string;
+    secretMaterial: 'keypair-bytes-never-returned';
+  };
+  balances: {
+    checked: boolean;
+    sol?: number;
+    usdc?: number;
+    usdcMint: string;
+    payerBalanceEnoughForAutoPay?: boolean;
+    error?: string;
+  };
+  policy: AgentCommercePolicySnapshot;
+  readiness: {
+    status: 'ready' | 'degraded' | 'not-ready';
+    canPayX402: boolean;
+    canExecuteWriteTools: boolean;
+    issues: readonly string[];
+    nextAction: string;
+  };
+  agentInstruction: string;
+}
+
+/**
  * @name X402PaidCallResult
  * @description Result returned after a hosted MCP paid request is completed.
  */
@@ -126,6 +193,36 @@ export interface X402PaidCallResult {
   response: unknown;
   attempts: number;
   transientRetries: readonly string[];
+  audit: X402PaidCallAudit;
+}
+
+/**
+ * @name X402PaidCallAudit
+ * @description Agent-readable proof object for one hosted paid MCP execution.
+ */
+export interface X402PaidCallAudit {
+  intentId: string;
+  profileName: string;
+  signerAddress: string;
+  endpoint: string;
+  toolName?: string;
+  requestMethod: string;
+  payment: {
+    amountUsd: number;
+    network: string;
+    asset: string;
+    payTo: string;
+  };
+  receipt: {
+    present: boolean;
+    transaction?: string;
+    network?: string;
+    amount?: string;
+    payer?: string;
+  };
+  attempts: number;
+  transientRetries: readonly string[];
+  secretMaterial: 'keypair-bytes-never-returned';
 }
 
 interface JsonRpcRequest {
@@ -158,6 +255,7 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
   validateInput(input);
 
   const endpoint = input.endpoint ?? DEFAULT_X402_PAID_CALL_ENDPOINT;
+  const profileName = input.profileName ?? getActiveProfile();
   const config = loadPaymentProfile(input.profileName);
   const signer = await loadClientSigner(config);
   const httpClient = createHttpPaymentClient(signer);
@@ -174,6 +272,7 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
         signerAddress: String(signer.address),
         httpClient,
         requestBody,
+        profileName,
         maxPriceUsd: input.maxPriceUsd,
         attempt,
         transientRetries,
@@ -190,6 +289,97 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
   }
 
   throw new Error('x402 paid call exhausted retries.');
+}
+
+/**
+ * @name getX402PaymentReadiness
+ * @description Checks local profile, signer, RPC, balances, and commerce policy for hosted paid/write workflows.
+ */
+export async function getX402PaymentReadiness(
+  profileName?: string,
+  endpoint = DEFAULT_X402_PAID_CALL_ENDPOINT,
+): Promise<X402PaymentReadinessResult> {
+  const activeProfile = profileName ?? getActiveProfile();
+  const configPath = getProfileConfigPath(activeProfile);
+  let config: SapMcpConfig | undefined;
+  let signerAddress: string | undefined;
+  const issues: string[] = [];
+
+  try {
+    config = loadPaymentProfile(profileName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    issues.push(`profile_load_failed: ${message}`);
+  }
+
+  if (config) {
+    try {
+      const signer = await loadClientSigner(config);
+      signerAddress = String(signer.address);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      issues.push(`signer_unavailable: ${message}`);
+    }
+  }
+
+  const policy = readAgentCommercePolicy();
+  const network = networkFromRpcUrl(config?.rpcUrl);
+  const usdcMint = usdcMintForNetwork(network);
+  const balances = await readBalanceSnapshot(config?.rpcUrl, signerAddress, usdcMint, policy.autoPayX402BelowUsd);
+  if (balances.error) {
+    issues.push(`balance_check_degraded: ${balances.error}`);
+  }
+
+  const walletFileExists = Boolean(config?.walletPath && existsSync(config.walletPath));
+  if (config?.walletPath && !walletFileExists) {
+    issues.push('wallet_file_missing');
+  }
+
+  const canPayX402 = Boolean(signerAddress && balances.payerBalanceEnoughForAutoPay !== false);
+  const canExecuteWriteTools = Boolean(signerAddress && config?.mode !== 'readonly');
+  const status = !config || !signerAddress || !walletFileExists
+    ? 'not-ready'
+    : issues.length > 0
+      ? 'degraded'
+      : 'ready';
+
+  return {
+    hostedMcp: {
+      endpoint,
+      accountModel: 'hosted-remote-accountless',
+      toolNamespace: 'sap',
+    },
+    localBridge: {
+      status: 'connected',
+      toolNamespace: 'sap_payments',
+      preferredTool: 'sap_payments_call_paid_tool',
+      readinessTool: 'sap_payments_readiness',
+    },
+    profile: {
+      activeProfile,
+      configPath,
+      mode: config?.mode ?? 'readonly',
+      network,
+      rpcUrl: redactUrl(config?.rpcUrl),
+      programId: config?.programId ?? '',
+      walletPathConfigured: Boolean(config?.walletPath),
+      walletFileExists,
+      signerConfigured: Boolean(signerAddress),
+      ...(signerAddress ? { signerPublicKey: signerAddress } : {}),
+      ...(config?.agentPubkey ? { agentPubkey: config.agentPubkey } : {}),
+      secretMaterial: 'keypair-bytes-never-returned',
+    },
+    balances,
+    policy,
+    readiness: {
+      status,
+      canPayX402,
+      canExecuteWriteTools,
+      issues,
+      nextAction: readinessNextAction(status, issues, canPayX402),
+    },
+    agentInstruction: 'Call sap_payments_readiness first for hosted paid/write workflows. If status is ready or degraded with canPayX402=true, use sap_payments_call_paid_tool for paid hosted tools. Do not infer local wallet state from hosted sap_profile_current.',
+  };
 }
 
 /**
@@ -291,6 +481,7 @@ async function executePaidAttempt(options: {
   signerAddress: string;
   httpClient: x402HTTPClient;
   requestBody: JsonRpcRequest;
+  profileName: string;
   maxPriceUsd: number;
   attempt: number;
   transientRetries: readonly string[];
@@ -320,6 +511,32 @@ async function executePaidAttempt(options: {
     throw new Error(`Paid MCP call returned JSON-RPC error: ${JSON.stringify(paid.body.error)}`);
   }
 
+  const toolName = extractToolName(options.requestBody);
+  const audit: X402PaidCallAudit = {
+    intentId: buildIntentId(options.requestBody, options.sessionId),
+    profileName: options.profileName,
+    signerAddress: options.signerAddress,
+    endpoint: options.endpoint,
+    ...(toolName ? { toolName } : {}),
+    requestMethod: options.requestBody.method,
+    payment: {
+      amountUsd,
+      network: selectedRequirements.network,
+      asset: selectedRequirements.asset,
+      payTo: selectedRequirements.payTo,
+    },
+    receipt: {
+      present: Boolean(paymentResult.settleResponse),
+      ...(paymentResult.settleResponse?.transaction ? { transaction: paymentResult.settleResponse.transaction } : {}),
+      ...(paymentResult.settleResponse?.network ? { network: paymentResult.settleResponse.network } : {}),
+      ...(paymentResult.settleResponse?.amount ? { amount: paymentResult.settleResponse.amount } : {}),
+      ...(paymentResult.settleResponse?.payer ? { payer: paymentResult.settleResponse.payer } : {}),
+    },
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
+    secretMaterial: 'keypair-bytes-never-returned',
+  };
+
   return {
     success: true,
     endpoint: options.endpoint,
@@ -335,6 +552,7 @@ async function executePaidAttempt(options: {
     response: paid.body,
     attempts: options.attempt,
     transientRetries: options.transientRetries,
+    audit,
   };
 }
 
@@ -603,6 +821,174 @@ function sleep(ms: number): Promise<void> {
 
 function isJsonRpcError(value: unknown): value is { error: unknown } {
   return value !== null && typeof value === 'object' && 'error' in value;
+}
+
+function networkFromRpcUrl(value: string | undefined): string {
+  if (!value) {
+    return 'mainnet-beta';
+  }
+  if (value.includes('mainnet')) {
+    return 'mainnet-beta';
+  }
+  if (value.includes('testnet')) {
+    return 'testnet';
+  }
+  if (value.includes('localhost') || value.includes('127.0.0.1') || value.includes('localnet')) {
+    return 'localnet';
+  }
+  return 'devnet';
+}
+
+function usdcMintForNetwork(network: string): string {
+  return network === 'devnet' ? DEVNET_USDC_MINT : MAINNET_USDC_MINT;
+}
+
+function redactUrl(value: string | undefined): string {
+  if (!value) {
+    return '';
+  }
+  try {
+    const url = new URL(value);
+    if (url.search) {
+      url.search = '?redacted=true';
+    }
+    return url.toString();
+  } catch {
+    return value.includes('?') ? `${value.split('?')[0]}?redacted=true` : value;
+  }
+}
+
+async function readBalanceSnapshot(
+  rpcUrl: string | undefined,
+  signerAddress: string | undefined,
+  usdcMint: string,
+  autoPayX402BelowUsd: number,
+): Promise<X402PaymentReadinessResult['balances']> {
+  if (!rpcUrl || !signerAddress) {
+    return {
+      checked: false,
+      usdcMint,
+      error: 'missing_rpc_or_signer',
+    };
+  }
+
+  try {
+    const connection = new Connection(rpcUrl, 'confirmed');
+    const owner = new PublicKey(signerAddress);
+    const mint = new PublicKey(usdcMint);
+    const [lamports, tokenAccounts] = await Promise.all([
+      connection.getBalance(owner, 'confirmed'),
+      connection.getParsedTokenAccountsByOwner(owner, { mint }, 'confirmed'),
+    ]);
+    const usdc = tokenAccounts.value.reduce((total, account) => {
+      const parsed = account.account.data.parsed as unknown;
+      if (!isRecord(parsed) || !isRecord(parsed.info) || !isRecord(parsed.info.tokenAmount)) {
+        return total;
+      }
+      const amount = parsed.info.tokenAmount.uiAmount;
+      return total + (typeof amount === 'number' && Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
+    return {
+      checked: true,
+      sol: lamports / 1_000_000_000,
+      usdc,
+      usdcMint,
+      payerBalanceEnoughForAutoPay: usdc >= autoPayX402BelowUsd,
+    };
+  } catch (error) {
+    return {
+      checked: false,
+      usdcMint,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function readAgentCommercePolicy(): AgentCommercePolicySnapshot {
+  return {
+    autoPayX402BelowUsd: readPositiveNumberEnv('SAP_MCP_X402_AUTO_PAY_MAX_USD', 0.02),
+    dailyX402LimitUsd: readOptionalPositiveNumberEnv('SAP_MCP_X402_DAILY_LIMIT_USD'),
+    maxTradeUsd: readOptionalPositiveNumberEnv('SAP_MCP_MAX_TRADE_USD') ?? 10,
+    maxSlippageBps: readPositiveNumberEnv('SAP_MCP_MAX_SLIPPAGE_BPS', 100),
+    requireConfirmationAboveUsd: readPositiveNumberEnv('SAP_MCP_REQUIRE_CONFIRMATION_ABOVE_USD', 1),
+    allowedProtocols: readListEnv('SAP_MCP_ALLOWED_PROTOCOLS', ['jupiter', 'sns', 'sap', 'metaplex']),
+    maxAttempts: readIntegerEnv('SAP_MCP_X402_MAX_ATTEMPTS', DEFAULT_MAX_ATTEMPTS, 1, MAX_ALLOWED_ATTEMPTS),
+  };
+}
+
+function readPositiveNumberEnv(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function readOptionalPositiveNumberEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function readIntegerEnv(name: string, fallback: number, min: number, max: number): number {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+function readListEnv(name: string, fallback: readonly string[]): readonly string[] {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+  const parsed = value.split(',').map(item => item.trim()).filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
+}
+
+function readinessNextAction(
+  status: X402PaymentReadinessResult['readiness']['status'],
+  issues: readonly string[],
+  canPayX402: boolean,
+): string {
+  if (status === 'ready') {
+    return 'Use sap_payments_call_paid_tool for hosted paid/write SAP MCP calls.';
+  }
+  if (canPayX402) {
+    return 'Proceed with paid calls if the user accepts degraded readiness; retry transient RPC errors with fresh challenges.';
+  }
+  if (issues.some(issue => issue.includes('wallet_file_missing'))) {
+    return 'Run the SAP MCP wizard repair or update the active profile walletPath to an existing dedicated keypair.';
+  }
+  if (issues.some(issue => issue.includes('signer_unavailable'))) {
+    return 'Run the SAP MCP wizard full setup or repair the local signer before paid/write calls.';
+  }
+  return 'Run the SAP MCP wizard repair flow, restart the agent runtime, then call sap_payments_readiness again.';
+}
+
+function extractToolName(requestBody: JsonRpcRequest): string | undefined {
+  if (requestBody.method !== 'tools/call' || !isRecord(requestBody.params)) {
+    return undefined;
+  }
+  const name = requestBody.params.name;
+  return typeof name === 'string' ? name : undefined;
+}
+
+function buildIntentId(requestBody: JsonRpcRequest, sessionId: string): string {
+  const source = JSON.stringify({
+    method: requestBody.method,
+    params: requestBody.params ?? null,
+    sessionId,
+    at: Date.now(),
+  });
+  return `sap-intent-${createHash('sha256').update(source).digest('hex').slice(0, 16)}`;
 }
 
 function parseCliArgs(argv: string[]): ParsedCliArgs {
