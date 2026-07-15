@@ -2,7 +2,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDefaultDesktopWizardDraft, saveDesktopWizardDraft, validateDesktopWizardDraft } from './desktop-flow.js';
+import {
+  createDefaultDesktopWizardDraft,
+  getDesktopProfileStatuses,
+  saveDesktopWizardDraft,
+  validateDesktopWizardDraft,
+} from './desktop-flow.js';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -54,6 +59,16 @@ describe('desktop wizard flow', () => {
       expect(codex).toContain('SAP_ALLOWED_TOOLS = "all"');
       expect(codex).not.toContain('mcp-remote');
       expect(result.runtimeActions.some((action) => action.runtime === 'Codex' && action.status === 'configured')).toBe(true);
+
+      const profiles = getDesktopProfileStatuses(homeDir);
+      expect(profiles[0]).toMatchObject({
+        name: 'solking-agent',
+        active: true,
+        mode: 'hosted-api',
+        network: 'mainnet-beta',
+        walletExists: true,
+      });
+      expect(profiles[0]?.walletPath).toBe(walletPath);
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }

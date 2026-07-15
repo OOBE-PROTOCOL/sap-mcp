@@ -118,6 +118,7 @@ app.whenReady().then(() => {
     return {
       draft: core.createDefaultDesktopWizardDraft(),
       runtimes: core.getDesktopRuntimeStatuses(),
+      profiles: core.getDesktopProfileStatuses(),
     };
   });
 

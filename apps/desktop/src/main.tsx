@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import sapLogoUrl from '../../../assets/explorer_logo.png';
 import './styles.css';
 
 const fullSteps = ['Setup', 'Profile', 'Wallet', 'Policy', 'Runtimes', 'Review'] as const;
@@ -7,6 +8,7 @@ const paymentsOnlySteps = ['Setup', 'Runtimes', 'Review'] as const;
 type StepName = typeof fullSteps[number];
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
+const releaseUrl = 'https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/0.8.0';
 const initialStateTimeoutMs = 15_000;
 
 function normalizeProfileName(value: string): string {
@@ -25,6 +27,7 @@ function fieldId(name: string): string {
 function App() {
   const [draft, setDraft] = useState<WizardDraft | null>(null);
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([]);
+  const [profiles, setProfiles] = useState<ProfileStatus[]>([]);
   const [step, setStep] = useState<StepName>('Setup');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,7 @@ function App() {
           configureCodex: defaultRuntimes.includes('codex'),
         });
         setRuntimes(state.runtimes);
+        setProfiles(state.profiles);
       })
       .catch((cause: unknown) => {
         if (!mounted) return;
@@ -164,6 +168,20 @@ function App() {
         profileName: normalizeProfileName(draft.profileName),
       });
       setResult(saved);
+      if (saved.setup) {
+        const profileName = normalizeProfileName(draft.profileName);
+        setProfiles((current) => upsertProfile(current, {
+          name: profileName,
+          path: saved.setup?.configPath ?? '',
+          active: true,
+          mode: saved.setup?.config.mode as WizardDraft['mode'],
+          rpcUrl: saved.setup?.config.rpcUrl,
+          network: networkFromRpcUrl(saved.setup?.config.rpcUrl),
+          agentPubkey: saved.setup?.config.agentPubkey,
+          walletPath: saved.setup?.walletPath,
+          walletExists: Boolean(saved.setup?.walletPath),
+        }));
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -174,7 +192,13 @@ function App() {
   return (
     <Shell>
       <aside className="sidebar" aria-label="Wizard progress">
-        <div className="brand-mark" aria-hidden="true">S</div>
+        <div className="brand-top">
+          <img className="brand-logo" src={sapLogoUrl} alt="SAP MCP" />
+          <button type="button" className="update-button" onClick={() => window.sapMcpWizard.openExternal(releaseUrl)} disabled={saving}>
+            <UpdateIcon />
+            Update
+          </button>
+        </div>
         <div>
           <p className="eyebrow">OOBE Protocol</p>
           <h1>SAP MCP Wizard</h1>
@@ -198,10 +222,11 @@ function App() {
         </ol>
         <div className="sidebar-actions">
           <button type="button" className="sidebar-home-button" onClick={goHome} disabled={saving}>
-            <span aria-hidden="true">H</span>
+            <span aria-hidden="true"><HomeIcon /></span>
             Home
           </button>
         </div>
+        <ProfilesPanel profiles={profiles} />
         <div className="hosted-card">
           <p>Hosted MCP</p>
           <code>{hostedUrl}</code>
@@ -249,6 +274,28 @@ function App() {
   );
 }
 
+function upsertProfile(profiles: ProfileStatus[], next: ProfileStatus): ProfileStatus[] {
+  const merged = profiles.map((profile) => ({ ...profile, active: false }));
+  const index = merged.findIndex((profile) => profile.name === next.name);
+  if (index >= 0) {
+    merged[index] = next;
+  } else {
+    merged.unshift(next);
+  }
+  return merged.sort((a, b) => {
+    if (a.active) return -1;
+    if (b.active) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function networkFromRpcUrl(rpcUrl?: string): string | undefined {
+  if (!rpcUrl) return undefined;
+  if (rpcUrl.includes('devnet')) return 'devnet';
+  if (rpcUrl.includes('testnet')) return 'testnet';
+  return 'mainnet-beta';
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="app-shell">{children}</div>;
 }
@@ -288,6 +335,22 @@ function StepContent({
           copy="Recommended for most users: hosted SAP MCP tools, a local SAP profile signer, and the native sap_payments bridge for x402 paid/write calls."
         />
         <div className="setup-layout">
+          <div className="setup-options setup-options-row">
+            <ToggleCard
+              title="Full hosted SAP MCP setup"
+              badge="Recommended"
+              copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the native sap_payments bridge."
+              checked={draft.setupMode === 'full'}
+              onChange={() => update({ setupMode: 'full' })}
+            />
+            <ToggleCard
+              title="Repair payment bridge only"
+              badge="Already configured"
+              copy="Keep the existing SAP profile and only install or repair the local sap_payments MCP entry for Codex, Claude, Hermes, OpenClaw, or compatible agents."
+              checked={draft.setupMode === 'payments-only'}
+              onChange={() => update({ setupMode: 'payments-only' })}
+            />
+          </div>
           <div className="setup-summary">
             <div className="setup-kicker">
               <span>Recommended hosted endpoint</span>
@@ -303,22 +366,6 @@ function StepContent({
               <strong>Default trust boundary</strong>
               <span>OOBE never receives keypair bytes. Paid/write hosted calls are authorized by the local SAP profile or external signer.</span>
             </div>
-          </div>
-          <div className="setup-options">
-            <ToggleCard
-              title="Full hosted SAP MCP setup"
-              badge="Recommended"
-              copy="Create or update a local SAP profile, configure wallet boundaries, policy limits, hosted MCP, and the native sap_payments bridge."
-              checked={draft.setupMode === 'full'}
-              onChange={() => update({ setupMode: 'full' })}
-            />
-            <ToggleCard
-              title="Repair payment bridge only"
-              badge="Already configured"
-              copy="Keep the existing SAP profile and only install or repair the local sap_payments MCP entry for Codex, Claude, Hermes, OpenClaw, or compatible agents."
-              checked={draft.setupMode === 'payments-only'}
-              onChange={() => update({ setupMode: 'payments-only' })}
-            />
           </div>
         </div>
       </>
@@ -530,6 +577,41 @@ function ToggleCard({ title, copy, badge, checked, onChange }: { title: string; 
   );
 }
 
+function ProfilesPanel({ profiles }: { profiles: ProfileStatus[] }) {
+  return (
+    <section className="profiles-panel" aria-label="Local SAP MCP profiles">
+      <div className="profiles-heading">
+        <span>Profiles</span>
+        <strong>{profiles.length}</strong>
+      </div>
+      {profiles.length === 0 ? (
+        <p>No local SAP profiles yet. Full setup will create one under the SAP MCP config directory.</p>
+      ) : (
+        <div className="profile-list">
+          {profiles.slice(0, 5).map((profile) => (
+            <article className={profile.active ? 'profile-card active' : 'profile-card'} key={profile.path}>
+              <div>
+                <strong>{profile.name}</strong>
+                {profile.active && <span>Active</span>}
+              </div>
+              <small>{profile.network ?? profile.mode ?? 'configured'}</small>
+              {profile.agentPubkey && <code>{shorten(profile.agentPubkey)}</code>}
+              <small className={profile.walletExists ? 'wallet-ok' : 'wallet-missing'}>
+                {profile.walletExists ? 'Wallet path exists' : profile.walletPath ? 'Wallet path missing' : 'No wallet path'}
+              </small>
+            </article>
+          ))}
+          {profiles.length > 5 && <small className="profile-more">+{profiles.length - 5} more profiles</small>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function shorten(value: string): string {
+  return value.length > 14 ? `${value.slice(0, 6)}...${value.slice(-6)}` : value;
+}
+
 function ReviewItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="review-item">
@@ -574,6 +656,27 @@ function DoneState({ result }: { result: WizardResult }) {
       </div>
       <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_payments_profile_current for local profile checks and sap_payments.sap_payments_call_paid_tool when a hosted tool returns payment_required." />
     </section>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m3 10.5 9-7 9 7" />
+      <path d="M5 9.5V21h14V9.5" />
+      <path d="M9 21v-6h6v6" />
+    </svg>
+  );
+}
+
+function UpdateIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 1-15.2 6.5" />
+      <path d="M3 12a9 9 0 0 1 15.2-6.5" />
+      <path d="M18 3v5h-5" />
+      <path d="M6 21v-5h5" />
+    </svg>
   );
 }
 

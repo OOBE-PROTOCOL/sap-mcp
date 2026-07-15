@@ -9,6 +9,18 @@ type RuntimeStatus = {
   recommendation: string;
 };
 
+type ProfileStatus = {
+  name: string;
+  path: string;
+  active: boolean;
+  mode?: WizardDraft['mode'];
+  rpcUrl?: string;
+  network?: string;
+  agentPubkey?: string;
+  walletPath?: string;
+  walletExists: boolean;
+};
+
 type WizardDraft = {
   setupMode: 'full' | 'payments-only';
   profileName: string;
@@ -51,7 +63,7 @@ type WizardResult = {
 
 interface Window {
   sapMcpWizard: {
-    getInitialState: () => Promise<{ draft: WizardDraft; runtimes: RuntimeStatus[] }>;
+    getInitialState: () => Promise<{ draft: WizardDraft; runtimes: RuntimeStatus[]; profiles: ProfileStatus[] }>;
     save: (draft: WizardDraft) => Promise<WizardResult>;
     openExternal: (url: string) => Promise<void>;
   };

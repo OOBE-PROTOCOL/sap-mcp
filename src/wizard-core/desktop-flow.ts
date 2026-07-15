@@ -1,6 +1,7 @@
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { defaults } from '../config/defaults.js';
-import { defaultGeneratedWalletPath } from '../config/paths.js';
+import { defaultGeneratedWalletPath, getPreferredConfigDir } from '../config/paths.js';
 import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '../config/setup.js';
 import {
   discoverMcpClientTargets,
@@ -51,6 +52,22 @@ export interface DesktopWizardRuntimeStatus {
   paths: string[];
   autoConfigurable: boolean;
   recommendation: string;
+}
+
+/**
+ * @name DesktopProfileStatus
+ * @description Safe local SAP MCP profile metadata shown by the desktop wizard without reading wallet bytes.
+ */
+export interface DesktopProfileStatus {
+  name: string;
+  path: string;
+  active: boolean;
+  mode?: SapMcpMode;
+  rpcUrl?: string;
+  network?: string;
+  agentPubkey?: string;
+  walletPath?: string;
+  walletExists: boolean;
 }
 
 /**
@@ -152,6 +169,114 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
       recommendation: 'Hosted SAP MCP plus local sap_payments bridge in OpenClaw MCP JSON.',
     },
   ];
+}
+
+/**
+ * @name getDesktopProfileStatuses
+ * @description Lists local SAP MCP config profiles without loading or exposing keypair material.
+ */
+export function getDesktopProfileStatuses(homeDir?: string): DesktopProfileStatus[] {
+  const configDir = homeDir ? join(homeDir, '.config', 'mcp-sap') : getPreferredConfigDir();
+  if (!existsSync(configDir)) {
+    return [];
+  }
+
+  const activeProfile = readActiveDesktopProfile(configDir);
+  const profiles: DesktopProfileStatus[] = [];
+  for (const file of readdirSync(configDir)) {
+    const profileName = profileNameFromConfigFile(file);
+    if (!profileName) {
+      continue;
+    }
+
+    const profilePath = join(configDir, file);
+    const config = readJsonObject(profilePath);
+    const walletPath = readStringField(config, 'walletPath');
+    const rpcUrl = readStringField(config, 'rpcUrl');
+    const mode = readModeField(config, 'mode');
+
+    profiles.push({
+      name: profileName,
+      path: profilePath,
+      active: profileName === activeProfile,
+      mode,
+      rpcUrl,
+      network: networkFromRpcUrl(rpcUrl),
+      agentPubkey: readStringField(config, 'agentPubkey'),
+      walletPath,
+      walletExists: Boolean(walletPath && existsSync(walletPath)),
+    });
+  }
+
+  profiles.sort((a, b) => {
+    if (a.active) return -1;
+    if (b.active) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return profiles;
+}
+
+function profileNameFromConfigFile(file: string): string | undefined {
+  if (file === 'config.json') {
+    return 'default';
+  }
+  if (file.startsWith('config-') && file.endsWith('.json')) {
+    return file.slice('config-'.length, -'.json'.length);
+  }
+  return undefined;
+}
+
+function readActiveDesktopProfile(configDir: string): string {
+  const activePath = join(configDir, '.active-profile');
+  if (!existsSync(activePath)) {
+    return 'default';
+  }
+  try {
+    return readFileSync(activePath, 'utf-8').trim() || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
+function readJsonObject(path: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function readStringField(record: Record<string, unknown>, field: string): string | undefined {
+  const value = record[field];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readModeField(record: Record<string, unknown>, field: string): SapMcpMode | undefined {
+  const value = readStringField(record, field);
+  if (
+    value === 'readonly'
+    || value === 'local-dev-keypair'
+    || value === 'external-signer'
+    || value === 'delegated-session'
+    || value === 'hosted-api'
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+function networkFromRpcUrl(rpcUrl?: string): string | undefined {
+  if (!rpcUrl) {
+    return undefined;
+  }
+  if (rpcUrl.includes('devnet')) {
+    return 'devnet';
+  }
+  if (rpcUrl.includes('testnet')) {
+    return 'testnet';
+  }
+  return 'mainnet-beta';
 }
 
 /**

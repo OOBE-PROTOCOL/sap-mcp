@@ -93,18 +93,36 @@ code {
   background: rgba(7, 17, 20, 0.88);
 }
 
-.brand-mark {
-  display: grid;
+.brand-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand-logo {
+  display: block;
   width: 56px;
   height: 56px;
-  place-items: center;
   border: 1px solid rgba(109, 235, 241, 0.35);
   border-radius: 14px;
-  background: linear-gradient(145deg, rgba(24, 212, 223, 0.28), rgba(255, 255, 255, 0.04));
-  color: var(--text);
-  font-size: 1.5rem;
-  font-weight: 800;
+  object-fit: cover;
   box-shadow: 0 18px 48px var(--shadow);
+}
+
+.update-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(109, 235, 241, 0.28);
+  border-radius: 999px;
+  background: rgba(16, 37, 43, 0.72);
+  color: var(--aqua-2);
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .eyebrow {
@@ -210,12 +228,18 @@ h1 {
   line-height: 1;
 }
 
+.sidebar-home-button svg,
+.update-button svg {
+  display: block;
+}
+
 .sidebar-home-button:hover {
   border-color: rgba(24, 212, 223, 0.62);
   background: rgba(24, 212, 223, 0.08);
 }
 
 .hosted-card,
+.profiles-panel,
 .panel,
 .runtime-card,
 .status-banner,
@@ -223,6 +247,105 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(13, 26, 31, 0.82);
+}
+
+.profiles-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.profiles-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.profiles-heading span {
+  color: var(--aqua-2);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.profiles-heading strong {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(109, 235, 241, 0.24);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.profiles-panel p,
+.profile-card small,
+.profile-more {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.42;
+}
+
+.profile-list {
+  display: grid;
+  max-height: 260px;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.profile-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(109, 235, 241, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 21, 25, 0.58);
+  padding: 10px;
+}
+
+.profile-card.active {
+  border-color: rgba(24, 212, 223, 0.54);
+  background: rgba(24, 212, 223, 0.08);
+}
+
+.profile-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-card span {
+  border: 1px solid rgba(124, 247, 188, 0.32);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 2px 6px;
+}
+
+.profile-card code {
+  font-size: 0.74rem;
+}
+
+.wallet-ok {
+  color: var(--success) !important;
+}
+
+.wallet-missing {
+  color: var(--warning) !important;
 }
 
 .hosted-card {
@@ -322,14 +445,16 @@ h1 {
 
 .setup-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.92fr) minmax(300px, 1fr);
   gap: 18px;
-  align-items: stretch;
+}
+
+.setup-options-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .setup-summary {
   display: flex;
-  min-height: 100%;
+  min-height: 0;
   flex-direction: column;
   gap: 18px;
   min-width: 0;
@@ -342,7 +467,7 @@ h1 {
 }
 
 .setup-summary h3 {
-  max-width: 20ch;
+  max-width: 28ch;
   margin-bottom: 0;
   font-size: clamp(1.85rem, 3.2vw, 2.55rem);
   line-height: 1.02;
@@ -409,6 +534,15 @@ h1 {
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+
+.setup-options-row .toggle-card {
+  min-height: 162px;
+  justify-content: space-between;
+}
+
+.setup-options-row .toggle-heading strong {
+  font-size: 1.05rem;
 }
 
 .toggle-card span {
@@ -698,10 +832,6 @@ button:disabled {
 }
 
 @media (max-width: 1180px) {
-  .setup-layout {
-    grid-template-columns: 1fr;
-  }
-
   .setup-summary h3 {
     max-width: 24ch;
   }
@@ -734,6 +864,10 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .profiles-panel {
+    max-height: none;
+  }
+
   .hosted-card {
     margin-top: 0;
   }
@@ -747,6 +881,7 @@ button:disabled {
 
   .form-grid,
   .setup-layout,
+  .setup-options-row,
   .choice-row,
   .runtime-grid,
   .review-grid {
