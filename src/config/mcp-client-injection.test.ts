@@ -15,6 +15,8 @@ import {
   installHostedPaymentBridgeConfigs,
   installX402PaidCallAddon,
   planMcpClientInjection,
+  resolveHostedPaymentBridgeContent,
+  validateHostedPaymentBridgeContent,
   type McpServerInjectionConfig,
   type McpClientTarget,
 } from './mcp-client-injection.js';
@@ -223,7 +225,8 @@ describe('MCP client injection', () => {
     expect(snippets.map(snippet => snippet.title)).toContain('Hermes Command Wrapper: x402_paid_call');
     expect(snippets.map(snippet => snippet.title)).toContain('Local MCP Tool Alternative');
     expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('[mcp_servers.sap_payments]');
-    expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]');
+    expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(snippets.find(snippet => snippet.title === 'Codex Payment Bridge TOML')?.content).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(snippets.find(snippet => snippet.title === 'Claude Code Payment Bridge Commands')?.content).toContain('claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp');
     expect(snippets.find(snippet => snippet.title === 'OpenClaw Payment Bridge JSON')?.content).toContain('"mcp"');
     expect(snippets.find(snippet => snippet.title === 'OpenClaw Payment Bridge JSON')?.content).toContain('"servers"');
@@ -240,9 +243,51 @@ describe('MCP client injection', () => {
     expect(built.nextContent).toContain('[mcp_servers.sap]');
     expect(built.nextContent).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(built.nextContent).toContain('[mcp_servers.sap_payments]');
-    expect(built.nextContent).toContain('SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"');
+    expect(built.nextContent).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(built.nextContent).not.toContain('SAP_MCP_RPC_URL');
     expect(built.nextContent).not.toContain('SAP_WALLET_PATH');
+  });
+
+  it('validates Codex hosted MCP plus local payment bridge config', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'codex',
+      label: 'Codex',
+      path: '/tmp/config.toml',
+      format: 'toml',
+      exists: true,
+    };
+    const built = buildCodexHostedPaymentBridgeContent('', undefined, 'win32');
+
+    expect(validateHostedPaymentBridgeContent(targetConfig, built.nextContent, 'win32')).toEqual([]);
+    expect(validateHostedPaymentBridgeContent(targetConfig, '[mcp_servers.sap]\ncommand = "npx.cmd"\nargs = ["-y", "mcp-remote@latest"]\n', 'win32'))
+      .toContain('Missing local sap_payments MCP bridge.');
+  });
+
+  it('auto-resolves legacy Codex mcp-remote config into native hosted plus sap_payments', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'codex',
+      label: 'Codex',
+      path: '/tmp/config.toml',
+      format: 'toml',
+      exists: true,
+    };
+    const resolved = resolveHostedPaymentBridgeContent(targetConfig, [
+      '[mcp_servers.sap]',
+      'command = "npx.cmd"',
+      'args = ["-y", "mcp-remote@latest", "https://mcp.sap.oobeprotocol.ai/mcp"]',
+      'startup_timeout_sec = 300',
+      '',
+    ].join('\n'), 'win32');
+
+    expect(resolved.resolvedIssues).toContain('Missing local sap_payments MCP bridge.');
+    expect(resolved.nextContent).toContain('[mcp_servers.sap]');
+    expect(resolved.nextContent).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(resolved.nextContent).toContain('[mcp_servers.sap_payments]');
+    expect(resolved.nextContent).toContain('command = "npx.cmd"');
+    expect(resolved.nextContent).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(resolved.nextContent).toContain('SAP_ALLOWED_TOOLS = "all"');
+    expect(resolved.nextContent).not.toContain('mcp-remote');
+    expect(validateHostedPaymentBridgeContent(targetConfig, resolved.nextContent, 'win32')).toEqual([]);
   });
 
   it('builds Claude JSON hosted MCP plus local payment bridge config', () => {
@@ -256,6 +301,10 @@ describe('MCP client injection', () => {
     const built = buildHostedPaymentBridgeContent(targetConfig, JSON.stringify({
       mcpServers: {
         sap: { command: 'old' },
+        filesystem: {
+          command: 'npx',
+          args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+        },
       },
     }));
     const parsed = JSON.parse(built.nextContent);
@@ -266,7 +315,12 @@ describe('MCP client injection', () => {
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
     expect(parsed.mcpServers.sap_payments.command).toMatch(/^npx/);
-    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
+    expect(parsed.mcpServers.filesystem).toEqual({
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+    });
     expect(JSON.stringify(parsed)).not.toContain('SAP_WALLET_PATH');
   });
 
@@ -342,7 +396,7 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
     expect(built.nextContent).toContain('  sap_payments:\n    command:');
-    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: all');
     expect(built.nextContent).toContain('  keep:\n    command: keep');
     expect(built.nextContent).not.toContain('command: old');
   });
@@ -369,7 +423,7 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: https://mcp.sap.oobeprotocol.ai/mcp\n      transport: streamable-http');
     expect(built.nextContent).toContain('    sap_payments:\n      command:');
-    expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: all');
     expect(built.nextContent).toContain('    keep:\n      command: keep');
     expect(built.nextContent).not.toContain('command: old');
   });
@@ -395,7 +449,8 @@ describe('MCP client injection', () => {
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
       transport: 'streamable-http',
     });
-    expect(parsed.mcp.servers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(parsed.mcp.servers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcp.servers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
     expect(parsed.mcpServers.keep.command).toBe('keep');
     expect(parsed.mcpServers.sap).toBeUndefined();
   });
@@ -411,7 +466,8 @@ describe('MCP client injection', () => {
 
     expect(results.map((result) => result.target.id)).toEqual(expect.arrayContaining(['codex', 'hermes']));
     expect(codex).toContain('[mcp_servers.sap_payments]');
-    expect(hermes.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost');
+    expect(hermes.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(hermes.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
   });
 
   it('discovers platform-specific Claude config paths', () => {
@@ -447,7 +503,8 @@ describe('MCP client injection', () => {
       '@oobe-protocol-labs/sap-mcp-server',
       'sap-mcp-server',
     ]);
-    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toContain('sap_payments_call_paid_tool');
+    expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
   });
 
   it('installs Windows Codex hosted payment bridge config with npx.cmd', () => {
@@ -462,7 +519,8 @@ describe('MCP client injection', () => {
     expect(written).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(written).toContain('[mcp_servers.sap_payments]');
     expect(written).toContain('command = "npx.cmd"');
-    expect(written).toContain('SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool');
+    expect(written).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('SAP_WALLET_PATH');
     expect(written).not.toContain('SAP_MCP_RPC_URL');
   });
@@ -481,7 +539,8 @@ describe('MCP client injection', () => {
     expect(result.backupPath).toBeDefined();
     expect(written).toContain('[mcp_servers.sap]');
     expect(written).toContain('[mcp_servers.sap_payments]');
-    expect(written).toContain('enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]');
+    expect(written).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('command = "old"');
   });
 });

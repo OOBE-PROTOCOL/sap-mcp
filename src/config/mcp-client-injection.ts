@@ -101,6 +101,16 @@ export interface McpClientAddonInstallResult {
   files: string[];
 }
 
+/**
+ * @name HostedPaymentBridgeResolution
+ * @description Result produced after building and auto-resolving hosted SAP MCP plus local sap_payments config.
+ */
+export interface HostedPaymentBridgeResolution {
+  nextContent: string;
+  hadSapConfig: boolean;
+  resolvedIssues: string[];
+}
+
 type JsonRecord = Record<string, unknown>;
 type SupportedPlatform = NodeJS.Platform;
 
@@ -108,15 +118,6 @@ const SAP_SERVER_NAME = 'sap';
 const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
 const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
 const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
-const X402_PAYMENT_BRIDGE_TOOLS = [
-  'sap_payments_call_paid_tool',
-  'sap_payments_prepare_challenge',
-  'sap_payments_sign_challenge',
-  'sap_payments_verify_receipt',
-  'sap_x402_paid_call',
-  'sap_profile_current',
-  'sap_x402_estimate_cost',
-] as const;
 /**
  * @name HOSTED_SAP_MCP_URL
  * @description Public OOBE hosted SAP MCP Streamable HTTP endpoint used in manual client setup snippets.
@@ -347,7 +348,8 @@ function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatfo
     ],
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
-      SAP_ALLOWED_TOOLS: X402_PAYMENT_BRIDGE_TOOLS.join(','),
+      SAP_MCP_PAYMENTS_BRIDGE_ONLY: 'true',
+      SAP_ALLOWED_TOOLS: 'all',
       SAP_LOG_LEVEL: 'info',
     },
   };
@@ -1105,12 +1107,10 @@ function hostedTomlServerBlock(hosted: HostedMcpServerConfig): string {
  */
 function codexPaymentBridgeTomlBlock(canonical: McpServerInjectionConfig): string {
   const args = `[${canonical.args.map((arg) => JSON.stringify(arg)).join(', ')}]`;
-  const enabledTools = `[${X402_PAYMENT_BRIDGE_TOOLS.map((tool) => JSON.stringify(tool)).join(', ')}]`;
   const lines = [
     `[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`,
     `command = ${JSON.stringify(canonical.command)}`,
     `args = ${args}`,
-    `enabled_tools = ${enabledTools}`,
     'tool_timeout_sec = 300',
   ];
 
@@ -1121,6 +1121,115 @@ function codexPaymentBridgeTomlBlock(canonical: McpServerInjectionConfig): strin
   }
 
   return lines.join('\n');
+}
+
+/**
+ * @name getCodexMcpServerSection
+ * @description Extracts a Codex MCP server section and nested env subsection for targeted validation.
+ */
+function getCodexMcpServerSection(content: string, serverName: string): string {
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `[mcp_servers.${serverName}]`);
+  if (start === -1) {
+    return '';
+  }
+
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end]?.trim() ?? '';
+    if (line.startsWith('[mcp_servers.') && !line.startsWith(`[mcp_servers.${serverName}.`)) {
+      break;
+    }
+    if (line.startsWith('[') && !line.startsWith(`[mcp_servers.${serverName}.`)) {
+      break;
+    }
+    end += 1;
+  }
+
+  return lines.slice(start, end).join('\n');
+}
+
+/**
+ * @name validateHostedPaymentBridgeContent
+ * @description Verifies that a runtime config contains both hosted SAP MCP and the local sap_payments bridge.
+ */
+export function validateHostedPaymentBridgeContent(
+  target: McpClientTarget,
+  content: string,
+  platform: SupportedPlatform = process.platform,
+): string[] {
+  const issues: string[] = [];
+  const expectedNpx = getNpxCommand(platform);
+
+  if (!content.includes(SAP_PAYMENT_BRIDGE_SERVER_NAME)) {
+    issues.push('Missing local sap_payments MCP bridge.');
+  }
+  if (!content.includes(HOSTED_SAP_MCP_URL)) {
+    issues.push(`Missing hosted SAP MCP URL ${HOSTED_SAP_MCP_URL}.`);
+  }
+  if (!content.includes('SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE')) {
+    issues.push('Missing SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE=false in local bridge env.');
+  }
+  const bridgeOnlyEnabled = content.includes('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"')
+    || content.includes('"SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true"')
+    || content.includes('SAP_MCP_PAYMENTS_BRIDGE_ONLY: "true"')
+    || content.includes('SAP_MCP_PAYMENTS_BRIDGE_ONLY: true');
+  if (!bridgeOnlyEnabled) {
+    issues.push('Missing SAP_MCP_PAYMENTS_BRIDGE_ONLY=true for the local payment bridge process.');
+  }
+  if (!content.includes('SAP_ALLOWED_TOOLS')) {
+    issues.push('Missing SAP_ALLOWED_TOOLS allow-list for the local payment bridge.');
+  }
+  const allowsAllTools = content.includes('SAP_ALLOWED_TOOLS = "all"')
+    || content.includes('"SAP_ALLOWED_TOOLS": "all"')
+    || content.includes('SAP_ALLOWED_TOOLS: all')
+    || content.includes('SAP_ALLOWED_TOOLS: "all"');
+  if (!allowsAllTools) {
+    issues.push('SAP_ALLOWED_TOOLS must be all because the bridge process is already payments-only.');
+  }
+  if (target.id === 'codex') {
+    if (!content.includes(`[mcp_servers.${SAP_SERVER_NAME}]`)) {
+      issues.push('Missing Codex [mcp_servers.sap] hosted server block.');
+    }
+    if (!content.includes(`[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`)) {
+      issues.push('Missing Codex [mcp_servers.sap_payments] local bridge block.');
+    }
+    if (!content.includes(`command = ${JSON.stringify(expectedNpx)}`)) {
+      issues.push(`Codex local bridge must use ${expectedNpx} on ${platform}.`);
+    }
+    const codexSapSection = getCodexMcpServerSection(content, SAP_SERVER_NAME);
+    const codexPaymentBridgeSection = getCodexMcpServerSection(content, SAP_PAYMENT_BRIDGE_SERVER_NAME);
+    if (codexSapSection.includes('mcp-remote') || codexPaymentBridgeSection.includes('mcp-remote')) {
+      issues.push('Legacy mcp-remote wrapper remains; Codex should use native Streamable HTTP plus sap_payments.');
+    }
+  }
+
+  return Array.from(new Set(issues));
+}
+
+/**
+ * @name resolveHostedPaymentBridgeContent
+ * @description Builds hosted SAP MCP plus local sap_payments config and auto-repairs stale runtime config.
+ */
+export function resolveHostedPaymentBridgeContent(
+  target: McpClientTarget,
+  content: string,
+  platform: SupportedPlatform = process.platform,
+): HostedPaymentBridgeResolution {
+  const preExistingIssues = content.trim()
+    ? validateHostedPaymentBridgeContent(target, content, platform)
+    : [];
+  const built = buildHostedPaymentBridgeContent(target, content, platform);
+  const builtIssues = validateHostedPaymentBridgeContent(target, built.nextContent, platform);
+  if (builtIssues.length === 0) {
+    return {
+      nextContent: built.nextContent,
+      hadSapConfig: built.hadSapConfig,
+      resolvedIssues: preExistingIssues,
+    };
+  }
+
+  throw new Error(`${target.label} hosted payment bridge auto-resolver failed without writing changes: ${builtIssues.join(' ')}`);
 }
 
 /**
@@ -1242,23 +1351,25 @@ export function installCodexHostedPaymentBridgeConfig(
     exists: existsSync(join(homeDir, '.codex', 'config.toml')),
   };
   const before = readTargetContent(target);
-  const built = buildCodexHostedPaymentBridgeContent(before, HOSTED_SAP_MCP_URL, platform);
+  const resolved = resolveHostedPaymentBridgeContent(target, before, platform);
   const backupPath = target.exists ? `${target.path}.bak-${Date.now()}` : undefined;
 
   mkdirSync(dirname(target.path), { recursive: true });
   if (backupPath) {
     writeFileSync(backupPath, before, 'utf-8');
   }
-  writeFileSync(target.path, built.nextContent, 'utf-8');
+  writeFileSync(target.path, resolved.nextContent, 'utf-8');
 
   return {
     target,
-    mode: built.hadSapConfig ? 'override' : 'merge',
+    mode: resolved.hadSapConfig ? 'override' : 'merge',
     written: true,
     backupPath,
-    message: built.hadSapConfig
-      ? 'Updated Codex hosted SAP MCP and local x402 payment bridge config'
-      : 'Created Codex hosted SAP MCP and local x402 payment bridge config',
+    message: resolved.resolvedIssues.length > 0
+      ? `Auto-repaired Codex hosted SAP MCP and local x402 payment bridge config (${resolved.resolvedIssues.length} issue${resolved.resolvedIssues.length === 1 ? '' : 's'} fixed)`
+      : resolved.hadSapConfig
+        ? 'Updated Codex hosted SAP MCP and local x402 payment bridge config'
+        : 'Created Codex hosted SAP MCP and local x402 payment bridge config',
   };
 }
 
@@ -1303,23 +1414,25 @@ export function installHostedPaymentBridgeConfig(
     exists: existsSync(target.path),
   };
   const before = readTargetContent(currentTarget);
-  const built = buildHostedPaymentBridgeContent(currentTarget, before, platform);
+  const resolved = resolveHostedPaymentBridgeContent(currentTarget, before, platform);
   const backupPath = currentTarget.exists ? `${currentTarget.path}.bak-${Date.now()}` : undefined;
 
   mkdirSync(dirname(currentTarget.path), { recursive: true, mode: 0o700 });
   if (backupPath) {
     writeFileSync(backupPath, before, 'utf-8');
   }
-  writeFileSync(currentTarget.path, built.nextContent, { encoding: 'utf-8', mode: 0o600 });
+  writeFileSync(currentTarget.path, resolved.nextContent, { encoding: 'utf-8', mode: 0o600 });
 
   return {
     target: currentTarget,
-    mode: built.hadSapConfig ? 'override' : 'merge',
+    mode: resolved.hadSapConfig ? 'override' : 'merge',
     written: true,
     backupPath,
-    message: built.hadSapConfig
-      ? `Repaired hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`
-      : `Installed hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`,
+    message: resolved.resolvedIssues.length > 0
+      ? `Auto-repaired hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label} (${resolved.resolvedIssues.length} issue${resolved.resolvedIssues.length === 1 ? '' : 's'} fixed)`
+      : resolved.hadSapConfig
+        ? `Repaired hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`
+        : `Installed hosted SAP MCP and local x402 payment bridge config in ${currentTarget.label}`,
   };
 }
 

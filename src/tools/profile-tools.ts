@@ -69,7 +69,7 @@ interface HostedAccountlessProfileSummary {
   signerConfigured: false;
   accountModel: 'hosted-remote-accountless';
   localProfileVisibility: 'not-visible-to-hosted-server';
-  localProfileTool: 'sap_payments.sap_profile_current';
+  localProfileTool: 'sap_payments.sap_payments_profile_current';
   secretMaterial: 'never-exposed';
 }
 
@@ -109,7 +109,7 @@ interface HostedRemoteRuntimeSummary {
   canonicalEndpoint: string;
   accountModel: 'hosted-remote-accountless';
   localProfileVisibility: 'not-visible-to-hosted-server';
-  localProfileTool: 'sap_payments.sap_profile_current';
+  localProfileTool: 'sap_payments.sap_payments_profile_current';
   serverRole: 'mcp-transport-payment-verifier-tool-executor';
   serverStoresUserKeypairs: false;
   serverSignerConfigured: boolean;
@@ -224,7 +224,7 @@ function buildHostedAccountlessProfileSummary(context: SapMcpContext): HostedAcc
     signerConfigured: false,
     accountModel: 'hosted-remote-accountless',
     localProfileVisibility: 'not-visible-to-hosted-server',
-    localProfileTool: 'sap_payments.sap_profile_current',
+    localProfileTool: 'sap_payments.sap_payments_profile_current',
     secretMaterial: 'never-exposed',
   };
 }
@@ -287,7 +287,7 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
     canonicalEndpoint: HOSTED_MCP_URL,
     accountModel: 'hosted-remote-accountless',
     localProfileVisibility: 'not-visible-to-hosted-server',
-    localProfileTool: 'sap_payments.sap_profile_current',
+    localProfileTool: 'sap_payments.sap_payments_profile_current',
     serverRole: 'mcp-transport-payment-verifier-tool-executor',
     serverStoresUserKeypairs: false,
     serverSignerConfigured: Boolean(context.signer),
@@ -307,7 +307,7 @@ function buildHostedRemoteRuntime(context: SapMcpContext): HostedRemoteRuntimeSu
       'writes unavailable',
       'remote MCP broken',
     ],
-    agentInstruction: 'When connected to hosted SAP MCP, report that the hosted server is accountless and OOBE does not custody user keys. Do not report profile "default" as the user local profile. If the user asks for their local profile, wallet, or signer status, call the local sap_payments.sap_profile_current bridge when available. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
+    agentInstruction: 'When connected to hosted SAP MCP, report that the hosted server is accountless and OOBE does not custody user keys. Do not report profile "default" as the user local profile. If the user asks for their local profile, wallet, or signer status, call the local sap_payments.sap_payments_profile_current bridge when available. Read tools are immediately available; paid and value-moving tools are available through x402/pay.sh plus the user local SAP profile or external signer. Do not switch to local stdio unless the user explicitly asks.',
   };
 }
 
@@ -387,7 +387,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
               ? 'available-through-configured-signer-and-policy'
               : 'not-available-without-configured-signer',
           localProfileVisibleToHostedServer: !hostedAccountless,
-          localProfileTool: hostedAccountless ? 'sap_payments.sap_profile_current' : undefined,
+          localProfileTool: hostedAccountless ? 'sap_payments.sap_payments_profile_current' : undefined,
           secretMaterial: 'never-exposed',
         },
         identityConsistency: buildIdentityConsistency(context),
@@ -414,7 +414,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           accountModel: 'hosted-remote-accountless',
           profiles: [],
           hostedRemote: buildHostedRemoteRuntime(context),
-          instruction: 'Hosted SAP MCP cannot see the caller local profiles. Use the local sap_payments.sap_profile_current bridge to inspect the user SAP profile, wallet, and signer status.',
+          instruction: 'Hosted SAP MCP cannot see the caller local profiles. Use the local sap_payments.sap_payments_profile_current bridge to inspect the user SAP profile, wallet, and signer status.',
         }, null, 2));
       }
 
@@ -451,8 +451,8 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
             network: getNetworkFromRpcUrl(context.config.rpcUrl),
             accountModel: 'hosted-remote-accountless',
             localProfileVisibility: 'not-visible-to-hosted-server',
-            localProfileTool: 'sap_payments.sap_profile_current',
-            instruction: 'Hosted SAP MCP is non-custodial and cannot read the caller local profile public key. Call the local sap_payments.sap_profile_current bridge for the user wallet and agent public key.',
+            localProfileTool: 'sap_payments.sap_payments_profile_current',
+            instruction: 'Hosted SAP MCP is non-custodial and cannot read the caller local profile public key. Call the local sap_payments.sap_payments_profile_current bridge for the user wallet and agent public key.',
             secretMaterial: 'never-exposed',
           }, null, 2));
         }

@@ -572,7 +572,7 @@ function DoneState({ result }: { result: WizardResult }) {
           </article>
         ))}
       </div>
-      <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_payments_call_paid_tool when a hosted SAP MCP tool returns payment_required." />
+      <StatusBanner tone="success" title="Next command for paid tools" text="Ask the agent to use sap_payments.sap_payments_profile_current for local profile checks and sap_payments.sap_payments_call_paid_tool when a hosted tool returns payment_required." />
     </section>
   );
 }

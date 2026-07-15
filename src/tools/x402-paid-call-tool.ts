@@ -8,6 +8,7 @@ import type { PaymentRequired } from '@x402/core/types';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
+import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import {
   executeX402PaidCall,
   inspectX402Receipt,
@@ -111,11 +112,44 @@ const paidCallOutputSchema = {
   },
 } as const;
 
+function redactUrl(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.search) {
+      url.search = '?redacted=true';
+    }
+    return url.toString();
+  } catch {
+    return value.includes('?') ? `${value.split('?')[0]}?redacted=true` : value;
+  }
+}
+
+function networkFromRpcUrl(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  if (value.includes('mainnet')) {
+    return 'mainnet-beta';
+  }
+  if (value.includes('testnet')) {
+    return 'testnet';
+  }
+  if (value.includes('localhost') || value.includes('127.0.0.1') || value.includes('localnet')) {
+    return 'localnet';
+  }
+  return 'devnet';
+}
+
 /**
  * @name registerX402PaidCallTool
  * @description Registers local hosted-payment tools for agents that need to resolve x402-gated SAP MCP calls.
  */
 export function registerX402PaidCallTool(server: Server, _context: SapMcpContext): void {
+  registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
@@ -123,6 +157,62 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
+}
+
+function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpContext): void {
+  registerTool(
+    server,
+    'sap_payments_profile_current',
+    {
+      title: 'Show Local SAP Payments Profile',
+      description: 'Return the local SAP MCP profile used by the sap_payments bridge for hosted x402 paid/write calls. Use this instead of the remote sap_profile_current when checking the caller wallet, signer, active profile, and local payment readiness. Never returns keypair bytes.',
+      inputSchema: {},
+      outputSchema: {
+        type: 'object',
+        properties: {
+          serverRole: { type: 'string', description: 'Role of this local MCP server.' },
+          activeProfile: { type: 'string', description: 'Profile selected by ~/.config/mcp-sap/.active-profile.' },
+          configPath: { type: 'string', description: 'Local profile config path used by the bridge.' },
+          mode: { type: 'string', description: 'SAP MCP mode from the local profile.' },
+          network: { type: 'string', description: 'Derived Solana network for the local profile RPC.' },
+          rpcUrl: { type: 'string', description: 'Redacted RPC URL used by the local profile.' },
+          programId: { type: 'string', description: 'SAP program id configured by the local profile.' },
+          walletPath: { type: 'string', description: 'Configured local wallet path. File contents are never returned.' },
+          walletPathConfigured: { type: 'boolean', description: 'Whether a wallet path is configured.' },
+          signerConfigured: { type: 'boolean', description: 'Whether the local bridge resolved a signer.' },
+          signerPublicKey: { type: 'string', description: 'Public key of the local signer when available.' },
+          secretMaterial: { type: 'string', description: 'Secret handling guarantee.' },
+          recommendedPaidTool: { type: 'string', description: 'Tool agents should call for hosted paid/write calls.' },
+        },
+        required: ['serverRole', 'activeProfile', 'configPath', 'mode', 'walletPathConfigured', 'signerConfigured', 'secretMaterial', 'recommendedPaidTool'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => createTextResponse(JSON.stringify({
+      serverRole: 'local-sap-payments-bridge',
+      activeProfile: getActiveProfile(),
+      configPath: getProfileConfigPath(getActiveProfile()),
+      mode: context.config.mode,
+      network: networkFromRpcUrl(context.config.rpcUrl),
+      rpcUrl: redactUrl(context.config.rpcUrl),
+      programId: context.config.programId,
+      agentPubkey: context.config.agentPubkey,
+      walletPath: context.config.walletPath,
+      walletPathConfigured: Boolean(context.config.walletPath),
+      signerConfigured: Boolean(context.signer),
+      signerPublicKey: context.signer?.publicKey.toBase58(),
+      localProfileVisibility: 'visible-to-local-sap-payments-bridge',
+      hostedRemoteVisibility: 'not-visible-to-hosted-accountless-server',
+      secretMaterial: 'keypair-bytes-never-returned',
+      recommendedPaidTool: 'sap_payments_call_paid_tool',
+      agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. The hosted SAP MCP server is intentionally accountless.',
+    }, null, 2)),
+  );
 }
 
 function registerPaymentsCallPaidTool(server: Server, name: 'sap_payments_call_paid_tool' | 'sap_x402_paid_call'): void {

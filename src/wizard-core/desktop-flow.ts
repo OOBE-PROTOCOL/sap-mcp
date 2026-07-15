@@ -1,3 +1,4 @@
+import { join } from 'path';
 import { defaults } from '../config/defaults.js';
 import { defaultGeneratedWalletPath } from '../config/paths.js';
 import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '../config/setup.js';
@@ -192,7 +193,11 @@ export function validateDesktopWizardDraft(draft: DesktopWizardDraft): string[] 
  * @name saveDesktopWizardDraft
  * @description Persists a desktop wizard draft and installs selected runtime integrations.
  */
-export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise<DesktopWizardResult> {
+export async function saveDesktopWizardDraft(
+  draft: DesktopWizardDraft,
+  homeDir?: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<DesktopWizardResult> {
   const errors = validateDesktopWizardDraft(draft);
   if (errors.length > 0) {
     throw new Error(errors.join('\n'));
@@ -223,7 +228,7 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
     selectedRuntimes.add('codex');
   }
 
-  for (const result of installHostedPaymentBridgeConfigs(Array.from(selectedRuntimes))) {
+  for (const result of installHostedPaymentBridgeConfigs(Array.from(selectedRuntimes), homeDir, platform)) {
     runtimeActions.push({
       runtime: result.target.label,
       status: 'configured',
@@ -234,7 +239,7 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
   }
 
   if (runtimeActions.length === 0 && draft.setupMode === 'full') {
-    const codex = installCodexHostedPaymentBridgeConfig();
+    const codex = installCodexHostedPaymentBridgeConfig(homeDir, platform);
     runtimeActions.push({
       runtime: 'Codex',
       status: 'configured',
@@ -245,7 +250,7 @@ export async function saveDesktopWizardDraft(draft: DesktopWizardDraft): Promise
   }
 
   if (draft.installAddonBundle) {
-    const addon = installX402PaidCallAddon();
+    const addon = installX402PaidCallAddon(homeDir ? join(homeDir, '.config', 'mcp-sap', 'addons', 'x402-paid-call') : undefined);
     runtimeActions.push({
       runtime: 'SAP MCP payment bridge bundle',
       status: 'installed',

@@ -88,6 +88,7 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_revoke_attestation',
   ],
   'payments:read': [
+    'sap_payments_profile_current',
     'sap_payments_prepare_challenge',
     'sap_payments_verify_receipt',
     'sap_x402_estimate_cost',

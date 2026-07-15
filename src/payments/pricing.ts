@@ -71,6 +71,7 @@ const FREE_TOOLS = new Set([
   'sap_skills_bundle',
   'sap_skills_install',
   'sap_get_network_overview',
+  'sap_payments_profile_current',
   'sap_payments_prepare_challenge',
   'sap_payments_sign_challenge',
   'sap_payments_call_paid_tool',

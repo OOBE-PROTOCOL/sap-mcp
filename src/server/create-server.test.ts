@@ -65,7 +65,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(273);
+    expect(names).toHaveLength(274);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -105,6 +105,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_skills_bundle');
     expect(names).toContain('sap_skills_install');
     expect(names).toContain('sap_x402_estimate_cost');
+    expect(names).toContain('sap_payments_profile_current');
     expect(names).toContain('sap_payments_call_paid_tool');
     expect(names).toContain('sap_payments_prepare_challenge');
     expect(names).toContain('sap_payments_sign_challenge');
@@ -121,6 +122,33 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_chat_read_all');
     expect(names).toContain('sap_chat_status');
     expect(names).toContain('sap_chat_seal_room');
+  });
+
+  it('limits the local sap_payments bridge process to payment helper tools', async () => {
+    const previous = process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+    process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = 'true';
+    try {
+      const server = registeredServer(await createSapMcpServer(baseConfig()));
+      const names = (server.tools ?? []).map((tool) => tool.name);
+
+      expect(names).toEqual([
+        'sap_payments_profile_current',
+        'sap_payments_call_paid_tool',
+        'sap_payments_prepare_challenge',
+        'sap_payments_sign_challenge',
+        'sap_payments_verify_receipt',
+        'sap_x402_paid_call',
+      ]);
+      expect(names).not.toContain('jupiter_swap');
+      expect(names).not.toContain('sap_register_agent');
+      expect(names).not.toContain('sol_get_balance');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+      } else {
+        process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = previous;
+      }
+    }
   });
 
   it('adds SAP usage context to bridge, Metaplex, and agent registry tools', async () => {
@@ -222,13 +250,13 @@ describe('createSapMcpServer', () => {
       configPath: null,
       accountModel: 'hosted-remote-accountless',
       localProfileVisibility: 'not-visible-to-hosted-server',
-      localProfileTool: 'sap_payments.sap_profile_current',
+      localProfileTool: 'sap_payments.sap_payments_profile_current',
     });
     expect(profile.hostedRemote).toMatchObject({
       canonicalEndpoint: 'https://mcp.sap.oobeprotocol.ai/mcp',
       accountModel: 'hosted-remote-accountless',
       localProfileVisibility: 'not-visible-to-hosted-server',
-      localProfileTool: 'sap_payments.sap_profile_current',
+      localProfileTool: 'sap_payments.sap_payments_profile_current',
       serverStoresUserKeypairs: false,
       signerStatus: 'server-non-custodial-user-signer-required',
       writeAccess: 'available-after-user-signature-and-payment-proof',
@@ -238,6 +266,7 @@ describe('createSapMcpServer', () => {
     expect(profile.hostedRemote?.doNotSummarizeAs).toContain('signer not configured');
     expect(profile.hostedRemote?.doNotSummarizeAs).toContain('read-only only');
     const toolNames = (server.tools ?? []).map((tool) => tool.name);
+    expect(toolNames).not.toContain('sap_payments_profile_current');
     expect(toolNames).not.toContain('sap_payments_call_paid_tool');
     expect(toolNames).not.toContain('sap_payments_prepare_challenge');
     expect(toolNames).not.toContain('sap_payments_sign_challenge');

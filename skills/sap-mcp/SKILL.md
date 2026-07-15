@@ -126,7 +126,7 @@ Hosted remote is accountless. If `sap_profile_current` returns
 `accountModel: hosted-remote-accountless`, do not describe `default` as the
 user's profile and do not infer the user's wallet from the hosted server. To
 inspect the local user profile, wallet, or signer status, call the local
-`sap_payments.sap_profile_current` bridge when it is configured.
+`sap_payments.sap_payments_profile_current` bridge when it is configured.
 
 Basic wallet reads are free on hosted SAP MCP. Call `sol_get_balance`,
 `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on the hosted

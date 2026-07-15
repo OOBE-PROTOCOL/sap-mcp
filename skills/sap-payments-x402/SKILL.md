@@ -7,6 +7,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 
 - `sap_x402_prepare_payment`
 - `sap_x402_get_balance`
+- `sap_payments_profile_current`
 - `sap_payments_call_paid_tool`
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`

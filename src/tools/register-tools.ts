@@ -25,6 +25,12 @@ import { registerMagicBlockTools } from './magicblock-tools.js';
  */
 export async function registerTools(server: Server, context: SapMcpContext): Promise<void> {
   logger.debug('Registering tools');
+
+  if (process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY === 'true') {
+    registerX402PaidCallTool(server, context);
+    logger.debug('Payments bridge tools registered', { count: getRegisteredTools(server).length });
+    return;
+  }
   
   // Register SAP SDK tools backed by @oobe-protocol-labs/synapse-sap-sdk.
   registerSapSdkTools(server, context);
