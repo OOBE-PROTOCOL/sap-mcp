@@ -71,6 +71,47 @@ function renderSolanaMark(): string {
 }
 
 /**
+ * @name renderDefiLogoRail
+ * @description Renders a compact animated rail for Solana DeFi protocol names exposed by SAP MCP.
+ */
+function renderDefiLogoRail(): string {
+  const protocols = ['JUP', 'RAY', 'ORCA', 'MET', 'DRIFT', 'PYTH', 'DAS', 'MPL'];
+  const items = [...protocols, ...protocols];
+
+  return `
+    <div class="protocol-logo-rail" aria-label="Integrated Solana protocol logos">
+      <div>
+        ${items.map((protocol) => `<span>${escapeHtml(protocol)}</span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * @name renderProtocolMedia
+ * @description Renders protocol-specific visual affordances inside the Protocol surface bento cards.
+ */
+function renderProtocolMedia(key: string): string {
+  if (key === 'defi') {
+    return renderDefiLogoRail();
+  }
+
+  if (key === 'rpc') {
+    return `<div class="protocol-avatar solana-avatar">${renderSolanaMark()}</div>`;
+  }
+
+  if (key === 'sap') {
+    return `
+      <div class="protocol-avatar sap-avatar">
+        <img src="/favicon.png" width="68" height="68" alt="SAP MCP">
+      </div>
+    `;
+  }
+
+  return '';
+}
+
+/**
  * @name renderNavGlyph
  * @description Renders compact glyphs for navigation dropdown rows without client-side icon dependencies.
  */
@@ -418,14 +459,14 @@ export function renderMetrics(model: LandingPageModel): string {
  */
 export function renderFeatureEngine(): string {
   const features = [
-    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora, Drift and market data flows.', 'wide'],
-    ['Solana RPC', 'Balances, token accounts, DAS assets, transactions, programs and simulation.', ''],
-    ['SAP Protocol', 'Agent registry, discovery, reputation, escrow, settlement and attestations.', 'tall'],
-    ['Identity', 'SNS domain checks, reverse lookup, linked identity and agent profile context.', ''],
-    ['Payments', 'x402 challenge tools, pay.sh provider metadata, receipts and paid-call replay.', 'wide'],
-    ['Policy', 'Local limits and optional Bento Guard policy checks before sensitive execution.', ''],
-    ['Skills', 'Bundled agent skills explain how to choose tools, fetch context and avoid waste.', ''],
-    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', ''],
+    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora, Drift and market data flows.', 'wide', 'defi'],
+    ['Solana RPC', 'Balances, token accounts, DAS assets, transactions, programs and simulation.', '', 'rpc'],
+    ['SAP Protocol', 'Agent registry, discovery, reputation, escrow, settlement and attestations.', 'tall', 'sap'],
+    ['Identity', 'SNS domain checks, reverse lookup, linked identity and agent profile context.', '', 'identity'],
+    ['Payments', 'x402 challenge tools, pay.sh provider metadata, receipts and paid-call replay.', 'wide', 'payments'],
+    ['Policy', 'Local limits and optional Bento Guard policy checks before sensitive execution.', '', 'policy'],
+    ['Skills', 'Bundled agent skills explain how to choose tools, fetch context and avoid waste.', '', 'skills'],
+    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', '', 'remote'],
   ] as const;
 
   return `
@@ -436,12 +477,56 @@ export function renderFeatureEngine(): string {
         <p>SAP MCP exposes Solana DeFi protocols, Solana RPC methods, and Synapse Agent Protocol operations through one MCP-compatible interface.</p>
       </div>
       <div class="protocol-bento">
-        ${features.map(([label, description, size], index) => `
-          <article class="protocol-card ${escapeHtml(size)}">
+        ${features.map(([label, description, size, key], index) => `
+          <article class="protocol-card ${escapeHtml(size)} protocol-${escapeHtml(key)}">
             <span class="protocol-index">${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
+            ${renderProtocolMedia(key)}
             <strong>${escapeHtml(label)}</strong>
             <p>${escapeHtml(description)}</p>
           </article>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * @name renderRegistryListings
+ * @description Renders public marketplace and registry listings where SAP MCP can be verified.
+ */
+export function renderRegistryListings(): string {
+  const listings = [
+    [
+      'Smithery',
+      'MCP server marketplace listing with hosted server metadata, tools, prompts, and configuration UX.',
+      'https://smithery.ai/servers/oobe-protocol/sap-mcp',
+      'SM',
+    ],
+    [
+      'Official MCP Registry',
+      'Canonical Model Context Protocol registry entry for ai.oobeprotocol.sap.mcp/sap-mcp.',
+      'https://registry.modelcontextprotocol.io/?q=ai.oobeprotocol.sap.mcp%2Fsap-mcp',
+      'MCP',
+    ],
+  ] as const;
+
+  return `
+    <section class="section registry-section" aria-labelledby="registry-title">
+      <div class="section-head">
+        <p class="eyebrow" id="registry-title">Listed and verifiable</p>
+        <h2>Discover SAP MCP from trusted MCP indexes.</h2>
+        <p>Hosted metadata is public, crawler-friendly, and linked from registries agents already inspect.</p>
+      </div>
+      <div class="registry-grid">
+        ${listings.map(([name, description, href, logo]) => `
+          <a class="registry-card" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">
+            <span class="registry-logo registry-logo-${escapeHtml(logo.toLowerCase())}">${escapeHtml(logo)}</span>
+            <span class="registry-copy">
+              <strong>${escapeHtml(name)}</strong>
+              <small>${escapeHtml(description)}</small>
+            </span>
+            <span class="registry-status">Verified</span>
+          </a>
         `).join('')}
       </div>
     </section>

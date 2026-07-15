@@ -756,10 +756,10 @@ export const LANDING_CSS = `
       linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.032)),
       rgba(255,255,255,.035);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
-    animation: bentoDrift 14s ease-in-out infinite;
+    animation: surfaceRise .34s cubic-bezier(0, 0, .2, 1) both, bentoDrift 14s ease-in-out infinite;
   }
-  .protocol-card:nth-child(2n) { animation-delay: -4s; }
-  .protocol-card:nth-child(3n) { animation-delay: -8s; }
+  .protocol-card:nth-child(2n) { animation-delay: .06s, -4s; }
+  .protocol-card:nth-child(3n) { animation-delay: .12s, -8s; }
   .protocol-card::before {
     content: "";
     position: absolute;
@@ -767,12 +767,15 @@ export const LANDING_CSS = `
     width: 180px;
     height: 180px;
     border-radius: 54px;
-    background: linear-gradient(135deg, rgba(40,216,232,.26), rgba(140,233,154,.08));
+    background: linear-gradient(135deg, rgba(40,216,232,.2), rgba(140,233,154,.06));
     transform: rotate(18deg);
-    opacity: .55;
+    opacity: .1;
   }
   .protocol-card.wide { grid-column: span 2; }
   .protocol-card.tall { grid-column: span 1; grid-row: span 2; }
+  .protocol-sap {
+    min-height: 534px;
+  }
   .protocol-index {
     position: absolute;
     top: 18px;
@@ -787,6 +790,63 @@ export const LANDING_CSS = `
     background: rgba(255,255,255,.045);
     font-size: 12px;
     font-weight: 900;
+  }
+  .protocol-logo-rail {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    width: min(270px, 48%);
+    overflow: hidden;
+    mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+    z-index: 2;
+  }
+  .protocol-logo-rail div {
+    display: flex;
+    width: max-content;
+    gap: 8px;
+    animation: logoRail 22s linear infinite;
+  }
+  .protocol-logo-rail span {
+    display: grid;
+    place-items: center;
+    min-width: 58px;
+    min-height: 34px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 999px;
+    color: rgba(245,251,252,.9);
+    background: rgba(255,255,255,.055);
+    backdrop-filter: blur(10px);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+  .protocol-avatar {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    display: grid;
+    place-items: center;
+    width: 86px;
+    height: 86px;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 24px;
+    background: rgba(255,255,255,.045);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    z-index: 2;
+  }
+  .protocol-avatar .solana-mark {
+    width: 58px;
+  }
+  .sap-avatar {
+    width: 112px;
+    height: 112px;
+    border-radius: 30px;
+    background: rgba(40,216,232,.06);
+  }
+  .sap-avatar img {
+    width: 78px;
+    height: 78px;
+    border-radius: 20px;
   }
   .protocol-card strong,
   .protocol-card p {
@@ -808,6 +868,100 @@ export const LANDING_CSS = `
   @keyframes bentoDrift {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-4px); }
+  }
+  @keyframes surfaceRise {
+    from {
+      opacity: 0;
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+    }
+  }
+  @keyframes logoRail {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .registry-section {
+    padding-top: 94px;
+  }
+  .registry-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .registry-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: 74px 1fr auto;
+    gap: 16px;
+    align-items: center;
+    min-height: 154px;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 28px;
+    padding: 22px;
+    color: var(--ink);
+    text-decoration: none;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.032)),
+      rgba(255,255,255,.04);
+    animation: surfaceRise .34s cubic-bezier(0, 0, .2, 1) both;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .registry-card:hover {
+    border-color: var(--line-strong);
+    background: rgba(40,216,232,.075);
+    transform: translateY(-2px);
+  }
+  .registry-logo {
+    display: grid;
+    place-items: center;
+    width: 74px;
+    height: 74px;
+    border: 1px solid rgba(40,216,232,.24);
+    border-radius: 22px;
+    color: var(--aqua);
+    background: rgba(40,216,232,.08);
+    font-weight: 950;
+  }
+  .registry-logo-sm {
+    color: #ffffff;
+    background:
+      radial-gradient(circle at 28% 26%, rgba(40,216,232,.22), transparent 38%),
+      linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.035));
+  }
+  .registry-logo-mcp {
+    color: var(--aqua);
+    background:
+      linear-gradient(135deg, rgba(40,216,232,.16), rgba(140,233,154,.055)),
+      rgba(40,216,232,.055);
+  }
+  .registry-copy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .registry-copy strong {
+    font-size: clamp(24px, 3vw, 38px);
+    line-height: 1;
+  }
+  .registry-copy small {
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .registry-status {
+    align-self: start;
+    border: 1px solid rgba(140,233,154,.28);
+    border-radius: 999px;
+    padding: 8px 10px;
+    color: var(--green);
+    background: rgba(140,233,154,.08);
+    font-size: 12px;
+    font-weight: 900;
   }
 
   .metric-grid,
@@ -1160,7 +1314,11 @@ export const LANDING_CSS = `
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .download-card,
-    .doc-tile {
+    .doc-tile,
+    .protocol-card,
+    .protocol-logo-rail div,
+    .registry-card {
+      animation: none;
       transition: none;
     }
   }
@@ -1215,11 +1373,17 @@ export const LANDING_CSS = `
     .protocol-bento {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .registry-grid {
+      grid-template-columns: 1fr;
+    }
     .protocol-card,
     .protocol-card.wide,
     .protocol-card.tall {
       grid-column: auto;
       grid-row: auto;
+    }
+    .protocol-sap {
+      min-height: 360px;
     }
     .machine-section {
       min-height: auto;
@@ -1326,8 +1490,38 @@ export const LANDING_CSS = `
     .download-actions,
     .step-downloads,
     .docs-grid,
-    .protocol-bento {
+    .protocol-bento,
+    .registry-card {
       grid-template-columns: 1fr;
+    }
+    .protocol-logo-rail {
+      width: min(210px, 54%);
+    }
+    .protocol-logo-rail span {
+      min-width: 50px;
+      min-height: 30px;
+      font-size: 10px;
+    }
+    .protocol-avatar {
+      width: 68px;
+      height: 68px;
+      border-radius: 20px;
+    }
+    .protocol-avatar .solana-mark {
+      width: 46px;
+    }
+    .sap-avatar {
+      width: 82px;
+      height: 82px;
+      border-radius: 24px;
+    }
+    .sap-avatar img {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+    }
+    .registry-status {
+      justify-self: start;
     }
     .metric strong { font-size: 40px; }
     .card,

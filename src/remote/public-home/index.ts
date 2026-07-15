@@ -10,6 +10,7 @@ import {
   renderIntegrationPath,
   renderMetrics,
   renderPayments,
+  renderRegistryListings,
   renderScrollMachine,
   renderTopNavigation,
 } from './sections.js';
@@ -60,6 +61,7 @@ export function renderLandingPage(model: LandingPageModel): string {
     ${renderMetrics(model)}
     ${renderScrollMachine(model)}
     ${renderFeatureEngine()}
+    ${renderRegistryListings()}
     ${renderIntegrationPath(model)}
     ${renderDownloads(model)}
     ${renderPayments(model)}
