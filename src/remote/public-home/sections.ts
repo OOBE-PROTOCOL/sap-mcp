@@ -57,6 +57,20 @@ function renderOsIcon(platform: 'windows' | 'macos' | 'linux'): string {
 }
 
 /**
+ * @name renderSolanaMark
+ * @description Renders the Solana mark used in the scroll coordination scene.
+ */
+function renderSolanaMark(): string {
+  return `
+    <svg class="solana-mark" viewBox="0 0 397 311" aria-label="Solana">
+      <path d="M64.6 237.9c2.8-2.8 6.6-4.4 10.6-4.4h306.2c6.7 0 10.1 8.1 5.3 12.9l-60.5 60.5c-2.8 2.8-6.6 4.4-10.6 4.4H9.4c-6.7 0-10.1-8.1-5.3-12.9l60.5-60.5Z" />
+      <path d="M64.6 4.4C67.4 1.6 71.2 0 75.2 0h306.2c6.7 0 10.1 8.1 5.3 12.9l-60.5 60.5c-2.8 2.8-6.6 4.4-10.6 4.4H9.4C2.7 77.8-.7 69.7 4.1 64.9L64.6 4.4Z" />
+      <path d="M326.2 120.7c-2.8-2.8-6.6-4.4-10.6-4.4H9.4c-6.7 0-10.1 8.1-5.3 12.9l60.5 60.5c2.8 2.8 6.6 4.4 10.6 4.4h306.2c6.7 0 10.1-8.1 5.3-12.9l-60.5-60.5Z" />
+    </svg>
+  `;
+}
+
+/**
  * @name renderNavGlyph
  * @description Renders compact glyphs for navigation dropdown rows without client-side icon dependencies.
  */
@@ -77,21 +91,21 @@ function renderNavGlyph(label: string): string {
  */
 export function renderTopNavigation(model: LandingPageModel): string {
   const runtimeLinks = [
-    ['Downloads', '#downloads', 'Native wizard installers and machine-readable download manifest.'],
+    ['Quick start', '#install', 'Choose native setup or CLI setup for hosted SAP MCP.'],
     ['Payments', '#payments', 'x402, pay.sh, local paid-call bridge, and receipt flow.'],
-    ['Capabilities', '#capabilities', 'Solana DeFi, Solana RPC, and Synapse Agent Protocol tool buckets.'],
-    ['Endpoint map', '#endpoints', 'Public HTTP surface and security boundary.'],
+    ['Tool buckets', '#capabilities', 'Solana DeFi, Solana RPC, and Synapse Agent Protocol tools.'],
+    ['Endpoints', '#endpoints', 'Public HTTP surface, discovery URLs, and security boundary.'],
   ] as const;
 
   const machineLinks = [
-    ['server.json', model.info.endpoints.serverInfo, 'Public server metadata for runtimes and marketplaces.'],
-    ['openapi.json', model.info.endpoints.openApi, 'pay.sh catalog and HTTP integration schema.'],
-    ['wizard/downloads.json', model.info.endpoints.wizardDownloads, 'Native wizard release links by operating system.'],
-    ['agent-card.json', model.info.endpoints.agentCard, 'A2A-compatible agent card metadata.'],
-    ['mcp-server-card.json', model.info.endpoints.smitheryServerCard, 'Marketplace server card metadata.'],
-    ['sap-mcp-wizard.json', model.info.endpoints.wizardDescriptor, 'Wizard installer descriptor and setup hints.'],
-    ['.well-known/x402', model.info.endpoints.x402Discovery, 'x402 payment discovery record.'],
-    ['pay/provider.yml', model.info.endpoints.payShProvider, 'pay.sh provider YAML for catalog and proxy workflows.'],
+    ['Server JSON', model.info.endpoints.serverInfo, 'Public server metadata for runtimes and marketplaces.'],
+    ['OpenAPI', model.info.endpoints.openApi, 'pay.sh catalog and HTTP integration schema.'],
+    ['Downloads JSON', model.info.endpoints.wizardDownloads, 'Native wizard release links by operating system.'],
+    ['Agent card', model.info.endpoints.agentCard, 'A2A-compatible agent card metadata.'],
+    ['MCP server card', model.info.endpoints.smitheryServerCard, 'Marketplace server card metadata.'],
+    ['Wizard descriptor', model.info.endpoints.wizardDescriptor, 'Wizard installer descriptor and setup hints.'],
+    ['x402 discovery', model.info.endpoints.x402Discovery, 'x402 payment discovery record.'],
+    ['pay.sh provider', model.info.endpoints.payShProvider, 'pay.sh provider YAML for catalog and proxy workflows.'],
   ] as const;
 
   const renderDropdownLink = ([label, href, description]: readonly [string, string, string]): string => `
@@ -116,18 +130,18 @@ export function renderTopNavigation(model: LandingPageModel): string {
       <div class="nav-center">
         <a class="nav-pill is-active" href="${escapeHtml(model.info.endpoints.landing)}">Home</a>
         <a class="nav-pill nav-pill-strong" href="${escapeHtml(model.info.endpoints.docs)}">Docs</a>
-        <details class="nav-dropdown">
+        <details class="nav-dropdown" data-nav-dropdown>
           <summary>
-            Explore
+            Gateway
             <span aria-hidden="true">⌄</span>
           </summary>
           <div class="nav-menu nav-menu-small">
             ${runtimeLinks.map(renderDropdownLink).join('')}
           </div>
         </details>
-        <details class="nav-dropdown">
+        <details class="nav-dropdown" data-nav-dropdown>
           <summary>
-            JSON & metadata
+            Metadata
             <span aria-hidden="true">⌄</span>
           </summary>
           <div class="nav-menu nav-menu-wide">
@@ -137,9 +151,40 @@ export function renderTopNavigation(model: LandingPageModel): string {
       </div>
       <div class="nav-actions">
         <span class="version-pill">v${escapeHtml(model.info.version)}</span>
-        <a class="button primary" href="#install">Install</a>
+        <a class="button primary nav-install" href="#install">
+          <span class="install-os install-os-windows">${renderOsIcon('windows')}</span>
+          <span class="install-os install-os-macos">${renderOsIcon('macos')}</span>
+          <span class="install-os install-os-linux">${renderOsIcon('linux')}</span>
+          <span>Install</span>
+        </a>
       </div>
     </nav>
+  `;
+}
+
+/**
+ * @name renderDownloadActionGroup
+ * @description Renders direct OS download buttons for install steps and download cards.
+ */
+function renderDownloadActionGroup(model: LandingPageModel, className = 'download-actions'): string {
+  const downloads = [
+    ['Windows', 'x64 .exe', 'windows', model.info.downloads.desktopWizard.windowsX64Setup],
+    ['macOS', 'Apple Silicon .dmg', 'macos', model.info.downloads.desktopWizard.macosArm64Dmg],
+    ['Linux', 'x64 .tar.gz', 'linux', model.info.downloads.desktopWizard.linuxX64TarGz],
+  ] as const;
+
+  return `
+    <div class="${escapeHtml(className)}">
+      ${downloads.map(([label, caption, platform, href]) => `
+        <a class="download-action os-${escapeHtml(platform)}" href="${escapeHtml(href)}">
+          <span class="os-mark">${renderOsIcon(platform)}</span>
+          <span>
+            <strong>${escapeHtml(label)}</strong>
+            <small>${escapeHtml(caption)}</small>
+          </span>
+        </a>
+      `).join('')}
+    </div>
   `;
 }
 
@@ -265,8 +310,10 @@ export function renderScrollMachine(model: LandingPageModel): string {
         </div>
         <div class="machine-core">
           <div class="machine-core-ring"></div>
-          <img src="/favicon.png" alt="" width="72" height="72">
-          <strong>SAP</strong>
+          <div class="machine-logo-pair">
+            <img src="/favicon.png" alt="SAP MCP" width="72" height="72">
+            ${renderSolanaMark()}
+          </div>
         </div>
         <div class="machine-part part-payments">
           <span>03</span>
@@ -411,14 +458,19 @@ export function renderIntegrationPath(model: LandingPageModel): string {
           <h3>Native download</h3>
           <p>Best when the user wants a guided desktop installer for profile creation, wallet isolation, runtime detection, and payment bridge repair.</p>
           <ol class="step-list">
-            <li><b>1</b><span>Download the Windows, macOS, or Linux wizard below.</span></li>
+            <li>
+              <b>1</b>
+              <span>
+                Download the desktop wizard for your operating system.
+                ${renderDownloadActionGroup(model, 'step-downloads')}
+              </span>
+            </li>
             <li><b>2</b><span>Open the wizard and choose <strong>Full hosted SAP MCP setup</strong>.</span></li>
             <li><b>3</b><span>Select detected runtimes such as Codex, Claude, Hermes, or OpenClaw.</span></li>
             <li><b>4</b><span>Restart the agent and connect to the hosted <code>/mcp</code> endpoint.</span></li>
           </ol>
           <div class="inline-actions">
             <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/06_DESKTOP_GUI_WIZARD">Desktop docs</a>
-            <a class="button" href="${escapeHtml(model.info.endpoints.wizardDownloads)}">Downloads JSON</a>
           </div>
         </article>
         <article class="card">
@@ -448,37 +500,29 @@ export function renderIntegrationPath(model: LandingPageModel): string {
  * @description Renders native wizard download cards and install commands.
  */
 export function renderDownloads(model: LandingPageModel): string {
-  const downloads = [
-    ['Windows', 'x64 setup .exe', 'windows', model.info.downloads.desktopWizard.windowsX64Setup],
-    ['macOS', 'Apple Silicon .dmg', 'macos', model.info.downloads.desktopWizard.macosArm64Dmg],
-    ['Linux', 'x64 tar.gz', 'linux', model.info.downloads.desktopWizard.linuxX64TarGz],
-  ] as const;
-
   return `
     <section class="section" id="downloads" aria-labelledby="downloads-title">
-      <div class="install-grid">
+      <div class="setup-grid">
         <article class="card">
           <p class="eyebrow" id="downloads-title">Install wizard</p>
           <h2>Choose native or npm setup.</h2>
           <p>Create a local SAP MCP profile, signer, policy limits, hosted client config, and payment bridge. For guided details, start with <a href="${escapeHtml(model.info.endpoints.docs)}">the user docs</a>.</p>
-          <pre class="code-block"><code>${escapeHtml(model.installScriptCommand)}</code></pre>
-          <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
+          <div class="command-stack">
+            <div>
+              <span>Native installer script</span>
+              <pre class="code-block"><code>${escapeHtml(model.installScriptCommand)}</code></pre>
+            </div>
+            <div>
+              <span>npm wizard</span>
+              <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
+            </div>
+          </div>
         </article>
         <article class="card">
           <p class="eyebrow">Native Downloads</p>
           <h2>One-click desktop wizard.</h2>
           <p>Download directly from the GitHub release for v${escapeHtml(model.info.version)}. The public downloads manifest remains available at <a href="${escapeHtml(model.info.endpoints.wizardDownloads)}">/wizard/downloads.json</a>.</p>
-          <div class="download-grid">
-            ${downloads.map(([label, caption, platform, href]) => `
-              <a class="download-card" href="${escapeHtml(href)}">
-                <span class="os-mark os-${escapeHtml(platform)}">${renderOsIcon(platform)}</span>
-                <span>
-                  <strong>${escapeHtml(label)}</strong>
-                  <span>${escapeHtml(caption)}</span>
-                </span>
-              </a>
-            `).join('')}
-          </div>
+          ${renderDownloadActionGroup(model)}
         </article>
       </div>
     </section>
@@ -553,9 +597,12 @@ export function renderEndpointMap(model: LandingPageModel): string {
         <article class="card">
           <p class="eyebrow" id="endpoints-title">Endpoint map</p>
           <h2>Public surface area.</h2>
-          <div class="timeline">
+          <div class="endpoint-list">
             ${endpoints.map(([method, url]) => `
-              <div class="timeline-item"><b>${escapeHtml(method)}</b><p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p></div>
+              <div class="endpoint-row">
+                <span class="method-badge method-${escapeHtml(method.toLowerCase())}">${escapeHtml(method)}</span>
+                <a href="${escapeHtml(url)}">${escapeHtml(url)}</a>
+              </div>
             `).join('')}
           </div>
           <p>MCP clients should connect to <code>/mcp</code> with <code>Accept: application/json, text/event-stream</code>.</p>

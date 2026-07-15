@@ -4,6 +4,59 @@
  */
 export const LANDING_SCRIPT = `
 (() => {
+  const dropdowns = Array.from(document.querySelectorAll('[data-nav-dropdown]'));
+  const setDetectedOs = () => {
+    const platform = String(navigator.platform || '').toLowerCase();
+    const userAgent = String(navigator.userAgent || '').toLowerCase();
+    const os = userAgent.includes('windows') || platform.includes('win')
+      ? 'windows'
+      : userAgent.includes('linux') || platform.includes('linux')
+        ? 'linux'
+        : 'macos';
+    document.documentElement.dataset.os = os;
+  };
+
+  setDetectedOs();
+
+  dropdowns.forEach((dropdown) => {
+    dropdown.addEventListener('toggle', () => {
+      if (!dropdown.open) {
+        return;
+      }
+
+      dropdowns.forEach((other) => {
+        if (other !== dropdown) {
+          other.open = false;
+        }
+      });
+    });
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target;
+    if (!(target instanceof Node)) {
+      return;
+    }
+
+    if (dropdowns.some((dropdown) => dropdown.contains(target))) {
+      return;
+    }
+
+    dropdowns.forEach((dropdown) => {
+      dropdown.open = false;
+    });
+  }, { passive: true });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    dropdowns.forEach((dropdown) => {
+      dropdown.open = false;
+    });
+  });
+
   const scene = document.querySelector('[data-engine-scene]');
   const machine = document.querySelector('[data-machine-section]');
   if ((!scene && !machine) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {

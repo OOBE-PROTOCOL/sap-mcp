@@ -189,9 +189,10 @@ export const LANDING_CSS = `
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 22px;
     padding: 10px;
-    background: rgba(10, 17, 18, .94);
+    background: rgba(10, 17, 18, .9);
     box-shadow: 0 28px 80px rgba(0, 0, 0, .44);
     backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     transform: translateX(-50%);
   }
   .nav-menu-wide {
@@ -248,6 +249,26 @@ export const LANDING_CSS = `
     display: flex;
     gap: 8px;
     align-items: center;
+  }
+  .nav-install {
+    gap: 8px;
+  }
+  .install-os {
+    display: none;
+    width: 20px;
+    height: 20px;
+    color: #061517;
+  }
+  .install-os svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+  html[data-os="windows"] .install-os-windows,
+  html[data-os="macos"] .install-os-macos,
+  html[data-os="linux"] .install-os-linux {
+    display: inline-grid;
+    place-items: center;
   }
   .button.primary {
     border-color: rgba(40, 216, 232, .58);
@@ -525,8 +546,14 @@ export const LANDING_CSS = `
     min-height: 180vh;
     margin-left: calc(50% - 50vw);
     padding: 110px max(16px, calc((100vw - var(--content)) / 2));
-    background: var(--paper);
-    color: var(--paper-ink);
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    background:
+      linear-gradient(rgba(40, 216, 232, .022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(40, 216, 232, .022) 1px, transparent 1px),
+      #0c1111;
+    background-size: 80px 80px;
+    color: var(--ink);
     overflow: clip;
   }
   .machine-copy {
@@ -540,7 +567,7 @@ export const LANDING_CSS = `
     font-size: clamp(36px, 5vw, 72px);
     line-height: .9;
   }
-  .machine-copy p { color: #68615b; }
+  .machine-copy p { color: var(--muted); }
   .machine-stage {
     position: sticky;
     top: 90px;
@@ -554,36 +581,53 @@ export const LANDING_CSS = `
     z-index: 4;
     display: grid;
     place-items: center;
-    width: 190px;
+    width: 270px;
     height: 190px;
-    border: 1px solid rgba(36,35,32,.18);
-    border-radius: 42px;
-    background: #151817;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--aqua);
-    box-shadow: 0 40px 80px rgba(0,0,0,.22);
+    box-shadow: none;
     transform: rotate(var(--machine-rotate, 0deg));
   }
-  .machine-core img { border-radius: 20px; }
-  .machine-core strong { font-size: 28px; }
+  .machine-logo-pair {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    filter: drop-shadow(0 28px 50px rgba(0,0,0,.36));
+  }
+  .machine-logo-pair img {
+    width: 86px;
+    height: 86px;
+    border-radius: 22px;
+  }
+  .solana-mark {
+    width: 112px;
+    height: auto;
+    color: var(--aqua);
+  }
+  .solana-mark path:nth-child(1) { fill: var(--aqua); }
+  .solana-mark path:nth-child(2) { fill: var(--green); }
+  .solana-mark path:nth-child(3) { fill: var(--blue); }
   .machine-core-ring {
     position: absolute;
     inset: -52px;
-    border: 1px solid rgba(36,35,32,.18);
+    border: 1px solid rgba(40,216,232,.14);
     border-radius: 50%;
   }
   .machine-part {
     position: absolute;
     z-index: 3;
     width: min(250px, 36vw);
-    border: 1px solid rgba(36,35,32,.16);
+    border: 1px solid rgba(255,255,255,.12);
     border-radius: 20px;
     padding: 18px;
-    background: rgba(255,255,255,.42);
-    box-shadow: 0 20px 40px rgba(0,0,0,.08);
+    background: rgba(255,255,255,.055);
+    box-shadow: 0 20px 40px rgba(0,0,0,.18);
     opacity: var(--machine-fade, .2);
   }
   .machine-part span {
-    color: #087f91;
+    color: var(--aqua);
     font-weight: 900;
     font-size: 12px;
   }
@@ -594,7 +638,7 @@ export const LANDING_CSS = `
   }
   .machine-part p {
     margin: 0;
-    color: #67615a;
+    color: var(--muted);
     overflow-wrap: anywhere;
   }
   .part-remote { transform: translate(calc(-230px - var(--machine-open, 0px)), -180px); }
@@ -605,7 +649,7 @@ export const LANDING_CSS = `
     position: absolute;
     width: min(780px, 72vw);
     height: 1px;
-    background: rgba(36,35,32,.16);
+    background: rgba(40,216,232,.2);
     transform: rotate(24deg) scaleX(var(--machine-rail-scale, .4));
   }
   .rail-b { transform: rotate(-24deg) scaleX(var(--machine-rail-scale, .4)); }
@@ -647,6 +691,7 @@ export const LANDING_CSS = `
   .metric-grid,
   .feature-grid,
   .install-grid,
+  .setup-grid,
   .endpoint-grid,
   .download-grid {
     display: grid;
@@ -655,6 +700,7 @@ export const LANDING_CSS = `
   .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .feature-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .install-grid { grid-template-columns: 1.15fr .85fr; }
+  .setup-grid { grid-template-columns: minmax(0, .95fr) minmax(380px, 1.05fr); }
   .endpoint-grid { grid-template-columns: 1.35fr .65fr; }
   .download-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
@@ -749,6 +795,70 @@ export const LANDING_CSS = `
     max-width: 100%;
     color: #d8faff;
     background: rgba(0, 0, 0, .34);
+  }
+  .command-stack {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .command-stack > div > span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--subtle);
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+  .download-actions,
+  .step-downloads {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .step-downloads {
+    margin-top: 12px;
+  }
+  .download-action {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px;
+    color: var(--ink);
+    text-decoration: none;
+    background: rgba(255, 255, 255, .045);
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  }
+  .download-action:hover {
+    border-color: var(--line-strong);
+    background: rgba(40, 216, 232, .08);
+    transform: translateY(-2px);
+  }
+  .download-action .os-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+  .download-action .os-mark svg {
+    width: 26px;
+    height: 26px;
+  }
+  .download-action span:last-child {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .download-action strong,
+  .download-action small {
+    display: block;
+  }
+  .download-action small {
+    color: var(--subtle);
+    font-size: 12px;
   }
   .download-card {
     display: grid;
@@ -872,6 +982,39 @@ export const LANDING_CSS = `
     background: var(--aqua);
   }
   .timeline-item p { margin-bottom: 0; }
+  .endpoint-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .endpoint-row {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+  }
+  .method-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 46px;
+    height: 26px;
+    border: 1px solid rgba(40, 216, 232, .28);
+    border-radius: 999px;
+    padding: 0 9px;
+    color: var(--aqua);
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+  }
+  .method-post {
+    color: var(--green);
+    border-color: rgba(140, 233, 154, .32);
+  }
+  .endpoint-row a {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
 
   .footer {
     padding: 70px 0 50px;
@@ -965,6 +1108,7 @@ export const LANDING_CSS = `
     .metric-grid,
     .feature-grid,
     .install-grid,
+    .setup-grid,
     .endpoint-grid,
     .footer-grid {
       grid-template-columns: 1fr;
@@ -1026,9 +1170,9 @@ export const LANDING_CSS = `
     .machine-core {
       order: -1;
       justify-self: center;
-      width: 150px;
-      height: 150px;
-      border-radius: 32px;
+      width: 100%;
+      height: auto;
+      min-height: 136px;
     }
     .machine-core-ring,
     .machine-rail {
@@ -1041,6 +1185,8 @@ export const LANDING_CSS = `
       transform: none !important;
     }
     .download-grid,
+    .download-actions,
+    .step-downloads,
     .docs-grid {
       grid-template-columns: 1fr;
     }
