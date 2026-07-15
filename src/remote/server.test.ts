@@ -477,9 +477,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<meta property="og:title" content="SAP MCP Server | OOBE Protocol">');
     expect(root).toContain('<link rel="icon" type="image/x-icon" href="/favicon.ico">');
     expect(root).toContain('<link rel="icon" type="image/png" href="/favicon.png">');
-    expect(root).toContain('href="/docs"');
-    expect(root).toContain('href="/openapi.json"');
-    expect(root).toContain('href="/pay/provider.yml"');
+    expect(root).toContain('href="https://mcp.sap.oobeprotocol.ai/docs"');
+    expect(root).toContain('href="https://mcp.sap.oobeprotocol.ai/openapi.json"');
+    expect(root).toContain('href="https://mcp.sap.oobeprotocol.ai/pay/provider.yml"');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
