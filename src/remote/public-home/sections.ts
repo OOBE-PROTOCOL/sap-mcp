@@ -1,5 +1,5 @@
 import { escapeHtml } from './escape.js';
-import type { LandingLink, LandingPageModel } from './types.js';
+import type { LandingPageModel } from './types.js';
 
 /**
  * @name formatUsd
@@ -57,17 +57,52 @@ function renderOsIcon(platform: 'windows' | 'macos' | 'linux'): string {
 }
 
 /**
+ * @name renderNavGlyph
+ * @description Renders compact glyphs for navigation dropdown rows without client-side icon dependencies.
+ */
+function renderNavGlyph(label: string): string {
+  const initials = label
+    .split(/[\s./-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return `<span class="nav-glyph" aria-hidden="true">${escapeHtml(initials || '•')}</span>`;
+}
+
+/**
  * @name renderTopNavigation
  * @description Renders the glass top navigation used by the hosted landing page.
  */
 export function renderTopNavigation(model: LandingPageModel): string {
-  const links: LandingLink[] = [
-    { label: 'Docs', href: model.info.endpoints.docs },
-    { label: 'Downloads', href: '#downloads' },
-    { label: 'Payments', href: '#payments' },
-    { label: 'OpenAPI', href: model.info.endpoints.openApi },
-    { label: 'pay.sh', href: model.info.endpoints.payShProvider },
-  ];
+  const runtimeLinks = [
+    ['Downloads', '#downloads', 'Native wizard installers and machine-readable download manifest.'],
+    ['Payments', '#payments', 'x402, pay.sh, local paid-call bridge, and receipt flow.'],
+    ['Capabilities', '#capabilities', 'Solana DeFi, Solana RPC, and Synapse Agent Protocol tool buckets.'],
+    ['Endpoint map', '#endpoints', 'Public HTTP surface and security boundary.'],
+  ] as const;
+
+  const machineLinks = [
+    ['server.json', model.info.endpoints.serverInfo, 'Public server metadata for runtimes and marketplaces.'],
+    ['openapi.json', model.info.endpoints.openApi, 'pay.sh catalog and HTTP integration schema.'],
+    ['wizard/downloads.json', model.info.endpoints.wizardDownloads, 'Native wizard release links by operating system.'],
+    ['agent-card.json', model.info.endpoints.agentCard, 'A2A-compatible agent card metadata.'],
+    ['mcp-server-card.json', model.info.endpoints.smitheryServerCard, 'Marketplace server card metadata.'],
+    ['sap-mcp-wizard.json', model.info.endpoints.wizardDescriptor, 'Wizard installer descriptor and setup hints.'],
+    ['.well-known/x402', model.info.endpoints.x402Discovery, 'x402 payment discovery record.'],
+    ['pay/provider.yml', model.info.endpoints.payShProvider, 'pay.sh provider YAML for catalog and proxy workflows.'],
+  ] as const;
+
+  const renderDropdownLink = ([label, href, description]: readonly [string, string, string]): string => `
+    <a class="nav-menu-link" href="${escapeHtml(href)}">
+      ${renderNavGlyph(label)}
+      <span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${escapeHtml(description)}</small>
+      </span>
+    </a>
+  `;
 
   return `
     <nav class="site-nav" aria-label="Primary navigation">
@@ -78,8 +113,27 @@ export function renderTopNavigation(model: LandingPageModel): string {
           <span>OOBE Protocol</span>
         </span>
       </a>
-      <div class="nav-links">
-        ${links.map((link) => `<a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`).join('')}
+      <div class="nav-center">
+        <a class="nav-pill is-active" href="${escapeHtml(model.info.endpoints.landing)}">Home</a>
+        <a class="nav-pill nav-pill-strong" href="${escapeHtml(model.info.endpoints.docs)}">Docs</a>
+        <details class="nav-dropdown">
+          <summary>
+            Explore
+            <span aria-hidden="true">⌄</span>
+          </summary>
+          <div class="nav-menu nav-menu-small">
+            ${runtimeLinks.map(renderDropdownLink).join('')}
+          </div>
+        </details>
+        <details class="nav-dropdown">
+          <summary>
+            JSON & metadata
+            <span aria-hidden="true">⌄</span>
+          </summary>
+          <div class="nav-menu nav-menu-wide">
+            ${machineLinks.map(renderDropdownLink).join('')}
+          </div>
+        </details>
       </div>
       <div class="nav-actions">
         <span class="version-pill">v${escapeHtml(model.info.version)}</span>
