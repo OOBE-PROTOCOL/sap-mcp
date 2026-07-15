@@ -373,6 +373,8 @@ describe('MCP client injection', () => {
     expect(hermesYaml).toContain('  sap_payments:\n    command: npx.cmd');
     expect(codexToml).toContain('[mcp_servers.sap_payments]');
     expect(codexToml).toContain('command = "npx.cmd"');
+    expect(codexToml).toContain('startup_timeout_sec = 300');
+    expect(codexToml).toContain('tool_timeout_sec = 300');
   });
 
   it('builds Hermes YAML hosted MCP plus local payment bridge config', () => {
@@ -519,6 +521,8 @@ describe('MCP client injection', () => {
     expect(written).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(written).toContain('[mcp_servers.sap_payments]');
     expect(written).toContain('command = "npx.cmd"');
+    expect(written).toContain('startup_timeout_sec = 300');
+    expect(written).toContain('tool_timeout_sec = 300');
     expect(written).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
     expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('SAP_WALLET_PATH');

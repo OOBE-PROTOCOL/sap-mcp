@@ -1111,6 +1111,7 @@ function codexPaymentBridgeTomlBlock(canonical: McpServerInjectionConfig): strin
     `[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`,
     `command = ${JSON.stringify(canonical.command)}`,
     `args = ${args}`,
+    'startup_timeout_sec = 300',
     'tool_timeout_sec = 300',
   ];
 
@@ -1196,6 +1197,12 @@ export function validateHostedPaymentBridgeContent(
     }
     if (!content.includes(`command = ${JSON.stringify(expectedNpx)}`)) {
       issues.push(`Codex local bridge must use ${expectedNpx} on ${platform}.`);
+    }
+    if (!content.includes('startup_timeout_sec = 300')) {
+      issues.push('Codex local bridge must set startup_timeout_sec = 300 so first-run npx installs do not hide sap_payments.');
+    }
+    if (!content.includes('tool_timeout_sec = 300')) {
+      issues.push('Codex local bridge must set tool_timeout_sec = 300 for paid settlement retries.');
     }
     const codexSapSection = getCodexMcpServerSection(content, SAP_SERVER_NAME);
     const codexPaymentBridgeSection = getCodexMcpServerSection(content, SAP_PAYMENT_BRIDGE_SERVER_NAME);

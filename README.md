@@ -118,12 +118,13 @@ For paid/write hosted tools, add the local non-custodial payment bridge as well:
 [mcp_servers.sap_payments]
 command = "npx"
 args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server", "sap-mcp-server"]
-enabled_tools = ["sap_payments_call_paid_tool", "sap_payments_prepare_challenge", "sap_payments_sign_challenge", "sap_payments_verify_receipt", "sap_x402_paid_call", "sap_profile_current", "sap_x402_estimate_cost"]
+startup_timeout_sec = 300
 tool_timeout_sec = 300
 
 [mcp_servers.sap_payments.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
-SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool,sap_payments_prepare_challenge,sap_payments_sign_challenge,sap_payments_verify_receipt,sap_x402_paid_call,sap_profile_current,sap_x402_estimate_cost"
+SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"
+SAP_ALLOWED_TOOLS = "all"
 SAP_LOG_LEVEL = "info"
 ```
 
