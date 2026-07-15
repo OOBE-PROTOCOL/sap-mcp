@@ -153,6 +153,16 @@ export const LANDING_CSS = `
   .nav-pill-strong {
     color: var(--aqua);
   }
+  .oobe-nav {
+    gap: 8px;
+    padding-left: 10px;
+  }
+  .oobe-nav img {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(140, 233, 154, .28);
+  }
   .nav-dropdown {
     position: relative;
   }
@@ -472,25 +482,44 @@ export const LANDING_CSS = `
   }
 
   .bento-strip {
-    padding: 22px 0 82px;
+    padding: 34px 0 96px;
   }
-  .bento-header {
+  .bento-stack {
     display: grid;
-    grid-template-columns: minmax(0, .78fr) minmax(260px, .42fr);
-    gap: 18px;
-    align-items: end;
-    margin-bottom: 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, .44fr);
+    gap: 22px;
+    align-items: start;
   }
-  .bento-header h2 {
-    max-width: 780px;
-    margin: 0;
-    font-size: clamp(34px, 4.8vw, 64px);
-    line-height: .92;
+  .bento-sticky-copy {
+    position: sticky;
+    top: 112px;
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 30px;
+    padding: 28px;
+    background:
+      linear-gradient(180deg, rgba(40,216,232,.09), rgba(255,255,255,.035)),
+      rgba(255,255,255,.045);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .bento-sticky-copy h2 {
+    max-width: 520px;
+    margin: 0 0 18px;
+    font-size: clamp(38px, 4.8vw, 72px);
+    line-height: .88;
+  }
+  .bento-sticky-copy p:last-child {
+    margin-bottom: 0;
+    color: var(--muted);
+    font-size: 18px;
   }
   .bento-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    grid-auto-rows: minmax(170px, auto);
+    grid-auto-rows: minmax(176px, auto);
     gap: 14px;
   }
   .bento-card {
@@ -597,18 +626,18 @@ export const LANDING_CSS = `
     filter: drop-shadow(0 28px 50px rgba(0,0,0,.36));
   }
   .machine-logo-pair img {
-    width: 86px;
-    height: 86px;
-    border-radius: 22px;
+    width: 100px;
+    height: 100px;
+    border-radius: 25px;
   }
   .solana-mark {
     width: 112px;
     height: auto;
-    color: var(--aqua);
+    color: var(--ink);
   }
-  .solana-mark path:nth-child(1) { fill: var(--aqua); }
-  .solana-mark path:nth-child(2) { fill: var(--green); }
-  .solana-mark path:nth-child(3) { fill: var(--blue); }
+  .solana-mark path {
+    fill: rgba(245, 251, 252, .94);
+  }
   .machine-core-ring {
     position: absolute;
     inset: -52px;
@@ -687,6 +716,100 @@ export const LANDING_CSS = `
     background: rgba(36, 35, 32, .055);
   }
   .paper .feature p { color: #67615a; }
+
+  .protocol-surface {
+    position: relative;
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    padding-left: max(16px, calc((100vw - var(--content)) / 2));
+    padding-right: max(16px, calc((100vw - var(--content)) / 2));
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    background:
+      radial-gradient(circle at 20% 10%, rgba(40, 216, 232, .13), transparent 30%),
+      linear-gradient(rgba(40, 216, 232, .022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(40, 216, 232, .022) 1px, transparent 1px),
+      #0c1111;
+    background-size: auto, 80px 80px, 80px 80px;
+    color: var(--ink);
+  }
+  .protocol-surface .section-head {
+    max-width: 820px;
+  }
+  .protocol-bento {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-auto-rows: minmax(178px, auto);
+    gap: 14px;
+  }
+  .protocol-card {
+    position: relative;
+    grid-column: span 2;
+    min-height: 178px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    border: 1px solid rgba(255, 255, 255, .11);
+    border-radius: 28px;
+    padding: 22px;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.032)),
+      rgba(255,255,255,.035);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    animation: bentoDrift 14s ease-in-out infinite;
+  }
+  .protocol-card:nth-child(2n) { animation-delay: -4s; }
+  .protocol-card:nth-child(3n) { animation-delay: -8s; }
+  .protocol-card::before {
+    content: "";
+    position: absolute;
+    inset: auto -54px -68px auto;
+    width: 180px;
+    height: 180px;
+    border-radius: 54px;
+    background: linear-gradient(135deg, rgba(40,216,232,.26), rgba(140,233,154,.08));
+    transform: rotate(18deg);
+    opacity: .55;
+  }
+  .protocol-card.wide { grid-column: span 3; }
+  .protocol-card.tall { grid-column: span 2; grid-row: span 2; }
+  .protocol-index {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255,255,255,.13);
+    border-radius: 999px;
+    color: var(--muted);
+    background: rgba(255,255,255,.045);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .protocol-card strong,
+  .protocol-card p {
+    position: relative;
+    z-index: 1;
+  }
+  .protocol-card strong {
+    display: block;
+    max-width: 360px;
+    margin-bottom: 10px;
+    font-size: clamp(24px, 3vw, 42px);
+    line-height: .96;
+  }
+  .protocol-card p {
+    max-width: 460px;
+    margin-bottom: 0;
+    color: var(--muted);
+  }
+  @keyframes bentoDrift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
 
   .metric-grid,
   .feature-grid,
@@ -1073,13 +1196,28 @@ export const LANDING_CSS = `
       min-height: 540px;
     }
     h1 { font-size: 52px; }
-    .bento-header,
+    .bento-stack,
     .bento-grid {
       grid-template-columns: 1fr;
+    }
+    .bento-sticky-copy {
+      position: relative;
+      top: auto;
+      order: -1;
+      min-height: 0;
     }
     .bento-card,
     .bento-card.wide,
     .bento-card.tall {
+      grid-column: auto;
+      grid-row: auto;
+    }
+    .protocol-bento {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .protocol-card,
+    .protocol-card.wide,
+    .protocol-card.tall {
       grid-column: auto;
       grid-row: auto;
     }
@@ -1187,7 +1325,8 @@ export const LANDING_CSS = `
     .download-grid,
     .download-actions,
     .step-downloads,
-    .docs-grid {
+    .docs-grid,
+    .protocol-bento {
       grid-template-columns: 1fr;
     }
     .metric strong { font-size: 40px; }

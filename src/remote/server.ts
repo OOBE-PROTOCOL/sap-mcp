@@ -24,6 +24,7 @@ import { renderLandingPage } from './public-home/index.js';
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
 const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
+const OOBE_LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'oobe-logo.png');
 const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
 const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
 const PAYMENT_STATS_CACHE_MS = 15_000;
@@ -37,6 +38,7 @@ const USDC_MAINNET_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 const MCP_REGISTRY_AUTH_PATH = '/.well-known/mcp-registry-auth';
 let logoAssetCache: Buffer | undefined;
+let oobeLogoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
@@ -784,6 +786,15 @@ export function resolvePublicLogoAsset(method: string | undefined, pathname: str
     return undefined;
   }
 
+  if (pathname === '/oobe-logo.png') {
+    const image = readOobeLogoAsset();
+    return {
+      contentType: 'image/png',
+      contentLength: image.byteLength,
+      body: method === 'HEAD' ? undefined : image,
+    };
+  }
+
   const image = readLogoAsset();
   const body = method === 'HEAD' ? undefined : image;
   if (['/favicon.png', '/apple-touch-icon.png', '/og.png'].includes(pathname)) {
@@ -826,6 +837,15 @@ function writeLogoAsset(res: http.ServerResponse, asset: PublicLogoAsset): void 
 function readLogoAsset(): Buffer {
   logoAssetCache ??= readFileSync(LOGO_ASSET_PATH);
   return logoAssetCache;
+}
+
+/**
+ * @name readOobeLogoAsset
+ * @description Loads the bundled OOBE mark used by the public navigation link.
+ */
+function readOobeLogoAsset(): Buffer {
+  oobeLogoAssetCache ??= readFileSync(OOBE_LOGO_ASSET_PATH);
+  return oobeLogoAssetCache;
 }
 
 /**

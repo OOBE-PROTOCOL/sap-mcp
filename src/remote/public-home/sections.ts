@@ -129,6 +129,10 @@ export function renderTopNavigation(model: LandingPageModel): string {
       </a>
       <div class="nav-center">
         <a class="nav-pill is-active" href="${escapeHtml(model.info.endpoints.landing)}">Home</a>
+        <a class="nav-pill oobe-nav" href="https://www.oobeprotocol.ai/">
+          <img src="/oobe-logo.png" width="24" height="24" alt="">
+          <span>OOBE</span>
+        </a>
         <a class="nav-pill nav-pill-strong" href="${escapeHtml(model.info.endpoints.docs)}">Docs</a>
         <details class="nav-dropdown" data-nav-dropdown>
           <summary>
@@ -258,11 +262,7 @@ export function renderHeroBento(model: LandingPageModel): string {
   ] as const;
 
   return `
-    <section class="bento-strip" aria-labelledby="bento-title">
-      <div class="bento-header">
-        <p class="eyebrow" id="bento-title">Agent coordination stack</p>
-        <h2>One gateway for discovery, execution, payment, and proof.</h2>
-      </div>
+    <section class="bento-strip bento-stack" aria-labelledby="bento-title">
       <div class="bento-grid">
         ${cards.map(([title, body, tone, key], index) => `
           <article class="bento-card bento-${escapeHtml(key)} ${index === 0 ? 'wide' : ''}" data-tone="${escapeHtml(tone)}">
@@ -278,6 +278,14 @@ export function renderHeroBento(model: LandingPageModel): string {
           <p>Free discovery. Paid tools return x402 challenges. Local signatures stay on the user's machine.</p>
         </article>
       </div>
+      <aside class="bento-sticky-copy">
+        <p class="eyebrow" id="bento-title">Agent coordination stack</p>
+        <h2>One gateway for discovery, execution, payment, and proof.</h2>
+        <p>
+          SAP MCP gives agent runtimes one hosted gateway for discovery and execution,
+          while payment receipts and signatures stay bound to the local profile.
+        </p>
+      </aside>
     </section>
   `;
 }
@@ -311,7 +319,7 @@ export function renderScrollMachine(model: LandingPageModel): string {
         <div class="machine-core">
           <div class="machine-core-ring"></div>
           <div class="machine-logo-pair">
-            <img src="/favicon.png" alt="SAP MCP" width="72" height="72">
+            <img src="/favicon.png" alt="SAP MCP" width="98" height="98">
             ${renderSolanaMark()}
           </div>
         </div>
@@ -407,27 +415,27 @@ export function renderMetrics(model: LandingPageModel): string {
  */
 export function renderFeatureEngine(): string {
   const features = [
-    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora, Drift and market data flows.', 'coral'],
-    ['Solana RPC', 'Balances, token accounts, DAS assets, transactions, programs and simulation.', 'yellow'],
-    ['SAP Protocol', 'Agent registry, discovery, reputation, escrow, settlement and attestations.', 'green'],
-    ['Identity', 'SNS domain checks, reverse lookup, linked identity and agent profile context.', 'blue'],
-    ['Payments', 'x402 challenge tools, pay.sh provider metadata, receipts and paid-call replay.', 'aqua'],
-    ['Policy', 'Local limits and optional Bento Guard policy checks before sensitive execution.', 'green'],
-    ['Skills', 'Bundled agent skills explain how to choose tools, fetch context and avoid waste.', 'blue'],
-    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', 'yellow'],
+    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora, Drift and market data flows.', 'wide'],
+    ['Solana RPC', 'Balances, token accounts, DAS assets, transactions, programs and simulation.', ''],
+    ['SAP Protocol', 'Agent registry, discovery, reputation, escrow, settlement and attestations.', 'tall'],
+    ['Identity', 'SNS domain checks, reverse lookup, linked identity and agent profile context.', ''],
+    ['Payments', 'x402 challenge tools, pay.sh provider metadata, receipts and paid-call replay.', 'wide'],
+    ['Policy', 'Local limits and optional Bento Guard policy checks before sensitive execution.', ''],
+    ['Skills', 'Bundled agent skills explain how to choose tools, fetch context and avoid waste.', ''],
+    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', ''],
   ] as const;
 
   return `
-    <section class="section paper" id="capabilities" aria-labelledby="capabilities-title">
+    <section class="section protocol-surface" id="capabilities" aria-labelledby="capabilities-title">
       <div class="section-head">
         <p class="eyebrow" id="capabilities-title">Protocol surface</p>
         <h2>Three buckets. One agent operations layer.</h2>
         <p>SAP MCP exposes Solana DeFi protocols, Solana RPC methods, and Synapse Agent Protocol operations through one MCP-compatible interface.</p>
       </div>
-      <div class="feature-grid">
-        ${features.map(([label, description, tone]) => `
-          <article class="feature" data-tone="${escapeHtml(tone)}">
-            <span>${escapeHtml(label)}</span>
+      <div class="protocol-bento">
+        ${features.map(([label, description, size], index) => `
+          <article class="protocol-card ${escapeHtml(size)}">
+            <span class="protocol-index">${escapeHtml(String(index + 1).padStart(2, '0'))}</span>
             <strong>${escapeHtml(label)}</strong>
             <p>${escapeHtml(description)}</p>
           </article>
