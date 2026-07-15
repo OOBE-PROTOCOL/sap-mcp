@@ -75,13 +75,23 @@ function renderSolanaMark(): string {
  * @description Renders a compact animated rail for Solana DeFi protocol names exposed by SAP MCP.
  */
 function renderDefiLogoRail(): string {
-  const protocols = ['JUP', 'RAY', 'ORCA', 'MET', 'DRIFT', 'PYTH', 'DAS', 'MPL'];
+  const protocols = [
+    ['Jupiter', '/logos/jupiter.ico'],
+    ['Raydium', '/logos/raydium.ico'],
+    ['Orca', '/logos/orca.ico'],
+    ['Meteora', '/logos/meteora.png'],
+    ['Drift', '/logos/drift.svg'],
+  ] as const;
   const items = [...protocols, ...protocols];
 
   return `
     <div class="protocol-logo-rail" aria-label="Integrated Solana protocol logos">
       <div>
-        ${items.map((protocol) => `<span>${escapeHtml(protocol)}</span>`).join('')}
+        ${items.map(([name, src]) => `
+          <span>
+            <img src="${escapeHtml(src)}" width="30" height="30" alt="${escapeHtml(name)}">
+          </span>
+        `).join('')}
       </div>
     </div>
   `;
@@ -466,7 +476,7 @@ export function renderFeatureEngine(): string {
     ['Payments', 'x402 challenge tools, pay.sh provider metadata, receipts and paid-call replay.', 'wide', 'payments'],
     ['Policy', 'Local limits and optional Bento Guard policy checks before sensitive execution.', '', 'policy'],
     ['Skills', 'Bundled agent skills explain how to choose tools, fetch context and avoid waste.', '', 'skills'],
-    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', '', 'remote'],
+    ['Remote-first', 'Hosted Streamable HTTP with local non-custodial signing for paid/write calls.', 'wide', 'remote'],
   ] as const;
 
   return `
@@ -500,13 +510,13 @@ export function renderRegistryListings(): string {
       'Smithery',
       'MCP server marketplace listing with hosted server metadata, tools, prompts, and configuration UX.',
       'https://smithery.ai/servers/oobe-protocol/sap-mcp',
-      'SM',
+      '/logos/smithery.svg',
     ],
     [
       'Official MCP Registry',
       'Canonical Model Context Protocol registry entry for ai.oobeprotocol.sap.mcp/sap-mcp.',
       'https://registry.modelcontextprotocol.io/?q=ai.oobeprotocol.sap.mcp%2Fsap-mcp',
-      'MCP',
+      '/logos/mcp.svg',
     ],
   ] as const;
 
@@ -520,7 +530,9 @@ export function renderRegistryListings(): string {
       <div class="registry-grid">
         ${listings.map(([name, description, href, logo]) => `
           <a class="registry-card" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">
-            <span class="registry-logo registry-logo-${escapeHtml(logo.toLowerCase())}">${escapeHtml(logo)}</span>
+            <span class="registry-logo">
+              <img src="${escapeHtml(logo)}" width="42" height="42" alt="${escapeHtml(name)}">
+            </span>
             <span class="registry-copy">
               <strong>${escapeHtml(name)}</strong>
               <small>${escapeHtml(description)}</small>

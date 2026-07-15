@@ -25,6 +25,7 @@ const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
 const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
 const OOBE_LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'oobe-logo.png');
+const LOGO_ASSET_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'logos');
 const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
 const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
 const PAYMENT_STATS_CACHE_MS = 15_000;
@@ -42,12 +43,22 @@ let oobeLogoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
+const PUBLIC_LOGO_ASSETS = {
+  '/logos/drift.svg': { filename: 'drift.svg', contentType: 'image/svg+xml' },
+  '/logos/jupiter.ico': { filename: 'jupiter.ico', contentType: 'image/x-icon' },
+  '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
+  '/logos/meteora.png': { filename: 'meteora.png', contentType: 'image/png' },
+  '/logos/orca.ico': { filename: 'orca.ico', contentType: 'image/x-icon' },
+  '/logos/raydium.ico': { filename: 'raydium.ico', contentType: 'image/x-icon' },
+  '/logos/smithery.svg': { filename: 'smithery.svg', contentType: 'image/svg+xml' },
+} as const;
+
 /**
  * @name PublicLogoAsset
  * @description Resolved public logo asset response metadata for browser and crawler icon routes.
  */
 export interface PublicLogoAsset {
-  contentType: 'image/png' | 'image/x-icon';
+  contentType: 'image/png' | 'image/svg+xml' | 'image/x-icon';
   contentLength: number;
   body?: Buffer;
 }
@@ -784,6 +795,16 @@ function isUnsafeDocsPath(pathname: string): boolean {
 export function resolvePublicLogoAsset(method: string | undefined, pathname: string): PublicLogoAsset | undefined {
   if (method !== 'GET' && method !== 'HEAD') {
     return undefined;
+  }
+
+  const logoAsset = PUBLIC_LOGO_ASSETS[pathname as keyof typeof PUBLIC_LOGO_ASSETS];
+  if (logoAsset !== undefined) {
+    const image = readFileSync(join(LOGO_ASSET_ROOT_PATH, logoAsset.filename));
+    return {
+      contentType: logoAsset.contentType,
+      contentLength: image.byteLength,
+      body: method === 'HEAD' ? undefined : image,
+    };
   }
 
   if (pathname === '/oobe-logo.png') {

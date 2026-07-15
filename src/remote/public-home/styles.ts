@@ -809,16 +809,19 @@ export const LANDING_CSS = `
   .protocol-logo-rail span {
     display: grid;
     place-items: center;
-    min-width: 58px;
-    min-height: 34px;
+    width: 42px;
+    height: 42px;
     border: 1px solid rgba(255,255,255,.12);
     border-radius: 999px;
     color: rgba(245,251,252,.9);
     background: rgba(255,255,255,.055);
     backdrop-filter: blur(10px);
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0;
+  }
+  .protocol-logo-rail img {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    object-fit: cover;
   }
   .protocol-avatar {
     position: absolute;
@@ -826,27 +829,27 @@ export const LANDING_CSS = `
     right: 18px;
     display: grid;
     place-items: center;
-    width: 86px;
-    height: 86px;
+    width: 44px;
+    height: 44px;
     border: 1px solid rgba(255,255,255,.1);
-    border-radius: 24px;
+    border-radius: 14px;
     background: rgba(255,255,255,.045);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
     z-index: 2;
   }
   .protocol-avatar .solana-mark {
-    width: 58px;
+    width: 30px;
   }
   .sap-avatar {
-    width: 112px;
-    height: 112px;
-    border-radius: 30px;
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
     background: rgba(40,216,232,.06);
   }
   .sap-avatar img {
-    width: 78px;
-    height: 78px;
-    border-radius: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
   }
   .protocol-card strong,
   .protocol-card p {
@@ -927,17 +930,10 @@ export const LANDING_CSS = `
     background: rgba(40,216,232,.08);
     font-weight: 950;
   }
-  .registry-logo-sm {
-    color: #ffffff;
-    background:
-      radial-gradient(circle at 28% 26%, rgba(40,216,232,.22), transparent 38%),
-      linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.035));
-  }
-  .registry-logo-mcp {
-    color: var(--aqua);
-    background:
-      linear-gradient(135deg, rgba(40,216,232,.16), rgba(140,233,154,.055)),
-      rgba(40,216,232,.055);
+  .registry-logo img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
   }
   .registry-copy {
     display: grid;
@@ -1498,27 +1494,30 @@ export const LANDING_CSS = `
       width: min(210px, 54%);
     }
     .protocol-logo-rail span {
-      min-width: 50px;
-      min-height: 30px;
-      font-size: 10px;
+      width: 36px;
+      height: 36px;
+    }
+    .protocol-logo-rail img {
+      width: 24px;
+      height: 24px;
     }
     .protocol-avatar {
-      width: 68px;
-      height: 68px;
-      border-radius: 20px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
     }
     .protocol-avatar .solana-mark {
-      width: 46px;
+      width: 28px;
     }
     .sap-avatar {
-      width: 82px;
-      height: 82px;
-      border-radius: 24px;
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
     }
     .sap-avatar img {
-      width: 58px;
-      height: 58px;
-      border-radius: 16px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
     }
     .registry-status {
       justify-self: start;

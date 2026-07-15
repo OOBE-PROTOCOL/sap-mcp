@@ -536,6 +536,19 @@ describe('remote MCP server config', () => {
     expect(resolvePublicLogoAsset('POST', '/favicon.ico')).toBeUndefined();
   });
 
+  it('serves allowlisted public protocol and registry logos only', () => {
+    const head = resolvePublicLogoAsset('HEAD', '/logos/smithery.svg');
+    const get = resolvePublicLogoAsset('GET', '/logos/jupiter.ico');
+
+    expect(head?.contentType).toBe('image/svg+xml');
+    expect(head?.contentLength).toBeGreaterThan(0);
+    expect(head?.body).toBeUndefined();
+    expect(get?.contentType).toBe('image/x-icon');
+    expect(get?.body?.byteLength).toBeGreaterThan(0);
+    expect(resolvePublicLogoAsset('GET', '/logos/unknown.svg')).toBeUndefined();
+    expect(resolvePublicLogoAsset('POST', '/logos/smithery.svg')).toBeUndefined();
+  });
+
   it('resolves hosted docs markdown safely from docs and USER_DOCS', () => {
     const root = resolvePublicDocsMarkdown('GET', '/docs/README.md');
     const sidebar = resolvePublicDocsMarkdown('GET', '/docs/_sidebar.md');
