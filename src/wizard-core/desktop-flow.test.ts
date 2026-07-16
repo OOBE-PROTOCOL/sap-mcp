@@ -63,7 +63,7 @@ describe('desktop wizard flow', () => {
       expect(result.readiness.profileIssues).toEqual([]);
       expect(result.readiness.runtimeIssues).toEqual([]);
 
-      const profiles = getDesktopProfileStatuses(homeDir);
+      const profiles = getDesktopProfileStatuses(homeDir, 'darwin');
       expect(profiles[0]).toMatchObject({
         name: 'solking-agent',
         active: true,
@@ -90,7 +90,7 @@ describe('desktop wizard flow', () => {
     }), 'utf-8');
 
     try {
-      const profiles = getDesktopProfileStatuses(homeDir);
+      const profiles = getDesktopProfileStatuses(homeDir, 'darwin');
       expect(profiles[0]).toMatchObject({
         name: 'stevier',
         active: true,

@@ -101,11 +101,6 @@ jobs:
       - name: Verify packaged desktop renderer
         run: pnpm run desktop:verify-artifact
 
-      - name: Generate desktop artifact checksums
-        shell: bash
-        run: |
-          node scripts/generate-desktop-checksums.mjs
-
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -117,16 +112,36 @@ jobs:
             release/desktop/*.tar.gz
             release/desktop/*.blockmap
             release/desktop/latest*.yml
-            release/desktop/SHA256SUMS.txt
           if-no-files-found: error
 
+  publish:
+    name: Publish desktop wizard release
+    if: github.ref_type == 'tag'
+    needs: desktop
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sap-mcp-wizard-*
+          path: release/desktop
+          merge-multiple: true
+
+      - name: Generate combined desktop artifact checksums
+        run: node scripts/generate-desktop-checksums.mjs
+
       - name: Attach artifacts to GitHub release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           make_latest: true
           tag_name: ${{ github.ref_name }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: |
             release/desktop/*.dmg
             release/desktop/*.zip
