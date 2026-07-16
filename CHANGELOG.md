@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## 0.9.0 - 2026-07-16
+
+Release-candidate quality pass for the hosted-first SAP MCP wizard, desktop
+installer, public dashboard, and local non-custodial payment bridge before the
+official 1.0.0 line.
+
 ### Added
 
 - Added homepage and docs quick-start steppers for the two supported integration
@@ -29,7 +37,7 @@ All notable changes to this project are documented in this file.
   commands out of numbered steps, making command blocks horizontally scrollable,
   and preventing equal-height cards from stretching the stepper content.
 - Refined the public install and native download cards so the release badge,
-  platform cards, and direct installer links clearly target the current 0.8.0
+  platform cards, and direct installer links clearly target the current 0.9.0
   desktop wizard assets.
 - Added the missing OpenAPI description for generic JSON-RPC `params` so
   x402/pay.sh catalog validators and agent indexers can explain every required
@@ -39,6 +47,15 @@ All notable changes to this project are documented in this file.
 - Made hosted `sap` plus local `sap_payments` runtime injection platform-aware
   end to end, with Windows tests proving that Codex, Claude, Hermes, and
   OpenClaw payment bridge configs use `npx.cmd` where required.
+
+### Verification
+
+- `pnpm run lint`
+- `pnpm run typecheck`
+- `pnpm run build`
+- `pnpm test -- --run`
+- `pnpm run desktop:renderer:build`
+- `npm pack --dry-run --cache ./.npm-cache`
 
 ## 0.8.0 - 2026-07-14
 
