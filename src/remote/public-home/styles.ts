@@ -317,16 +317,16 @@ export const LANDING_CSS = `
     background: rgba(255, 255, 255, .045);
   }
   .mobile-nav-toggle {
-    width: 46px;
-    height: 46px;
-    border-radius: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 15px;
     place-items: center;
-    gap: 4px;
+    gap: 2px;
     padding: 0;
   }
   .mobile-nav-toggle span {
     display: block;
-    width: 20px;
+    width: 18px;
     height: 2px;
     border-radius: 99px;
     background: var(--ink);
@@ -440,13 +440,13 @@ export const LANDING_CSS = `
     transform: translateX(0);
   }
   html.mobile-nav-open .mobile-nav-toggle span:nth-child(1) {
-    transform: translateY(6px) rotate(45deg);
+    transform: translateY(4px) rotate(45deg);
   }
   html.mobile-nav-open .mobile-nav-toggle span:nth-child(2) {
     opacity: 0;
   }
   html.mobile-nav-open .mobile-nav-toggle span:nth-child(3) {
-    transform: translateY(-6px) rotate(-45deg);
+    transform: translateY(-4px) rotate(-45deg);
   }
   .version-pill {
     border: 1px solid rgba(255, 255, 255, .12);
@@ -1699,17 +1699,28 @@ export const LANDING_CSS = `
       border-radius: 18px;
     }
     .runtime-logo-rail {
-      border-radius: 24px;
-      mask-image: none;
+      border-radius: 999px;
+      padding: 7px;
+      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
     }
     .runtime-logo-rail div {
-      width: 100%;
-      flex-wrap: wrap;
-      animation: none;
+      width: max-content;
+      flex-wrap: nowrap;
+      animation: runtimeRail 30s linear infinite;
     }
     .runtime-logo-item {
-      flex: 1 1 calc(50% - 8px);
+      flex: 0 0 auto;
       justify-content: flex-start;
+      min-height: 38px;
+      padding: 6px 13px 6px 7px;
+      font-size: 13px;
+    }
+    .runtime-logo-item img {
+      width: 26px;
+      height: 26px;
+    }
+    .runtime-logo-item strong {
+      font-size: 12px;
     }
     h1 {
       max-width: 12ch;
@@ -1728,7 +1739,7 @@ export const LANDING_CSS = `
       width: 100%;
     }
     .hero-visual {
-      min-height: 470px;
+      min-height: 410px;
       border-radius: 24px;
     }
     .terminal-strip {
@@ -1743,23 +1754,49 @@ export const LANDING_CSS = `
       white-space: nowrap;
     }
     .orbital-engine {
-      inset: 78px 12px 132px;
+      inset: 76px 10px 104px;
+    }
+    .orbit {
+      width: min(66%, 280px);
+    }
+    .orbit-b {
+      width: min(50%, 220px);
+    }
+    .orbit-c {
+      width: min(34%, 160px);
+    }
+    .orbit-core {
+      width: 112px;
+      height: 112px;
+      border-radius: 26px;
+    }
+    .orbit-core img {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+    }
+    .orbit-core strong {
+      font-size: 22px;
     }
     .orbit-chip {
-      width: 92px;
-      padding: 10px;
-      font-size: 12px;
-    }
-    .chip-a,
-    .chip-c {
-      left: 4%;
-    }
-    .chip-b,
-    .chip-d {
-      right: 4%;
+      display: none;
     }
     .hero-bento-mini {
-      grid-template-columns: 1fr;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .hero-bento-mini div {
+      border-radius: 13px;
+      padding: 10px;
+    }
+    .hero-bento-mini span {
+      font-size: 9px;
+    }
+    .hero-bento-mini strong {
+      font-size: 18px;
     }
     .bento-header h2,
     .docs-launchpad h2,
@@ -1879,6 +1916,27 @@ export const LANDING_CSS = `
       padding: 0 7px;
       font-size: 9px;
     }
+    .footer {
+      padding: 48px 0 34px;
+      font-size: 14px;
+    }
+    .footer-grid {
+      gap: 20px;
+      padding-top: 18px;
+    }
+    .footer strong {
+      font-size: 15px;
+    }
+    .footer p {
+      margin-bottom: 0;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .footer a {
+      padding: 4px 0;
+      font-size: 14px;
+      line-height: 1.35;
+    }
   }
 
   @media (max-width: 420px) {
@@ -1893,22 +1951,10 @@ export const LANDING_CSS = `
       font-size: 16px;
     }
     .hero-visual {
-      min-height: 430px;
+      min-height: 388px;
     }
-    .orbit-core {
-      width: 122px;
-      height: 122px;
-      border-radius: 28px;
-    }
-    .orbit-core strong {
-      font-size: 23px;
-    }
-    .orbit-chip {
-      width: 84px;
-      padding: 9px;
-    }
-    .runtime-logo-item {
-      flex-basis: 100%;
+    .terminal-strip code {
+      max-width: 138px;
     }
     .section {
       padding: 64px 0;
