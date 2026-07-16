@@ -81,6 +81,8 @@ describe('desktop wizard flow', () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'sap-mcp-desktop-home-'));
     const configDir = join(homeDir, '.config', 'mcp-sap');
     mkdirSync(configDir, { recursive: true });
+    delete process.env.XDG_CONFIG_HOME;
+    delete process.env.APPDATA;
     writeFileSync(join(configDir, '.active-profile'), 'stevier', 'utf-8');
     writeFileSync(join(configDir, 'config-stevier.json'), JSON.stringify({
       mode: 'hosted-api',
