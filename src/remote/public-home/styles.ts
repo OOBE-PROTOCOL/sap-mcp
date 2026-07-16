@@ -28,6 +28,9 @@ export const LANDING_CSS = `
   }
 
   * { box-sizing: border-box; }
+  img, svg, video, canvas {
+    max-width: 100%;
+  }
   html { scroll-behavior: smooth; }
   body {
     margin: 0;
@@ -54,6 +57,9 @@ export const LANDING_CSS = `
   }
 
   a { color: inherit; }
+  code, pre {
+    max-width: 100%;
+  }
   a:focus-visible, button:focus-visible {
     outline: 2px solid var(--aqua);
     outline-offset: 3px;
@@ -97,6 +103,18 @@ export const LANDING_CSS = `
     gap: 10px;
     min-width: 0;
     text-decoration: none;
+  }
+  .brand > span,
+  .nav-menu-link span,
+  .download-action span,
+  .download-card span,
+  .card,
+  .metric,
+  .feature,
+  .bento-card,
+  .protocol-card,
+  .registry-card {
+    min-width: 0;
   }
   .brand img {
     width: 42px;
@@ -259,6 +277,7 @@ export const LANDING_CSS = `
     display: flex;
     gap: 8px;
     align-items: center;
+    min-width: 0;
   }
   .nav-install {
     gap: 8px;
@@ -355,6 +374,9 @@ export const LANDING_CSS = `
     gap: 56px;
     align-items: center;
     padding: 78px 0 52px;
+  }
+  .hero > * {
+    min-width: 0;
   }
   .hero-copy { align-self: center; }
   .eyebrow {
@@ -537,6 +559,9 @@ export const LANDING_CSS = `
     grid-template-columns: minmax(0, .92fr) minmax(480px, .68fr);
     gap: 58px;
     align-items: start;
+  }
+  .bento-stack > * {
+    min-width: 0;
   }
   .bento-sticky-copy {
     position: sticky;
@@ -1382,7 +1407,9 @@ export const LANDING_CSS = `
       justify-content: stretch;
       overflow-x: auto;
       padding-bottom: 2px;
+      scrollbar-width: none;
     }
+    .nav-center::-webkit-scrollbar { display: none; }
     .nav-center > * {
       flex: 0 0 auto;
     }
@@ -1453,6 +1480,9 @@ export const LANDING_CSS = `
       min-height: 680px;
       margin: 36px 0 0;
     }
+    .machine-part {
+      width: min(230px, 34vw);
+    }
     .docs-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -1472,6 +1502,49 @@ export const LANDING_CSS = `
     .runtime-logo-strip {
       width: min(calc(100% - 24px), var(--content));
     }
+    .site-nav {
+      top: 8px;
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 22px;
+      gap: 10px;
+    }
+    .brand img {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+    }
+    .brand strong {
+      font-size: 14px;
+    }
+    .brand span span {
+      font-size: 11px;
+    }
+    .nav-pill,
+    .nav-dropdown summary,
+    .nav-actions a,
+    .button {
+      min-height: 40px;
+      padding: 9px 12px;
+      font-size: 13px;
+    }
+    .nav-actions {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+    }
+    .nav-install {
+      justify-self: stretch;
+    }
+    .version-pill {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    .nav-menu {
+      width: calc(100vw - 28px);
+      max-height: min(68vh, 480px);
+      border-radius: 18px;
+    }
     .runtime-logo-rail {
       border-radius: 24px;
       mask-image: none;
@@ -1485,7 +1558,11 @@ export const LANDING_CSS = `
       flex: 1 1 calc(50% - 8px);
       justify-content: flex-start;
     }
-    h1 { font-size: 42px; }
+    h1 {
+      max-width: 12ch;
+      font-size: 42px;
+      line-height: .92;
+    }
     .section h2 { font-size: 34px; }
     .lead { font-size: 18px; }
     .hero {
@@ -1498,8 +1575,19 @@ export const LANDING_CSS = `
       width: 100%;
     }
     .hero-visual {
-      min-height: 500px;
+      min-height: 470px;
       border-radius: 24px;
+    }
+    .terminal-strip {
+      left: 14px;
+      right: 14px;
+      top: 14px;
+    }
+    .terminal-strip code {
+      max-width: 170px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .orbital-engine {
       inset: 78px 12px 132px;
@@ -1522,8 +1610,24 @@ export const LANDING_CSS = `
     }
     .bento-header h2,
     .docs-launchpad h2,
-    .machine-copy h2 {
+    .machine-copy h2,
+    .bento-sticky-copy h2 {
       font-size: 38px;
+      line-height: .95;
+    }
+    .bento-sticky-copy {
+      padding-bottom: 0;
+    }
+    .bento-card,
+    .protocol-card {
+      min-height: 230px;
+      border-radius: 22px;
+      padding: 18px;
+    }
+    .bento-card h3,
+    .protocol-card strong {
+      font-size: 30px;
+      line-height: 1;
     }
     .machine-stage {
       display: grid;
@@ -1556,6 +1660,22 @@ export const LANDING_CSS = `
     .protocol-bento,
     .registry-card {
       grid-template-columns: 1fr;
+    }
+    .registry-card {
+      grid-template-columns: 56px 1fr;
+      border-radius: 22px;
+    }
+    .registry-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+    }
+    .registry-logo img {
+      width: 34px;
+      height: 34px;
+    }
+    .registry-status {
+      grid-column: 1 / -1;
     }
     .protocol-logo-rail {
       width: min(210px, 54%);
@@ -1595,6 +1715,64 @@ export const LANDING_CSS = `
     .metric { padding: 18px; }
     .download-card {
       min-height: 96px;
+    }
+    .endpoint-row {
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 9px;
+    }
+    .method-badge {
+      min-width: 40px;
+      height: 24px;
+      padding: 0 7px;
+      font-size: 9px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .hero-actions,
+    .inline-actions {
+      gap: 8px;
+    }
+    h1 {
+      font-size: 36px;
+    }
+    .lead {
+      font-size: 16px;
+    }
+    .hero-visual {
+      min-height: 430px;
+    }
+    .orbit-core {
+      width: 122px;
+      height: 122px;
+      border-radius: 28px;
+    }
+    .orbit-core strong {
+      font-size: 23px;
+    }
+    .orbit-chip {
+      width: 84px;
+      padding: 9px;
+    }
+    .runtime-logo-item {
+      flex-basis: 100%;
+    }
+    .section {
+      padding: 64px 0;
+    }
+    .machine-section {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .download-action,
+    .download-card {
+      grid-template-columns: 42px 1fr;
+    }
+    .download-action .os-mark,
+    .os-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
     }
   }
 `;

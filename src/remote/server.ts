@@ -1640,52 +1640,219 @@ export function buildDocsHtml(
     :root {
       --theme-color: #28d8e8;
       --sidebar-width: 310px;
+      --sap-bg: #111413;
+      --sap-panel: rgba(255, 255, 255, .055);
+      --sap-line: rgba(255, 255, 255, .14);
+      --sap-aqua: #28d8e8;
+      --sap-ink: #f5fbfc;
+      --sap-muted: #a8b9bc;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      background: var(--sap-bg);
     }
     body {
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #17242b;
+      color: var(--sap-ink);
+      background:
+        linear-gradient(rgba(40, 216, 232, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(40, 216, 232, .025) 1px, transparent 1px),
+        var(--sap-bg);
+      background-size: 80px 80px;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 16% 10%, rgba(40, 216, 232, .12), transparent 30%),
+        radial-gradient(circle at 84% 18%, rgba(134, 166, 255, .08), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,.025), transparent 40%);
+    }
+    .docs-home {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 80;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 54px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      padding: 7px 15px 7px 8px;
+      color: var(--sap-ink);
+      text-decoration: none;
+      font-weight: 850;
+      background: rgba(11, 17, 17, .82);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .docs-home:hover,
+    .docs-home:focus-visible {
+      border-color: rgba(40,216,232,.44);
+      background: rgba(40,216,232,.09);
+    }
+    .docs-home img {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      box-shadow: 0 0 0 1px rgba(40,216,232,.2);
+    }
+    .docs-home span {
+      display: grid;
+      gap: 1px;
+      line-height: 1.05;
+    }
+    .docs-home small {
+      color: var(--sap-muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+    .app-nav {
+      background: rgba(11, 17, 17, .9);
+      border-bottom: 1px solid var(--sap-line);
+      color: var(--sap-ink);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .github-corner svg {
+      color: var(--sap-bg);
+      fill: var(--sap-aqua);
+    }
+    .search input {
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      color: var(--sap-ink);
+      background: rgba(255,255,255,.055);
     }
     .app-name-link {
-      color: #062730;
+      color: var(--sap-ink);
       font-weight: 800;
     }
+    .app-name {
+      margin-top: 82px;
+    }
     .sidebar {
-      border-right: 1px solid rgba(6,39,48,.10);
+      border-right: 1px solid var(--sap-line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.028)),
+        rgba(9, 17, 18, .92);
+      color: var(--sap-muted);
+    }
+    .sidebar-toggle {
+      background: rgba(11, 17, 17, .88);
+      border-radius: 0 14px 14px 0;
+      border: 1px solid var(--sap-line);
+      border-left: 0;
     }
     .sidebar-nav strong,
     .markdown-section h1,
     .markdown-section h2,
     .markdown-section h3 {
-      color: #062730;
+      color: var(--sap-ink);
       letter-spacing: 0;
     }
+    .sidebar ul li a,
+    .sidebar ul li.active > a,
+    .anchor span {
+      color: var(--sap-muted);
+    }
+    .sidebar ul li.active > a,
+    .sidebar ul li a:hover {
+      color: var(--sap-aqua);
+    }
+    .markdown-section {
+      max-width: 920px;
+      color: var(--sap-muted);
+    }
+    .markdown-section strong,
+    .markdown-section table,
+    .markdown-section li {
+      color: var(--sap-muted);
+    }
     .markdown-section a {
-      color: #087f91;
+      color: var(--sap-aqua);
       text-underline-offset: 3px;
     }
     .markdown-section code {
-      color: #062730;
+      color: #d8faff;
       border-radius: 6px;
+      background: rgba(255,255,255,.08);
     }
     .markdown-section pre {
       border-radius: 8px;
-      border: 1px solid rgba(6,39,48,.10);
+      border: 1px solid var(--sap-line);
+      background: rgba(0,0,0,.34);
     }
     .markdown-section table {
       display: table;
       width: 100%;
+      overflow-wrap: anywhere;
+    }
+    .markdown-section th,
+    .markdown-section td {
+      border-color: rgba(255,255,255,.12);
     }
     .markdown-section blockquote {
-      border-left-color: #28d8e8;
-      color: #49656f;
+      border-left-color: var(--sap-aqua);
+      color: var(--sap-muted);
+      background: rgba(40,216,232,.045);
     }
     .cover-main,
     section.cover {
-      background: linear-gradient(115deg, rgba(40,216,232,.13), transparent 34%), #f8fdff;
+      background:
+        linear-gradient(115deg, rgba(40,216,232,.13), transparent 34%),
+        var(--sap-bg);
+    }
+    @media (max-width: 768px) {
+      .docs-home {
+        position: sticky;
+        top: 8px;
+        left: auto;
+        width: calc(100% - 24px);
+        margin: 8px 12px;
+        justify-content: flex-start;
+      }
+      .app-name {
+        margin-top: 18px;
+      }
+      .markdown-section {
+        padding: 32px 18px 40px;
+      }
+      .markdown-section h1 {
+        font-size: 34px;
+        line-height: 1;
+      }
+      .markdown-section table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+    @media (max-width: 420px) {
+      .docs-home {
+        border-radius: 20px;
+      }
+      .docs-home span strong {
+        font-size: 14px;
+      }
     }
   </style>
 </head>
 <body>
+  <a class="docs-home" href="${escapeHtml(info.endpoints.landing)}" aria-label="Back to SAP MCP home">
+    <img src="/favicon.png" width="38" height="38" alt="">
+    <span>
+      <strong>SAP MCP Docs</strong>
+      <small>Back to hosted gateway</small>
+    </span>
+  </a>
   <div id="app">Loading SAP MCP documentation...</div>
   <script>
     window.$docsify = ${docsifyConfig};
