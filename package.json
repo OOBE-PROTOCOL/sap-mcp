@@ -27,6 +27,7 @@
     "CHANGELOG.md",
     "LICENSE",
     "server.json",
+    "smithery.config.schema.json",
     ".env.example",
     "config.example.json",
     "config.secure-example.json",

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAP MCP Hosted Setup",
+  "description": "SAP MCP is hosted and non-custodial. Free/read tools work remotely; paid or write tools require a local SAP profile and sap_payments bridge created by the wizard.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "setupMode": {
+      "type": "string",
+      "title": "Setup mode",
+      "description": "Choose hosted-read for discovery only, or hosted-paid-local-bridge to use x402/pay.sh paid and write tools with local signing.",
+      "enum": [
+        "hosted-read",
+        "hosted-paid-local-bridge"
+      ],
+      "default": "hosted-paid-local-bridge"
+    },
+    "wizardCompleted": {
+      "type": "boolean",
+      "title": "Wizard completed",
+      "description": "Set true after running: npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard",
+      "default": false
+    },
+    "maxUsdPerPaidCall": {
+      "type": "number",
+      "title": "Max USD per paid call",
+      "description": "Recommended local policy cap for x402/pay.sh hosted paid tool calls. Enforced by the local sap_payments bridge, not by Smithery.",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0.02
+    },
+    "autoPayMicropayments": {
+      "type": "boolean",
+      "title": "Auto-pay small calls",
+      "description": "Optional local bridge behavior for tiny approved calls. OOBE hosted MCP never stores user keypairs, wallet bytes, or signer secrets.",
+      "default": false
+    }
+  }
+}

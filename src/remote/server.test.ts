@@ -24,6 +24,15 @@ const originalAuthSecret = process.env.SAP_MCP_AUTH_SECRET;
 const originalStateless = process.env.SAP_MCP_HTTP_STATELESS;
 const originalRemoteRateLimit = process.env.SAP_MCP_REMOTE_RATE_LIMIT_PER_MINUTE;
 const originalFacilitatorPublicKey = process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY;
+const originalMaxStatefulSessions = process.env.SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS;
+const originalSessionIdleTtl = process.env.SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS;
+const originalSessionAbsoluteTtl = process.env.SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS;
+const originalSessionCleanupInterval = process.env.SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS;
+const originalMaxInFlightRequests = process.env.SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS;
+const originalRequestTimeout = process.env.SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS;
+const originalHeadersTimeout = process.env.SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS;
+const originalKeepAliveTimeout = process.env.SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS;
+const originalMaxRequestsPerSocket = process.env.SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET;
 const githubReleaseBaseUrl = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
 
 const appConfig: SapMcpConfig = {
@@ -132,6 +141,51 @@ function restoreEnv(): void {
   } else {
     process.env.SAP_MCP_X402_FACILITATOR_PUBLIC_KEY = originalFacilitatorPublicKey;
   }
+  if (originalMaxStatefulSessions === undefined) {
+    delete process.env.SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS;
+  } else {
+    process.env.SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS = originalMaxStatefulSessions;
+  }
+  if (originalSessionIdleTtl === undefined) {
+    delete process.env.SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS = originalSessionIdleTtl;
+  }
+  if (originalSessionAbsoluteTtl === undefined) {
+    delete process.env.SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS = originalSessionAbsoluteTtl;
+  }
+  if (originalSessionCleanupInterval === undefined) {
+    delete process.env.SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS = originalSessionCleanupInterval;
+  }
+  if (originalMaxInFlightRequests === undefined) {
+    delete process.env.SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS;
+  } else {
+    process.env.SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS = originalMaxInFlightRequests;
+  }
+  if (originalRequestTimeout === undefined) {
+    delete process.env.SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS = originalRequestTimeout;
+  }
+  if (originalHeadersTimeout === undefined) {
+    delete process.env.SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS = originalHeadersTimeout;
+  }
+  if (originalKeepAliveTimeout === undefined) {
+    delete process.env.SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS;
+  } else {
+    process.env.SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS = originalKeepAliveTimeout;
+  }
+  if (originalMaxRequestsPerSocket === undefined) {
+    delete process.env.SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET;
+  } else {
+    process.env.SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET = originalMaxRequestsPerSocket;
+  }
 }
 
 afterEach(() => {
@@ -150,6 +204,21 @@ describe('remote MCP server config', () => {
     expect(config.auth).toEqual({ type: 'none' });
     expect(config.stateless).toBe(false);
     expect(config.rateLimit.requestsPerMinute).toBe(60);
+    expect(config.sessions).toEqual({
+      maxStatefulSessions: 2000,
+      idleTtlMs: 600000,
+      absoluteTtlMs: 3600000,
+      cleanupIntervalMs: 30000,
+    });
+    expect(config.concurrency).toEqual({
+      maxInFlightRequests: 1024,
+    });
+    expect(config.http).toEqual({
+      requestTimeoutMs: 300000,
+      headersTimeoutMs: 65000,
+      keepAliveTimeoutMs: 75000,
+      maxRequestsPerSocket: 0,
+    });
     expect(config.paymentDiscovery).toMatchObject({
       provider: 'x402',
       network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
@@ -171,6 +240,37 @@ describe('remote MCP server config', () => {
 
     expect(config.stateless).toBe(false);
     expect(config.rateLimit.requestsPerMinute).toBe(500);
+  });
+
+  it('allows hosted concurrency and session lifecycle tuning from env', () => {
+    process.env.SAP_MCP_AUTH_TYPE = 'none';
+    process.env.SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS = '5000';
+    process.env.SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS = '120000';
+    process.env.SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS = '900000';
+    process.env.SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS = '10000';
+    process.env.SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS = '2048';
+    process.env.SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS = '600000';
+    process.env.SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS = '70000';
+    process.env.SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS = '80000';
+    process.env.SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET = '10000';
+
+    const config = defaultRemoteConfig(appConfig);
+
+    expect(config.sessions).toEqual({
+      maxStatefulSessions: 5000,
+      idleTtlMs: 120000,
+      absoluteTtlMs: 900000,
+      cleanupIntervalMs: 10000,
+    });
+    expect(config.concurrency).toEqual({
+      maxInFlightRequests: 2048,
+    });
+    expect(config.http).toEqual({
+      requestTimeoutMs: 600000,
+      headersTimeoutMs: 70000,
+      keepAliveTimeoutMs: 80000,
+      maxRequestsPerSocket: 10000,
+    });
   });
 
   it('advertises no bearer requirement in the public agent card when auth is none', () => {

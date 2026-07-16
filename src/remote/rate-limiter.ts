@@ -44,6 +44,7 @@ export class RemoteRateLimiter {
   private readonly config: RemoteRateLimitConfig;
   private readonly localEntries = new Map<string, LocalRateLimitEntry>();
   private readonly redis?: InstanceType<typeof Redis>;
+  private readonly cleanupInterval?: NodeJS.Timeout;
 
   public constructor(config: RemoteRateLimitConfig) {
     this.config = config;
@@ -56,7 +57,11 @@ export class RemoteRateLimiter {
       this.redis.on('error', (error: Error) => {
         logger.warn('Remote rate limiter Redis error', { error });
       });
+      return;
     }
+
+    this.cleanupInterval = setInterval(() => this.cleanupLocal(), WINDOW_MS);
+    this.cleanupInterval.unref?.();
   }
 
   /**
@@ -97,6 +102,9 @@ export class RemoteRateLimiter {
    * @description Closes the optional Redis connection.
    */
   public async close(): Promise<void> {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
     await this.redis?.quit();
   }
 
@@ -135,6 +143,23 @@ export class RemoteRateLimiter {
       remaining,
       resetSeconds,
     };
+  }
+
+  private cleanupLocal(): void {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, entry] of this.localEntries.entries()) {
+      if (entry.resetAt <= now) {
+        this.localEntries.delete(key);
+        cleaned += 1;
+      }
+    }
+    if (cleaned > 0) {
+      logger.debug('Remote rate limiter local cleanup', {
+        cleaned,
+        activeKeys: this.localEntries.size,
+      });
+    }
   }
 }
 

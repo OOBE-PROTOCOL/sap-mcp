@@ -88,8 +88,41 @@ export interface RemoteMCPConfig {
   auth: RemoteAuthConfig;
   stateless: boolean;
   rateLimit: RemoteRateLimitConfig;
+  sessions?: RemoteSessionConfig;
+  concurrency?: RemoteConcurrencyConfig;
+  http?: RemoteHttpTuningConfig;
   paymentDiscovery?: PublicPaymentDiscovery;
   paymentPriceRange?: PublicPaymentPriceRange;
+}
+
+/**
+ * @name RemoteSessionConfig
+ * @description Bounds stateful Streamable HTTP MCP sessions so crawlers and idle agents cannot exhaust memory.
+ */
+export interface RemoteSessionConfig {
+  maxStatefulSessions: number;
+  idleTtlMs: number;
+  absoluteTtlMs: number;
+  cleanupIntervalMs: number;
+}
+
+/**
+ * @name RemoteConcurrencyConfig
+ * @description Bounds concurrently executing MCP requests while preserving fast failure under overload.
+ */
+export interface RemoteConcurrencyConfig {
+  maxInFlightRequests: number;
+}
+
+/**
+ * @name RemoteHttpTuningConfig
+ * @description Node HTTP server socket and header timeout settings for reverse-proxied streaming deployments.
+ */
+export interface RemoteHttpTuningConfig {
+  requestTimeoutMs: number;
+  headersTimeoutMs: number;
+  keepAliveTimeoutMs: number;
+  maxRequestsPerSocket: number;
 }
 
 /**
@@ -385,6 +418,43 @@ interface StatefulMcpSession {
   lastSeenAt: number;
 }
 
+class RemoteCapacityError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = 'RemoteCapacityError';
+  }
+}
+
+class InFlightRequestLimiter {
+  private active = 0;
+
+  public constructor(private readonly maxInFlightRequests: number) {}
+
+  public tryAcquire(): (() => void) | undefined {
+    if (this.maxInFlightRequests <= 0) {
+      return () => undefined;
+    }
+
+    if (this.active >= this.maxInFlightRequests) {
+      return undefined;
+    }
+
+    this.active += 1;
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this.active = Math.max(0, this.active - 1);
+    };
+  }
+
+  public getActiveCount(): number {
+    return this.active;
+  }
+}
+
 /**
  * @name parseApiKeys
  * @description Parses comma-separated `apiKey=userId` entries from environment configuration.
@@ -425,6 +495,9 @@ export function defaultRemoteConfig(appConfig: SapMcpConfig): RemoteMCPConfig {
     corsOrigins: appConfig.httpCorsOrigins,
     stateless: parseRemoteBoolean(process.env.SAP_MCP_HTTP_STATELESS, false),
     rateLimit: buildRemoteRateLimitConfigFromEnv(appConfig.rateLimitPerMinute),
+    sessions: buildRemoteSessionConfigFromEnv(),
+    concurrency: buildRemoteConcurrencyConfigFromEnv(),
+    http: buildRemoteHttpTuningConfigFromEnv(),
     paymentDiscovery: buildPublicPaymentDiscovery(appConfig),
     paymentPriceRange: {
       minUsd: appConfig.monetization.prices.minUsd,
@@ -528,6 +601,38 @@ function parseRemoteBoolean(raw: string | undefined, fallback: boolean): boolean
     return fallback;
   }
   return ['true', '1', 'yes', 'on'].includes(raw.trim().toLowerCase());
+}
+
+function buildRemoteSessionConfigFromEnv(): RemoteSessionConfig {
+  return {
+    maxStatefulSessions: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS, 2_000),
+    idleTtlMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS, 10 * 60 * 1000),
+    absoluteTtlMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS, 60 * 60 * 1000),
+    cleanupIntervalMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS, 30_000),
+  };
+}
+
+function buildRemoteConcurrencyConfigFromEnv(): RemoteConcurrencyConfig {
+  return {
+    maxInFlightRequests: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS, 1_024),
+  };
+}
+
+function buildRemoteHttpTuningConfigFromEnv(): RemoteHttpTuningConfig {
+  return {
+    requestTimeoutMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS, 5 * 60 * 1000),
+    headersTimeoutMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS, 65_000),
+    keepAliveTimeoutMs: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS, 75_000),
+    maxRequestsPerSocket: parseRemotePositiveInteger(process.env.SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET, 0),
+  };
+}
+
+function parseRemotePositiveInteger(raw: string | undefined, fallback: number): number {
+  if (!raw) {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 /**
@@ -1809,7 +1914,11 @@ export class RemoteMCPServer {
   private readonly appConfig: SapMcpConfig;
   private readonly authManager: AuthManager;
   private readonly rateLimiter: RemoteRateLimiter;
+  private readonly requestLimiter: InFlightRequestLimiter;
   private readonly statefulSessions = new Map<string, StatefulMcpSession>();
+  private readonly sessionConfig: RemoteSessionConfig;
+  private readonly httpTuning: RemoteHttpTuningConfig;
+  private sessionCleanupInterval?: NodeJS.Timeout;
   private httpServer?: http.Server;
 
   public constructor(config?: RemoteMCPConfig) {
@@ -1823,6 +1932,11 @@ export class RemoteMCPServer {
     this.config = config ?? defaultRemoteConfig(this.appConfig);
     this.authManager = new AuthManager(this.config.auth);
     this.rateLimiter = new RemoteRateLimiter(this.config.rateLimit);
+    this.sessionConfig = this.config.sessions ?? buildRemoteSessionConfigFromEnv();
+    this.httpTuning = this.config.http ?? buildRemoteHttpTuningConfigFromEnv();
+    this.requestLimiter = new InFlightRequestLimiter(
+      this.config.concurrency?.maxInFlightRequests ?? buildRemoteConcurrencyConfigFromEnv().maxInFlightRequests,
+    );
   }
 
   /**
@@ -1832,6 +1946,7 @@ export class RemoteMCPServer {
   public async start(): Promise<void> {
     this.validateAuthConfig();
     await this.rateLimiter.initialize();
+    this.startSessionCleanup();
 
     const monetizationGate = await McpMonetizationGate.create(this.appConfig);
 
@@ -1974,6 +2089,22 @@ export class RemoteMCPServer {
         return;
       }
 
+      const releaseRequest = this.requestLimiter.tryAcquire();
+      if (!releaseRequest) {
+        writeJson(res, 503, {
+          error: 'remote_mcp_over_capacity',
+          retryAfterSeconds: 2,
+          hint: 'The hosted MCP gateway is protecting itself from overload. Retry shortly or reduce parallel calls.',
+        }, {
+          'Retry-After': '2',
+          'X-MCP-In-Flight': String(this.requestLimiter.getActiveCount()),
+        });
+        return;
+      }
+      res.once('finish', releaseRequest);
+      res.once('close', releaseRequest);
+      res.setHeader('X-MCP-In-Flight', String(this.requestLimiter.getActiveCount()));
+
       // ── Request logging ─────────────────────────────────────────────
       const reqStart = Date.now();
       const callerIp = getRateLimitKey(req);
@@ -2034,6 +2165,23 @@ export class RemoteMCPServer {
           }
         }
       } catch (error) {
+        if (error instanceof RemoteCapacityError) {
+          logger.warn('Remote MCP capacity limit reached', {
+            error: error.message,
+            activeSessions: this.statefulSessions.size,
+          });
+          if (!res.headersSent) {
+            writeJson(res, 503, {
+              error: 'remote_mcp_session_capacity',
+              retryAfterSeconds: 5,
+              activeSessions: this.statefulSessions.size,
+              maxStatefulSessions: this.sessionConfig.maxStatefulSessions,
+            }, {
+              'Retry-After': '5',
+            });
+          }
+          return;
+        }
         logger.error('Remote MCP request failed', { error });
         if (!res.headersSent) {
           writeJson(res, 500, {
@@ -2047,6 +2195,11 @@ export class RemoteMCPServer {
         }
       }
     });
+
+    this.httpServer.requestTimeout = this.httpTuning.requestTimeoutMs;
+    this.httpServer.headersTimeout = this.httpTuning.headersTimeoutMs;
+    this.httpServer.keepAliveTimeout = this.httpTuning.keepAliveTimeoutMs;
+    this.httpServer.maxRequestsPerSocket = this.httpTuning.maxRequestsPerSocket;
 
     await new Promise<void>((resolve, reject) => {
       this.httpServer?.once('error', reject);
@@ -2063,6 +2216,10 @@ export class RemoteMCPServer {
       stateless: this.config.stateless,
       rateLimitPerMinute: this.config.rateLimit.enabled ? this.config.rateLimit.requestsPerMinute : 0,
       redisRateLimit: Boolean(this.config.rateLimit.redisUrl),
+      maxStatefulSessions: this.sessionConfig.maxStatefulSessions,
+      sessionIdleTtlMs: this.sessionConfig.idleTtlMs,
+      maxInFlightRequests: this.config.concurrency?.maxInFlightRequests,
+      requestTimeoutMs: this.httpTuning.requestTimeoutMs,
     });
   }
 
@@ -2071,6 +2228,10 @@ export class RemoteMCPServer {
    * @description Gracefully closes the MCP transport and HTTP listener.
    */
   public async stop(): Promise<void> {
+    if (this.sessionCleanupInterval) {
+      clearInterval(this.sessionCleanupInterval);
+      this.sessionCleanupInterval = undefined;
+    }
     const sessions = Array.from(this.statefulSessions.values());
     this.statefulSessions.clear();
     await Promise.allSettled(sessions.map(session => session.transport.close()));
@@ -2205,6 +2366,11 @@ export class RemoteMCPServer {
    * @description Creates one MCP server and Streamable HTTP transport for a single initialized session.
    */
   private async createStatefulSessionTransport(): Promise<StreamableHTTPServerTransport> {
+    await this.pruneStatefulSessions('before-create');
+    if (this.statefulSessions.size >= this.sessionConfig.maxStatefulSessions) {
+      throw new RemoteCapacityError(`Stateful MCP session capacity reached (${this.sessionConfig.maxStatefulSessions})`);
+    }
+
     const server = await createSapMcpServer(this.appConfig);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -2225,16 +2391,98 @@ export class RemoteMCPServer {
     transport.onclose = () => {
       const sessionId = transport.sessionId;
       if (sessionId) {
-        this.statefulSessions.delete(sessionId);
-        logger.info('Stateful MCP session closed', {
-          sessionId,
-          activeSessions: this.statefulSessions.size,
-        });
+        const deleted = this.statefulSessions.delete(sessionId);
+        if (deleted) {
+          logger.info('Stateful MCP session closed', {
+            sessionId,
+            activeSessions: this.statefulSessions.size,
+          });
+        }
       }
     };
 
     await server.connect(transport);
     return transport;
+  }
+
+  private startSessionCleanup(): void {
+    if (this.config.stateless || this.sessionCleanupInterval) {
+      return;
+    }
+
+    this.sessionCleanupInterval = setInterval(() => {
+      void this.pruneStatefulSessions('interval').catch(error => {
+        logger.warn('Stateful MCP session cleanup failed', { error });
+      });
+    }, this.sessionConfig.cleanupIntervalMs);
+    this.sessionCleanupInterval.unref?.();
+  }
+
+  private async pruneStatefulSessions(reason: 'before-create' | 'interval'): Promise<void> {
+    if (this.statefulSessions.size === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const expiredSessionIds: string[] = [];
+    for (const [sessionId, session] of this.statefulSessions.entries()) {
+      const idleMs = now - session.lastSeenAt;
+      const ageMs = now - session.createdAt;
+      if (idleMs > this.sessionConfig.idleTtlMs || ageMs > this.sessionConfig.absoluteTtlMs) {
+        expiredSessionIds.push(sessionId);
+      }
+    }
+
+    for (const sessionId of expiredSessionIds) {
+      await this.closeStatefulSession(sessionId, 'expired');
+    }
+
+    if (this.statefulSessions.size < this.sessionConfig.maxStatefulSessions) {
+      if (expiredSessionIds.length > 0) {
+        logger.info('Stateful MCP session cleanup completed', {
+          reason,
+          closed: expiredSessionIds.length,
+          activeSessions: this.statefulSessions.size,
+        });
+      }
+      return;
+    }
+
+    const targetSize = Math.max(0, this.sessionConfig.maxStatefulSessions - 1);
+    const sessionsByIdleAge = Array.from(this.statefulSessions.entries())
+      .sort(([, left], [, right]) => left.lastSeenAt - right.lastSeenAt);
+    const overflowCount = Math.max(0, this.statefulSessions.size - targetSize);
+    for (const [sessionId] of sessionsByIdleAge.slice(0, overflowCount)) {
+      await this.closeStatefulSession(sessionId, 'capacity-prune');
+    }
+
+    if (expiredSessionIds.length > 0 || overflowCount > 0) {
+      logger.info('Stateful MCP session cleanup completed', {
+        reason,
+        expired: expiredSessionIds.length,
+        prunedForCapacity: overflowCount,
+        activeSessions: this.statefulSessions.size,
+      });
+    }
+  }
+
+  private async closeStatefulSession(
+    sessionId: string,
+    reason: 'expired' | 'capacity-prune' | 'shutdown',
+  ): Promise<void> {
+    const session = this.statefulSessions.get(sessionId);
+    if (!session) {
+      return;
+    }
+
+    this.statefulSessions.delete(sessionId);
+    await session.transport.close().catch(error => {
+      logger.warn('Failed to close stateful MCP session', {
+        sessionId,
+        reason,
+        error,
+      });
+    });
   }
 
   /**

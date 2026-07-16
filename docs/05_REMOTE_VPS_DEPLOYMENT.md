@@ -63,8 +63,37 @@ Required categories:
 6. Monetization settings.
 7. Facilitator URL and facilitator auth token when x402 is enabled.
 8. Logging format and retention settings.
+9. Redis settings for multi-process rate limits and payment ledger streams.
+10. Stateful MCP session and in-flight request limits.
 
 Public agent-facing deployments can run without Bearer auth when x402, rate limits, and policy are enabled. Private beta, enterprise, admin, and non-public deployments should use API key or JWT auth.
+
+For high-volume hosted operation, configure bounded Streamable HTTP behavior:
+
+```bash
+# Shared backends for PM2 cluster / multi-process deployments.
+SAP_MCP_USE_REDIS=true
+SAP_MCP_REDIS_URL=redis://127.0.0.1:6379
+
+# Stateful MCP session lifecycle.
+SAP_MCP_REMOTE_MAX_STATEFUL_SESSIONS=5000
+SAP_MCP_REMOTE_SESSION_IDLE_TTL_MS=300000
+SAP_MCP_REMOTE_SESSION_ABSOLUTE_TTL_MS=1800000
+SAP_MCP_REMOTE_SESSION_CLEANUP_INTERVAL_MS=15000
+
+# Request/stream backpressure.
+SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS=2048
+
+# HTTP listener tuning behind Nginx/Cloudflare.
+SAP_MCP_REMOTE_REQUEST_TIMEOUT_MS=300000
+SAP_MCP_REMOTE_HEADERS_TIMEOUT_MS=65000
+SAP_MCP_REMOTE_KEEP_ALIVE_TIMEOUT_MS=75000
+SAP_MCP_REMOTE_MAX_REQUESTS_PER_SOCKET=10000
+```
+
+Set `SAP_MCP_REMOTE_MAX_IN_FLIGHT_REQUESTS` below the reverse-proxy connection
+budget. When the server reaches the cap it returns `503 remote_mcp_over_capacity`
+with `Retry-After`, instead of letting requests hang indefinitely.
 
 ## 05.5 Public Routes
 
@@ -104,6 +133,9 @@ Recommended rules:
 5. Restart on crash.
 6. Alert on health-check failures, payment verification failures, and unexpected auth failures.
 7. Never commit production PM2 ecosystem files containing real environment values.
+8. Use Redis before enabling PM2 cluster mode for the hosted remote process.
+9. Keep Nginx streaming proxy buffering disabled for `/mcp`.
+10. Alert on `remote_mcp_over_capacity`, session capacity, and 5xx rates.
 
 The public `ecosystem.config.example.cjs` is a shape reference only. Copy it into private infrastructure and replace every placeholder from your secret store before deployment.
 

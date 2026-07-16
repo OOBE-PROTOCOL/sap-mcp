@@ -180,6 +180,12 @@ DELETE  /mcp
 
 `GET /docs` serves the public documentation site for install, start, configuration, hosted remote MCP, x402/pay.sh payments, and MCP client setup.
 
+Marketplace listings such as Smithery can use [`smithery.config.schema.json`](smithery.config.schema.json)
+to explain the hosted setup path. The schema intentionally asks for no
+secrets: SAP MCP hosted reads work remotely, while paid/write calls use the
+wizard-managed local `sap_payments` bridge, local profile policy, and
+user-controlled signer.
+
 See [05. Remote VPS Deployment](docs/05_REMOTE_VPS_DEPLOYMENT.md) and [07. Endpoints And Clients](docs/07_ENDPOINTS_AND_CLIENTS.md).
 
 ## 6. Monetization
