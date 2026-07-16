@@ -483,6 +483,13 @@ describe('remote MCP server config', () => {
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
+    expect(root).toContain('SAP MCP compatible agent runtimes');
+    expect(root).toContain('<strong>Hermes</strong>');
+    expect(root).toContain('<strong>Codex</strong>');
+    expect(root).toContain('<strong>Claude</strong>');
+    expect(root).toContain('<strong>OpenClaw</strong>');
+    expect(root).not.toContain('Caller Fingerprints');
+    expect(root).not.toContain('caller origins');
     expect(root).toContain('Native Downloads');
     expect(root).toContain(`SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`);
     expect(root).toContain(`SAP-MCP-Wizard-${MCP_SERVER_VERSION}-arm64.dmg`);

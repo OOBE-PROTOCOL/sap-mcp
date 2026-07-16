@@ -98,6 +98,35 @@ function renderDefiLogoRail(): string {
 }
 
 /**
+ * @name renderRuntimeLogoRail
+ * @description Renders the hosted MCP-compatible runtime carousel under the primary navigation.
+ */
+export function renderRuntimeLogoRail(): string {
+  const runtimes = [
+    ['Hermes', 'H', 'Agent profile runtime with MCP tools and skills.'],
+    ['Codex', 'C', 'Developer agent runtime with hosted MCP and local payment bridge.'],
+    ['Claude', 'Cl', 'Claude Desktop and Claude Code MCP-compatible setup.'],
+    ['OpenClaw', 'Oc', 'Open agent runtime wired through hosted SAP MCP.'],
+  ] as const;
+  const items = [...runtimes, ...runtimes, ...runtimes];
+
+  return `
+    <section class="runtime-logo-strip" aria-label="SAP MCP compatible agent runtimes">
+      <div class="runtime-logo-rail">
+        <div>
+          ${items.map(([name, mark, description]) => `
+            <span class="runtime-logo-item" title="${escapeHtml(description)}">
+              <b aria-hidden="true">${escapeHtml(mark)}</b>
+              <strong>${escapeHtml(name)}</strong>
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+/**
  * @name renderProtocolMedia
  * @description Renders protocol-specific visual affordances inside the Protocol surface bento cards.
  */
@@ -456,12 +485,7 @@ export function renderMetrics(model: LandingPageModel): string {
         <article class="metric">
           <span>x402 Challenges</span>
           <strong>${escapeHtml(formatInteger(stats.totalPaymentRequests))}</strong>
-          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} verified payments from ${escapeHtml(formatInteger(stats.uniqueRemoteCallers))} caller origins.</p>
-        </article>
-        <article class="metric">
-          <span>Caller Fingerprints</span>
-          <strong>${escapeHtml(formatInteger(stats.uniqueUserAgents))}</strong>
-          <p>Unique user-agent signatures observed in paid challenge traffic.</p>
+          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} verified payments, ${escapeHtml(formatInteger(stats.totalFailedSettlements))} failed settlements.</p>
         </article>
       </div>
     </section>

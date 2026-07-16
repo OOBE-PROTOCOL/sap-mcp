@@ -11,6 +11,7 @@ import {
   renderMetrics,
   renderPayments,
   renderRegistryListings,
+  renderRuntimeLogoRail,
   renderScrollMachine,
   renderTopNavigation,
 } from './sections.js';
@@ -55,6 +56,7 @@ export function renderLandingPage(model: LandingPageModel): string {
 <body>
   <a class="skip-link" href="#install">Skip to install</a>
   ${renderTopNavigation(model)}
+  ${renderRuntimeLogoRail()}
   <main class="page-shell">
     ${renderHero(model)}
     ${renderHeroBento(model)}

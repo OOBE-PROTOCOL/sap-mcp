@@ -295,6 +295,57 @@ export const LANDING_CSS = `
     white-space: nowrap;
   }
 
+  .runtime-logo-strip {
+    width: min(calc(100% - 32px), var(--content));
+    margin: 12px auto 0;
+    overflow: hidden;
+  }
+  .runtime-logo-rail {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 999px;
+    padding: 8px;
+    background: rgba(255, 255, 255, .035);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  }
+  .runtime-logo-rail div {
+    display: flex;
+    width: max-content;
+    gap: 8px;
+    animation: runtimeRail 34s linear infinite;
+  }
+  .runtime-logo-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    border: 1px solid rgba(40, 216, 232, .16);
+    border-radius: 999px;
+    padding: 7px 16px 7px 8px;
+    color: var(--ink);
+    background: rgba(8, 18, 19, .72);
+    white-space: nowrap;
+  }
+  .runtime-logo-item b {
+    display: grid;
+    place-items: center;
+    min-width: 30px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(40, 216, 232, .24);
+    border-radius: 999px;
+    color: var(--aqua);
+    background: rgba(40, 216, 232, .08);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .runtime-logo-item strong {
+    font-size: 13px;
+    line-height: 1;
+  }
+
   .page-shell {
     width: min(calc(100% - 32px), var(--content));
     margin: 0 auto;
@@ -886,6 +937,10 @@ export const LANDING_CSS = `
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
   }
+  @keyframes runtimeRail {
+    from { transform: translateX(0); }
+    to { transform: translateX(-33.333%); }
+  }
 
   .registry-section {
     padding-top: 94px;
@@ -1313,6 +1368,7 @@ export const LANDING_CSS = `
     .doc-tile,
     .protocol-card,
     .protocol-logo-rail div,
+    .runtime-logo-rail div,
     .registry-card {
       animation: none;
       transition: none;
@@ -1415,8 +1471,22 @@ export const LANDING_CSS = `
 
   @media (max-width: 640px) {
     .page-shell,
-    .site-nav {
+    .site-nav,
+    .runtime-logo-strip {
       width: min(calc(100% - 24px), var(--content));
+    }
+    .runtime-logo-rail {
+      border-radius: 24px;
+      mask-image: none;
+    }
+    .runtime-logo-rail div {
+      width: 100%;
+      flex-wrap: wrap;
+      animation: none;
+    }
+    .runtime-logo-item {
+      flex: 1 1 calc(50% - 8px);
+      justify-content: flex-start;
     }
     h1 { font-size: 42px; }
     .section h2 { font-size: 34px; }
