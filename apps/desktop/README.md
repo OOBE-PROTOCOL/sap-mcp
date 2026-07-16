@@ -7,7 +7,7 @@ TUI wizards. It does not keep an independent configuration model.
 
 ## What It Does
 
-- creates a named SAP MCP profile under `~/.config/mcp-sap`;
+- creates a named SAP MCP profile under the OS-specific SAP MCP config directory;
 - creates or imports a dedicated SAP MCP wallet path;
 - keeps keypair bytes out of the renderer and out of hosted MCP config;
 - configures Codex, Claude, Hermes, and OpenClaw with hosted `sap` plus local `sap_payments`;

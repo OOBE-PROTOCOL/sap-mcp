@@ -30,6 +30,27 @@ function platformConfigBase(): string {
 }
 
 /**
+ * Resolves the preferred config directory for an explicit platform/home pair.
+ * This is used by the desktop wizard tests and GUI flows so Windows writes to
+ * AppData/Roaming even when the process runs outside a normal user shell.
+ */
+export function getPreferredConfigDirForPlatform(
+  home = homedir(),
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.XDG_CONFIG_HOME) {
+    return join(env.XDG_CONFIG_HOME, CONFIG_APP_DIR);
+  }
+
+  if (platform === 'win32') {
+    return join(env.APPDATA || join(home, 'AppData', 'Roaming'), CONFIG_APP_DIR);
+  }
+
+  return join(home, '.config', CONFIG_APP_DIR);
+}
+
+/**
  * Resolves the platform-specific base directory for runtime data.
  */
 function platformDataBase(): string {

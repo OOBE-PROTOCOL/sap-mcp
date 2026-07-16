@@ -245,7 +245,7 @@ function SuccessScreen({ title, config, result }: { title: string; config: Parti
       <Text> </Text>
       <Text color="green" bold>╚══════════════════════════════════════════════════════╝</Text>
       <Text> </Text>
-      <Text color="gray" dimColor>Config saved to {result?.configPath || '~/.config/mcp-sap/config.json'}</Text>
+      <Text color="gray" dimColor>Config saved to {result?.configPath || 'the SAP MCP config directory'}</Text>
       {result?.walletPath && (
         <Text color="gray" dimColor>Wallet: {result.walletPath}</Text>
       )}
@@ -282,7 +282,7 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           Review every value before saving. Keypair bytes are never displayed.
         </Text>
         <Text color="gray" dimColor>
-          Config lives in ~/.config/mcp-sap and follows the active profile pointer.
+          Config lives in the OS-specific SAP MCP config directory and follows the active profile pointer.
         </Text>
         <Text> </Text>
         <WaterWave />

@@ -373,7 +373,7 @@ function StepContent({
             <h3>Remote tools. Local signatures. Smooth payments.</h3>
             <div className="setup-bullets">
               <span>Hosted SAP MCP exposes the full remote tool surface.</span>
-              <span>Your profile under ~/.config/mcp-sap owns signing.</span>
+              <span>Your local SAP MCP profile owns signing.</span>
               <span>sap_payments handles x402 challenges locally.</span>
             </div>
             <div className="info-strip">
@@ -389,7 +389,7 @@ function StepContent({
   if (step === 'Profile') {
     return (
       <>
-        <PanelHeader title="Name the local SAP profile" copy="Profiles isolate agent identity, policy limits, and wallet paths under ~/.config/mcp-sap." />
+        <PanelHeader title="Name the local SAP profile" copy="Profiles isolate agent identity, policy limits, and wallet paths in the OS-specific SAP MCP config directory." />
         <div className="form-grid">
           <TextField
             id="profileName"
@@ -512,7 +512,7 @@ function StepContent({
           <input id={fieldId('installAddonBundle')} type="checkbox" checked={draft.installAddonBundle} onChange={(event) => update({ installAddonBundle: event.target.checked })} />
           <span>
             <strong>Install local bridge reference bundle</strong>
-            <small>Writes runtime snippets under ~/.config/mcp-sap/addons/x402-paid-call for inspection, repair, and custom clients.</small>
+            <small>Writes runtime snippets under the SAP MCP config directory for inspection, repair, and custom clients.</small>
           </span>
         </label>
       </>

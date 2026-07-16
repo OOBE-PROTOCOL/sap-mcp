@@ -37,9 +37,15 @@ export interface TuiWizardSaveResult {
  * Executes the preferred config dir operation.
  */
 export function preferredConfigDir(): string {
-  const base = process.env.XDG_CONFIG_HOME
-    || (process.platform === 'win32' ? process.env.APPDATA || homedir() : join(homedir(), '.config'));
-  return join(base, 'mcp-sap');
+  if (process.env.XDG_CONFIG_HOME) {
+    return join(process.env.XDG_CONFIG_HOME, 'mcp-sap');
+  }
+
+  if (process.platform === 'win32') {
+    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'mcp-sap');
+  }
+
+  return join(homedir(), '.config', 'mcp-sap');
 }
 
 /**

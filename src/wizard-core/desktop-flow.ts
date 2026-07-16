@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { defaults } from '../config/defaults.js';
-import { defaultGeneratedWalletPath, getPreferredConfigDir } from '../config/paths.js';
+import { defaultGeneratedWalletPath, getPreferredConfigDirForPlatform } from '../config/paths.js';
 import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '../config/setup.js';
 import {
   discoverMcpClientTargets,
@@ -196,8 +196,11 @@ export function getDesktopRuntimeStatuses(homeDir?: string): DesktopWizardRuntim
  * @name getDesktopProfileStatuses
  * @description Lists local SAP MCP config profiles without loading or exposing keypair material.
  */
-export function getDesktopProfileStatuses(homeDir?: string): DesktopProfileStatus[] {
-  const configDir = homeDir ? join(homeDir, '.config', 'mcp-sap') : getPreferredConfigDir();
+export function getDesktopProfileStatuses(
+  homeDir?: string,
+  platform: NodeJS.Platform = process.platform,
+): DesktopProfileStatus[] {
+  const configDir = getPreferredConfigDirForPlatform(homeDir, platform);
   if (!existsSync(configDir)) {
     return [];
   }
@@ -432,7 +435,8 @@ export async function saveDesktopWizardDraft(
   }
 
   if (draft.installAddonBundle) {
-    const addon = installX402PaidCallAddon(homeDir ? join(homeDir, '.config', 'mcp-sap', 'addons', 'x402-paid-call') : undefined);
+    const addonDir = join(getPreferredConfigDirForPlatform(homeDir, platform), 'addons', 'x402-paid-call');
+    const addon = installX402PaidCallAddon(addonDir);
     runtimeActions.push({
       runtime: 'SAP MCP payment bridge bundle',
       status: 'installed',
@@ -459,7 +463,7 @@ function buildDesktopReadiness(input: {
   homeDir?: string;
   platform: NodeJS.Platform;
 }): DesktopWizardReadiness {
-  const profiles = getDesktopProfileStatuses(input.homeDir);
+  const profiles = getDesktopProfileStatuses(input.homeDir, input.platform);
   const activeProfile = input.profileName
     ? profiles.find((profile) => profile.name === input.profileName)
     : profiles.find((profile) => profile.active);

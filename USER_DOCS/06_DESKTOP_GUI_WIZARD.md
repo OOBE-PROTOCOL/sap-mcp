@@ -6,7 +6,7 @@ The SAP MCP Desktop Wizard is the normie-friendly installer for users who do not
 
 It creates the same real SAP MCP profile as the CLI/TUI wizard:
 
-- a named profile under `~/.config/mcp-sap`;
+- a named profile under the SAP MCP config directory;
 - a dedicated local SAP MCP wallet or external signer boundary;
 - conservative policy limits;
 - hosted MCP config for `https://mcp.sap.oobeprotocol.ai/mcp`;
@@ -14,12 +14,19 @@ It creates the same real SAP MCP profile as the CLI/TUI wizard:
 
 The desktop app is not a mock installer. It calls the same setup modules used by `sap-mcp-config wizard`.
 
+Default profile directories:
+
+| OS | SAP MCP profile directory |
+| --- | --- |
+| macOS / Linux | `~/.config/mcp-sap` or `$XDG_CONFIG_HOME/mcp-sap` |
+| Windows | `%APPDATA%\mcp-sap` |
+
 The first screen lets you choose one of two modes:
 
 | Mode | Use It When |
 | --- | --- |
 | **Full hosted SAP MCP setup** | **Recommended.** You are creating or refreshing a SAP MCP profile, wallet boundary, policy limits, hosted MCP entry, and native local payment bridge. |
-| **Payment bridge repair** | You already have `~/.config/mcp-sap` configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
+| **Payment bridge repair** | You already have a local SAP MCP profile configured, hosted tools are visible, but paid/write calls still return `payment_required`. |
 
 The default full setup path configures two MCP entries for supported runtimes:
 
