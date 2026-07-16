@@ -1,30 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "SAP MCP Hosted Setup",
-  "description": "SAP MCP is hosted and non-custodial. Free/read tools work remotely; paid or write tools require a local SAP profile and sap_payments bridge created by the wizard.",
+  "title": "SAP MCP Smithery Setup",
+  "description": "Choose how this Smithery session should use SAP MCP. The hosted endpoint is non-custodial: free discovery works immediately, while paid/write tools require either a native x402-capable client or the local sap_payments bridge created by the SAP MCP wizard.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "setupMode": {
+    "usageMode": {
       "type": "string",
-      "title": "Setup mode",
-      "description": "Choose hosted-read for discovery only, or hosted-paid-local-bridge to use x402/pay.sh paid and write tools with local signing.",
+      "title": "Usage mode",
+      "description": "Use free-discovery for immediate hosted reads that do not require payment. Use x402-native-client when this runtime can parse PAYMENT-REQUIRED and retry with PAYMENT-SIGNATURE or X-PAYMENT. Use local-sap-payments-bridge when a desktop/agent runtime has been configured by the SAP MCP wizard.",
       "enum": [
-        "hosted-read",
-        "hosted-paid-local-bridge"
+        "free-discovery",
+        "x402-native-client",
+        "local-sap-payments-bridge"
       ],
-      "default": "hosted-paid-local-bridge"
+      "default": "free-discovery"
+    },
+    "x402Payer": {
+      "type": "string",
+      "title": "x402 payer",
+      "description": "How paid MCP calls will be paid. Select none for free discovery only, native when the current client signs x402 itself, sap-payments when the local SAP MCP bridge is installed, or custom when an external x402 CLI/proxy will handle the replay.",
+      "enum": [
+        "none",
+        "native",
+        "sap-payments",
+        "custom"
+      ],
+      "default": "none"
     },
     "wizardCompleted": {
       "type": "boolean",
       "title": "Wizard completed",
-      "description": "Set true after running: npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard",
+      "description": "Set true after running the SAP MCP wizard locally: npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard. The wizard creates the local SAP profile, signer boundary, hosted sap entry, and sap_payments bridge.",
       "default": false
     },
     "maxUsdPerPaidCall": {
       "type": "number",
       "title": "Max USD per paid call",
-      "description": "Recommended local policy cap for x402/pay.sh hosted paid tool calls. Enforced by the local sap_payments bridge, not by Smithery.",
+      "description": "Recommended local policy cap for x402/pay.sh hosted paid tool calls. The hosted server returns the challenge; the local sap_payments bridge, native x402 client, or custom payer should enforce this cap before signing.",
       "minimum": 0,
       "maximum": 100,
       "default": 0.02
@@ -32,8 +45,15 @@
     "autoPayMicropayments": {
       "type": "boolean",
       "title": "Auto-pay small calls",
-      "description": "Optional local bridge behavior for tiny approved calls. OOBE hosted MCP never stores user keypairs, wallet bytes, or signer secrets.",
+      "description": "Optional local/client behavior for tiny approved calls under the configured cap. OOBE hosted MCP never stores user keypairs, wallet bytes, or signer secrets.",
       "default": false
+    },
+    "setupCommand": {
+      "type": "string",
+      "title": "Local setup command",
+      "description": "Copy this command into a local terminal when paid/write tools should work from a non-custodial user profile.",
+      "const": "npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard",
+      "default": "npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard"
     }
   }
 }

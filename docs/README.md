@@ -63,6 +63,7 @@ For paid/write hosted tools, also configure the local `sap_payments` bridge. The
 - [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
 - [Client Configs](user/04_CLIENT_CONFIGS.md)
 - [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
+- [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
 
 ## What The Hosted Server Provides
 
@@ -108,9 +109,10 @@ Read these first:
 1. [Hosted Remote MCP](user/01_HOSTED_REMOTE_MCP.md)
 2. [Client Configs](user/04_CLIENT_CONFIGS.md)
 3. [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
-4. [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
-5. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
-6. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
+4. [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
+5. [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
+6. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
+7. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
 
 ## Public Endpoints
 
@@ -120,6 +122,7 @@ Read these first:
 | `GET /docs` | This documentation site. |
 | `POST /mcp` | Streamable HTTP MCP endpoint for agents. |
 | `GET /server.json` | Public, secret-free machine-readable server metadata. |
+| `GET /smithery.config.schema.json` | Optional Smithery setup schema for free discovery, native x402 clients, and local `sap_payments` bridge users. |
 | `GET /.well-known/agent-card.json` | A2A-style agent card. |
 | `GET /.well-known/sap-mcp-wizard.json` | Wizard install descriptor for agents that cannot see local config. |
 | `GET /wizard/install.sh` | One-line wizard installer. |

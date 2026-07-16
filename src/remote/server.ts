@@ -28,6 +28,7 @@ const OOBE_LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..',
 const LOGO_ASSET_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'logos');
 const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
 const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
+const SMITHERY_CONFIG_SCHEMA_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'smithery.config.schema.json');
 const PAYMENT_STATS_CACHE_MS = 15_000;
 const SERVER_CARD_CACHE_MS = 300_000;
 const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
@@ -232,6 +233,7 @@ export interface PublicServerInfo {
     serverInfo: string;
     openApi: string;
     x402Discovery: string;
+    smitheryConfigSchema: string;
     smitheryServerCard: string;
     payShProvider: string;
     agentCard: string;
@@ -272,6 +274,25 @@ export interface PublicServerInfo {
     npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server';
     github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
     userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
+  };
+}
+
+/**
+ * @name MarketplaceConfigurationMetadata
+ * @description Public setup hints for MCP marketplaces and agent runtimes.
+ */
+export interface MarketplaceConfigurationMetadata {
+  required: false;
+  schemaUrl: string;
+  configSchema: unknown;
+  recommendedMode: 'free-discovery';
+  paidToolModes: readonly ['x402-native-client', 'local-sap-payments-bridge'];
+  instructions: string;
+  setupCommand: typeof WIZARD_NPM_COMMAND;
+  localBridge: {
+    serverName: 'sap_payments';
+    readinessTool: 'sap_payments_readiness';
+    paidCallTool: 'sap_payments_call_paid_tool';
   };
 }
 
@@ -324,6 +345,7 @@ export interface StaticServerCard {
     required: boolean;
     schemes: readonly ('none' | 'x402' | 'Bearer')[];
   };
+  configuration: MarketplaceConfigurationMetadata;
   transport: {
     type: 'streamable-http';
     url: string;
@@ -1169,6 +1191,7 @@ export function buildPublicServerInfo(
       serverInfo: `${baseUrl}/server.json`,
       openApi: `${baseUrl}/openapi.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
+      smitheryConfigSchema: `${baseUrl}/smithery.config.schema.json`,
       smitheryServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
       payShProvider: `${baseUrl}/pay/provider.yml`,
       agentCard: `${baseUrl}/.well-known/agent-card.json`,
@@ -1211,6 +1234,36 @@ export function buildPublicServerInfo(
       userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS',
     },
   };
+}
+
+/**
+ * @name buildMarketplaceConfigurationMetadata
+ * @description Builds public Smithery/marketplace configuration hints for non-custodial x402 usage.
+ */
+export function buildMarketplaceConfigurationMetadata(req: http.IncomingMessage, config: RemoteMCPConfig): MarketplaceConfigurationMetadata {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  return {
+    required: false,
+    schemaUrl: `${baseUrl}/smithery.config.schema.json`,
+    configSchema: readSmitheryConfigSchema(),
+    recommendedMode: 'free-discovery',
+    paidToolModes: ['x402-native-client', 'local-sap-payments-bridge'],
+    instructions: 'Start with free discovery tools in Smithery. Paid/write tools return x402 challenges; complete them with a native x402-capable client or with the local sap_payments bridge installed by the SAP MCP wizard.',
+    setupCommand: WIZARD_NPM_COMMAND,
+    localBridge: {
+      serverName: 'sap_payments',
+      readinessTool: 'sap_payments_readiness',
+      paidCallTool: 'sap_payments_call_paid_tool',
+    },
+  };
+}
+
+/**
+ * @name readSmitheryConfigSchema
+ * @description Reads the published Smithery JSON schema from the packaged root.
+ */
+export function readSmitheryConfigSchema(): unknown {
+  return JSON.parse(readFileSync(SMITHERY_CONFIG_SCHEMA_PATH, 'utf-8')) as unknown;
 }
 
 /**
@@ -1297,6 +1350,7 @@ export async function buildStaticServerCard(
       required: authRequired,
       schemes: authRequired ? ['Bearer'] : ['none', 'x402'],
     },
+    configuration: buildMarketplaceConfigurationMetadata(req, config),
     transport: {
       type: 'streamable-http',
       url: `${baseUrl}/mcp`,
@@ -2136,6 +2190,13 @@ export class RemoteMCPServer {
 
       if (isPublicReadMethod(req.method) && url.pathname === '/server.json') {
         writeJson(res, 200, buildPublicServerInfo(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/smithery.config.schema.json') {
+        writeJson(res, 200, readSmitheryConfigSchema(), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
         return;

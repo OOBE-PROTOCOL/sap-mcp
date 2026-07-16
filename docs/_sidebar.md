@@ -3,6 +3,7 @@
   - [Hosted Remote MCP](user/01_HOSTED_REMOTE_MCP.md)
   - [Local Stdio MCP](user/02_LOCAL_STDIO_MCP.md)
   - [Client Configs](user/04_CLIENT_CONFIGS.md)
+  - [Smithery And Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
   - [Skills And Tools](user/05_SKILLS_AND_TOOLS.md)
   - [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
 

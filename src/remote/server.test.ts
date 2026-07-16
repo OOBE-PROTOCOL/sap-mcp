@@ -6,6 +6,7 @@ import {
   buildA2AAgentCard,
   buildDocsHtml,
   buildLandingHtml,
+  buildMarketplaceConfigurationMetadata,
   buildPublicPayShProviderYaml,
   buildPublicServerInfo,
   buildStaticServerCard,
@@ -371,6 +372,7 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
+    expect(info.endpoints.smitheryConfigSchema).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');
     expect(info.endpoints.smitheryServerCard).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/mcp/server-card.json');
     expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
@@ -438,6 +440,18 @@ describe('remote MCP server config', () => {
       sizes: ['512x512'],
     });
     expect(card.authentication).toEqual({ required: false, schemes: ['none', 'x402'] });
+    expect(card.configuration).toMatchObject({
+      required: false,
+      schemaUrl: 'https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json',
+      recommendedMode: 'free-discovery',
+      paidToolModes: ['x402-native-client', 'local-sap-payments-bridge'],
+      setupCommand: expect.stringContaining('sap-mcp-config wizard'),
+      localBridge: {
+        serverName: 'sap_payments',
+        readinessTool: 'sap_payments_readiness',
+        paidCallTool: 'sap_payments_call_paid_tool',
+      },
+    });
     expect(card.transport).toEqual({
       type: 'streamable-http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
@@ -451,6 +465,25 @@ describe('remote MCP server config', () => {
       destructiveHint: expect.any(Boolean),
       idempotentHint: expect.any(Boolean),
       openWorldHint: expect.any(Boolean),
+    });
+  });
+
+  it('builds marketplace configuration metadata for Smithery x402 setup UX', () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const metadata = buildMarketplaceConfigurationMetadata(req, publicRemoteConfig);
+
+    expect(metadata.required).toBe(false);
+    expect(metadata.schemaUrl).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');
+    expect(metadata.configSchema).toMatchObject({
+      title: 'SAP MCP Smithery Setup',
+      properties: {
+        usageMode: {
+          default: 'free-discovery',
+        },
+        x402Payer: {
+          default: 'none',
+        },
+      },
     });
   });
 

@@ -188,3 +188,4 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config au
 | `04_CLIENT_CONFIGS.md` | Claude, Hermes, Codex, OpenClaw config examples |
 | `05_SKILLS_AND_TOOLS.md` | Skills, tool selection, and security behavior |
 | `06_DESKTOP_GUI_WIZARD.md` | Desktop GUI wizard install, hosted setup, local payment bridge, and runtime behavior |
+| `07_SMITHERY_AND_MARKETPLACES.md` | Smithery setup schema, marketplace usage, native x402 clients, and local bridge guidance |
