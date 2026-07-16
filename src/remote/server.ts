@@ -44,11 +44,15 @@ let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefi
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
 const PUBLIC_LOGO_ASSETS = {
+  '/logos/claude.svg': { filename: 'claude.svg', contentType: 'image/svg+xml' },
+  '/logos/codex.svg': { filename: 'codex.svg', contentType: 'image/svg+xml' },
   '/logos/drift.svg': { filename: 'drift.svg', contentType: 'image/svg+xml' },
+  '/logos/hermes.svg': { filename: 'hermes.svg', contentType: 'image/svg+xml' },
   '/logos/jupiter.ico': { filename: 'jupiter.ico', contentType: 'image/x-icon' },
   '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
   '/logos/meteora.png': { filename: 'meteora.png', contentType: 'image/png' },
   '/logos/orca.ico': { filename: 'orca.ico', contentType: 'image/x-icon' },
+  '/logos/openclaw.svg': { filename: 'openclaw.svg', contentType: 'image/svg+xml' },
   '/logos/raydium.ico': { filename: 'raydium.ico', contentType: 'image/x-icon' },
   '/logos/smithery.svg': { filename: 'smithery.svg', contentType: 'image/svg+xml' },
 } as const;

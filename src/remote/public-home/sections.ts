@@ -103,10 +103,10 @@ function renderDefiLogoRail(): string {
  */
 export function renderRuntimeLogoRail(): string {
   const runtimes = [
-    ['Hermes', 'H', 'Agent profile runtime with MCP tools and skills.'],
-    ['Codex', 'C', 'Developer agent runtime with hosted MCP and local payment bridge.'],
-    ['Claude', 'Cl', 'Claude Desktop and Claude Code MCP-compatible setup.'],
-    ['OpenClaw', 'Oc', 'Open agent runtime wired through hosted SAP MCP.'],
+    ['Hermes', '/logos/hermes.svg', 'Agent profile runtime with MCP tools and skills.'],
+    ['Codex', '/logos/codex.svg', 'Developer agent runtime with hosted MCP and local payment bridge.'],
+    ['Claude', '/logos/claude.svg', 'Claude Desktop and Claude Code MCP-compatible setup.'],
+    ['OpenClaw', '/logos/openclaw.svg', 'Open agent runtime wired through hosted SAP MCP.'],
   ] as const;
   const items = [...runtimes, ...runtimes, ...runtimes];
 
@@ -114,9 +114,9 @@ export function renderRuntimeLogoRail(): string {
     <section class="runtime-logo-strip" aria-label="SAP MCP compatible agent runtimes">
       <div class="runtime-logo-rail">
         <div>
-          ${items.map(([name, mark, description]) => `
+          ${items.map(([name, src, description]) => `
             <span class="runtime-logo-item" title="${escapeHtml(description)}">
-              <b aria-hidden="true">${escapeHtml(mark)}</b>
+              <img src="${escapeHtml(src)}" width="30" height="30" alt="${escapeHtml(name)}">
               <strong>${escapeHtml(name)}</strong>
             </span>
           `).join('')}

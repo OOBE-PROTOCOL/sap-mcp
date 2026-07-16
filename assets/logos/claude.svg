@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Claude</title>
+  <rect width="64" height="64" rx="18" fill="#191411"/>
+  <path d="M32 9c5.3 8.9 5.3 15.6 0 20.2-5.3-4.6-5.3-11.3 0-20.2Z" fill="#d97745"/>
+  <path d="M55 32c-8.9 5.3-15.6 5.3-20.2 0 4.6-5.3 11.3-5.3 20.2 0Z" fill="#e9a66e"/>
+  <path d="M32 55c-5.3-8.9-5.3-15.6 0-20.2 5.3 4.6 5.3 11.3 0 20.2Z" fill="#b85f38"/>
+  <path d="M9 32c8.9-5.3 15.6-5.3 20.2 0-4.6 5.3-11.3 5.3-20.2 0Z" fill="#f2c59b"/>
+  <circle cx="32" cy="32" r="6.6" fill="#f5eadf"/>
+</svg>

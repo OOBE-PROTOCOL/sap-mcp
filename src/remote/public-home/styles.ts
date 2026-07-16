@@ -328,18 +328,14 @@ export const LANDING_CSS = `
     background: rgba(8, 18, 19, .72);
     white-space: nowrap;
   }
-  .runtime-logo-item b {
-    display: grid;
-    place-items: center;
-    min-width: 30px;
+  .runtime-logo-item img {
+    flex: 0 0 auto;
     width: 30px;
     height: 30px;
     border: 1px solid rgba(40, 216, 232, .24);
     border-radius: 999px;
-    color: var(--aqua);
     background: rgba(40, 216, 232, .08);
-    font-size: 11px;
-    line-height: 1;
+    object-fit: cover;
   }
   .runtime-logo-item strong {
     font-size: 13px;
