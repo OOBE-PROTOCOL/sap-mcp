@@ -197,6 +197,15 @@ export function renderTopNavigation(model: LandingPageModel): string {
       </span>
     </a>
   `;
+  const renderMobileLink = ([label, href, description]: readonly [string, string, string]): string => `
+    <a class="mobile-nav-link" href="${escapeHtml(href)}" data-mobile-nav-link>
+      <span>
+        <strong>${escapeHtml(label)}</strong>
+        <small>${escapeHtml(description)}</small>
+      </span>
+      <b aria-hidden="true">→</b>
+    </a>
+  `;
 
   return `
     <nav class="site-nav" aria-label="Primary navigation">
@@ -242,7 +251,43 @@ export function renderTopNavigation(model: LandingPageModel): string {
           <span>Install</span>
         </a>
       </div>
+      <button class="mobile-nav-toggle" type="button" aria-label="Open navigation" aria-controls="mobile-nav-panel" aria-expanded="false" data-mobile-nav-toggle>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </nav>
+    <div class="mobile-nav-backdrop" data-mobile-nav-close></div>
+    <aside class="mobile-nav-panel" id="mobile-nav-panel" aria-hidden="true">
+      <div class="mobile-nav-head">
+        <a class="brand" href="${escapeHtml(model.info.endpoints.landing)}" data-mobile-nav-link>
+          <img src="/favicon.png" width="42" height="42" alt="SAP MCP">
+          <span>
+            <strong>SAP MCP</strong>
+            <span>OOBE Protocol</span>
+          </span>
+        </a>
+        <button class="mobile-nav-close" type="button" aria-label="Close navigation" data-mobile-nav-close>×</button>
+      </div>
+      <div class="mobile-nav-primary">
+        <a class="button primary" href="#install" data-mobile-nav-link>
+          <span class="install-os install-os-windows">${renderOsIcon('windows')}</span>
+          <span class="install-os install-os-macos">${renderOsIcon('macos')}</span>
+          <span class="install-os install-os-linux">${renderOsIcon('linux')}</span>
+          <span>Install wizard</span>
+        </a>
+        <a class="button" href="${escapeHtml(model.info.endpoints.docs)}" data-mobile-nav-link>Docs</a>
+        <a class="button" href="https://www.oobeprotocol.ai/" data-mobile-nav-link>OOBE</a>
+      </div>
+      <div class="mobile-nav-group">
+        <p>Gateway</p>
+        ${runtimeLinks.map(renderMobileLink).join('')}
+      </div>
+      <div class="mobile-nav-group">
+        <p>Metadata</p>
+        ${machineLinks.map(renderMobileLink).join('')}
+      </div>
+    </aside>
   `;
 }
 

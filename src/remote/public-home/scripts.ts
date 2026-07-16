@@ -5,6 +5,9 @@
 export const LANDING_SCRIPT = `
 (() => {
   const dropdowns = Array.from(document.querySelectorAll('[data-nav-dropdown]'));
+  const mobileToggle = document.querySelector('[data-mobile-nav-toggle]');
+  const mobilePanel = document.querySelector('#mobile-nav-panel');
+  const mobileCloseTargets = Array.from(document.querySelectorAll('[data-mobile-nav-close], [data-mobile-nav-link]'));
   const setDetectedOs = () => {
     const platform = String(navigator.platform || '').toLowerCase();
     const userAgent = String(navigator.userAgent || '').toLowerCase();
@@ -17,6 +20,31 @@ export const LANDING_SCRIPT = `
   };
 
   setDetectedOs();
+
+  const setMobileNavOpen = (isOpen) => {
+    document.documentElement.classList.toggle('mobile-nav-open', isOpen);
+
+    if (mobileToggle) {
+      mobileToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      mobileToggle.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+    }
+
+    if (mobilePanel) {
+      mobilePanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    }
+  };
+
+  if (mobileToggle) {
+    mobileToggle.addEventListener('click', () => {
+      setMobileNavOpen(!document.documentElement.classList.contains('mobile-nav-open'));
+    });
+  }
+
+  mobileCloseTargets.forEach((target) => {
+    target.addEventListener('click', () => {
+      setMobileNavOpen(false);
+    });
+  });
 
   dropdowns.forEach((dropdown) => {
     dropdown.addEventListener('toggle', () => {
@@ -55,6 +83,7 @@ export const LANDING_SCRIPT = `
     dropdowns.forEach((dropdown) => {
       dropdown.open = false;
     });
+    setMobileNavOpen(false);
   });
 
   const scene = document.querySelector('[data-engine-scene]');
