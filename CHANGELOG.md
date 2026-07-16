@@ -6,6 +6,34 @@ All notable changes to this project are documented in this file.
 
 No unreleased changes yet.
 
+## 0.9.1 - 2026-07-16
+
+Hotfix for hosted SAP MCP users whose agent runtime connected to the remote
+`sap` server but could not start the local non-custodial `sap_payments` bridge
+from an `npx`/`npm exec` install.
+
+### Fixed
+
+- Fixed `sap-mcp-server` startup when launched by Hermes, Codex, Claude,
+  OpenClaw, or another MCP runtime through `npx` outside the repository. The
+  CLI bootstrap now adds both package-local and npm/npx parent `node_modules`
+  paths before loading the server, so SAP SDK assets such as
+  `@oobe-protocol-labs/synapse-sap-sdk/idl/synapse_agent_sap.json` resolve
+  correctly.
+- Made the runtime module resolver find the actual package root from any
+  compiled `dist/*` entrypoint instead of assuming a fixed folder depth.
+- Updated generated runtime config examples and wizard tests to pin the local
+  `sap_payments` bridge to `@oobe-protocol-labs/sap-mcp-server@0.9.1`.
+
+### Verification
+
+- `pnpm run lint`
+- `pnpm run typecheck`
+- `pnpm test -- --run src/runtime/module-resolution.test.ts src/payments/pricing.test.ts src/payments/monetization-gate.test.ts src/remote/server.test.ts`
+- `pnpm run build`
+- Real packaged install smoke test from a temporary directory using the generated
+  npm tarball and `SAP_MCP_PAYMENTS_BRIDGE_ONLY=true`.
+
 ## 0.9.0 - 2026-07-16
 
 Release-candidate quality pass for the hosted-first SAP MCP wizard, desktop
