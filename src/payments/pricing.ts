@@ -79,6 +79,21 @@ const FREE_TOOLS = new Set([
   'sap_payments_verify_receipt',
 ]);
 
+const STRICT_FREE_TOOLS = new Set([
+  'sap_profile_current',
+  'sap_profile_list',
+  'sap_profile_public_key',
+  'sap_skills_list',
+  'sap_skills_bundle',
+  'sap_skills_install',
+  'sap_payments_profile_current',
+  'sap_payments_readiness',
+  'sap_payments_prepare_challenge',
+  'sap_payments_sign_challenge',
+  'sap_payments_call_paid_tool',
+  'sap_payments_verify_receipt',
+]);
+
 const READ_PREMIUM_TOOLS = new Set([
   'sap_list_all_agents',
   'sap_discover_agents',
@@ -229,7 +244,7 @@ export function priceToolCall(
   toolCall: McpToolCall,
   config: SapMcpMonetizationConfig,
 ): ToolPricing {
-  const tier = classifyTool(toolCall.toolName);
+  const tier = classifyTool(toolCall.toolName, config);
 
   if (tier === 'free') {
     return {
@@ -275,8 +290,9 @@ export function priceToolCall(
  * @name classifyTool
  * @description Maps a tool name to the default hosted monetization tier.
  */
-export function classifyTool(toolName: string): PaymentTier {
-  if (FREE_TOOLS.has(toolName)) {
+export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationConfig, 'strictTools'>): PaymentTier {
+  const freeTools = config?.strictTools ? STRICT_FREE_TOOLS : FREE_TOOLS;
+  if (freeTools.has(toolName)) {
     return 'free';
   }
 

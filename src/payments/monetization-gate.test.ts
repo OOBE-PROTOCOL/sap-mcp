@@ -14,6 +14,7 @@ const baseMonetization: SapMcpMonetizationConfig = {
   payTo: '11111111111111111111111111111111',
   facilitatorUrl: 'http://127.0.0.1:8788/facilitator',
   maxTimeoutSeconds: 120,
+  strictTools: false,
   prices: {
     readPremiumUsd: 0.008,
     builderUsd: 0.05,

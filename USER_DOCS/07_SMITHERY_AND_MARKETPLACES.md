@@ -132,7 +132,25 @@ Those requests count as calls or payment challenges, but they do not count as
 settled volume. Settled volume only increases when a valid x402 proof is
 verified and settled through the OOBE facilitator.
 
-## 8. Agent Instructions
+## 8. Strict Marketplace Monetization
+
+OOBE hosted deployments can run strict tool monetization:
+
+```bash
+SAP_MCP_MONETIZATION_STRICT_TOOLS=true
+```
+
+In strict mode, MCP handshake and discovery still work, but every operational
+tool call outside base profile, skill bootstrap, and local `sap_payments` bridge
+helpers requires x402 payment. This is the correct mode when public marketplace
+traffic should not receive free balance, token-account, or operational reads.
+
+Strict mode does not make Smithery or any marketplace pay automatically. It only
+ensures that unpaid operational calls are challenged consistently. The caller
+still needs a native x402 payer, a custom x402 CLI/proxy, or the local
+`sap_payments` bridge.
+
+## 9. Agent Instructions
 
 Agents should summarize SAP MCP marketplace state like this:
 
@@ -143,4 +161,3 @@ Agents should summarize SAP MCP marketplace state like this:
 
 Avoid saying the hosted server "has no signer" as if the user is blocked. The
 correct trust model is: remote tools, local signatures.
-

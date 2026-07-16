@@ -307,6 +307,11 @@
           "format": "uri",
           "description": "Optional pay.sh checkout URL included in 402 response bodies."
         },
+        "strictTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, hosted monetization charges every non-essential tool call. MCP handshake/discovery, base profile, skills bootstrap, and local payment bridge helper tools remain free."
+        },
         "prices": {
           "type": "object",
           "additionalProperties": false,

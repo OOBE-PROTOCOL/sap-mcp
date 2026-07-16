@@ -124,6 +124,17 @@ Before mainnet launch, verify these cases on devnet:
 | Facilitator unavailable | Paid call fails closed, not free. |
 | pay.sh checkout configured | 402 body includes checkout URL, but SAP MCP remains pricing authority. |
 
+Hosted marketplace deployments can enable strict tool monetization:
+
+```bash
+SAP_MCP_MONETIZATION_STRICT_TOOLS=true
+```
+
+Strict mode keeps MCP handshake/discovery, base profile context, skill bootstrap,
+and local `sap_payments` bridge helper tools free. Basic balance reads and other
+operational tool calls become paid `tools/call` requests. Use this for public
+marketplaces where every real operational call should produce an x402 challenge.
+
 ## 06.6 pay.sh Role
 
 pay.sh is useful as a provider/catalog/proxy layer for public distribution and checkout UX.

@@ -136,6 +136,7 @@ export const envSchema = z.object({
   SAP_MCP_X402_FACILITATOR_AUTH_TOKEN: z.string().optional(),
   SAP_MCP_X402_MAX_TIMEOUT_SECONDS: z.coerce.number().positive().default(120),
   SAP_MCP_PAY_SH_CHECKOUT_URL: z.string().url().optional(),
+  SAP_MCP_MONETIZATION_STRICT_TOOLS: booleanEnvSchema.default(false),
   SAP_MCP_PRICE_READ_PREMIUM_USD: z.coerce.number().positive().default(0.008),
   SAP_MCP_PRICE_BUILDER_USD: z.coerce.number().positive().default(0.05),
   SAP_MCP_PRICE_VALUE_FIXED_USD: z.coerce.number().nonnegative().default(0.2),
@@ -231,6 +232,7 @@ export interface SapMcpMonetizationConfig {
   facilitatorAuthToken?: string;
   maxTimeoutSeconds: number;
   payShCheckoutUrl?: string;
+  strictTools: boolean;
   prices: {
     readPremiumUsd: number;
     builderUsd: number;
@@ -700,6 +702,8 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
       facilitatorAuthToken: env.SAP_MCP_X402_FACILITATOR_AUTH_TOKEN,
       maxTimeoutSeconds: env.SAP_MCP_X402_MAX_TIMEOUT_SECONDS,
       payShCheckoutUrl: env.SAP_MCP_PAY_SH_CHECKOUT_URL,
+      strictTools: asOptionalBoolean(monetizationConfig.strictTools)
+        ?? env.SAP_MCP_MONETIZATION_STRICT_TOOLS,
       prices: {
         readPremiumUsd: asOptionalNumber(monetizationPrices.readPremiumUsd) ?? env.SAP_MCP_PRICE_READ_PREMIUM_USD,
         builderUsd: asOptionalNumber(monetizationPrices.builderUsd) ?? env.SAP_MCP_PRICE_BUILDER_USD,

@@ -11,6 +11,7 @@ const monetizationConfig: SapMcpMonetizationConfig = {
   payTo: '11111111111111111111111111111111',
   facilitatorUrl: 'https://x402.oobeprotocol.ai/facilitator',
   maxTimeoutSeconds: 120,
+  strictTools: false,
   prices: {
     readPremiumUsd: 0.008,
     builderUsd: 0.05,
@@ -103,6 +104,29 @@ describe('SAP MCP monetization pricing', () => {
     const decision = resolvePaymentDecision(parsed, monetizationConfig);
 
     expect(decision.required).toBe(false);
+  });
+
+  it('can price basic balance reads in strict hosted mode', () => {
+    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('read-premium');
+    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
+    expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sol_get_balance',
+        arguments: { address: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, {
+      ...monetizationConfig,
+      strictTools: true,
+    });
+
+    expect(decision.required).toBe(true);
   });
 
   it('prices enriched discovery as read premium', () => {
