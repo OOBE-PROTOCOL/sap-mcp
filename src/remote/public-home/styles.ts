@@ -335,7 +335,8 @@ export const LANDING_CSS = `
     border: 1px solid rgba(40, 216, 232, .24);
     border-radius: 999px;
     background: rgba(40, 216, 232, .08);
-    object-fit: cover;
+    object-fit: contain;
+    padding: 2px;
   }
   .runtime-logo-item strong {
     font-size: 13px;

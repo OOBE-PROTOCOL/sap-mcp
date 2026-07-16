@@ -488,9 +488,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('<strong>Codex</strong>');
     expect(root).toContain('<strong>Claude</strong>');
     expect(root).toContain('<strong>OpenClaw</strong>');
-    expect(root).toContain('/logos/hermes.svg');
-    expect(root).toContain('/logos/codex.svg');
-    expect(root).toContain('/logos/claude.svg');
+    expect(root).toContain('/logos/hermes.png');
+    expect(root).toContain('/logos/codex.webp');
+    expect(root).toContain('/logos/claude.png');
     expect(root).toContain('/logos/openclaw.svg');
     expect(root).not.toContain('Caller Fingerprints');
     expect(root).not.toContain('caller origins');

@@ -103,9 +103,9 @@ function renderDefiLogoRail(): string {
  */
 export function renderRuntimeLogoRail(): string {
   const runtimes = [
-    ['Hermes', '/logos/hermes.svg', 'Agent profile runtime with MCP tools and skills.'],
-    ['Codex', '/logos/codex.svg', 'Developer agent runtime with hosted MCP and local payment bridge.'],
-    ['Claude', '/logos/claude.svg', 'Claude Desktop and Claude Code MCP-compatible setup.'],
+    ['Hermes', '/logos/hermes.png', 'Agent profile runtime with MCP tools and skills.'],
+    ['Codex', '/logos/codex.webp', 'Developer agent runtime with hosted MCP and local payment bridge.'],
+    ['Claude', '/logos/claude.png', 'Claude Desktop and Claude Code MCP-compatible setup.'],
     ['OpenClaw', '/logos/openclaw.svg', 'Open agent runtime wired through hosted SAP MCP.'],
   ] as const;
   const items = [...runtimes, ...runtimes, ...runtimes];

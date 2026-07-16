@@ -44,10 +44,10 @@ let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefi
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
 const PUBLIC_LOGO_ASSETS = {
-  '/logos/claude.svg': { filename: 'claude.svg', contentType: 'image/svg+xml' },
-  '/logos/codex.svg': { filename: 'codex.svg', contentType: 'image/svg+xml' },
+  '/logos/claude.png': { filename: 'claude.png', contentType: 'image/png' },
+  '/logos/codex.webp': { filename: 'codex.webp', contentType: 'image/webp' },
   '/logos/drift.svg': { filename: 'drift.svg', contentType: 'image/svg+xml' },
-  '/logos/hermes.svg': { filename: 'hermes.svg', contentType: 'image/svg+xml' },
+  '/logos/hermes.png': { filename: 'hermes.png', contentType: 'image/png' },
   '/logos/jupiter.ico': { filename: 'jupiter.ico', contentType: 'image/x-icon' },
   '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
   '/logos/meteora.png': { filename: 'meteora.png', contentType: 'image/png' },
@@ -62,7 +62,7 @@ const PUBLIC_LOGO_ASSETS = {
  * @description Resolved public logo asset response metadata for browser and crawler icon routes.
  */
 export interface PublicLogoAsset {
-  contentType: 'image/png' | 'image/svg+xml' | 'image/x-icon';
+  contentType: 'image/png' | 'image/svg+xml' | 'image/webp' | 'image/x-icon';
   contentLength: number;
   body?: Buffer;
 }
