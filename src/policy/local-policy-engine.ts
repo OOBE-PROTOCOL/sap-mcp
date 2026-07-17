@@ -393,7 +393,7 @@ export function createPolicyConfigFromEnv(): PolicyConfig {
     
   const escalationTools = process.env.SAP_MCP_ESCALATION_TOOLS
     ? process.env.SAP_MCP_ESCALATION_TOOLS.split(',').map(s => s.trim())
-    : ['sap_close_agent', 'sap_withdraw_escrow', 'sap_transfer_ownership'];
+    : ['sap_close_agent', 'sap_withdraw_escrow_v2', 'sap_transfer_ownership'];
 
   // Parse time window if specified (format: "9-17" for 9am-5pm UTC)
   let allowedHours: { start: number; end: number } | undefined;

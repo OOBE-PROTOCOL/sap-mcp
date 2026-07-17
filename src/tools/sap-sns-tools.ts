@@ -1,15 +1,15 @@
 /**
  * SAP SNS MCP tools.
  *
- * Wraps the SNS integration from `@oobe-protocol-labs/synapse-sap-sdk@0.21.x` and
+ * Wraps the SNS integration from `@oobe-protocol-labs/synapse-sap-sdk@1.0.x` and
  * `@bonfida/spl-name-service`.
  *
- * Architecture (v0.21.0 — Free Choice Record System):
+ * Architecture (v1.0.x — Free Choice Record System):
  * - `SnsModule` (modules/sns) is the primary SDK module for SAP agent domain operations:
  *   registration, resolution, availability, validation, PDA derivation.
  * - Bonfida SDK functions are used directly for record management and domain queries
  *   not covered by SnsModule.
- * - `sns-standalone` (SnsSdk) is DEPRECATED and removed in v0.21.0.
+ * - `sns-standalone` (SnsSdk) is deprecated and not used by SAP MCP.
  *
  * Tool groups:
  * - Registration: `sap_sns_register_agent_domain` (SnsModule — signs + submits with USDC)
@@ -729,7 +729,7 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
  * @name registerSapSnsTools
  * @description Registers production SNS integration tools.
  *
- * Uses SnsModule from synapse-sap-sdk v0.21.0 as primary SDK module and
+ * Uses SnsModule from synapse-sap-sdk v1.0.x as primary SDK module and
  * Bonfida SDK functions for record management not covered by SnsModule.
  * sns-standalone (SnsSdk) is deprecated and removed.
  */

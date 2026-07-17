@@ -14,6 +14,7 @@ import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
+import { registerAgentStartTool } from './agent-start-tool.js';
 
 /**
  * Register all tools with the MCP server.
@@ -35,7 +36,7 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Register SAP SDK tools backed by @oobe-protocol-labs/synapse-sap-sdk.
   registerSapSdkTools(server, context);
 
-  // Register SNS integration tools backed by synapse-sap-sdk v0.21.
+  // Register SNS integration tools backed by synapse-sap-sdk v1.0.x.
   registerSapSnsTools(server, context);
   
   // Register network stats tool backed by SAP discovery/global registry APIs.
@@ -58,6 +59,10 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register profile tools with redacted signer metadata and live runtime reload.
   registerProfileTools(server, context);
+
+  // Register the free agent bootstrap tool before skill tools so runtimes have
+  // a single obvious entry point after tools/list.
+  registerAgentStartTool(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);

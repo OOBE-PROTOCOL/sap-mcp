@@ -60,6 +60,17 @@ Create or select a profile:
 npx sap-mcp-config wizard
 ```
 
+After connecting hosted SAP MCP in an agent runtime, start the agent context
+with one short message:
+
+```text
+Start SAP MCP.
+```
+
+The agent should call the free `sap_agent_start` tool or `sap-agent-start`
+prompt, load `sap_skills_bundle`, and use the local `sap_payments` bridge for
+paid/write hosted calls.
+
 Inspect the active profile:
 
 ```bash
@@ -117,7 +128,7 @@ For paid/write hosted tools, add the local non-custodial payment bridge as well:
 ```toml
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.1", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.2", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -135,7 +146,7 @@ Codex supports Streamable HTTP MCP servers with URL-based entries in `config.tom
 ```toml
 [mcp_servers.sap]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.1", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.2", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"

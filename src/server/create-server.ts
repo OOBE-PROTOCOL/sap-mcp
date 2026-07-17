@@ -9,6 +9,7 @@ import { logger } from '../core/logger.js';
 import {
   MCP_SERVER_DESCRIPTION,
   MCP_SERVER_ICON_URL,
+  MCP_SERVER_INSTRUCTIONS,
   MCP_SERVER_NAME,
   MCP_SERVER_TITLE,
   MCP_SERVER_VERSION,
@@ -51,6 +52,7 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
         resources: {},  // Enable resources/list
         prompts: {},    // Enable prompts/list
       },
+      instructions: MCP_SERVER_INSTRUCTIONS,
     }
   );
   

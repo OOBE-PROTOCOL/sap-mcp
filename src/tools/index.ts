@@ -7,7 +7,7 @@ export { registerTools } from './register-tools.js';
 // REAL SAP SDK TOOLS (75 tools)
 export { registerSapSdkTools } from './sap-sdk-tools.js';
 
-// REAL SAP SNS TOOLS — SNS integration exported by synapse-sap-sdk v0.21
+// REAL SAP SNS TOOLS — SNS integration exported by synapse-sap-sdk v1.0.x
 export { registerSapSnsTools } from './sap-sns-tools.js';
 
 // REAL CLIENT SDK TOOLS — SynapseAgentKit plugin tools plus compatibility tools
@@ -24,6 +24,9 @@ export { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 
 // REAL PROFILE TOOLS — inspect and switch loaded SAP MCP profiles without exposing keypairs
 export { registerProfileTools } from './profile-tools.js';
+
+// REAL AGENT START TOOL — concise hosted SAP MCP bootstrap for agent runtimes
+export { registerAgentStartTool } from './agent-start-tool.js';
 
 // REAL SKILL TOOLS — list, bundle, and install SAP MCP agent skills
 export { registerSkillsTools } from './skills-tools.js';

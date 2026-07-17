@@ -160,7 +160,7 @@ describe('desktop wizard flow', () => {
       expect(codex).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
       expect(codex).toContain('[mcp_servers.sap_payments]');
       expect(codex).toContain('command = "npx.cmd"');
-      expect(codex).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.1');
+      expect(codex).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.2');
       expect(codex).toContain('SAP_ALLOWED_TOOLS = "all"');
       expect(existsSync(join(addonPath, 'manifest.json'))).toBe(true);
       expect(result.runtimeActions.some((action) => action.path === addonPath)).toBe(true);

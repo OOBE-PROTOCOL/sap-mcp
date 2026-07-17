@@ -67,6 +67,7 @@ describe('SAP MCP monetization pricing', () => {
   });
 
   it('keeps SAP MCP skill bootstrap tools free', () => {
+    expect(classifyTool('sap_agent_start')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
     expect(classifyTool('sap_skills_install')).toBe('free');
@@ -109,6 +110,7 @@ describe('SAP MCP monetization pricing', () => {
   it('can price basic balance reads in strict hosted mode', () => {
     expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
+    expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
 
     const parsed = parseJsonRpcBody({
@@ -175,7 +177,7 @@ describe('SAP MCP monetization pricing', () => {
       id: 1,
       method: 'tools/call',
       params: {
-        name: 'sap_create_escrow',
+        name: 'sap_create_escrow_v2',
         arguments: { payment: { amountUsd: 10 } },
       },
     });

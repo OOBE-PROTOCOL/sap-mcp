@@ -245,7 +245,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
           skills: getSkillSummaries(parsed.skills),
           upstream: {
             repository: 'https://github.com/OOBE-PROTOCOL/synapse-sap-sdk',
-            ref: 'v0.21.0',
+            ref: 'v1.0.2',
             sourcePath: 'skills',
           },
         }, null, 2));

@@ -6,12 +6,18 @@ safe signing behavior.
 
 ## First Step
 
+If the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or "SAP
+mode", treat it as the activation command. Call `sap_agent_start` when it is
+available, then call `sap_skills_bundle` with `includeContents: true` and load
+the returned SAP MCP skill contents into context.
+
 Always inspect runtime context through MCP tools, not by reading config files:
 
-1. `sap_profile_current`
-2. `sap_profile_list`
-3. `sap_profile_public_key`
-4. `sap_network_stats`
+1. `sap_agent_start`
+2. `sap_profile_current`
+3. `sap_profile_list`
+4. `sap_profile_public_key`
+5. `sap_network_stats`
 
 The server profile is the source of truth. Environment variables from the MCP
 client must not override profile-owned RPC or wallet settings unless
@@ -54,13 +60,13 @@ Use the bundled routing map for local MCP tool selection:
 - `skills/sap-mcp/TOOL_REFERENCE.md`
 - `USER_DOCS/05_SKILLS_AND_TOOLS.md`
 
-SAP MCP skill bootstrap tools are free context/setup tools. Call
-`sap_skills_list`, `sap_skills_bundle`, and local `sap_skills_install`
-directly. Do not route skill listing, bundling, or installation through
-`sap_x402_paid_call`. On hosted remote MCP, use `sap_skills_bundle` to download
-skill contents; the hosted server cannot install files onto the caller's local
-machine. Local installation belongs to the wizard, desktop app, addon installer,
-or a local stdio SAP MCP process.
+SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
+`sap_agent_start`, `sap_skills_list`, `sap_skills_bundle`, and local
+`sap_skills_install` directly. Do not route startup, skill listing, bundling, or
+installation through `sap_x402_paid_call`. On hosted remote MCP, use
+`sap_skills_bundle` to download skill contents; the hosted server cannot
+install files onto the caller's local machine. Local installation belongs to the
+wizard, desktop app, addon installer, or a local stdio SAP MCP process.
 
 ## Hosted Remote MCP
 
@@ -154,6 +160,15 @@ When summarizing a hosted connection, use language like:
 external signer." Avoid saying "signer not configured", "read-only only",
 "writes unavailable", or "remote MCP broken" unless a specific tool returns
 that exact operational error.
+
+For simple connection questions such as "are you connected to SAP MCP?", answer
+briefly. Include connected yes/no, endpoint, mode, non-custodial status, and
+one next action. Do not dump the full tool catalog, protocol list, or category
+summary unless the user explicitly asks what tools are available. Startup logs
+or registration logs prove that the MCP server started; they do not prove that
+the current agent runtime injected every tool as callable. If `tools/list`
+works but callable functions are missing, report a runtime reload/injection
+issue and ask the user to restart the runtime.
 
 ## Profile Tools
 

@@ -7,6 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createSapMcpServer } from './create-server.js';
 import type { SapMcpConfig } from '../core/types.js';
 import { getPermissionMappedTools, getRequiredPermission } from '../security/tool-permissions.js';
+import { MCP_SERVER_INSTRUCTIONS } from '../core/constants.js';
 
 interface ToolDefinitionForTest {
   name: string;
@@ -65,7 +66,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(275);
+    expect(names).toHaveLength(270);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -101,6 +102,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_profile_list');
     expect(names).toContain('sap_profile_public_key');
     expect(names).toContain('sap_profile_switch');
+    expect(names).toContain('sap_agent_start');
     expect(names).toContain('sap_skills_list');
     expect(names).toContain('sap_skills_bundle');
     expect(names).toContain('sap_skills_install');
@@ -115,6 +117,15 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_x402_build_headers_from_escrow');
     expect(names).toContain('sap_x402_fetch_escrow');
     expect(names).toContain('sap_x402_settle_batch');
+    expect(names).not.toContain('sap_create_escrow');
+    expect(names).not.toContain('sap_deposit_escrow');
+    expect(names).not.toContain('sap_settle_escrow');
+    expect(names).not.toContain('sap_settle_escrow_batch');
+    expect(names).not.toContain('sap_withdraw_escrow');
+    expect(names).not.toContain('sap_close_escrow');
+    expect(names).toContain('sap_create_escrow_v2');
+    expect(names).toContain('sap_deposit_escrow_v2');
+    expect(names).toContain('sap_settle_escrow_v2');
     expect(names).toContain('sap_chat_derive_room');
     expect(names).toContain('sap_chat_start_room');
     expect(names).toContain('sap_chat_send_message');
@@ -123,6 +134,38 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_chat_read_all');
     expect(names).toContain('sap_chat_status');
     expect(names).toContain('sap_chat_seal_room');
+  });
+
+  it('publishes concise SAP MCP startup guidance through initialize instructions', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig())) as RegisteredServerForTest & {
+      _instructions?: string;
+    };
+
+    expect(server._instructions).toBe(MCP_SERVER_INSTRUCTIONS);
+    expect(server._instructions).toContain('sap_agent_start');
+    expect(server._instructions).toContain('sap_skills_bundle');
+    expect(server._instructions).toContain('sap_payments_call_paid_tool');
+    expect(server._instructions).toContain('Escrow writes are V2-only');
+    expect(server._instructions).not.toContain('280 tools');
+  });
+
+  it('exposes Escrow V2 as the active escrow write surface', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+    const createEscrowV2 = toolsByName.get('sap_create_escrow_v2');
+    const schema = createEscrowV2?.inputSchema?.properties ?? {};
+
+    expect(createEscrowV2?.description).toContain('SelfReport/0 is rejected');
+    expect(schema).toHaveProperty('settlementSecurity');
+    expect(schema).toHaveProperty('tokenMint');
+    expect(schema).toHaveProperty('tokenDecimals');
+    expect(schema).toHaveProperty('disputeWindowSlots');
+    expect(schema).toHaveProperty('coSigner');
+    expect(schema).toHaveProperty('arbiter');
+    expect(schema).toHaveProperty('expiresAt');
+    expect(schema).toHaveProperty('nonce');
+    expect(schema.pricePerCall?.description).toContain('micro-USDC');
+    expect(schema.initialDeposit?.description).toContain('smallest unit');
   });
 
   it('limits the local sap_payments bridge process to payment helper tools', async () => {
@@ -440,6 +483,21 @@ describe('createSapMcpServer', () => {
     expect(bundleText).toContain('TOOL_REFERENCE.md');
     expect(installText).toContain('"dryRun": true');
     expect(installText).toContain('requiresConfirmation');
+  });
+
+  it('exposes a free SAP MCP startup playbook for agent runtimes', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+
+    const start = await server.toolHandlers?.sap_agent_start({ goal: 'check wallet balance' });
+    const text = start?.content[0]?.text ?? '';
+
+    expect(text).toContain('Start SAP MCP');
+    expect(text).toContain('sap_skills_bundle');
+    expect(text).toContain('sap_payments_readiness');
+    expect(text).toContain('sap_payments_call_paid_tool');
+    expect(text).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(text).toContain('connectionCheck');
+    expect(text).toContain('Do not list all tools or categories');
   });
 
   it('does not install skill files from hosted-api mode', async () => {

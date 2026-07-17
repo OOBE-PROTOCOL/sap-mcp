@@ -16,7 +16,7 @@ or `sap-agentkit` skills:
 | `sap-memory-vault` | Vaults, sessions, inscriptions, epoch pages |
 | `sap-ledger-session` | Session continuity and latest durable reads |
 | `sap-payments-x402` | x402 payment context, balances, subscriptions |
-| `sap-escrow-settlement` | Escrow v1/v2, settlement, pending settlement, disputes |
+| `sap-escrow-settlement` | Escrow V2, settlement, pending settlement, disputes |
 | `sap-staking` | SAP stake deposit, unstake, stake reads |
 | `sap-solana-token` | SOL/SPL balances, transfers, token admin |
 | `sap-defi` | Jupiter, perps, liquidity, orderbooks, bridges, staking protocols |
@@ -67,20 +67,21 @@ SAP reputation, feedback, attestations, and FairScale:
 `sap_revoke_attestation`, `sap_update_reputation_metrics`,
 `sap_fairscale_score`, `sap_fairscale_trust_gate`.
 
-SAP payments, x402, subscriptions, escrow, settlement, disputes, staking:
+SAP payments, x402, subscriptions, Escrow V2, settlement, disputes, staking:
 
 `sap_x402_prepare_payment`, `sap_x402_get_balance`,
 `sap_create_subscription`, `sap_fund_subscription`,
 `sap_cancel_subscription`, `sap_fetch_subscription`,
-`sap_create_escrow`, `sap_deposit_escrow`, `sap_settle_escrow`,
-`sap_settle_escrow_batch`, `sap_withdraw_escrow`, `sap_close_escrow`,
-`sap_fetch_escrow`, `sap_create_escrow_v2`, `sap_deposit_escrow_v2`,
+`sap_create_escrow_v2`, `sap_deposit_escrow_v2`,
 `sap_settle_escrow_v2`, `sap_finalize_settlement_v2`,
 `sap_file_dispute_v2`, `sap_withdraw_escrow_v2`, `sap_close_escrow_v2`,
 `sap_fetch_escrow_v2`, `sap_fetch_pending_settlement`,
 `sap_next_settlement_index`, `sap_fetch_dispute`, `sap_init_stake`,
 `sap_deposit_stake`, `sap_request_unstake`, `sap_complete_unstake`,
 `sap_fetch_stake`.
+
+Use `sap_fetch_escrow` only for legacy read-only inspection. V1 escrow write
+tools are not part of the active SAP MCP surface.
 
 ## `sap-sns`
 

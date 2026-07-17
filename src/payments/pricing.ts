@@ -58,6 +58,7 @@ const FREE_MCP_METHODS = new Set([
 ]);
 
 const FREE_TOOLS = new Set([
+  'sap_agent_start',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',
@@ -80,6 +81,7 @@ const FREE_TOOLS = new Set([
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
+  'sap_agent_start',
   'sap_profile_current',
   'sap_profile_list',
   'sap_profile_public_key',

@@ -1,6 +1,30 @@
 # Skills And Tool Usage
 
-## 1. Install Skills
+## 1. Start SAP MCP
+
+Users should not need to paste a long operations prompt. After connecting the
+hosted `sap` MCP server, say this to the agent:
+
+```text
+Start SAP MCP.
+```
+
+The agent should then:
+
+1. call `sap_agent_start`;
+2. call `sap_skills_bundle` with `includeContents: true`;
+3. use exact tool names from `tools/list`;
+4. call `sap_payments_readiness` if the local `sap_payments` bridge is visible;
+5. use `sap_payments_call_paid_tool` for paid hosted tools that return x402 payment requirements.
+
+If `sap_payments` is missing, run the wizard repair flow and restart the agent
+runtime:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
+```
+
+## 2. Install Skills
 
 List bundled skills:
 
@@ -34,7 +58,7 @@ Install bundled skills into a local agent skill directory:
 }
 ```
 
-## 2. Tool Selection
+## 3. Tool Selection
 
 Use profile and context first:
 
@@ -63,7 +87,7 @@ Use transactions:
 - `sap_sign_transaction`
 - `sap_submit_signed_transaction`
 
-## 3. Agent Safety
+## 4. Agent Safety
 
 Agents must not:
 

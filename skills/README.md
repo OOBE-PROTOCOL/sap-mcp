@@ -4,7 +4,7 @@ Production skill pack for agents using the SAP MCP server through Claude,
 Hermes, OpenClaw, Codex, or another MCP-capable runtime.
 
 This pack is adapted for `sap-mcp-server` from the upstream Synapse SAP SDK
-v0.21.0 skill taxonomy:
+v1.0.x skill taxonomy:
 
 - `sap-overview`
 - `sap-mcp`
@@ -44,7 +44,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-memory-vault` | Vaults, sessions, inscriptions, compact memory, epoch pages |
 | `sap-ledger-session` | Session continuity and latest durable session reads |
 | `sap-payments-x402` | x402 payment context, balances, subscriptions |
-| `sap-escrow-settlement` | Escrow v1/v2, settlement, pending settlement, disputes |
+| `sap-escrow-settlement` | Escrow V2, settlement, pending settlement, disputes |
 | `sap-staking` | SAP stake initialization, deposit, unstake, and stake reads |
 | `sap-solana-token` | SOL/SPL balances, transfers, token deploy, mint, burn, token admin |
 | `sap-defi` | Jupiter, Drift, Adrena, Lulo, liquidity, orderbooks, bridges, Jito, staking |

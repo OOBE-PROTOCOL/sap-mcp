@@ -3,7 +3,7 @@
 Use this skill for SAP Protocol registry, agent lifecycle, memory, reputation,
 x402 payments, escrow, settlement, disputes, staking, and tool publishing.
 
-This skill corresponds to upstream SAP SDK v0.21.0 domains such as
+This skill corresponds to upstream SAP SDK v1.0.x domains such as
 `sap-overview`, `sap-client`, `sap-advanced`, `sap-memory`,
 `sap-merchant`, and `sap-enterprise`.
 
@@ -72,12 +72,6 @@ Use:
 - `sap_create_subscription`
 - `sap_fund_subscription`
 - `sap_cancel_subscription`
-- `sap_create_escrow`
-- `sap_deposit_escrow`
-- `sap_settle_escrow`
-- `sap_settle_escrow_batch`
-- `sap_withdraw_escrow`
-- `sap_close_escrow`
 - `sap_create_escrow_v2`
 - `sap_deposit_escrow_v2`
 - `sap_settle_escrow_v2`
@@ -85,6 +79,11 @@ Use:
 - `sap_file_dispute_v2`
 - `sap_withdraw_escrow_v2`
 - `sap_close_escrow_v2`
+
+Escrow writes are V2-only. Default `settlementSecurity` is DisputeWindow (`2`);
+CoSigned (`1`) requires `coSigner`; SelfReport (`0`) is not a valid default.
+Escrow amounts are smallest token units: lamports for SOL and micro-USDC for
+USDC.
 
 ## Staking
 

@@ -16,14 +16,45 @@ SAP MCP exposes several tool families:
 
 Agents should:
 
-1. Call profile/context tools before claiming the current network.
-2. Respect the active profile's `rpcUrl`, `programId`, and `mode`.
-3. Prefer SAP SDK docs and skills when explaining SAP Protocol semantics.
-4. Answer in the user's language unless the user asks otherwise.
-5. Avoid showing internal thinking, keypair bytes, raw request secrets, or private config.
-6. Ask for approval before signing or value-moving operations when required by policy.
+1. Treat `Start SAP MCP`, `Initialize SAP MCP`, `Load SAP`, and `SAP mode` as activation phrases.
+2. Call `sap_agent_start` first when it is exposed, then load `sap_skills_bundle` with `includeContents: true`.
+3. Call profile/context tools before claiming the current network.
+4. For hosted remote MCP, describe the remote server as accountless and non-custodial; do not call `default` the user's local profile.
+5. Use local `sap_payments_profile_current` and `sap_payments_readiness` when the `sap_payments` bridge is visible.
+6. Respect the active profile's `rpcUrl`, `programId`, and `mode`.
+7. Prefer SAP SDK docs and skills when explaining SAP Protocol semantics.
+8. Answer in the user's language unless the user asks otherwise.
+9. Avoid showing internal thinking, keypair bytes, raw request secrets, or private config.
+10. Ask for approval before signing or value-moving operations when required by policy.
 
-## 09.3 Skills Directory
+The intended user command is short:
+
+```text
+Start SAP MCP.
+```
+
+The agent should then run the startup routine itself instead of asking the user
+to paste a long prompt.
+
+For simple status prompts such as "are you connected to SAP MCP?", keep the
+answer compact: connected yes/no, endpoint, mode, non-custodial status, local
+`sap_payments` readiness only if it was actually checked, and one next action.
+Do not list the full tool catalog, protocol families, or category summary
+unless the user explicitly asks what tools are available.
+
+## 09.3 Bootstrap Tools And Prompts
+
+SAP MCP exposes a free startup path:
+
+1. `sap_agent_start` returns the machine-readable agent playbook.
+2. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
+3. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
+4. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
+
+These calls are free. Paid tools should only start after the agent has loaded
+skills and, when needed, verified the local `sap_payments` bridge.
+
+## 09.4 Skills Directory
 
 The repo may include a `skills/` directory for client-installable SAP MCP operating instructions.
 
@@ -38,13 +69,13 @@ Recommended skill topics:
 7. Troubleshooting network/profile mismatch.
 8. On-chain agent chat workflows using SAP session ledgers.
 
-## 09.4 Upstream SDK References
+## 09.5 Upstream SDK References
 
 Use upstream SAP SDK docs and skills as the source of protocol behavior:
 
 1. `https://github.com/OOBE-PROTOCOL/synapse-sap-sdk/tree/main/docs`
 2. `https://github.com/OOBE-PROTOCOL/synapse-sap-sdk/tree/main/skills`
-3. `https://github.com/OOBE-PROTOCOL/synapse-sap-sdk/tree/v0.21.0/skills`
+3. `https://github.com/OOBE-PROTOCOL/synapse-sap-sdk/tree/v1.0.2/skills`
 
 SAP MCP wrappers should map to real SDK imports and types from:
 
@@ -52,7 +83,7 @@ SAP MCP wrappers should map to real SDK imports and types from:
 2. `@oobe-protocol-labs/synapse-client-sdk`
 3. `@modelcontextprotocol/sdk`
 
-## 09.5 Tool Documentation Standard
+## 09.6 Tool Documentation Standard
 
 Each exported tool should include:
 
@@ -68,6 +99,6 @@ Each exported tool should include:
 
 Avoid stubs, fake compatibility wrappers, `any`, TODO-only handlers, and undocumented low-code glue.
 
-## 09.6 Language Behavior
+## 09.7 Language Behavior
 
 If a user asks in English, the agent should answer in English. If a user asks in Italian, the agent should answer in Italian. SAP MCP prompts and skills should reinforce this behavior because tool output may contain multilingual metadata.

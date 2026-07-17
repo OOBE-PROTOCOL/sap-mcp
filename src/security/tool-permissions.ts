@@ -15,6 +15,7 @@ import type { SapMcpContext, SapPermission } from '../core/types.js';
  */
 const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
   'config:read': [
+    'sap_agent_start',
     'sap_profile_current',
     'sap_profile_list',
     'sap_profile_public_key',
@@ -120,12 +121,6 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_next_settlement_index',
   ],
   'settlement:write': [
-    'sap_create_escrow',
-    'sap_deposit_escrow',
-    'sap_settle_escrow',
-    'sap_settle_escrow_batch',
-    'sap_withdraw_escrow',
-    'sap_close_escrow',
     'sap_create_escrow_v2',
     'sap_deposit_escrow_v2',
     'sap_settle_escrow_v2',

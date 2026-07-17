@@ -23,6 +23,7 @@ import { explainProofOfExecutionPrompt } from './execution-proof/explain-proof-o
 import { verifyExecutionProofPrompt } from './execution-proof/verify-execution-proof.prompt.js';
 
 // Context prompts
+import { sapAgentStartPrompt } from './context/sap-agent-start.prompt.js';
 import { sapAgentContextPrompt } from './context/sap-agent-context.prompt.js';
 
 /**
@@ -48,7 +49,8 @@ export async function registerPrompts(server: Server, context: SapMcpContext): P
   verifyExecutionProofPrompt(server, context);
   
   // Register context prompts
+  sapAgentStartPrompt(server, context);
   sapAgentContextPrompt(server, context);
   
-  logger.debug('Prompts registered', { count: 9 });
+  logger.debug('Prompts registered', { count: 10 });
 }

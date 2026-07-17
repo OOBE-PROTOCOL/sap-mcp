@@ -1248,7 +1248,7 @@ export function buildMarketplaceConfigurationMetadata(req: http.IncomingMessage,
     configSchema: readSmitheryConfigSchema(),
     recommendedMode: 'free-discovery',
     paidToolModes: ['x402-native-client', 'local-sap-payments-bridge'],
-    instructions: 'Start with free discovery tools in Smithery. Paid/write tools return x402 challenges; complete them with a native x402-capable client or with the local sap_payments bridge installed by the SAP MCP wizard.',
+    instructions: 'Start with free sap_agent_start, then sap_skills_bundle with includeContents=true so the agent loads SAP MCP skills before selecting tools. Paid/write tools return standard x402 challenges; complete them with a native x402-capable client or the local sap_payments bridge installed by the SAP MCP wizard. Hosted SAP MCP is non-custodial and never receives user keypair bytes.',
     setupCommand: WIZARD_NPM_COMMAND,
     localBridge: {
       serverName: 'sap_payments',

@@ -2,7 +2,7 @@
  * SAP SDK MCP tools.
  *
  * This module intentionally wraps only methods that exist on
- * `@oobe-protocol-labs/synapse-sap-sdk@0.21.x`. It does not create local
+ * `@oobe-protocol-labs/synapse-sap-sdk@1.0.x`. It does not create local
  * facades for missing SDK namespaces and it does not fabricate network data.
  */
 
@@ -16,14 +16,12 @@ import {
   type Capability,
   type CompactInscribeArgs,
   type CreateAttestationArgs,
-  type CreateEscrowArgs,
   type CreateEscrowV2Args,
   type CreateSubscriptionArgs,
   type GiveFeedbackArgs,
   type InscribeMemoryArgs,
   type PricingTier,
   type RegisterAgentArgs,
-  type Settlement,
   type UpdateAgentArgs,
   type UpdateFeedbackArgs,
   type UpdateToolArgs,
@@ -52,6 +50,65 @@ interface ToolRegistration {
   inputSchema: unknown;
   handler: SapToolHandler;
 }
+
+const ESCROW_AMOUNT_DESCRIPTION =
+  'Amount in the escrow token smallest unit: lamports for SOL, micro-USDC for USDC, or base units for the configured SPL token.';
+
+const ESCROW_V2_COSIGNED_MODE = 1;
+const ESCROW_V2_DISPUTE_WINDOW_MODE = 2;
+const DEFAULT_ESCROW_V2_DISPUTE_WINDOW_SLOTS = new BN(2160);
+
+const escrowV2CreateInputSchema = {
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58). The V2 escrow PDA is derived from this wallet plus nonce.',
+  },
+  pricePerCall: {
+    type: 'string',
+    description: `Price per served call as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}`,
+  },
+  maxCalls: {
+    type: 'string',
+    description: 'Maximum number of calls covered by the escrow as a decimal string. Use 0 for unlimited when supported by policy.',
+  },
+  initialDeposit: {
+    type: 'string',
+    description: `Initial escrow deposit as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}`,
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+  expiresAt: {
+    type: 'string',
+    description: 'Optional expiry timestamp in unix seconds as a decimal string. Defaults to 0 (no expiry).',
+  },
+  tokenMint: {
+    type: 'string',
+    description: 'Optional SPL payment token mint. Omit/null for native SOL. Use EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v for mainnet USDC x402 escrows.',
+  },
+  tokenDecimals: {
+    type: 'number',
+    description: 'Payment token decimals. Defaults to 6 when tokenMint is set, otherwise 9 for native SOL.',
+  },
+  settlementSecurity: {
+    type: 'number',
+    enum: [1, 2],
+    description: 'V2 settlement security mode. 1=CoSigned (requires coSigner). 2=DisputeWindow (recommended default; requires disputeWindowSlots > 0). SelfReport/0 is deprecated and rejected on-chain.',
+  },
+  disputeWindowSlots: {
+    type: 'string',
+    description: 'Required positive dispute window in slots for settlementSecurity=2. Defaults to 2160 (~15 minutes).',
+  },
+  coSigner: {
+    type: 'string',
+    description: 'Required co-signer wallet public key when settlementSecurity=1 (CoSigned).',
+  },
+  arbiter: {
+    type: 'string',
+    description: 'Optional arbiter public key kept for IDL compatibility and dispute workflows.',
+  },
+};
 
 interface AnchorAccountResult<TAccount> {
   publicKey: PublicKey;
@@ -577,24 +634,8 @@ function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
 }
 
 /**
- * @name parseEscrowArgs
- * @description Builds typed V1 escrow creation args from MCP JSON input.
- */
-function parseEscrowArgs(input: JsonRecord): CreateEscrowArgs {
-  return {
-    pricePerCall: requiredBn(input, 'pricePerCall'),
-    maxCalls: requiredBn(input, 'maxCalls'),
-    initialDeposit: requiredBn(input, 'initialDeposit'),
-    expiresAt: optionalBn(input, 'expiresAt', new BN(0)),
-    volumeCurve: [],
-    tokenMint: optionalPublicKey(input, 'tokenMint') ?? null,
-    tokenDecimals: optionalNumber(input, 'tokenDecimals') ?? 9,
-  };
-}
-
-/**
  * @name parseX402PreparePaymentOptions
- * @description Builds typed V1 x402 payment preparation options from MCP JSON input.
+ * @description Builds typed x402 payment preparation options from MCP JSON input.
  */
 function parseX402PreparePaymentOptions(input: JsonRecord): PreparePaymentOptions {
   return {
@@ -606,6 +647,7 @@ function parseX402PreparePaymentOptions(input: JsonRecord): PreparePaymentOption
       afterCalls: point.afterCalls,
       pricePerCall: point.pricePerCall,
     })),
+    nonce: optionalString(input, 'nonce'),
     tokenMint: optionalPublicKey(input, 'tokenMint') ?? null,
     tokenDecimals: optionalNumber(input, 'tokenDecimals'),
     networkIdentifier: optionalString(input, 'networkIdentifier'),
@@ -624,6 +666,7 @@ function parsePaymentContext(input: JsonRecord): PaymentContext {
     depositorWallet: requiredPublicKey(input, 'depositorWallet'),
     pricePerCall: requiredBn(input, 'pricePerCall'),
     maxCalls: requiredBn(input, 'maxCalls'),
+    nonce: optionalBn(input, 'nonce', new BN(0)),
     txSignature: requiredString(input, 'txSignature'),
     networkIdentifier: requiredString(input, 'networkIdentifier'),
   };
@@ -686,6 +729,29 @@ function parseX402BatchSettlementEntries(value: unknown): Array<{ calls: number;
  * @description Builds typed V2 escrow creation args from MCP JSON input.
  */
 function parseEscrowV2Args(input: JsonRecord): CreateEscrowV2Args {
+  const tokenMint = optionalPublicKey(input, 'tokenMint') ?? null;
+  const settlementSecurity = optionalNumber(input, 'settlementSecurity') ?? ESCROW_V2_DISPUTE_WINDOW_MODE;
+  if (settlementSecurity === 0) {
+    throw new Error('settlementSecurity=0 / SelfReport is deprecated and rejected by the current SAP program. Use 1 (CoSigned) or 2 (DisputeWindow).');
+  }
+  if (settlementSecurity !== ESCROW_V2_COSIGNED_MODE && settlementSecurity !== ESCROW_V2_DISPUTE_WINDOW_MODE) {
+    throw new Error('settlementSecurity must be 1 (CoSigned) or 2 (DisputeWindow).');
+  }
+
+  const coSigner = optionalPublicKey(input, 'coSigner') ?? null;
+  if (settlementSecurity === ESCROW_V2_COSIGNED_MODE && !coSigner) {
+    throw new Error('coSigner is required when settlementSecurity=1 (CoSigned).');
+  }
+
+  const disputeWindowSlots = optionalBn(
+    input,
+    'disputeWindowSlots',
+    settlementSecurity === ESCROW_V2_DISPUTE_WINDOW_MODE ? DEFAULT_ESCROW_V2_DISPUTE_WINDOW_SLOTS : new BN(0)
+  );
+  if (settlementSecurity === ESCROW_V2_DISPUTE_WINDOW_MODE && disputeWindowSlots.lte(new BN(0))) {
+    throw new Error('disputeWindowSlots must be positive when settlementSecurity=2 (DisputeWindow).');
+  }
+
   return {
     escrowNonce: optionalBn(input, 'nonce', new BN(0)),
     pricePerCall: requiredBn(input, 'pricePerCall'),
@@ -693,24 +759,12 @@ function parseEscrowV2Args(input: JsonRecord): CreateEscrowV2Args {
     initialDeposit: requiredBn(input, 'initialDeposit'),
     expiresAt: optionalBn(input, 'expiresAt', new BN(0)),
     volumeCurve: [],
-    tokenMint: optionalPublicKey(input, 'tokenMint') ?? null,
-    tokenDecimals: optionalNumber(input, 'tokenDecimals') ?? 9,
-    settlementSecurity: optionalNumber(input, 'settlementSecurity') ?? 0,
-    disputeWindowSlots: optionalBn(input, 'disputeWindowSlots', new BN(0)),
-    coSigner: optionalPublicKey(input, 'coSigner') ?? null,
+    tokenMint,
+    tokenDecimals: optionalNumber(input, 'tokenDecimals') ?? (tokenMint ? 6 : 9),
+    settlementSecurity,
+    disputeWindowSlots,
+    coSigner,
     arbiter: optionalPublicKey(input, 'arbiter') ?? null,
-  };
-}
-
-/**
- * @name parseSettlement
- * @description Builds typed V1 batch-settlement entries from MCP JSON input.
- */
-function parseSettlement(item: unknown): Settlement {
-  const record = asRecord(item);
-  return {
-    callsToSettle: requiredBn(record, 'callsToSettle'),
-    serviceHash: requiredBytes(record, 'serviceHash', 32),
   };
 }
 
@@ -999,7 +1053,7 @@ const discoveryTools: ToolRegistration[] = [
   {
     name: 'sap_discover_agents',
     title: 'Discover SAP Agents',
-    description: 'Discover agents by protocol, capability, or capability list. Unfiltered global listing is not exposed by SDK v0.20.',
+    description: 'Discover agents by protocol, capability, or capability list. For unfiltered global listing, use sap_list_all_agents.',
     inputSchema: {
       protocol: { type: 'string', description: 'Protocol identifier to filter agents by (e.g. "jupiter", "drift")' },
       capability: { type: 'string', description: 'Single capability ID to filter agents by (e.g. "jupiter:swap")' },
@@ -1033,7 +1087,7 @@ const discoveryTools: ToolRegistration[] = [
         count: 0,
         agents: [],
         overview: await client.discovery.getNetworkOverview(),
-        note: 'SDK v0.20 exposes filtered discovery, not unfiltered global agent enumeration. Provide protocol or capability.',
+        note: 'SDK filtered discovery requires a protocol or capability. For global on-chain directory snapshots, call sap_list_all_agents.',
       };
     },
   },
@@ -1271,61 +1325,6 @@ const indexAndFetchTools: ToolRegistration[] = [
 
 const paymentAndEscrowTools: ToolRegistration[] = [
   {
-    name: 'sap_create_escrow',
-    title: 'Create SAP Escrow V1',
-    description: 'Create a V1 escrow using SDK EscrowModule.create.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, pricePerCall: { type: 'string', description: 'Price per call in lamports (as a decimal string)' }, maxCalls: { type: 'string', description: 'Maximum number of calls the escrow covers (as a decimal string)' }, initialDeposit: { type: 'string', description: 'Initial deposit amount in lamports (as a decimal string)' } },
-    handler: async (input, client) => ({ signature: await client.escrow.create(requiredPublicKey(input, 'agentWallet'), parseEscrowArgs(input)) }),
-  },
-  {
-    name: 'sap_deposit_escrow',
-    title: 'Deposit SAP Escrow V1',
-    description: 'Deposit funds into a V1 escrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, amount: { type: 'string', description: 'Deposit amount in lamports (as a decimal string)' } },
-    handler: async (input, client) => ({ signature: await client.escrow.deposit(requiredPublicKey(input, 'agentWallet'), requiredBn(input, 'amount')) }),
-  },
-  {
-    name: 'sap_settle_escrow',
-    title: 'Settle SAP Escrow V1',
-    description: 'Settle calls against a V1 escrow.',
-    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, callsToSettle: { type: 'string', description: 'Number of calls to settle (as a decimal string)' }, serviceHash: { type: 'array', description: '32-byte service hash as a byte array, hex string, or base64 string' } },
-    handler: async (input, client) => ({
-      signature: await client.escrow.settle(requiredPublicKey(input, 'depositorWallet'), requiredBn(input, 'callsToSettle'), requiredBytes(input, 'serviceHash', 32)),
-    }),
-  },
-  {
-    name: 'sap_settle_escrow_batch',
-    title: 'Batch Settle SAP Escrow V1',
-    description: 'Batch settle V1 escrow entries using SDK EscrowModule.settleBatch.',
-    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, settlements: { type: 'array', description: 'Array of settlement objects, each containing callsToSettle (string) and serviceHash (32-byte array)' }, batchRoot: { type: 'array', description: 'Optional 32-byte Merkle root for batch verification' } },
-    handler: async (input, client) => {
-      if (!Array.isArray(input.settlements)) {
-        throw new Error('settlements must be an array');
-      }
-      return {
-        signature: await client.escrow.settleBatch(
-          requiredPublicKey(input, 'depositorWallet'),
-          input.settlements.map(parseSettlement),
-          input.batchRoot === undefined ? null : requiredBytes(input, 'batchRoot', 32)
-        ),
-      };
-    },
-  },
-  {
-    name: 'sap_withdraw_escrow',
-    title: 'Withdraw SAP Escrow V1',
-    description: 'Withdraw funds from a V1 escrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, amount: { type: 'string', description: 'Withdrawal amount in lamports (as a decimal string)' } },
-    handler: async (input, client) => ({ signature: await client.escrow.withdraw(requiredPublicKey(input, 'agentWallet'), requiredBn(input, 'amount')) }),
-  },
-  {
-    name: 'sap_close_escrow',
-    title: 'Close SAP Escrow V1',
-    description: 'Close an empty V1 escrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' } },
-    handler: async (input, client) => ({ signature: await client.escrow.close(requiredPublicKey(input, 'agentWallet')) }),
-  },
-  {
     name: 'sap_x402_estimate_cost',
     title: 'Estimate SAP x402 Cost',
     description: 'Estimate cost for a number of calls using SDK X402Registry.estimateCost. Reads escrow/pricing when available and supports optional volume curve overrides.',
@@ -1365,9 +1364,9 @@ const paymentAndEscrowTools: ToolRegistration[] = [
   },
   {
     name: 'sap_x402_prepare_payment',
-    title: 'Prepare SAP x402 Payment V1 Deprecated',
-    description: 'Prepare a V1 x402 payment context using SDK X402Registry.preparePayment. Deprecated by the SDK for production escrow creation; prefer Escrow V2 tools for new flows.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, pricePerCall: { type: 'string', description: 'Price per call as a decimal string' }, deposit: { type: 'string', description: 'Initial deposit amount as a decimal string' }, maxCalls: { type: 'string', description: 'Optional maximum number of calls covered' }, expiresAt: { type: 'string', description: 'Optional expiry timestamp in unix seconds' }, volumeCurve: { type: 'array', description: 'Optional array of { afterCalls, pricePerCall } pricing breakpoints' }, tokenMint: { type: 'string', description: 'Optional SPL token mint; omit/null for SOL' }, tokenDecimals: { type: 'number', description: 'Optional token decimals' }, networkIdentifier: { type: 'string', description: 'Optional x402 network identifier written into headers' } },
+    title: 'Prepare SAP x402 Payment',
+    description: 'Prepare an x402 payment context using SDK X402Registry.preparePayment. New production escrow funding should use Escrow V2 fields and nonce-aware flows.',
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, pricePerCall: { type: 'string', description: `Price per call as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` }, deposit: { type: 'string', description: `Initial deposit as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` }, maxCalls: { type: 'string', description: 'Optional maximum number of calls covered' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' }, expiresAt: { type: 'string', description: 'Optional expiry timestamp in unix seconds' }, volumeCurve: { type: 'array', description: 'Optional array of { afterCalls, pricePerCall } pricing breakpoints' }, tokenMint: { type: 'string', description: 'Optional SPL token mint; omit/null for SOL. Use EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v for mainnet USDC.' }, tokenDecimals: { type: 'number', description: 'Optional token decimals. Defaults to 6 for USDC/SPL flows when supplied by the SDK and 9 for native SOL.' }, networkIdentifier: { type: 'string', description: 'Optional x402 network identifier written into headers' } },
     handler: async (input, client) => ({
       payment: await client.x402.preparePayment(requiredPublicKey(input, 'agentWallet'), parseX402PreparePaymentOptions(input)),
     }),
@@ -1376,7 +1375,7 @@ const paymentAndEscrowTools: ToolRegistration[] = [
     name: 'sap_x402_build_payment_headers',
     title: 'Build SAP x402 Payment Headers',
     description: 'Build SAP x402 HTTP headers from a public PaymentContext returned by sap_x402_prepare_payment.',
-    inputSchema: { escrowPda: { type: 'string', description: 'Escrow PDA (base58)' }, agentPda: { type: 'string', description: 'Agent PDA (base58)' }, agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, pricePerCall: { type: 'string', description: 'Price per call in token base units' }, maxCalls: { type: 'string', description: 'Max calls as a decimal string' }, txSignature: { type: 'string', description: 'Escrow creation transaction signature' }, networkIdentifier: { type: 'string', description: 'x402 network identifier stored in the payment context' }, network: { type: 'string', description: 'Optional override for X-Payment-Network' } },
+    inputSchema: { escrowPda: { type: 'string', description: 'Escrow PDA (base58)' }, agentPda: { type: 'string', description: 'Agent PDA (base58)' }, agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, pricePerCall: { type: 'string', description: 'Price per call in token base units' }, maxCalls: { type: 'string', description: 'Max calls as a decimal string' }, nonce: { type: 'string', description: 'Escrow nonce as a decimal string. Defaults to 0.' }, txSignature: { type: 'string', description: 'Escrow creation transaction signature' }, networkIdentifier: { type: 'string', description: 'x402 network identifier stored in the payment context' }, network: { type: 'string', description: 'Optional override for X-Payment-Network' } },
     handler: async (input, client) => ({
       headers: client.x402.buildPaymentHeaders(parsePaymentContext(input), { network: optionalString(input, 'network') }),
     }),
@@ -1385,9 +1384,10 @@ const paymentAndEscrowTools: ToolRegistration[] = [
     name: 'sap_x402_build_headers_from_escrow',
     title: 'Build SAP x402 Headers From Escrow',
     description: 'Build SAP x402 HTTP headers by fetching escrow data for an agent wallet with SDK X402Registry.buildPaymentHeadersFromEscrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, network: { type: 'string', description: 'Optional network identifier for X-Payment-Network' } },
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' }, network: { type: 'string', description: 'Optional network identifier for X-Payment-Network' } },
     handler: async (input, client) => ({
       headers: await client.x402.buildPaymentHeadersFromEscrow(requiredPublicKey(input, 'agentWallet'), {
+        nonce: optionalString(input, 'nonce'),
         network: optionalString(input, 'network'),
       }),
     }),
@@ -1396,34 +1396,37 @@ const paymentAndEscrowTools: ToolRegistration[] = [
     name: 'sap_x402_has_escrow',
     title: 'Check SAP x402 Escrow',
     description: 'Check whether an x402 escrow exists for an agent/depositor pair.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58); defaults to caller in SDK' } },
-    handler: async (input, client) => ({ exists: await client.x402.hasEscrow(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor')) }),
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58); defaults to caller in SDK' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' } },
+    handler: async (input, client) => ({ exists: await client.x402.hasEscrow(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor'), { nonce: optionalString(input, 'nonce') }) }),
   },
   {
     name: 'sap_x402_fetch_escrow',
     title: 'Fetch SAP x402 Escrow',
     description: 'Fetch raw x402 escrow account data using SDK X402Registry.fetchEscrow. Resolves V2 first, then V1 fallback.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58); defaults to caller in SDK' } },
-    handler: async (input, client) => ({ escrow: await client.x402.fetchEscrow(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor')) }),
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58); defaults to caller in SDK' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' } },
+    handler: async (input, client) => ({ escrow: await client.x402.fetchEscrow(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor'), { nonce: optionalString(input, 'nonce') }) }),
   },
   {
     name: 'sap_x402_get_balance',
     title: 'Get SAP x402 Balance',
     description: 'Fetch x402 escrow balance using SDK X402Registry.getBalance.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58) to filter balance by' } },
-    handler: async (input, client) => ({ balance: await client.x402.getBalance(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor')) }),
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositor: { type: 'string', description: 'Optional depositor wallet (base58) to filter balance by' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' } },
+    handler: async (input, client) => ({ balance: await client.x402.getBalance(requiredPublicKey(input, 'agentWallet'), optionalPublicKey(input, 'depositor'), { nonce: optionalString(input, 'nonce') }) }),
   },
   {
     name: 'sap_x402_settle',
     title: 'Settle SAP x402 Calls',
     description: 'Settle served x402 calls through SDK X402Registry.settle. Must be called by the agent owner wallet.',
-    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, callsToSettle: { type: 'number', description: 'Number of calls to settle' }, serviceData: { type: 'string', description: 'Service data to hash into the settlement proof' }, priorityFeeMicroLamports: { type: 'number', description: 'Optional priority fee in microlamports per compute unit' }, computeUnits: { type: 'number', description: 'Optional compute-unit limit' }, skipPreflight: { type: 'boolean', description: 'Optional skip preflight flag' }, commitment: { type: 'string', description: 'Optional processed|confirmed|finalized commitment' }, maxRetries: { type: 'number', description: 'Optional RPC retry limit' } },
+    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' }, callsToSettle: { type: 'number', description: 'Number of calls to settle' }, serviceData: { type: 'string', description: 'Service data to hash into the settlement proof' }, priorityFeeMicroLamports: { type: 'number', description: 'Optional priority fee in microlamports per compute unit' }, computeUnits: { type: 'number', description: 'Optional compute-unit limit' }, skipPreflight: { type: 'boolean', description: 'Optional skip preflight flag' }, commitment: { type: 'string', description: 'Optional processed|confirmed|finalized commitment' }, maxRetries: { type: 'number', description: 'Optional RPC retry limit' } },
     handler: async (input, client) => ({
       settlement: await client.x402.settle(
         requiredPublicKey(input, 'depositorWallet'),
         requiredNumber(input, 'callsToSettle'),
         requiredString(input, 'serviceData'),
-        parseSettleOptions(input)
+        {
+          ...(parseSettleOptions(input) ?? {}),
+          ...(optionalString(input, 'nonce') ? { nonce: optionalString(input, 'nonce') } : {}),
+        }
       ),
     }),
   },
@@ -1431,12 +1434,15 @@ const paymentAndEscrowTools: ToolRegistration[] = [
     name: 'sap_x402_settle_batch',
     title: 'Batch Settle SAP x402 Calls',
     description: 'Batch-settle served x402 calls through SDK X402Registry.settleBatch. Must be called by the agent owner wallet.',
-    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, entries: { type: 'array', description: 'Array of { calls, serviceData } settlement entries' }, priorityFeeMicroLamports: { type: 'number', description: 'Optional priority fee in microlamports per compute unit' }, computeUnits: { type: 'number', description: 'Optional compute-unit limit' }, skipPreflight: { type: 'boolean', description: 'Optional skip preflight flag' }, commitment: { type: 'string', description: 'Optional processed|confirmed|finalized commitment' }, maxRetries: { type: 'number', description: 'Optional RPC retry limit' } },
+    inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, nonce: { type: 'string', description: 'Optional escrow nonce as a decimal string. Defaults to 0.' }, entries: { type: 'array', description: 'Array of { calls, serviceData } settlement entries' }, priorityFeeMicroLamports: { type: 'number', description: 'Optional priority fee in microlamports per compute unit' }, computeUnits: { type: 'number', description: 'Optional compute-unit limit' }, skipPreflight: { type: 'boolean', description: 'Optional skip preflight flag' }, commitment: { type: 'string', description: 'Optional processed|confirmed|finalized commitment' }, maxRetries: { type: 'number', description: 'Optional RPC retry limit' } },
     handler: async (input, client) => ({
       settlement: await client.x402.settleBatch(
         requiredPublicKey(input, 'depositorWallet'),
         parseX402BatchSettlementEntries(input.entries),
-        parseSettleOptions(input)
+        {
+          ...(parseSettleOptions(input) ?? {}),
+          ...(optionalString(input, 'nonce') ? { nonce: optionalString(input, 'nonce') } : {}),
+        }
       ),
     }),
   },
@@ -1446,15 +1452,15 @@ const escrowV2Tools: ToolRegistration[] = [
   {
     name: 'sap_create_escrow_v2',
     title: 'Create SAP Escrow V2',
-    description: 'Create a V2 escrow using SDK EscrowV2Module.create.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, pricePerCall: { type: 'string', description: 'Price per call in lamports (as a decimal string)' }, maxCalls: { type: 'string', description: 'Maximum number of calls the escrow covers (as a decimal string)' }, initialDeposit: { type: 'string', description: 'Initial deposit amount in lamports (as a decimal string)' } },
+    description: 'Create a V2 escrow using SDK EscrowV2Module.create. Defaults to DisputeWindow settlementSecurity=2; SelfReport/0 is rejected.',
+    inputSchema: escrowV2CreateInputSchema,
     handler: async (input, client) => ({ signature: await client.escrowV2.create(requiredPublicKey(input, 'agentWallet'), parseEscrowV2Args(input)) }),
   },
   {
     name: 'sap_deposit_escrow_v2',
     title: 'Deposit SAP Escrow V2',
     description: 'Deposit funds into a V2 escrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: 'Deposit amount in lamports (as a decimal string)' } },
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: `Deposit amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` } },
     handler: async (input, client) => ({ signature: await client.escrowV2.deposit(requiredPublicKey(input, 'agentWallet'), optionalBn(input, 'nonce', new BN(0)), requiredBn(input, 'amount')) }),
   },
   {
@@ -1502,14 +1508,13 @@ const escrowV2Tools: ToolRegistration[] = [
     name: 'sap_file_dispute_v2',
     title: 'File SAP Escrow V2 Dispute',
     description: 'File a dispute for a V2 pending settlement.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, settlementIndex: { type: 'string', description: 'Settlement index to dispute (as a decimal string)' }, evidenceHash: { type: 'array', description: '32-byte evidence hash as a byte array, hex string, or base64 string' }, disputeType: { type: 'number', description: 'Optional dispute type identifier (numeric)' } },
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, settlementIndex: { type: 'string', description: 'Settlement index to dispute (as a decimal string)' }, evidenceHash: { type: 'array', description: '32-byte evidence hash as a byte array, hex string, or base64 string' } },
     handler: async (input, client) => ({
       signature: await client.escrowV2.fileDispute(
         requiredPublicKey(input, 'agentWallet'),
         optionalBn(input, 'nonce', new BN(0)),
         requiredBn(input, 'settlementIndex'),
-        requiredBytes(input, 'evidenceHash', 32),
-        optionalNumber(input, 'disputeType')
+        requiredBytes(input, 'evidenceHash', 32)
       ),
     }),
   },
@@ -1517,7 +1522,7 @@ const escrowV2Tools: ToolRegistration[] = [
     name: 'sap_withdraw_escrow_v2',
     title: 'Withdraw SAP Escrow V2',
     description: 'Withdraw funds from a V2 escrow.',
-    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: 'Withdrawal amount in lamports (as a decimal string)' } },
+    inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: `Withdrawal amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` } },
     handler: async (input, client) => ({ signature: await client.escrowV2.withdraw(requiredPublicKey(input, 'agentWallet'), optionalBn(input, 'nonce', new BN(0)), requiredBn(input, 'amount')) }),
   },
   {
@@ -1786,7 +1791,7 @@ const sapToolGroups: ToolRegistration[][] = [
 
 /**
  * @name registerSapSdkTools
- * @description Registers production SAP SDK-backed tools using the public SDK v0.20 client surface.
+ * @description Registers production SAP SDK-backed tools using the current public SDK v1.0.x client surface.
  */
 export function registerSapSdkTools(server: Server, _context: SapMcpContext): void {
   logger.debug('Registering SAP SDK tools');

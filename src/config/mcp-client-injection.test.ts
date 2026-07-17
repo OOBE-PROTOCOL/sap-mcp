@@ -192,7 +192,7 @@ describe('MCP client injection', () => {
     });
     expect(codexLocal?.content).toContain('[mcp_servers.sap]');
     expect(codexLocal?.content).toContain('--package');
-    expect(codexLocal?.content).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.1');
+    expect(codexLocal?.content).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.2');
   });
 
   it('discovers Codex config as a create-capable target', () => {
@@ -205,7 +205,7 @@ describe('MCP client injection', () => {
   it('builds portable Codex npx stdio config without wallet or RPC overrides', () => {
     const config = createNpxCodexServerConfig();
 
-    expect(config.args).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.1');
+    expect(config.args).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.2');
     expect(config.args).toContain('sap-mcp-server');
     expect(config.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
@@ -502,7 +502,7 @@ describe('MCP client injection', () => {
     expect(parsed.mcpServers.sap_payments.args).toEqual([
       '--yes',
       '--package',
-      '@oobe-protocol-labs/sap-mcp-server@0.9.1',
+      '@oobe-protocol-labs/sap-mcp-server@0.9.2',
       'sap-mcp-server',
     ]);
     expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');

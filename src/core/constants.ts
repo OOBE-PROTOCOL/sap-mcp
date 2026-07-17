@@ -59,6 +59,19 @@ export const MCP_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
  */
 export const MCP_SERVER_DESCRIPTION = 'Solana-native MCP gateway for Synapse Agent Protocol tools, DeFi protocols, SNS identity, x402/pay.sh payments, and user-controlled agent operations.';
 /**
+ * MCP initialize instructions. Clients may surface this text to the model as
+ * server guidance, so keep it concise, standard-compliant, and action-oriented.
+ */
+export const MCP_SERVER_INSTRUCTIONS = [
+  'SAP MCP is a Solana-native, non-custodial MCP gateway. Hosted mode is accountless: OOBE never receives user keypair bytes.',
+  'When the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or asks to use SAP MCP, first call free tool sap_agent_start, then sap_skills_bundle with includeContents=true, and load the returned skills before selecting tools.',
+  'For simple connection/status questions, answer briefly with endpoint, mode, non-custodial status, local sap_payments readiness only if checked, and one next action. Do not dump the full tool catalog unless asked.',
+  'Use exact tool names from tools/list. Do not rewrite hyphenated tool names such as spl-token_getTokenAccounts.',
+  'Hosted paid/write tools return HTTP 402 x402/pay.sh challenges. This is normal. Prefer the local sap_payments_call_paid_tool bridge for paid hosted calls; it signs locally and retries without exposing keypair bytes.',
+  'If sap_payments is missing, ask the user to run the SAP MCP wizard repair flow and restart the agent runtime. Do not claim hosted SAP MCP can custody or see local wallet config.',
+  'Escrow writes are V2-only. Use sap_create_escrow_v2 and related V2 tools. Default settlementSecurity is DisputeWindow (2); never default to SelfReport (0). Amounts are smallest units: lamports for SOL, micro-USDC for USDC.',
+].join('\n');
+/**
  * Public homepage for hosted SAP MCP documentation and runtime onboarding.
  */
 export const MCP_SERVER_WEBSITE_URL = 'https://mcp.sap.oobeprotocol.ai/';
@@ -69,7 +82,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.1';
+export const MCP_SERVER_VERSION = '0.9.2';
 
 /**
  * Tool categories

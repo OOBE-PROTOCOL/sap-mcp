@@ -51,7 +51,7 @@ export function generateSapIntegrationPrompt(server: Server, _context: SapMcpCon
       '',
       '## 1. Install Dependencies',
       '```bash',
-      'pnpm add @oobe-protocol-labs/synapse-sap-sdk@0.21.0',
+      'pnpm add @oobe-protocol-labs/synapse-sap-sdk@1.0.2',
       'pnpm add @coral-xyz/anchor @solana/web3.js',
       '```',
       '',

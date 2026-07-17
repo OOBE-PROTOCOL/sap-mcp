@@ -2,9 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## 0.9.2 - 2026-07-17
 
-No unreleased changes yet.
+### Added
+
+- Added the free `sap_agent_start` tool and matching `sap-agent-start` prompt so
+  users can tell an agent "Start SAP MCP" instead of pasting a long operations
+  prompt. The bootstrap points agents to `sap_skills_bundle`,
+  `sap_payments_readiness`, and `sap_payments_call_paid_tool` while preserving
+  hosted accountless/non-custodial behavior.
+
+### Fixed
+
+- Tightened SAP MCP agent bootstrap behavior so simple connection checks stay
+  concise instead of dumping the full tool catalog or protocol category list.
+- Added AgentKit SPL token input alias normalization for common wallet-owner
+  fields, reducing schema-discovery retries in agent runtimes.
 
 ## 0.9.1 - 2026-07-16
 

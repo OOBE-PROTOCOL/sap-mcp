@@ -25,3 +25,6 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   utf-8-validate: true
+
+minimumReleaseAgeExclude:
+  - '@oobe-protocol-labs/synapse-sap-sdk@1.0.2'

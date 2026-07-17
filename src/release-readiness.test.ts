@@ -101,4 +101,43 @@ describe('release readiness documentation and package surface', () => {
 
     expect(viteConfig).toContain("base: './'");
   });
+
+  it('keeps active SAP skills aligned with SDK 1.0.x Escrow V2 and hosted x402 flows', () => {
+    const activeSkillText = [
+      readText('skills/README.md'),
+      readText('skills/sap-escrow-settlement/SKILL.md'),
+      readText('skills/sap-mcp/TOOL_REFERENCE.md'),
+      readText('skills/sap-operations/SKILL.md'),
+      readText('skills/sap-payments-x402/SKILL.md'),
+      readText('src/prompts/context/sap-agent-start.prompt.ts'),
+      readText('src/prompts/payments/explain-x402-settlement.prompt.ts'),
+    ].join('\n');
+
+    const removedV1WriteTools = [
+      'sap_create_escrow',
+      'sap_deposit_escrow',
+      'sap_settle_escrow',
+      'sap_settle_escrow_batch',
+      'sap_withdraw_escrow',
+      'sap_close_escrow',
+    ];
+
+    for (const removedTool of removedV1WriteTools) {
+      expect(activeSkillText).not.toContain(`- \`${removedTool}\``);
+      expect(activeSkillText).not.toContain(`\`${removedTool}\`,`);
+    }
+
+    expect(activeSkillText).toContain('sap_create_escrow_v2');
+    expect(activeSkillText).toContain('settlementSecurity');
+    expect(activeSkillText).toContain('DisputeWindow');
+    expect(activeSkillText).toContain('micro-USDC');
+    expect(activeSkillText).toContain('sap_payments_call_paid_tool');
+    expect(activeSkillText).toContain('402 challenge');
+    expect(activeSkillText).toContain('retry');
+    expect(activeSkillText).not.toContain('v0.21.0');
+    expect(activeSkillText).not.toContain('SDK v0.20');
+    expect(activeSkillText).not.toContain('280 tools');
+    expect(activeSkillText).not.toContain('createEscrow(');
+    expect(activeSkillText).not.toContain('settleEscrow(');
+  });
 });

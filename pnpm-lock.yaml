@@ -33,10 +33,10 @@ importers:
         version: 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@oobe-protocol-labs/synapse-client-sdk':
         specifier: ^2.0.6
-        version: 2.0.6(@coral-xyz/anchor@0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@langchain/core@0.3.80(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@oobe-protocol-labs/synapse-sap-sdk@0.21.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
+        version: 2.0.6(@coral-xyz/anchor@0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@langchain/core@0.3.80(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@oobe-protocol-labs/synapse-sap-sdk@1.0.2(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
       '@oobe-protocol-labs/synapse-sap-sdk':
-        specifier: ^0.21.0
-        version: 0.21.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        specifier: ^1.0.2
+        version: 1.0.2(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@solana/kit':
         specifier: ^5.5.1
         version: 5.5.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -266,6 +266,16 @@ packages:
     resolution: {integrity: sha512-i28w9+BMFufhhpmLQCNx1CKKXTsEn+5RT18VFpPqdGO3sqaYlnUWC1m3wDpOvlzGk498dljgRpRo5wmcsnuEMg==}
     peerDependencies:
       '@solana/web3.js': ^1.87.3
+
+  '@bonfida/sns-records@0.1.0':
+    resolution: {integrity: sha512-/viuqvsjvAUjFxzqX0L3ZntfK1S5K1Nj+j2avxq2tCXhA2Ee7Qt0gPCaQKuMv3hh8cKAEMaZ8crZHomns3UuqA==}
+    peerDependencies:
+      '@solana/web3.js': ^1.87.3
+
+  '@bonfida/spl-name-service@3.0.23':
+    resolution: {integrity: sha512-RXx4vkIHwU8LJPPFVHcntY0c5l3DNZZZujuD7XnkMScNAO9Pykp4EwQxmDLC9o07uRupoya0WB2uY1LDHJHNFw==}
+    peerDependencies:
+      '@solana/web3.js': ^1.98.2
 
   '@bonfida/spl-name-service@3.0.9':
     resolution: {integrity: sha512-WawxrGJv82N0Jc+q+erqm2g7r1KjbljKC5ynFHlUFUbvmF2GOFmYxs8IKblNrNoDVj/2HGkCg7kZscKlq7t7xg==}
@@ -753,8 +763,8 @@ packages:
       zod:
         optional: true
 
-  '@oobe-protocol-labs/synapse-sap-sdk@0.21.0':
-    resolution: {integrity: sha512-0kQefLbESwtxpkvCkX6l39loIPD7pjGzFswuZXhhuVBCVvsRgEdwO8YvQw/W2xR28zIyD698aQeCQermTLxxzQ==}
+  '@oobe-protocol-labs/synapse-sap-sdk@1.0.2':
+    resolution: {integrity: sha512-V1x5vi1CRgTCkAoQE2NQ3qU29lL5oKcAllWdvvobSbGQf8CmKvEDirn4QRtTfWMbNtuYRh/n4z6qB78Ohu557Q==}
     engines: {node: '>=18'}
 
   '@oxc-project/types@0.137.0':
@@ -4567,6 +4577,32 @@ snapshots:
       bs58: 5.0.0
       buffer: 6.0.3
 
+  '@bonfida/sns-records@0.1.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))':
+    dependencies:
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      borsh: 1.0.0
+      bs58: 5.0.0
+      buffer: 6.0.3
+
+  '@bonfida/spl-name-service@3.0.23(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@bonfida/sns-records': 0.1.0(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
+      '@noble/curves': 1.9.7
+      '@scure/base': 1.2.6
+      '@solana/spl-token': 0.4.6(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      borsh: 2.0.0
+      buffer: 6.0.3
+      graphemesplit: 2.6.0
+      ipaddr.js: 2.4.0
+      punycode: 2.3.1
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - fastestsmallesttextencoderdecoder
+      - typescript
+      - utf-8-validate
+
   '@bonfida/spl-name-service@3.0.9(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
       '@bonfida/sns-records': 0.0.1(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
@@ -5086,7 +5122,7 @@ snapshots:
 
   '@noble/hashes@2.2.0': {}
 
-  '@oobe-protocol-labs/synapse-client-sdk@2.0.6(@coral-xyz/anchor@0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@langchain/core@0.3.80(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@oobe-protocol-labs/synapse-sap-sdk@0.21.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)':
+  '@oobe-protocol-labs/synapse-client-sdk@2.0.6(@coral-xyz/anchor@0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@langchain/core@0.3.80(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@oobe-protocol-labs/synapse-sap-sdk@1.0.2(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)':
     dependencies:
       '@solana/kit': 6.10.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       eventemitter3: 5.0.4
@@ -5095,7 +5131,7 @@ snapshots:
     optionalDependencies:
       '@coral-xyz/anchor': 0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@langchain/core': 0.3.80(ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
-      '@oobe-protocol-labs/synapse-sap-sdk': 0.21.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@oobe-protocol-labs/synapse-sap-sdk': 1.0.2(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@solana/web3.js': 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       ioredis: 5.11.1
       zod: 3.25.76
@@ -5104,9 +5140,9 @@ snapshots:
       - fastestsmallesttextencoderdecoder
       - utf-8-validate
 
-  '@oobe-protocol-labs/synapse-sap-sdk@0.21.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@oobe-protocol-labs/synapse-sap-sdk@1.0.2(@noble/hashes@2.2.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
-      '@bonfida/spl-name-service': 3.0.9(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@bonfida/spl-name-service': 3.0.23(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@coral-xyz/anchor': 0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@metaplex-foundation/mpl-core': 1.10.0(@metaplex-foundation/umi@1.5.1)(@noble/hashes@2.2.0)
       '@metaplex-foundation/umi': 1.5.1

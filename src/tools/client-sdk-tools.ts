@@ -57,6 +57,19 @@ interface SynapseAgentKitInstance {
 type SynapseAgentKitConstructor = new (config: { rpcUrl: string }) => SynapseAgentKitInstance;
 type ProtocolToolsModule = typeof import('@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols');
 
+const TOOL_INPUT_ALIASES: ReadonlyMap<string, Readonly<Record<string, string>>> = new Map([
+  ['spl-token_getTokenAccounts', {
+    owner: 'wallet',
+    address: 'wallet',
+    pubkey: 'wallet',
+  }],
+  ['spl-token_getBalance', {
+    owner: 'wallet',
+    address: 'wallet',
+    pubkey: 'wallet',
+  }],
+]);
+
 /**
  * Initialize Client SDK (SynapseAgentKit) with all plugins
  */
@@ -379,11 +392,11 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
         {
           title: formatToolTitle(name),
           description: buildAgentKitToolDescription(name, tool.description),
-          inputSchema: tool.schema || tool.inputSchema || {},
+          inputSchema: enhanceAgentKitInputSchema(name, tool.schema || tool.inputSchema || {}),
         },
         async (input: unknown) => {
           try {
-            const result = await tool.invoke(input);
+            const result = await tool.invoke(normalizeAgentKitToolInput(name, input));
             return createTextResponse(
               typeof result === 'string' ? result : JSON.stringify(result, null, 2)
             );
@@ -478,18 +491,22 @@ function assertRequiredAgentKitTools(toolNames: string[]): void {
 function buildAgentKitToolDescription(name: string, sdkDescription?: string): string {
   const context = getAgentKitToolContext(name);
   const base = sdkDescription || `${name} (Synapse AgentKit)`;
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  const aliasHint = aliases
+    ? ` Parameter aliases accepted by SAP MCP for agent ergonomics: ${Object.entries(aliases).map(([from, to]) => `${from} -> ${to}`).join(', ')}. Prefer the canonical schema names in new calls.`
+    : '';
 
   if (!context) {
     return [
       base,
-      'SAP MCP context: This Synapse AgentKit tool is served beside the sap_* SDK tools. Use sap_register_agent, sap_update_agent, and sap_publish_tool_by_name when the capability should become part of an on-chain SAP agent profile or tool registry entry.',
+      `SAP MCP context: This Synapse AgentKit tool is served beside the sap_* SDK tools. Use sap_register_agent, sap_update_agent, and sap_publish_tool_by_name when the capability should become part of an on-chain SAP agent profile or tool registry entry.${aliasHint}`,
     ].join(' ');
   }
 
   return [
     base,
     `SAP MCP context: Protocol ${context.protocol}; operation class ${context.risk}. ${context.usage}`,
-    context.workflow,
+    `${context.workflow}${aliasHint}`,
   ].join(' ');
 }
 
@@ -508,4 +525,75 @@ function getAgentKitToolContext(name: string): AgentKitToolContext | undefined {
   }
 
   return AGENTKIT_CONTEXT_BY_PREFIX.find(([prefix]) => name.startsWith(prefix))?.[1];
+}
+
+/**
+ * @name normalizeAgentKitToolInput
+ * @description Accepts common user/agent aliases before invoking SDK-provided tools.
+ * This keeps canonical schemas intact while avoiding brittle retry loops for
+ * read-style wallet tools such as spl-token_getTokenAccounts.
+ */
+export function normalizeAgentKitToolInput(name: string, input: unknown): unknown {
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  if (!aliases || !input || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  for (const [from, to] of Object.entries(aliases)) {
+    if (normalized[to] === undefined && normalized[from] !== undefined) {
+      normalized[to] = normalized[from];
+    }
+  }
+
+  return normalized;
+}
+
+function enhanceAgentKitInputSchema(name: string, schema: unknown): unknown {
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  if (!aliases || !schema || typeof schema !== 'object' || Array.isArray(schema)) {
+    return schema;
+  }
+
+  const cloned = structuredCloneSafe(schema);
+  if (!cloned || typeof cloned !== 'object' || Array.isArray(cloned)) {
+    return schema;
+  }
+
+  const record = cloned as Record<string, unknown>;
+  const properties = getSchemaProperties(record);
+  if (!properties) {
+    return cloned;
+  }
+
+  for (const [from, to] of Object.entries(aliases)) {
+    const target = properties[to];
+    if (!target || typeof target !== 'object' || Array.isArray(target)) {
+      continue;
+    }
+
+    const targetRecord = target as Record<string, unknown>;
+    const existing = typeof targetRecord.description === 'string' ? targetRecord.description : '';
+    if (!existing.includes(`Alias accepted: ${from}`)) {
+      targetRecord.description = `${existing}${existing ? ' ' : ''}Alias accepted: ${from}. Prefer canonical parameter "${to}".`;
+    }
+  }
+
+  return cloned;
+}
+
+function getSchemaProperties(schema: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+    return schema.properties as Record<string, unknown>;
+  }
+
+  return schema;
+}
+
+function structuredCloneSafe(value: unknown): unknown {
+  try {
+    return structuredClone(value);
+  } catch {
+    return JSON.parse(JSON.stringify(value)) as unknown;
+  }
 }

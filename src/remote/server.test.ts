@@ -453,11 +453,19 @@ describe('remote MCP server config', () => {
         paidCallTool: 'sap_payments_call_paid_tool',
       },
     });
+    expect(card.configuration.instructions).toContain('sap_agent_start');
+    expect(card.configuration.instructions).toContain('sap_skills_bundle');
+    expect(card.configuration.instructions).toContain('sap_payments');
+    expect(card.configuration.instructions).toContain('never receives user keypair bytes');
     expect(card.transport).toEqual({
       type: 'streamable-http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(card.tools).toHaveLength(268);
+    expect(card.tools).toHaveLength(263);
+    expect(card.tools.some((tool) => tool.name === 'sap_agent_start')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_create_escrow')).toBe(false);
+    expect(card.tools.some((tool) => tool.name === 'sap_create_escrow_v2')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_payments_call_paid_tool')).toBe(false);
     expect(card.prompts.length).toBeGreaterThan(0);
     expect(firstTool.title).toBeTruthy();
     expect(firstTool.outputSchema).toMatchObject({ type: 'object' });

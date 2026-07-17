@@ -108,7 +108,21 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config sh
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config profile-info
 ```
 
-## 4. Test Hosted MCP Manually
+## 4. First Agent Message
+
+After the hosted `sap` server and local `sap_payments` bridge are configured,
+restart the agent runtime and say:
+
+```text
+Start SAP MCP.
+```
+
+The agent should call `sap_agent_start`, load `sap_skills_bundle`, inspect
+hosted profile state, and use `sap_payments_readiness` before paid/write calls.
+This is the normal path for non-technical users. They should not need to paste a
+long prompt or manually explain x402.
+
+## 5. Test Hosted MCP Manually
 
 Initialize:
 
@@ -130,7 +144,7 @@ curl -iN https://mcp.sap.oobeprotocol.ai/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-## 5. Free Tool Smoke Test
+## 6. Free Tool Smoke Test
 
 ```bash
 curl -iN https://mcp.sap.oobeprotocol.ai/mcp \
@@ -143,7 +157,7 @@ curl -iN https://mcp.sap.oobeprotocol.ai/mcp \
 
 The RPC URL in returned metadata must be redacted if it contains query secrets.
 
-## 6. Paid Tool Smoke Test
+## 7. Paid Tool Smoke Test
 
 ```bash
 curl -iN https://mcp.sap.oobeprotocol.ai/mcp \

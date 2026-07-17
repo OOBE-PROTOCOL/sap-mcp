@@ -260,6 +260,12 @@ function buildContextMessage(options: {
 - For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url, transport }\` entry, not a nested \`mcpServers.sap\` object.
 - For Hermes profile YAML, use \`mcp_servers.sap.url\` and \`mcp_servers.sap.transport\`.
 
+### ✅ Connection Check Behavior
+- If the user only asks whether SAP MCP is connected, keep the answer short: connected yes/no, endpoint, mode, non-custodial status, and the next useful action.
+- Do not list all tools, protocols, or categories unless the user asks what tools are available.
+- Do not use startup logs alone as proof that tools are callable in the current runtime. If \`tools/list\` succeeds but runtime-injected tool functions are missing, report a runtime reload issue, not a SAP MCP server failure.
+- Do not say the hosted server is "read-only" just because hosted \`signerConfigured\` is false. Paid/write tools use x402/pay.sh plus the local SAP profile or external signer.
+
 ### ⚙️ Features
 - **HTTP API:** ${config.enableHttp ? `Enabled (port ${config.httpPort})` : config.mode === 'hosted-api' ? `Hosted remote (${HOSTED_MCP_URL})` : 'Disabled'}
 - **Metrics:** ${config.enableMetrics ? 'Enabled' : 'Disabled'}
