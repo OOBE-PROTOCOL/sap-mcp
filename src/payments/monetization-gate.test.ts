@@ -16,8 +16,8 @@ const baseMonetization: SapMcpMonetizationConfig = {
   maxTimeoutSeconds: 120,
   strictTools: false,
   prices: {
-    readPremiumUsd: 0.008,
-    builderUsd: 0.05,
+    readPremiumUsd: 0.001,
+    builderUsd: 0.008,
     valueFixedUsd: 0.2,
     valueBps: 50,
     minUsd: 0.001,
@@ -402,8 +402,8 @@ describe('MCP monetization gate readiness', () => {
     const virtualPath = buildPaidVirtualPath({
       required: true,
       tier: 'read-premium',
-      priceUsd: 0.008,
-      price: '$0.008',
+      priceUsd: 0.001,
+      price: '$0.001',
       description: 'test',
       toolPricings: [],
       toolNames: ['sap_list_all_agents'],
@@ -412,8 +412,8 @@ describe('MCP monetization gate readiness', () => {
       scheme: 'exact',
       network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
       asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
-      amount: '8000',
-      maxAmountRequired: '8000',
+      amount: '1000',
+      maxAmountRequired: '1000',
       payTo: baseMonetization.payTo,
       maxTimeoutSeconds: 120,
       extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
@@ -495,7 +495,7 @@ describe('MCP monetization gate readiness', () => {
         paymentRequirements: typeof accepted;
       };
       expect(verifyBody.paymentRequirements.extra.feePayer).toBe(accepted.extra.feePayer);
-      expect(verifyBody.paymentRequirements.amount).toBe('8000');
+      expect(verifyBody.paymentRequirements.amount).toBe('1000');
     } finally {
       if (previousXdgDataHome === undefined) {
         delete process.env.XDG_DATA_HOME;
@@ -522,8 +522,8 @@ describe('MCP monetization gate readiness', () => {
     const virtualPath = buildPaidVirtualPath({
       required: true,
       tier: 'read-premium',
-      priceUsd: 0.008,
-      price: '$0.008',
+      priceUsd: 0.001,
+      price: '$0.001',
       description: 'test',
       toolPricings: [],
       toolNames: ['sap_list_all_agents'],
@@ -532,8 +532,8 @@ describe('MCP monetization gate readiness', () => {
       scheme: 'exact',
       network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
       asset: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
-      amount: '8000',
-      maxAmountRequired: '8000',
+      amount: '1000',
+      maxAmountRequired: '1000',
       payTo: baseMonetization.payTo,
       maxTimeoutSeconds: 120,
       extra: { feePayer: 'FeePayer111111111111111111111111111111111' },

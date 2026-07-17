@@ -123,7 +123,7 @@ describe('MagicBlock tools registration', () => {
     expect(names).toContain('magicblock_getRandomnessResult');
   });
 
-  it('every tool has a description with price info', () => {
+  it('every tool has a useful description without embedded price literals', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const mbTools = getMagicBlockTools(server);
@@ -131,7 +131,7 @@ describe('MagicBlock tools registration', () => {
     for (const tool of mbTools) {
       expect(tool.description).toBeTruthy();
       expect(tool.description.length).toBeGreaterThan(20);
-      expect(tool.description).toMatch(/\$0\.\d{2}/);
+      expect(tool.description).not.toMatch(/\$0\.\d{2}/);
     }
   });
 
@@ -146,18 +146,35 @@ describe('MagicBlock tools registration', () => {
     }
   });
 
-  it('READ tools have $0.01 in description (14 tools)', () => {
+  it('does not hard-code stale hosted prices in tool descriptions', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-    const readTools = getMagicBlockTools(server).filter((t) => t.description.includes('$0.01'));
-    expect(readTools).toHaveLength(14);
+    for (const tool of getMagicBlockTools(server)) {
+      expect(tool.description).not.toContain('$0.01');
+      expect(tool.description).not.toContain('$0.05');
+      expect(tool.description).not.toContain('50_000');
+      expect(tool.description).not.toContain('10_000');
+    }
   });
 
-  it('WRITE tools have $0.05 in description (6 tools)', () => {
+  it('unsigned transaction builders point agents to SAP MCP transaction tools', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-    const writeTools = getMagicBlockTools(server).filter((t) => t.description.includes('$0.05'));
-    expect(writeTools).toHaveLength(6);
+    const unsignedBuilders = getMagicBlockTools(server).filter((tool) => [
+      'magicblock_deposit',
+      'magicblock_transfer',
+      'magicblock_withdraw',
+      'magicblock_swap',
+      'magicblock_initializeMint',
+      'magicblock_requestRandomness',
+    ].includes(tool.name));
+
+    expect(unsignedBuilders).toHaveLength(6);
+    for (const tool of unsignedBuilders) {
+      expect(tool.description).toContain('sap_preview_transaction');
+      expect(tool.description).toContain('sap_sign_transaction');
+      expect(tool.description).toContain('sap_submit_signed_transaction');
+    }
   });
 
   it('every tool has a handler registered', () => {

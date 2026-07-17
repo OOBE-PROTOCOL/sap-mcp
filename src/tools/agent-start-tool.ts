@@ -128,6 +128,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'For free reads, call hosted tools directly.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
+      'If a tool returns transactionBase64, transaction, or an unsigned transaction object, use sap_preview_transaction -> sap_sign_transaction -> sap_submit_signed_transaction. Never create local .js/.mjs signing scripts or read keypair JSON.',
       'Preview value-moving actions and ask for confirmation when policy requires it.',
     ],
     paymentFlow: {
@@ -137,6 +138,20 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       legacyAlias: 'sap_x402_paid_call',
       retryPolicy: 'On BlockhashNotFound, transaction_simulation_failed, node-behind, or expired payment payload, create a fresh challenge and retry through sap_payments_call_paid_tool. Do not reuse an old signed payload.',
       receiptRule: 'Capture PAYMENT-RESPONSE or X-PAYMENT-RESPONSE and bind it to the tool output/audit summary.',
+    },
+    transactionFlow: {
+      unsignedTransactionTools: [
+        'jupiter_swapInstructions',
+        'jupiter_getOrder',
+        'magicblock_swap',
+        'magicblock_deposit',
+        'magicblock_transfer',
+        'magicblock_withdraw',
+        'sap_sns_build_manage_record_transaction',
+        'sap_sns_build_set_primary_domain_transaction',
+      ],
+      officialPath: ['sap_preview_transaction', 'sap_sign_transaction', 'sap_submit_signed_transaction'],
+      rule: 'Do not write temporary signing scripts, shell commands that read keypair files, or raw transaction signers. The SAP MCP transaction tools are the only supported signing/submission path for agents.',
     },
     connectionCheck: {
       intent: 'Use this when the user asks "are you connected?", "is SAP MCP connected?", "check SAP", or similar status-only questions.',

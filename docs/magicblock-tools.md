@@ -24,21 +24,25 @@ additional configuration needed.
 
 ## Pricing
 
-Two tiers, priced in USDC base units (6 decimals):
+Hosted pricing is resolved centrally by `src/payments/pricing.ts` and returned
+as an x402/pay.sh challenge before the paid tool executes.
 
-| Tier | Price | Count | Tools |
-|------|-------|-------|-------|
-| READ | $0.01 | 14 | ER Router queries, health, auth, balances, swap quotes, mint checks, VRF result |
-| WRITE | $0.05 | 6 | deposit, transfer, withdraw, swap, initializeMint, VRF request |
+| Tier | Tools |
+|------|-------|
+| Free/readiness | MCP discovery, SAP skill bootstrap, payment readiness, transaction decode/preview |
+| Read-premium | ER Router queries, balances, swap quotes, mint checks, VRF result |
+| Builder | Deposit, transfer, withdraw, initialize mint, VRF request transaction builders |
+| Value-action | Public/private swap transaction builders and other value-moving actions |
 
-Every tool description includes its price. Every successful response
-includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
+Do not hard-code MagicBlock prices in agents. Call `sap_x402_estimate_cost` or
+the local `sap_payments_call_paid_tool` helper and enforce the user profile's
+`maxPriceUsd` / spend policy.
 
 ---
 
 ## Tools (20 total)
 
-### ER Router (6 read-only — $0.01)
+### ER Router (6 read-only)
 
 | Tool | Description |
 |------|-------------|
@@ -49,7 +53,7 @@ includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
 | `magicblock_getBlockhashForAccounts` | Get a blockhash for a batch of accounts (max 100) |
 | `magicblock_getSignatureStatuses` | Check transaction confirmation status |
 
-### Private Payments — Meta & Auth (3 — $0.01)
+### Private Payments — Meta & Auth (3)
 
 | Tool | Description |
 |------|-------------|
@@ -57,14 +61,14 @@ includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
 | `magicblock_challenge` | Generate a challenge string for wallet auth |
 | `magicblock_login` | Exchange signed challenge for bearer token |
 
-### Private Payments — Balance (2 — $0.01)
+### Private Payments — Balance (2)
 
 | Tool | Description |
 |------|-------------|
 | `magicblock_balance` | Read base-chain SPL token balance |
 | `magicblock_privateBalance` | Read ephemeral-rollup SPL balance (requires auth) |
 
-### Private Payments — SPL Token Flows (3 — $0.05)
+### Private Payments — SPL Token Flows (3)
 
 | Tool | Description |
 |------|-------------|
@@ -74,24 +78,24 @@ includes `priceUsd` and `priceBaseUnits` fields for SAP escrow settlement.
 
 ### Private Payments — Swap (2)
 
-| Tool | Price | Description |
-|------|-------|-------------|
-| `magicblock_swapQuote` | $0.01 | Get a swap quote between two SPL mints |
-| `magicblock_swap` | $0.05 | Build unsigned swap tx (public or private) |
+| Tool | Description |
+|------|-------------|
+| `magicblock_swapQuote` | Get a swap quote between two SPL mints |
+| `magicblock_swap` | Build unsigned swap tx (public or private) |
 
 ### Private Payments — Mint Init (2)
 
-| Tool | Price | Description |
-|------|-------|-------------|
-| `magicblock_initializeMint` | $0.05 | Build unsigned mint transfer queue init tx |
-| `magicblock_isMintInitialized` | $0.01 | Check if a mint's transfer queue exists |
+| Tool | Description |
+|------|-------------|
+| `magicblock_initializeMint` | Build unsigned mint transfer queue init tx |
+| `magicblock_isMintInitialized` | Check if a mint's transfer queue exists |
 
 ### VRF (2 — on-chain via @solana/web3.js)
 
-| Tool | Price | Description |
-|------|-------|-------------|
-| `magicblock_requestRandomness` | $0.05 | Build unsigned tx invoking request_randomness on the VRF program (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz) |
-| `magicblock_getRandomnessResult` | $0.01 | Read the RandomnessRequest account on-chain to check fulfillment and retrieve random bytes |
+| Tool | Description |
+|------|-------------|
+| `magicblock_requestRandomness` | Build unsigned tx invoking request_randomness on the VRF program (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz) |
+| `magicblock_getRandomnessResult` | Read the RandomnessRequest account on-chain to check fulfillment and retrieve random bytes |
 
 ---
 
@@ -126,21 +130,23 @@ Write tools return an unsigned transaction:
 Expected flow:
 
 1. Call the MagicBlock tool (e.g. `magicblock_deposit`) → get `transactionBase64`
-2. Sign with `sap_sign_transaction`
-3. Submit with `sap_submit_signed_transaction` to the RPC indicated by `sendTo`
+2. Preview with `sap_preview_transaction`
+3. Sign with `sap_sign_transaction`
+4. Submit with `sap_submit_signed_transaction` to the RPC indicated by `sendTo`
+
+Agents must not create temporary JavaScript signing scripts, read keypair JSON,
+or sign raw message bytes outside SAP MCP transaction tools.
 
 ---
 
 ## Response Format
 
-Every successful response is wrapped with pricing metadata:
+Successful tool responses are wrapped by SAP MCP:
 
 ```json
 {
   "success": true,
   "tool": "magicblock_deposit",
-  "priceUsd": "$0.05",
-  "priceBaseUnits": "50000",
   "data": { ... }
 }
 ```

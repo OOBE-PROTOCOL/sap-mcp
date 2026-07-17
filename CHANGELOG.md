@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.3 - 2026-07-17
+
+### Changed
+
+- Rebalanced hosted x402 pricing for agent commerce UX: premium reads now
+  default to `$0.001`, builder/preflight calls default to `$0.008`, and
+  value-moving actions stay on the value-action tier.
+- Classified `jupiter_getQuote` and `magicblock_swapQuote` as lightweight
+  read-premium calls instead of builder calls, so agents can quote and preview
+  without paying value-action style fees.
+- Kept SAP payment readiness, x402 estimates, transaction decode, and
+  transaction preview free so agents can choose tools, check limits, and prepare
+  safe execution without bottlenecks.
+
+### Fixed
+
+- Strengthened SAP MCP initialize instructions, `sap_agent_start`, transaction
+  tool descriptions, and MagicBlock tool descriptions so agents use the official
+  `sap_preview_transaction` -> `sap_sign_transaction` ->
+  `sap_submit_signed_transaction` path instead of creating temporary local
+  signing scripts or reading keypair files.
+- Removed hard-coded MagicBlock `$0.01`/`$0.05` pricing text from tool
+  descriptions; hosted prices now resolve from the central pricing registry.
+
 ## 0.9.2 - 2026-07-17
 
 ### Added

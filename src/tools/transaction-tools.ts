@@ -260,7 +260,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
     'sap_decode_transaction',
     {
       title: 'Decode Transaction',
-      description: 'Decode a serialized Solana transaction and return stable transaction metadata.',
+      description: 'Decode a serialized Solana transaction and return stable transaction metadata. Use this before signing when a SAP MCP, Jupiter, MagicBlock, SNS, Metaplex, or DeFi tool returns transactionBase64 or an unsigned transaction.',
       inputSchema: {
         transaction: { type: 'string', description: 'Serialized transaction' },
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
@@ -284,7 +284,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
     'sap_preview_transaction',
     {
       title: 'Preview Transaction',
-      description: 'Preview a Solana transaction before signing or submission.',
+      description: 'Preview a Solana transaction before signing or submission. This is the required preflight step for agent workflows; do not create local signing scripts or read keypair files.',
       inputSchema: {
         transaction: { type: 'string', description: 'Serialized transaction' },
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
@@ -314,7 +314,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
     'sap_sign_transaction',
     {
       title: 'Sign Transaction',
-      description: 'Sign a serialized Solana transaction with the configured SAP MCP signer.',
+      description: 'Sign a serialized Solana transaction with the configured SAP MCP signer after sap_preview_transaction. This is the supported non-custodial signing path for agents; never read keypair JSON or sign raw message bytes in temporary scripts.',
       inputSchema: {
         transaction: { type: 'string', description: 'Unsigned or partially signed transaction' },
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
@@ -350,7 +350,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
     'sap_submit_signed_transaction',
     {
       title: 'Submit Signed Transaction',
-      description: 'Submit a signed Solana transaction through the configured RPC endpoint.',
+      description: 'Submit a signed Solana transaction produced by sap_sign_transaction through the configured RPC endpoint. Use this instead of custom sendRawTransaction scripts so policy, retries, and audit stay inside SAP MCP.',
       inputSchema: {
         signedTransaction: { type: 'string', description: 'Signed serialized transaction' },
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },

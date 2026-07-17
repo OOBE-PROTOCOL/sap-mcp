@@ -7,13 +7,13 @@
  *   - mb-vrf      (2 Solana VRF tools — on-chain via @solana/web3.js)
  *
  * Pricing:
- *   READ  = $0.01/call (10_000 USDC base units) — 14 read-only tools
- *   WRITE = $0.05/call (50_000 USDC base units) — 6 transaction-building tools
+ *   READ  = hosted read-premium tier — lightweight discovery, quote, and state tools.
+ *   BUILD = hosted builder/value-action tiers — transaction-building or value-moving tools.
  *
  * Write tools (deposit, transfer, withdraw, swap, initializeMint) return
- * unsigned transactions. The caller must sign with sap_sign_transaction
- * and submit with sap_submit_signed_transaction to the RPC indicated by
- * the `sendTo` field ("base" or "ephemeral").
+ * unsigned transactions. Agents must use sap_preview_transaction,
+ * sap_sign_transaction, and sap_submit_signed_transaction. Do not create
+ * temporary signing scripts or read local keypair files.
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -477,7 +477,7 @@ const validatorField = f.string('Optional ER validator pubkey. Defaults to the s
 /**
  * @name registerMagicBlockTools
  * @description Registers 20 MagicBlock tools (ER Router, Private Payments, VRF)
- *   with the MCP server. Each tool is priced at $0.01 (read) or $0.05 (write).
+ *   with the MCP server. Hosted pricing is resolved centrally by src/payments/pricing.ts.
  * @param server - MCP server receiving tool definitions and handlers.
  * @param context - Shared runtime context (VRF getRandomnessResult uses the Solana connection).
  */
@@ -526,7 +526,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<EndpointInput>('magicblock_getRoutes',
-    'List available Ephemeral Rollup nodes from the Magic Router (identity, FQDN, fee, block time, country). Price: $0.01.',
+    'List available Ephemeral Rollup nodes from the Magic Router (identity, FQDN, fee, block time, country)..',
     schema({ endpoint: endpointField }),
     async (raw) => {
       try {
@@ -538,7 +538,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<EndpointInput>('magicblock_getIdentity',
-    'Get the identity and FQDN of the current ER Validator node. Price: $0.01.',
+    'Get the identity and FQDN of the current ER Validator node..',
     schema({ endpoint: endpointField }),
     async (raw) => {
       try {
@@ -550,7 +550,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<AccountInput>('magicblock_getDelegationStatus',
-    'Check whether a Solana account is delegated to an Ephemeral Rollup. Returns authority, owner, delegation slot, and lamports. Price: $0.01.',
+    'Check whether a Solana account is delegated to an Ephemeral Rollup. Returns authority, owner, delegation slot, and lamports..',
     schema({ account: f.pubkey('Account pubkey to check delegation status for'), endpoint: endpointField }, ['account']),
     async (raw) => {
       try {
@@ -562,7 +562,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<AccountInfoInput>('magicblock_getAccountInfo',
-    'Fetch account information (data, lamports, owner, executable, space) via the Magic Router. Price: $0.01.',
+    'Fetch account information (data, lamports, owner, executable, space) via the Magic Router..',
     schema({ account: f.pubkey('Account pubkey to fetch info for'), encoding: f.enum('Encoding for account data', ['base64', 'base64+zstd']), endpoint: endpointField }, ['account']),
     async (raw) => {
       try {
@@ -574,7 +574,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<AccountsInput>('magicblock_getBlockhashForAccounts',
-    'Get a blockhash and last valid block height for a batch of account addresses (max 100). Price: $0.01.',
+    'Get a blockhash and last valid block height for a batch of account addresses (max 100)..',
     schema({ accounts: f.array('Array of account addresses (max 100)', f.pubkey('Account pubkey')), endpoint: endpointField }, ['accounts']),
     async (raw) => {
       try {
@@ -586,7 +586,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<SignaturesInput>('magicblock_getSignatureStatuses',
-    'Check the confirmation status (processed/confirmed/finalized) of one or more transaction signatures. Price: $0.01.',
+    'Check the confirmation status (processed/confirmed/finalized) of one or more transaction signatures..',
     schema({ signatures: f.array('Array of transaction signatures', f.string('Transaction signature (base58)')), endpoint: endpointField }, ['signatures']),
     async (raw) => {
       try {
@@ -602,7 +602,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<Record<string, never>>('magicblock_health',
-    'Check the health status of the MagicBlock Private Payments API. Price: $0.01.',
+    'Check the health status of the MagicBlock Private Payments API..',
     schema({}),
     async () => {
       try {
@@ -613,7 +613,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<ChallengeInput>('magicblock_challenge',
-    'Generate a challenge string for the wallet to sign (step 1 of the PER auth flow). Price: $0.01.',
+    'Generate a challenge string for the wallet to sign (step 1 of the PER auth flow)..',
     schema({ pubkey: f.pubkey('Wallet pubkey that will sign the challenge'), cluster: clusterField }, ['pubkey']),
     async (raw) => {
       try {
@@ -627,7 +627,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<LoginInput>('magicblock_login',
-    'Exchange a signed challenge for a bearer token (step 2 of PER auth flow). The token is used for private-balance and private transfers. Price: $0.01.',
+    'Exchange a signed challenge for a bearer token (step 2 of PER auth flow). The token is used for private-balance and private transfers..',
     schema({ pubkey: f.pubkey('Wallet pubkey that signed the challenge'), challenge: f.string('Challenge string from magicblock_challenge'), signature: f.string('Wallet signature over the challenge string'), cluster: clusterField }, ['pubkey', 'challenge', 'signature']),
     async (raw) => {
       try {
@@ -645,7 +645,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<BalanceInput>('magicblock_balance',
-    'Read the base-chain SPL token balance for an address (public, no auth required). Price: $0.01.',
+    'Read the base-chain SPL token balance for an address (public, no auth required)..',
     schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField }, ['address', 'mint']),
     async (raw) => {
       try {
@@ -657,7 +657,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<PrivateBalanceInput>('magicblock_privateBalance',
-    'Read the ephemeral-rollup SPL token balance for an address (requires bearer token from login). Price: $0.01.',
+    'Read the ephemeral-rollup SPL token balance for an address (requires bearer token from login)..',
     schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField, authToken: f.string('Bearer token from magicblock_login (required for private reads)') }, ['address', 'mint', 'authToken']),
     async (raw) => {
       try {
@@ -673,7 +673,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<DepositInput>('magicblock_deposit',
-    'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Sign with sap_sign_transaction and submit to the RPC indicated by sendTo. Price: $0.05.',
+    'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Do not create local signing scripts. Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), amount: f.number('Base-unit amount to deposit (integer, minimum 1)'), mint: f.string('SPL mint. Defaults to USDC (mainnet) or devnet USDC'), cluster: clusterField, validator: validatorField, initIfMissing: f.boolean('Initialize the transfer queue if missing (default true)'), initVaultIfMissing: f.boolean('Initialize the vault if missing (default true)'), initAtasIfMissing: f.boolean('Initialize associated token accounts if missing (default true)'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'amount']),
     async (raw) => {
       try {
@@ -691,7 +691,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<TransferInput>('magicblock_transfer',
-    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Price: $0.05.',
+    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
     schema({
       from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
       amount: f.number('Base-unit amount to transfer (integer, minimum 1)'),
@@ -732,7 +732,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<WithdrawInput>('magicblock_withdraw',
-    'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Price: $0.05.',
+    'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), mint: f.string('SPL mint on Solana'), amount: f.number('Base-unit amount to withdraw (integer, minimum 1)'), cluster: clusterField, validator: f.string('Optional ER validator pubkey'), initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'), initAtasIfMissing: f.boolean('Initialize ATAs if missing (default true)'), escrowIndex: f.number('Optional escrow index for the withdrawal'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'mint', 'amount']),
     async (raw) => {
       try {
@@ -755,7 +755,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<SwapQuoteInput>('magicblock_swapQuote',
-    'Get a swap quote between two SPL mints (proxies Triton Metis swap API). Pass the result into magicblock_swap. Price: $0.01.',
+    'Get a swap quote between two SPL mints (proxies Triton Metis swap API). Pass the result into magicblock_swap. Lightweight read tier; use this before any value-moving swap.',
     schema({ inputMint: f.string('Input token mint address'), outputMint: f.string('Output token mint address'), amount: f.string("Raw amount to swap (unsigned integer string, e.g. '1000000')"), slippageBps: f.number('Slippage threshold in basis points (e.g. 50 = 0.5%)'), swapMode: f.enum('Swap mode: fixed input or fixed output amount', ['ExactIn', 'ExactOut']), onlyDirectRoutes: f.boolean('Limit routing to a single hop (default false)'), restrictIntermediateTokens: f.boolean('Restrict intermediate tokens to a more stable set (default false)'), platformFeeBps: f.number('Optional platform fee in basis points'), maxAccounts: f.number('Approximate maximum account budget for the route (default 64)') }, ['inputMint', 'outputMint', 'amount']),
     async (raw) => {
       try {
@@ -775,7 +775,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<SwapInput>('magicblock_swap',
-    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter, 'private' mode routes output through a scheduled private transfer with delay and split. Price: $0.05.",
+    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter, 'private' mode routes output through a scheduled private transfer with delay and split. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
     schema({ userPublicKey: f.pubkey('Wallet that will sign the swap transaction'), quoteResponse: f.object('Quote response object from magicblock_swapQuote (pass as-is)', {}), visibility: f.enum("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']), destination: f.pubkey("Final private-transfer recipient (required when visibility='private')"), minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle"), maxDelayMs: f.string("Private only. Latest (ms) the queued transfer may settle (<= 600000)"), split: f.number('Private only. Number of queue entries to split across (1-14)'), clientRefId: f.string('Private only. Optional u64 client correlation ID'), validator: f.string('Optional validator pubkey for the transfer-queue PDA'), wrapAndUnwrapSol: f.boolean('Auto wrap/unwrap native SOL when needed (default true)'), asLegacyTransaction: f.boolean('Build a legacy transaction (not allowed when visibility=private, default false)') }, ['userPublicKey', 'quoteResponse']),
     async (raw) => {
       try {
@@ -800,7 +800,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<InitializeMintInput>('magicblock_initializeMint',
-    'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Price: $0.05.',
+    'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that will sign the transaction'), mint: f.string('SPL mint to initialize a transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['owner', 'mint']),
     async (raw) => {
       try {
@@ -814,7 +814,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<IsMintInitializedInput>('magicblock_isMintInitialized',
-    'Check whether a mint has a validator-scoped transfer queue on the ephemeral RPC. Price: $0.01.',
+    'Check whether a mint has a validator-scoped transfer queue on the ephemeral RPC..',
     schema({ mint: f.string('SPL mint to check'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['mint']),
     async (raw) => {
       try {
@@ -832,7 +832,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<VrfRequestInput>('magicblock_requestRandomness',
-    'Request provably fair on-chain randomness from the MagicBlock VRF oracle (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz). Builds an unsigned transaction that invokes request_randomness on the VRF program. The caller must sign with sap_sign_transaction and submit to Solana. The oracle queue defaults to the base-layer queue (Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh); set ephemeral=true to use the ER queue for delegated programs. Price: $0.05.',
+    'Request provably fair on-chain randomness from the MagicBlock VRF oracle (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz). Builds an unsigned transaction that invokes request_randomness on the VRF program. Use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; do not create local signing scripts. The oracle queue defaults to the base-layer queue (Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh); set ephemeral=true to use the ER queue for delegated programs. Builder fee applies.',
     schema({
       payer: f.pubkey('Wallet pubkey that will pay for the request and sign the transaction'),
       callbackProgramId: f.pubkey('Program ID of the callback program (the program that will consume the randomness)'),
@@ -927,7 +927,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<VrfResultInput>('magicblock_getRandomnessResult',
-    'Check whether a VRF request has been fulfilled by reading the RandomnessRequest account on-chain. Returns fulfilled status, random bytes (if available), and the request metadata. Price: $0.01.',
+    'Check whether a VRF request has been fulfilled by reading the RandomnessRequest account on-chain. Returns fulfilled status, random bytes (if available), and the request metadata..',
     schema({ requestKey: f.pubkey('VRF request PDA key from magicblock_requestRandomness'), endpoint: endpointField }, ['requestKey']),
     async (raw) => {
       try {

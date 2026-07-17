@@ -68,8 +68,8 @@ const appConfig: SapMcpConfig = {
     maxTimeoutSeconds: 120,
     strictTools: false,
     prices: {
-      readPremiumUsd: 0.008,
-      builderUsd: 0.05,
+      readPremiumUsd: 0.001,
+      builderUsd: 0.008,
       valueFixedUsd: 0.2,
       valueBps: 50,
       minUsd: 0.001,
@@ -591,7 +591,7 @@ describe('remote MCP server config', () => {
     expect(yaml).toContain("  recipient: '11111111111111111111111111111111'");
     expect(yaml).toContain("    path: 'mcp'");
     expect(yaml).toContain('    metering:');
-    expect(yaml).toContain('            - price_usd: 0.008');
+    expect(yaml).toContain('            - price_usd: 0.001');
     expect(yaml).not.toContain('api_key=');
     expect(yaml).not.toContain('super-secret');
     expect(yaml).not.toContain('rpc_url:');

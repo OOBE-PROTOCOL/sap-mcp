@@ -161,7 +161,7 @@ endpoints:
           unit: requests
           scale: 1
           tiers:
-            - price_usd: 0.008
+            - price_usd: 0.001
 ```
 
 pay.sh metered rules to keep:
@@ -233,7 +233,7 @@ endpoints:
           unit: requests
           scale: 1
           tiers:
-            - price_usd: 0.008
+            - price_usd: 0.001
 
   - method: POST
     path: 'mcp/pro'

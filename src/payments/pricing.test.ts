@@ -13,8 +13,8 @@ const monetizationConfig: SapMcpMonetizationConfig = {
   maxTimeoutSeconds: 120,
   strictTools: false,
   prices: {
-    readPremiumUsd: 0.008,
-    builderUsd: 0.05,
+    readPremiumUsd: 0.001,
+    builderUsd: 0.008,
     valueFixedUsd: 0.2,
     valueBps: 50,
     minUsd: 0.001,
@@ -147,8 +147,37 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('read-premium');
-      expect(decision.price).toBe('$0.008');
+      expect(decision.price).toBe('$0.001');
     }
+  });
+
+  it('prices live quotes as lightweight reads instead of builder calls', () => {
+    for (const toolName of ['jupiter_getQuote', 'magicblock_swapQuote']) {
+      const parsed = parseJsonRpcBody({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: { inputMint: 'So11111111111111111111111111111111111111112' },
+        },
+      });
+
+      const decision = resolvePaymentDecision(parsed, monetizationConfig);
+
+      expect(decision.required).toBe(true);
+      if (decision.required) {
+        expect(decision.tier).toBe('read-premium');
+        expect(decision.price).toBe('$0.001');
+      }
+    }
+  });
+
+  it('keeps SAP payment readiness and transaction preflight free', () => {
+    expect(classifyTool('sap_x402_estimate_cost')).toBe('free');
+    expect(classifyTool('sap_payments_readiness')).toBe('free');
+    expect(classifyTool('sap_decode_transaction')).toBe('free');
+    expect(classifyTool('sap_preview_transaction')).toBe('free');
   });
 
   it('prices SNS batch checks as builder calls', () => {
@@ -167,7 +196,13 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('builder');
-      expect(decision.price).toBe('$0.05');
+      expect(decision.price).toBe('$0.008');
+    }
+  });
+
+  it('prices swap transaction builders as value actions', () => {
+    for (const toolName of ['jupiter_getOrder', 'jupiter_smartSwap', 'magicblock_swap']) {
+      expect(classifyTool(toolName)).toBe('value-action');
     }
   });
 
@@ -212,7 +247,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('batch');
-      expect(decision.price).toBe('$0.058');
+      expect(decision.price).toBe('$0.009');
     }
   });
 
@@ -241,7 +276,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(yaml).toContain('routing:\n  type: proxy');
     expect(yaml).toContain("url: 'https://mcp.sap.oobeprotocol.ai/'");
     expect(yaml).toContain("path: 'mcp'");
-    expect(yaml).toContain('price_usd: 0.008');
+    expect(yaml).toContain('price_usd: 0.001');
     expect(yaml).toContain("signer: { type: file, path: '/etc/oobe/pay/operator.json' }");
   });
 

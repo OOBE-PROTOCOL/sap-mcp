@@ -314,12 +314,12 @@
             "readPremiumUsd": {
               "type": "number",
               "exclusiveMinimum": 0,
-              "default": 0.008
+              "default": 0.001
             },
             "builderUsd": {
               "type": "number",
               "exclusiveMinimum": 0,
-              "default": 0.05
+              "default": 0.008
             },
             "valueFixedUsd": {
               "type": "number",
