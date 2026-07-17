@@ -17,7 +17,8 @@ import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { createStructuredJsonResponse, createTextResponse } from '../adapters/mcp/tool-response.js';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 
 type AgentTarget = 'claude' | 'codex' | 'hermes' | 'openclaw' | 'custom';
@@ -42,6 +43,10 @@ interface SkillSummary {
 }
 
 const SKILL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
+const SAP_MCP_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
+const SAP_MCP_WIZARD_COMMAND = `npm exec --yes --package ${SAP_MCP_PACKAGE} -- sap-mcp-config wizard`;
+const SAP_MCP_REPAIR_COMMAND = `npm exec --yes --package ${SAP_MCP_PACKAGE} -- sap-mcp-config repair`;
 
 /**
  * @name parseInput
@@ -93,6 +98,19 @@ function getDefaultTargetDir(agent: AgentTarget | undefined): string | undefined
     case undefined:
       return undefined;
   }
+}
+
+/**
+ * @name getAgentTargetDirs
+ * @description Returns the canonical local skill directories for supported runtimes.
+ */
+function getAgentTargetDirs(): Record<Exclude<AgentTarget, 'custom'>, string> {
+  return {
+    claude: join(homedir(), '.claude', 'skills'),
+    codex: join(homedir(), '.codex', 'skills'),
+    hermes: join(homedir(), '.hermes', 'skills'),
+    openclaw: join(homedir(), '.openclaw', 'skills'),
+  };
 }
 
 /**
@@ -223,6 +241,109 @@ function installSkillFiles(files: SkillFile[], targetDir: string): string[] {
 }
 
 /**
+ * @name buildSkillsUpgradePlan
+ * @description Builds a local-first plan for refreshing bundled SAP MCP skills.
+ */
+function buildSkillsUpgradePlan(input: SkillToolInput, context: SapMcpContext): Record<string, unknown> {
+  const selectedSkills = getSkillSummaries(input.skills);
+  const selectedFiles = getSkillFiles(input.skills);
+  const targetDir = input.targetDir || getDefaultTargetDir(input.agent);
+  const targetDirs = getAgentTargetDirs();
+
+  return {
+    success: true,
+    action: 'skills-upgrade-plan',
+    latestVersion: MCP_SERVER_VERSION,
+    package: SAP_MCP_PACKAGE,
+    hostedEndpoint: HOSTED_MCP_URL,
+    serverMode: context.config.mode,
+    hosted: context.config.mode === 'hosted-api',
+    canWriteLocalFiles: context.config.mode !== 'hosted-api',
+    selectedSkills,
+    fileCount: selectedFiles.length,
+    targetDir: targetDir ?? null,
+    targetDirs,
+    commands: {
+      wizard: SAP_MCP_WIZARD_COMMAND,
+      repair: SAP_MCP_REPAIR_COMMAND,
+      installCodexSkills: `npm exec --yes --package ${SAP_MCP_PACKAGE} -- sap-mcp-config wizard`,
+      installSpecificRuntime: targetDir
+        ? `Call sap_skills_install with {"targetDir":"${targetDir.replaceAll('\\', '\\\\')}","confirm":true}`
+        : 'Call sap_skills_install with agent or targetDir and confirm:true from a local SAP MCP process.',
+    },
+    agentInstructions: [
+      'First call sap_agent_start.',
+      'Then call sap_skills_bundle with includeContents:true and load the returned SKILL.md files into context.',
+      'If running locally and the user wants files written, call sap_skills_install with confirm:true.',
+      'If running hosted, do not claim files were installed. Show the pinned wizard/repair command and ask the user to run it locally.',
+      'After installation or repair, ask the user to restart the agent runtime so the skills and sap_payments bridge are visible.',
+    ],
+    nextToolCalls: [
+      {
+        tool: 'sap_skills_bundle',
+        arguments: { skills: input.skills ?? undefined, includeContents: true },
+        reason: 'Load the latest bundled skills into current agent context immediately.',
+      },
+      {
+        tool: 'sap_runtime_repair_plan',
+        arguments: { agent: input.agent ?? undefined },
+        reason: 'Return exact runtime repair commands when local sap_payments is missing or stale.',
+      },
+    ],
+  };
+}
+
+/**
+ * @name buildRuntimeRepairPlan
+ * @description Builds exact commands for repairing hosted MCP and sap_payments runtime config.
+ */
+function buildRuntimeRepairPlan(input: SkillToolInput, context: SapMcpContext): Record<string, unknown> {
+  const targetRuntime = input.agent ?? 'custom';
+  return {
+    success: true,
+    action: 'runtime-repair-plan',
+    latestVersion: MCP_SERVER_VERSION,
+    package: SAP_MCP_PACKAGE,
+    hostedEndpoint: HOSTED_MCP_URL,
+    serverMode: context.config.mode,
+    targetRuntime,
+    repairCommand: SAP_MCP_REPAIR_COMMAND,
+    wizardCommand: SAP_MCP_WIZARD_COMMAND,
+    commands: {
+      allPlatforms: SAP_MCP_REPAIR_COMMAND,
+      macosLinux: SAP_MCP_REPAIR_COMMAND,
+      windowsPowerShell: SAP_MCP_REPAIR_COMMAND,
+      windowsCmd: SAP_MCP_REPAIR_COMMAND,
+      fullWizard: SAP_MCP_WIZARD_COMMAND,
+    },
+    whatRepairDoes: [
+      'Preserves existing third-party MCP servers.',
+      'Adds or repairs the hosted sap MCP entry for https://mcp.sap.oobeprotocol.ai/mcp.',
+      'Adds or repairs the local sap_payments bridge entry using npx/npm exec and the pinned SAP MCP package version.',
+      'Updates only SAP_ALLOWED_TOOLS for OOBE SAP payment bridge tools.',
+      'Writes backups before changing runtime config files.',
+    ],
+    expectedAfterRestart: {
+      hostedNamespace: 'sap',
+      localBridgeNamespace: 'sap_payments',
+      requiredBridgeTools: [
+        'sap_payments_profile_current',
+        'sap_payments_readiness',
+        'sap_payments_call_paid_tool',
+        'sap_payments_finalize_transaction',
+        'sap_payments_verify_receipt',
+      ],
+    },
+    agentInstructions: [
+      'If sap_payments tools are missing, do not ask the user to manually edit TOML/JSON/YAML first.',
+      'Show repairCommand, tell the user to run it locally, then restart the agent runtime.',
+      'After restart, call sap_payments_readiness before paid/write operations.',
+      'If repair succeeds but tools remain missing, inspect the runtime MCP startup logs instead of retrying paid hosted calls directly.',
+    ],
+  };
+}
+
+/**
  * @name registerSkillsTools
  * @description Registers skill pack discovery, export, and install tools.
  */
@@ -339,6 +460,150 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         }, null, 2));
       } catch (error) {
         return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    'sap_skills_upgrade_plan',
+    {
+      title: 'Plan SAP MCP Skills Upgrade',
+      description: 'Free helper that returns exact latest-release commands and target directories for upgrading SAP MCP skills. Hosted mode returns a local action plan; local mode can then use sap_skills_install to write files.',
+      inputSchema: {
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'custom'], description: 'Optional target runtime whose default skill directory should be used.' },
+        targetDir: { type: 'string', description: 'Optional explicit local skill directory.' },
+        skills: { type: 'array', description: 'Optional subset of bundled skill names to upgrade.', items: { type: 'string' } },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the upgrade plan was generated.' },
+          action: { type: 'string', description: 'Plan type.' },
+          latestVersion: { type: 'string', description: 'Pinned SAP MCP package version for the upgrade.' },
+          package: { type: 'string', description: 'Pinned npm package spec.' },
+          hostedEndpoint: { type: 'string', description: 'Hosted SAP MCP endpoint.' },
+          serverMode: { type: 'string', description: 'Current server mode.' },
+          canWriteLocalFiles: { type: 'boolean', description: 'Whether this MCP process can write skill files locally.' },
+          selectedSkills: { type: 'array', description: 'Bundled skills included in the plan.', items: { type: 'object' } },
+          fileCount: { type: 'number', description: 'Number of bundled skill files selected.' },
+          targetDir: { type: ['string', 'null'], description: 'Resolved target directory when known.' },
+          targetDirs: { type: 'object', description: 'Default local skill directories by runtime.' },
+          commands: { type: 'object', description: 'Pinned commands to run locally.' },
+          agentInstructions: { type: 'array', description: 'Instructions agents should follow without guessing.', items: { type: 'string' } },
+          nextToolCalls: { type: 'array', description: 'Suggested next MCP tool calls.', items: { type: 'object' } },
+        },
+        required: ['success', 'action', 'latestVersion', 'package', 'hostedEndpoint', 'serverMode', 'canWriteLocalFiles', 'selectedSkills', 'fileCount', 'targetDir', 'targetDirs', 'commands', 'agentInstructions', 'nextToolCalls'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        return createStructuredJsonResponse(buildSkillsUpgradePlan(parseInput(input), context));
+      } catch (error) {
+        return createStructuredJsonResponse(
+          {
+            success: false,
+            action: 'skills-upgrade-plan',
+            latestVersion: MCP_SERVER_VERSION,
+            package: SAP_MCP_PACKAGE,
+            hostedEndpoint: HOSTED_MCP_URL,
+            serverMode: context.config.mode,
+            canWriteLocalFiles: context.config.mode !== 'hosted-api',
+            selectedSkills: [],
+            fileCount: 0,
+            targetDir: null,
+            targetDirs: getAgentTargetDirs(),
+            commands: {
+              wizard: SAP_MCP_WIZARD_COMMAND,
+              repair: SAP_MCP_REPAIR_COMMAND,
+            },
+            agentInstructions: ['Show this structured error and call sap_runtime_repair_plan before asking the user to edit config by hand.'],
+            nextToolCalls: [{ tool: 'sap_runtime_repair_plan', arguments: {}, reason: 'Recover from skill upgrade planning failure.' }],
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          { isError: true },
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    'sap_runtime_repair_plan',
+    {
+      title: 'Plan SAP Runtime Repair',
+      description: 'Free helper that returns the pinned latest-release repair command for hosted SAP MCP plus local sap_payments bridge setup. Use this before asking users to manually edit runtime config.',
+      inputSchema: {
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'custom'], description: 'Optional runtime to focus repair instructions on.' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the repair plan was generated.' },
+          action: { type: 'string', description: 'Plan type.' },
+          latestVersion: { type: 'string', description: 'Pinned SAP MCP package version for repair.' },
+          package: { type: 'string', description: 'Pinned npm package spec.' },
+          hostedEndpoint: { type: 'string', description: 'Hosted SAP MCP endpoint.' },
+          serverMode: { type: 'string', description: 'Current server mode.' },
+          targetRuntime: { type: 'string', description: 'Runtime selected for repair guidance.' },
+          repairCommand: { type: 'string', description: 'Primary local command to repair hosted MCP and sap_payments bridge config.' },
+          wizardCommand: { type: 'string', description: 'Full local wizard command for profile creation or full setup.' },
+          commands: { type: 'object', description: 'OS-specific repair command aliases.' },
+          whatRepairDoes: { type: 'array', description: 'Concrete operations performed by repair.', items: { type: 'string' } },
+          expectedAfterRestart: { type: 'object', description: 'Tool namespaces and bridge tools expected after restarting the runtime.' },
+          agentInstructions: { type: 'array', description: 'Instructions agents should follow without guessing.', items: { type: 'string' } },
+        },
+        required: ['success', 'action', 'latestVersion', 'package', 'hostedEndpoint', 'serverMode', 'targetRuntime', 'repairCommand', 'wizardCommand', 'commands', 'whatRepairDoes', 'expectedAfterRestart', 'agentInstructions'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        return createStructuredJsonResponse(buildRuntimeRepairPlan(parseInput(input), context));
+      } catch (error) {
+        return createStructuredJsonResponse(
+          {
+            success: false,
+            action: 'runtime-repair-plan',
+            latestVersion: MCP_SERVER_VERSION,
+            package: SAP_MCP_PACKAGE,
+            hostedEndpoint: HOSTED_MCP_URL,
+            serverMode: context.config.mode,
+            targetRuntime: 'custom',
+            repairCommand: SAP_MCP_REPAIR_COMMAND,
+            wizardCommand: SAP_MCP_WIZARD_COMMAND,
+            commands: {
+              allPlatforms: SAP_MCP_REPAIR_COMMAND,
+              macosLinux: SAP_MCP_REPAIR_COMMAND,
+              windowsPowerShell: SAP_MCP_REPAIR_COMMAND,
+              windowsCmd: SAP_MCP_REPAIR_COMMAND,
+              fullWizard: SAP_MCP_WIZARD_COMMAND,
+            },
+            whatRepairDoes: [
+              'Preserves existing third-party MCP servers.',
+              'Repairs only OOBE SAP hosted MCP and sap_payments entries.',
+            ],
+            expectedAfterRestart: {
+              hostedNamespace: 'sap',
+              localBridgeNamespace: 'sap_payments',
+              requiredBridgeTools: ['sap_payments_profile_current', 'sap_payments_readiness', 'sap_payments_call_paid_tool'],
+            },
+            agentInstructions: ['Show this structured error, run the pinned repair command locally, then restart the agent runtime.'],
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          { isError: true },
+        );
       }
     }
   );

@@ -13,6 +13,20 @@ export function createTextResponse(
 }
 
 /**
+ * Executes the create structured json response operation.
+ */
+export function createStructuredJsonResponse<T extends Record<string, unknown>>(
+  data: T,
+  options?: { isError?: boolean },
+): { content: Array<{ type: 'text'; text: string }>; structuredContent: T; isError?: boolean } {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    structuredContent: data,
+    isError: options?.isError,
+  };
+}
+
+/**
  * Executes the create json response operation.
  */
 export function createJsonResponse(data: unknown): { content: Array<{ type: 'text'; text: string }> } {

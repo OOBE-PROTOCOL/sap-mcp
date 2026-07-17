@@ -70,15 +70,13 @@ type ToolContent = {
 type ToolCallResult = {
   content: ToolContent[];
   isError?: boolean;
-  structuredContent?: {
-    content: ToolContent[];
-    isError?: boolean;
-  };
+  structuredContent?: Record<string, unknown>;
 };
 
 interface RegisteredMcpServer extends Server {
   tools?: Tool[];
   toolHandlers?: Record<string, ToolHandler>;
+  toolHasExplicitOutputSchema?: Record<string, boolean>;
   resources?: Resource[];
   resourceHandlers?: Record<string, ResourceHandler>;
   resourceTemplates?: ResourceTemplate[];
@@ -159,11 +157,28 @@ function isToolCallResult(value: unknown): value is ToolCallResult {
  * @name toToolCallResult
  * @description Normalizes legacy tool handler returns and native MCP tool results.
  */
-function toToolCallResult(result: unknown): ToolCallResult {
+function parseSingleJsonTextContent(content: ToolContent[]): Record<string, unknown> | undefined {
+  if (content.length !== 1 || content[0].type !== 'text' || typeof content[0].text !== 'string') {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(content[0].text) as unknown;
+    return isPlainObject(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toToolCallResult(result: unknown, hasExplicitOutputSchema = false): ToolCallResult {
   if (isToolCallResult(result)) {
+    const inferredStructuredContent = hasExplicitOutputSchema
+      ? parseSingleJsonTextContent(result.content)
+      : undefined;
+
     return {
       ...result,
-      structuredContent: result.structuredContent ?? {
+      structuredContent: result.structuredContent ?? inferredStructuredContent ?? {
         content: result.content,
         isError: result.isError,
       },
@@ -179,7 +194,7 @@ function toToolCallResult(result: unknown): ToolCallResult {
 
   return {
     content,
-    structuredContent: { content },
+    structuredContent: hasExplicitOutputSchema && isPlainObject(result) ? result : { content },
   };
 }
 
@@ -703,9 +718,11 @@ export function registerTool<TInput = unknown>(
   // Initialize server storage if needed
   store.toolHandlers = store.toolHandlers || {};
   store.tools = store.tools || [];
+  store.toolHasExplicitOutputSchema = store.toolHasExplicitOutputSchema || {};
   
   // Store handler and tool definition
   store.toolHandlers[name] = (input: unknown) => handler(input as TInput);
+  store.toolHasExplicitOutputSchema[name] = definition.outputSchema !== undefined;
   store.tools.push(tool);
   
   // Register JSON-RPC handlers if not already done
@@ -760,7 +777,8 @@ export function registerTool<TInput = unknown>(
 
         const result = await handler(args || {});
         logger.debug('Tool call completed', { tool: canonicalToolName, requestedTool: toolName });
-        return toToolCallResult(result);
+        const hasExplicitOutputSchema = Boolean(withRegistrationStore(server).toolHasExplicitOutputSchema?.[canonicalToolName]);
+        return toToolCallResult(result, hasExplicitOutputSchema);
       } catch (error) {
         logger.error('Tool call failed', { tool: canonicalToolName, requestedTool: toolName, error });
         throw error;

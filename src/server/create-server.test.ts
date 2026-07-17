@@ -7,7 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createSapMcpServer } from './create-server.js';
 import type { SapMcpConfig } from '../core/types.js';
 import { getPermissionMappedTools, getRequiredPermission } from '../security/tool-permissions.js';
-import { MCP_SERVER_INSTRUCTIONS } from '../core/constants.js';
+import { MCP_SERVER_INSTRUCTIONS, MCP_SERVER_VERSION } from '../core/constants.js';
 
 interface ToolDefinitionForTest {
   name: string;
@@ -29,6 +29,8 @@ interface ToolDefinitionForTest {
 
 interface ToolResponseForTest {
   content: Array<{ text: string }>;
+  structuredContent?: Record<string, unknown>;
+  isError?: boolean;
 }
 
 type ToolHandlerForTest = (input: Record<string, unknown>) => Promise<ToolResponseForTest>;
@@ -66,7 +68,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(271);
+    expect(names).toHaveLength(273);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -74,6 +76,8 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('jupiter_swap');
     expect(names).toContain('jupiter_swapInstructions');
     expect(names).toContain('jupiter_smartSwap');
+    expect(names).toContain('sap_skills_upgrade_plan');
+    expect(names).toContain('sap_runtime_repair_plan');
     expect(names).toContain('bridging_bridgeWormhole');
     expect(names).toContain('bridging_bridgeWormholeStatus');
     expect(names).toContain('bridging_bridgeDeBridge');
@@ -560,9 +564,26 @@ describe('createSapMcpServer', () => {
     expect(text).toContain('sap_skills_bundle');
     expect(text).toContain('sap_payments_readiness');
     expect(text).toContain('sap_payments_call_paid_tool');
+    expect(text).toContain('sap_skills_upgrade_plan');
+    expect(text).toContain('sap_runtime_repair_plan');
     expect(text).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(text).toContain('connectionCheck');
     expect(text).toContain('Do not list all tools or categories');
+    expect(start?.structuredContent?.success).toBe(true);
+    expect(start?.structuredContent?.repairCommand).toContain('sap-mcp-config repair');
+  });
+
+  it('exposes free maintenance plans for skill upgrades and runtime repair', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+
+    const upgrade = await server.toolHandlers?.sap_skills_upgrade_plan({ agent: 'codex' });
+    const repair = await server.toolHandlers?.sap_runtime_repair_plan({ agent: 'codex' });
+
+    expect(upgrade?.structuredContent?.success).toBe(true);
+    expect(upgrade?.structuredContent?.latestVersion).toBe(MCP_SERVER_VERSION);
+    expect(upgrade?.content[0]?.text).toContain('sap_skills_bundle');
+    expect(repair?.structuredContent?.repairCommand).toContain('sap-mcp-config repair');
+    expect(repair?.content[0]?.text).toContain('sap_payments_call_paid_tool');
   });
 
   it('does not install skill files from hosted-api mode', async () => {

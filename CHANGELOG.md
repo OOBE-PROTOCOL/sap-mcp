@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.6 - 2026-07-17
+
+### Added
+
+- Added free hosted maintenance tools:
+  - `sap_skills_upgrade_plan` returns latest-release skill upgrade commands,
+    target directories, and next tool calls without pretending hosted MCP can
+    write local files.
+  - `sap_runtime_repair_plan` returns the pinned repair command, OS command
+    aliases, expected `sap_payments` bridge tools, and runtime restart guidance.
+
+### Fixed
+
+- Fixed structured MCP output for tools with explicit output schemas. Tools such
+  as `sap_agent_start` now return schema-valid `structuredContent` instead of a
+  nested MCP `content` wrapper, avoiding strict runtime errors like
+  `success is a required property`.
+- Updated the agent startup playbook so stale skills and missing
+  `sap_payments` bridge issues route through free maintenance tools before paid
+  or write workflows.
+- Updated user docs and bundled skills to teach `sap_skills_upgrade_plan` and
+  `sap_runtime_repair_plan` as the canonical recovery path.
+
 ## 0.9.5 - 2026-07-17
 
 ### Added

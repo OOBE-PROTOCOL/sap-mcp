@@ -71,6 +71,8 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
     expect(classifyTool('sap_skills_install')).toBe('free');
+    expect(classifyTool('sap_skills_upgrade_plan')).toBe('free');
+    expect(classifyTool('sap_runtime_repair_plan')).toBe('free');
   });
 
   it('canonicalizes client-normalized tool aliases before pricing', () => {
@@ -112,6 +114,8 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_skills_upgrade_plan', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_runtime_repair_plan', { strictTools: true })).toBe('free');
 
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',

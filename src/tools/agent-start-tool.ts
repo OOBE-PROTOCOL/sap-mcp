@@ -5,11 +5,14 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
-const WIZARD_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
+const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
+const REPAIR_COMMAND = `npm exec --yes --package ${NPM_PACKAGE} -- sap-mcp-config repair`;
+const WIZARD_COMMAND = `npm exec --yes --package ${NPM_PACKAGE} -- sap-mcp-config wizard`;
 
 /**
  * @name registerAgentStartTool
@@ -60,7 +63,7 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
     },
     async (input: unknown) => {
       const goal = parseGoal(input);
-      return createTextResponse(JSON.stringify(buildAgentStartPayload(context, goal), null, 2));
+      return createStructuredJsonResponse(buildAgentStartPayload(context, goal));
     },
   );
 }
@@ -99,6 +102,18 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
         arguments: { includeContents: true },
         required: true,
         reason: 'Load the bundled SAP MCP skills into agent context before selecting protocol tools.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_skills_upgrade_plan',
+        required: false,
+        reason: 'If local skills are missing or stale, return exact latest-release commands and target directories before retrying.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_runtime_repair_plan',
+        required: false,
+        reason: 'If sap_payments is missing, returns the pinned repair command and OS-specific restart instructions.',
       },
       {
         namespace: 'hosted sap',
@@ -175,9 +190,17 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       listTool: 'sap_skills_list',
       bundleTool: 'sap_skills_bundle',
       installTool: 'sap_skills_install',
+      upgradePlanTool: 'sap_skills_upgrade_plan',
       hostedInstallRule: 'Hosted SAP MCP cannot write local files; load sap_skills_bundle into context or run the wizard locally.',
     },
+    maintenance: {
+      repairTool: 'sap_runtime_repair_plan',
+      repairCommand: REPAIR_COMMAND,
+      wizardCommand: WIZARD_COMMAND,
+      latestPackage: NPM_PACKAGE,
+      rule: 'Use sap_runtime_repair_plan before asking users to hand-edit runtime config. It preserves other MCP servers and only repairs OOBE SAP entries.',
+    },
     userFacingSummary: 'SAP MCP is ready: hosted tools are available at /mcp, skills are loaded, and paid/write operations should use the local sap_payments bridge so signatures stay user-controlled.',
-    repairCommand: WIZARD_COMMAND,
+    repairCommand: REPAIR_COMMAND,
   };
 }

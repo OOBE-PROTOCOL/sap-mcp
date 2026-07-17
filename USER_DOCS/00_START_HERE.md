@@ -66,6 +66,18 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 4. Use `sap_payments_call_paid_tool` when a hosted tool requires x402 payment.
 5. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.
 
+Agents can discover the same recovery path without guessing. The hosted SAP MCP
+server exposes these free maintenance tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `sap_agent_start` | Load the canonical startup playbook. |
+| `sap_skills_upgrade_plan` | Return latest-release skill upgrade commands and target directories. |
+| `sap_runtime_repair_plan` | Return the pinned repair command and expected `sap_payments` bridge tools after restart. |
+
+If an agent says the local `sap_payments` bridge is missing, ask it to call
+`sap_runtime_repair_plan` before asking you to edit JSON, TOML, or YAML by hand.
+
 Show the active profile:
 
 ```bash
