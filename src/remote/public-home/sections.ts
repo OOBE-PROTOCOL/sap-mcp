@@ -661,11 +661,13 @@ export function renderIntegrationPath(model: LandingPageModel): string {
           <p>Best for terminals, servers, and deterministic setup from npm without touching runtime config files by hand.</p>
           <ol class="step-list">
             <li><b>1</b><span>Run the CLI wizard command.</span></li>
-            <li><b>2</b><span>Accept the default <code>hosted-api</code> mode for remote SAP MCP.</span></li>
+            <li><b>2</b><span>Choose <strong>Full hosted SAP MCP setup</strong> for new profiles, or repair when the profile already exists.</span></li>
             <li><b>3</b><span>Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</span></li>
             <li><b>4</b><span>Call <code>sap_payments_readiness</code>; use <code>sap_payments_call_paid_tool</code> for x402 challenges and <code>sap_payments_finalize_transaction</code> for unsigned hosted transactions.</span></li>
           </ol>
           <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
+          <p class="muted">Already have a profile? Repair only the hosted runtime/payment bridge:</p>
+          <pre class="code-block"><code>${escapeHtml(model.repairCommand)}</code></pre>
           <div class="inline-actions">
             <a class="button" href="${escapeHtml(model.info.endpoints.docs)}">Start here</a>
             <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/04_CLIENT_CONFIGS">Client configs</a>
@@ -697,6 +699,10 @@ export function renderDownloads(model: LandingPageModel): string {
             <div>
               <span>npm wizard</span>
               <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
+            </div>
+            <div>
+              <span>Repair hosted runtime/payment bridge only</span>
+              <pre class="code-block"><code>${escapeHtml(model.repairCommand)}</code></pre>
             </div>
           </div>
         </article>

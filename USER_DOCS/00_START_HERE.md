@@ -44,14 +44,24 @@ https://mcp.sap.oobeprotocol.ai/docs/#/user/06_DESKTOP_GUI_WIZARD
 
 ### CLI Wizard
 
-Run the wizard:
+Run the wizard for a full hosted setup:
 
 ```bash
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
-1. Accept the default **hosted-api** mode for hosted SAP MCP.
-2. Create or import the dedicated local SAP MCP wallet profile.
+At the first menu, choose **Full hosted SAP MCP setup** for new profiles or
+**Repair hosted runtime + sap_payments bridge only** when the profile already
+exists and only paid/write hosted calls are failing.
+
+Repair without walking through the full wizard:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config repair
+```
+
+1. Full setup creates or imports the dedicated local SAP MCP wallet profile.
+2. Repair keeps the active profile and only fixes OOBE `sap`/`sap_payments` runtime entries.
 3. Let the wizard configure hosted `sap` plus local `sap_payments` for supported runtimes.
 4. Use `sap_payments_call_paid_tool` when a hosted tool requires x402 payment.
 5. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.

@@ -97,6 +97,15 @@ Install or repair runtime bridge config from the wizard:
 npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard
 ```
 
+Repair only hosted `sap` plus local `sap_payments` runtime entries:
+
+```bash
+npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config repair
+```
+
+The repair command keeps the active SAP MCP profile and only updates OOBE SAP
+MCP blocks, so unrelated MCP servers from other projects stay intact.
+
 The wizard can also write a local reference bundle under:
 
 ```txt

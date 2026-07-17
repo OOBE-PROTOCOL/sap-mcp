@@ -35,6 +35,7 @@ import {
 } from './mcp-client-injection.js';
 
 type WizardLogLevel = WizardSetupInput['logLevel'];
+type WizardSetupPath = 'full-hosted' | 'repair-payments' | 'manual-snippets';
 type QuestionValidator = (value: string) => string | undefined;
 type QuestionTransform = (value: string) => string;
 
@@ -641,13 +642,57 @@ async function wizardWelcome() {
 }
 
 /**
+ * Internal helper for choosing between full setup and repair-only runtime configuration.
+ */
+async function wizardSetupPath(): Promise<WizardSetupPath> {
+  clearConsole();
+  printSapLogo();
+  printHeader('Step 1: Setup Path', 'Full hosted setup or repair-only');
+
+  printLead('Choose what this wizard should do. First-time users should keep the full hosted setup. Existing users who can see hosted SAP MCP tools but cannot run paid/write tools should choose repair.');
+  console.log('');
+  printLabel('Default hosted model');
+  printField('Hosted MCP', paint('https://mcp.sap.oobeprotocol.ai/mcp', 'aqua'));
+  printField('Local bridge', 'sap_payments signs x402 proofs and finalizes unsigned transactions locally');
+  printField('Trust boundary', 'OOBE never receives keypair bytes; unrelated MCP servers stay untouched');
+  console.log('');
+  printControlHints();
+  console.log('');
+
+  const choice = await askChoice(
+    'What do you want to configure?',
+    [
+      `${paint('Full hosted SAP MCP setup', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')}`,
+      `${paint('Repair hosted runtime + sap_payments bridge only', 'aqua', 'bold')} ${paint('[existing profile]', 'yellow')}`,
+      'Print manual hosted/runtime snippets only',
+    ],
+    0,
+    [
+      'Creates or updates a SAP profile, wallet/signing boundary, policy limits, hosted MCP config, and local sap_payments bridge.',
+      'Keeps the active SAP profile and only fixes OOBE SAP MCP runtime entries for Codex, Claude, Hermes, and OpenClaw.',
+      'Does not write files. Use this when configuring an unsupported runtime by hand.',
+    ]
+  );
+
+  if (choice === 1) {
+    return 'repair-payments';
+  }
+
+  if (choice === 2) {
+    return 'manual-snippets';
+  }
+
+  return 'full-hosted';
+}
+
+/**
  * Internal helper for the wizard profile operation.
  */
 async function wizardProfile(): Promise<string> {
   while (true) {
     clearConsole();
     printSapLogo();
-    printHeader('Step 1: Agent Profile', 'Create or select agent identity');
+    printHeader('Step 2: Agent Profile', 'Create or select agent identity');
     
     printLead('Choose a stable profile name for this agent or operator identity.');
     printControlHints();
@@ -686,7 +731,7 @@ async function wizardProfile(): Promise<string> {
 async function wizardMode(): Promise<SapMcpMode> {
   clearConsole();
   printSapLogo();
-  printHeader('Step 2: Connection & Signing Mode', 'Where should this SAP MCP profile operate?');
+  printHeader('Step 3: Connection & Signing Mode', 'Where should this SAP MCP profile operate?');
   
   printLead('For most users, choose the hosted SAP MCP Server: agents connect to https://mcp.sap.oobeprotocol.ai/mcp while payments and signatures stay on this machine through the local sap_payments bridge.');
   console.log('');
@@ -730,7 +775,7 @@ async function wizardMode(): Promise<SapMcpMode> {
 async function wizardRpcUrl(mode: SapMcpMode): Promise<string> {
   clearConsole();
   printSapLogo();
-  printHeader('Step 3: Solana RPC', 'Blockchain connection settings');
+  printHeader('Step 4: Solana RPC', 'Blockchain connection settings');
   
   const isDev = mode === 'local-dev-keypair';
   const defaultRpc = isDev 
@@ -776,7 +821,7 @@ async function wizardSignerConfig(
     clearConsole();
     printSapLogo();
     printHeader(
-      'Step 4: Wallet Configuration',
+      'Step 5: Wallet Configuration',
       mode === 'hosted-api' ? 'Hosted signing profile' : 'Local keypair setup',
     );
     
@@ -859,7 +904,7 @@ async function wizardSignerConfig(
   if (mode === 'external-signer') {
     clearConsole();
     printSapLogo();
-    printHeader('Step 4: External Signer', 'Signing service configuration');
+    printHeader('Step 5: External Signer', 'Signing service configuration');
 
     return { externalSignerUrl: await askExternalSignerUrl() };
   }
@@ -901,7 +946,7 @@ async function wizardSecurityLimits(mode: SapMcpMode): Promise<{ maxTxValueSol: 
   
   clearConsole();
   printSapLogo();
-  printHeader('Step 5: Security Limits', 'Transaction spending controls');
+  printHeader('Step 6: Security Limits', 'Transaction spending controls');
   
   printLead('Set guardrails before this profile can sign or submit transactions. These limits are enforced before signing.');
   printControlHints();
@@ -945,7 +990,7 @@ async function wizardSecurityLimits(mode: SapMcpMode): Promise<{ maxTxValueSol: 
 async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoApiKey?: string; bentoAgentId?: string }> {
   clearConsole();
   printSapLogo();
-  printHeader('Step 6: Bento Guard Integration', 'Optional AI-powered security layer');
+  printHeader('Step 7: Bento Guard Integration', 'Optional AI-powered security layer');
   
   printLead('Bento Guard is optional. When enabled, local deterministic policy still runs and Bento adds AI-assisted intent scoring.');
   printControlHints();
@@ -1164,6 +1209,42 @@ function installRecommendedPaymentBridgeConfigs(): void {
   const bundle = installX402PaidCallAddon();
   printSuccess(`Installed ${bundle.addonId} bridge reference bundle to ${bundle.targetDir}`);
   printInfo('Restart your agent runtime, then call sap_payments.sap_payments_readiness before paid/write flows, sap_payments.sap_payments_call_paid_tool for x402 challenges, and sap_payments.sap_payments_finalize_transaction for unsigned hosted transactions.');
+}
+
+/**
+ * Repairs hosted SAP MCP plus local sap_payments runtime configuration without changing the active SAP profile.
+ */
+export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void {
+  if (options.clear !== false) {
+    clearConsole();
+  }
+
+  printSapLogo();
+  printHeader('Payment Bridge Repair', 'Hosted sap + local sap_payments');
+  printLead('This repair keeps the existing active SAP MCP profile and only updates OOBE SAP MCP runtime entries.');
+  console.log('');
+  printLabel('What will be repaired');
+  printBullet('Hosted remote SAP MCP entry named sap.');
+  printBullet('Local non-custodial payment bridge entry named sap_payments.');
+  printBullet('Stale SAP mcp-remote wrappers and stale SAP allow-lists when detected.');
+  printBullet('The x402 paid-call reference bundle under ~/.config/mcp-sap/addons.');
+  console.log('');
+  printLabel('What will not be touched');
+  printBullet('Other MCP servers from other projects.');
+  printBullet('Wallet/keypair bytes or Solana CLI keypairs.');
+  printBullet('Existing SAP profile policy limits unless the user runs full setup.');
+  console.log('');
+
+  installRecommendedPaymentBridgeConfigs();
+
+  console.log('');
+  printSuccess('Repair complete.');
+  printLabel('Next step');
+  printBullet('Restart the agent runtime completely.');
+  printBullet(`Ask the agent to call ${paint('sap_payments.sap_payments_readiness', 'aqua')}.`);
+  printBullet(`Use ${paint('sap_payments.sap_payments_call_paid_tool', 'aqua')} for hosted paid tools.`);
+  printBullet(`Use ${paint('sap_payments.sap_payments_finalize_transaction', 'aqua')} when a hosted builder returns an unsigned transaction.`);
+  console.log('');
 }
 
 /**
@@ -1464,26 +1545,46 @@ export async function runWizard() {
   try {
     // Welcome
     await wizardWelcome();
+
+    // Step 1: Setup path
+    const setupPath = await wizardSetupPath();
+
+    if (setupPath === 'repair-payments') {
+      runPaymentBridgeRepair();
+      rl.close();
+      return;
+    }
+
+    if (setupPath === 'manual-snippets') {
+      clearConsole();
+      printSapLogo();
+      printHeader('Manual Runtime Snippets', 'Hosted sap + local sap_payments');
+      printHostedMcpJsonSnippet();
+      printX402PaidCallAddonSnippets();
+      printInfo('No files were changed. Run sap-mcp-config repair to auto-repair supported runtimes later.');
+      rl.close();
+      return;
+    }
     
-    // Step 1: Profile
+    // Step 2: Profile
     const profileName = await wizardProfile();
     
-    // Step 2: Mode
+    // Step 3: Mode
     const mode = await wizardMode();
     
-    // Step 3: RPC
+    // Step 4: RPC
     const rpcUrl = await wizardRpcUrl(mode);
     
-    // Step 4: Signer (pass profileName for wallet path)
+    // Step 5: Signer (pass profileName for wallet path)
     const signerConfig = await wizardSignerConfig(mode, profileName);
     
-    // Step 5: Security
+    // Step 6: Security
     const securityLimits = await wizardSecurityLimits(mode);
     
-    // Step 6: Bento Integration (optional)
+    // Step 7: Bento Integration (optional)
     const bentoConfig = await wizardBentoIntegration();
     
-    // Step 7: HTTP (if hosted-api)
+    // HTTP transport is disabled for user-hosted profile setup.
     const httpConfig = await wizardHttpTransport(mode);
     
     // Step 8: Logging

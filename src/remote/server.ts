@@ -33,6 +33,7 @@ const PAYMENT_STATS_CACHE_MS = 15_000;
 const SERVER_CARD_CACHE_MS = 300_000;
 const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;
 const WIZARD_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard';
+const REPAIR_NPM_COMMAND = 'npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config repair';
 const X402_PAID_CALL_NPX_COMMAND = 'npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call --tool sap_list_all_agents --arguments \'{"limit":5}\' --max-usd 0.02 --confirm';
 const X402_PAID_CALL_ADDON_PATH = '~/.config/mcp-sap/addons/x402-paid-call';
 const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
@@ -1631,6 +1632,7 @@ export function buildLandingHtml(
     title,
     installScriptCommand: 'curl -fsSL https://mcp.sap.oobeprotocol.ai/wizard/install.sh | sh',
     wizardCommand: WIZARD_NPM_COMMAND,
+    repairCommand: REPAIR_NPM_COMMAND,
     paidCallCommand: X402_PAID_CALL_NPX_COMMAND,
     paidCallAddonPath: X402_PAID_CALL_ADDON_PATH,
   });

@@ -17,7 +17,7 @@
  */
 
 import { getConfigManager, type AuditEntry, type FullConfig, type PendingChange } from './config/secure-config.js';
-import { runWizard } from './config/wizard.js';
+import { runPaymentBridgeRepair, runWizard } from './config/wizard.js';
 import { getPreferredConfigDir } from './config/paths.js';
 import {
   listProfiles,
@@ -244,6 +244,7 @@ function printUsage() {
   console.log(`${purple}Core Commands:${reset}`);
   console.log('  init                      Create default configuration');
   console.log('  wizard                    Interactive setup wizard (recommended for first-time)');
+  console.log('  repair                    Repair hosted sap + local sap_payments runtime config');
   console.log('  show                      Show current configuration');
   console.log('  set <field> <value>       Set a configuration field');
   console.log('  pubkey                    Show agent public key');
@@ -271,6 +272,7 @@ function printUsage() {
   console.log('');
   console.log(`${aqua}Examples:${reset}`);
   console.log(`  ${purple}sap-mcp-config wizard${reset}              # Start interactive wizard`);
+  console.log(`  ${purple}sap-mcp-config repair${reset}              # Repair hosted runtime/payment bridge`);
   console.log(`  ${purple}sap-mcp-config pubkey${reset}              # Show agent pubkey`);
   console.log(`  ${purple}sap-mcp-config profiles${reset}            # List all profiles`);
   console.log(`  ${purple}sap-mcp-config profile hermes${reset}      # Switch to hermes profile`);
@@ -311,6 +313,13 @@ async function main() {
       case 'wizard': {
         console.log('Starting interactive configuration wizard...\n');
         await runWizard();
+        break;
+      }
+
+      case 'repair':
+      case 'repair-payments':
+      case 'repair-bridge': {
+        runPaymentBridgeRepair({ clear: false });
         break;
       }
 

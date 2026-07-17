@@ -60,6 +60,12 @@ Create or select a profile:
 npx sap-mcp-config wizard
 ```
 
+Repair hosted SAP MCP runtime entries without recreating the profile:
+
+```bash
+npx sap-mcp-config repair
+```
+
 After connecting hosted SAP MCP in an agent runtime, start the agent context
 with one short message:
 

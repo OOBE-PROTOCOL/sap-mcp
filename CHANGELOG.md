@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.5 - 2026-07-17
+
+### Added
+
+- Added a first-step setup path menu to the CLI wizard so users can choose
+  **Full hosted SAP MCP setup**, **Repair hosted runtime + sap_payments bridge
+  only**, or manual snippets before any profile/wallet prompts.
+- Added `sap-mcp-config repair` plus `repair-payments` and `repair-bridge`
+  aliases for users who already have a local SAP MCP profile and only need to
+  repair hosted `sap` plus local `sap_payments` runtime entries.
+
+### Fixed
+
+- Made the repair-only path use the same auto-resolver as the full wizard,
+  preserving unrelated MCP servers while updating only OOBE SAP MCP entries,
+  stale `mcp-remote` wrappers, SAP allow-list issues, and the local x402
+  reference bundle.
+- Updated user docs, README, and the hosted dashboard so normal users can find
+  the repair path without rerunning full profile/wallet setup.
+
 ## 0.9.4 - 2026-07-17
 
 ### Added

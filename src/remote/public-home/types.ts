@@ -85,6 +85,7 @@ export interface LandingPageModel {
   title: string;
   installScriptCommand: string;
   wizardCommand: string;
+  repairCommand: string;
   paidCallCommand: string;
   paidCallAddonPath: string;
 }
