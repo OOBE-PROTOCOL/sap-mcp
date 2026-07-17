@@ -99,6 +99,8 @@ Do not infer that tools are callable from startup logs alone. A tool is callable
 - Free reads can call hosted tools directly.
 - Paid hosted tools return HTTP 402 with x402/pay.sh payment requirements. Treat that as the normal payment handshake, not as a failure.
 - Prefer local \`sap_payments_call_paid_tool\` for paid/write hosted calls. \`sap_x402_paid_call\` is a legacy alias.
+- If a hosted paid/write tool returns \`transactionBase64\`, \`transaction\`, or an unsigned transaction object, finalize it through local \`sap_payments_finalize_transaction\`.
+- Never create temporary signing scripts, read keypair JSON, export keypair bytes, or call hosted \`sap_sign_transaction\` for user-owned signing.
 - Never ask the user for private key bytes. The local SAP profile or external signer signs payment payloads.
 - If a payment retry sees \`BlockhashNotFound\`, \`transaction_simulation_failed\`, \`node is behind\`, or an expired payload, create a fresh challenge through \`sap_payments_call_paid_tool\`. Do not reuse old signed payment payloads.
 - Capture \`PAYMENT-RESPONSE\` or \`X-PAYMENT-RESPONSE\` as a receipt and include it in the final audit summary when relevant.

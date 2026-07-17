@@ -102,6 +102,13 @@ Then paid hosted calls should be routed through:
 sap_payments_call_paid_tool
 ```
 
+If a paid hosted builder returns an unsigned transaction payload, finalize it
+locally with:
+
+```txt
+sap_payments_finalize_transaction
+```
+
 ## 6. Native x402 Client Flow
 
 If the user already has an x402-capable client, the flow is:

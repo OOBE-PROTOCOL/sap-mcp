@@ -61,6 +61,7 @@ Most agent runtimes can connect to hosted SAP MCP directly, but not every runtim
 ```txt
 sap_payments_readiness
 sap_payments_call_paid_tool
+sap_payments_finalize_transaction
 ```
 
 `sap_payments_readiness` is free. It verifies the hosted endpoint, local bridge,
@@ -102,7 +103,7 @@ The wizard can also write a local reference bundle under:
 ~/.config/mcp-sap/addons/x402-paid-call
 ```
 
-Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
+Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge, `sap_payments_finalize_transaction` for local transaction preview/sign/submit, and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment and transaction signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
 
 Basic wallet reads do not require x402. Call `sol_get_balance`, `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on hosted SAP MCP. They should not be routed through the local payment bridge and should not depend on the facilitator.
 

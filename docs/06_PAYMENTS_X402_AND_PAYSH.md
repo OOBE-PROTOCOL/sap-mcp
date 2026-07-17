@@ -92,6 +92,7 @@ has a user-controlled wallet profile:
 | --- | --- |
 | `sap_payments_readiness` | Free local readiness check for hosted MCP, active profile, signer, SOL/USDC balance, and commerce policy limits. Call this first for paid/write workflows. |
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
+| `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits. |
 | `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
 | `sap_payments_verify_receipt` | Decode a payment response/receipt header for inspection. |

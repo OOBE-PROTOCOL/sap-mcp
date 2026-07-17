@@ -10,7 +10,7 @@ import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
-type TransactionEncoding = 'base64' | 'base58';
+export type TransactionEncoding = 'base64' | 'base58';
 type SolanaTransaction = Transaction | VersionedTransaction;
 
 interface TransactionInput {
@@ -41,6 +41,17 @@ interface NativeTransferEstimate {
   sol: number;
 }
 
+export interface FinalizeTransactionInput {
+  transaction?: string;
+  transactionBase64?: string;
+  encoding?: TransactionEncoding;
+  submit?: boolean;
+  skipPreflight?: boolean;
+  maxRetries?: number;
+  confirm?: boolean;
+  intentId?: string;
+}
+
 const SYSTEM_TRANSFER_INSTRUCTION_INDEX = 2;
 const SYSTEM_TRANSFER_LAYOUT_BYTES = 12;
 
@@ -51,7 +62,7 @@ const SYSTEM_TRANSFER_LAYOUT_BYTES = 12;
  * @param encoding - Encoding used by the incoming transaction.
  * @returns Raw serialized transaction bytes.
  */
-function decodeInputBytes(value: string, encoding: TransactionEncoding = 'base64'): Buffer {
+export function decodeInputBytes(value: string, encoding: TransactionEncoding = 'base64'): Buffer {
   if (encoding === 'base64') {
     return Buffer.from(value, 'base64');
   }
@@ -70,7 +81,7 @@ function decodeInputBytes(value: string, encoding: TransactionEncoding = 'base64
  * @param encoding - Encoding used by the incoming transaction.
  * @returns Deserialized Solana transaction.
  */
-function deserializeTransaction(value: string, encoding?: TransactionEncoding): SolanaTransaction {
+export function deserializeTransaction(value: string, encoding?: TransactionEncoding): SolanaTransaction {
   const bytes = decodeInputBytes(value, encoding);
 
   try {
@@ -155,7 +166,7 @@ function estimateNativeTransfer(transaction: SolanaTransaction, signer?: PublicK
  * @param transaction - Deserialized transaction to check.
  * @param signer - Optional signer filter for signing checks.
  */
-async function assertTransactionPolicy(
+export async function assertTransactionPolicy(
   context: SapMcpContext,
   transaction: SolanaTransaction,
   signer?: PublicKey
@@ -183,7 +194,7 @@ async function assertTransactionPolicy(
  * @param transaction - Transaction to serialize.
  * @returns Base64 encoded transaction bytes.
  */
-function serializeTransaction(transaction: SolanaTransaction): string {
+export function serializeTransaction(transaction: SolanaTransaction): string {
   if (transaction instanceof VersionedTransaction) {
     return Buffer.from(transaction.serialize()).toString('base64');
   }
@@ -200,7 +211,7 @@ function serializeTransaction(transaction: SolanaTransaction): string {
  * @param transaction - Deserialized transaction.
  * @returns Transaction metadata safe to expose to MCP clients.
  */
-function describeTransaction(transaction: SolanaTransaction, context?: SapMcpContext): DecodedTransaction {
+export function describeTransaction(transaction: SolanaTransaction, context?: SapMcpContext): DecodedTransaction {
   const nativeTransfer = estimateNativeTransfer(transaction);
   const maxTxValueSol = context?.config.maxTxValueSol;
   const policyAllowed = context
@@ -246,6 +257,83 @@ function describeTransaction(transaction: SolanaTransaction, context?: SapMcpCon
     policyAllowed,
     policyReason,
   };
+}
+
+/**
+ * @name finalizeTransactionWithLocalSigner
+ * @description Preview, sign, and optionally submit a transaction with the local SAP MCP signer.
+ * @param context - Shared MCP runtime context containing signer, policy, and RPC connection.
+ * @param input - Transaction finalization request.
+ * @returns Agent-readable finalization result without secret material.
+ */
+export async function finalizeTransactionWithLocalSigner(
+  context: SapMcpContext,
+  input: FinalizeTransactionInput,
+): Promise<Record<string, unknown>> {
+  if (!context.signer) {
+    throw new Error('No local signer configured. Run the SAP MCP wizard full setup or repair the local sap_payments bridge, then restart the agent runtime.');
+  }
+
+  if (input.confirm !== true) {
+    throw new Error('confirm: true is required before the local SAP MCP signer can finalize a transaction.');
+  }
+
+  const transactionText = input.transaction ?? input.transactionBase64;
+  if (!transactionText) {
+    throw new Error('transaction or transactionBase64 is required.');
+  }
+
+  const encoding = input.encoding ?? 'base64';
+  const transaction = deserializeTransaction(transactionText, encoding);
+  const preview = describeTransaction(transaction, context);
+  const nativeTransfer = await assertTransactionPolicy(context, transaction, context.signer.publicKey);
+  const signedTransaction = await context.signer.signTransaction(transaction);
+  const signedTransactionBase64 = serializeTransaction(signedTransaction);
+
+  const result: Record<string, unknown> = {
+    success: true,
+    action: input.submit === true ? 'preview-sign-submit' : 'preview-sign',
+    submitted: false,
+    signerPublicKey: context.signer.publicKey.toBase58(),
+    nativeTransferSol: nativeTransfer.sol,
+    preview: {
+      ...preview,
+      canSign: true,
+      signer: context.signer.publicKey.toBase58(),
+    },
+    signedTransaction: signedTransactionBase64,
+    encoding: 'base64',
+    audit: {
+      intentId: input.intentId ?? `sap-tx-${Date.now()}`,
+      profileMode: context.config.mode,
+      signerPublicKey: context.signer.publicKey.toBase58(),
+      previewed: true,
+      signedLocally: true,
+      submitted: false,
+      secretMaterial: 'keypair-bytes-never-returned',
+      rule: 'Finalized by SAP MCP local signer. No temporary scripts, raw keypair reads, or exported secret bytes were used.',
+    },
+  };
+
+  if (input.submit === true) {
+    const signature = await context.connection.sendRawTransaction(
+      decodeInputBytes(signedTransactionBase64, 'base64'),
+      {
+        skipPreflight: input.skipPreflight,
+        maxRetries: input.maxRetries,
+      },
+    );
+
+    result.submitted = true;
+    result.signature = signature;
+    result.audit = {
+      ...(result.audit as Record<string, unknown>),
+      submitted: true,
+      signature,
+    };
+  }
+
+  return result;
 }
 
 /**

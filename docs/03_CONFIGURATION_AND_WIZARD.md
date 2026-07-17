@@ -108,15 +108,14 @@ For hosted paid/write tools, clients may also need a local `sap_payments` bridge
 ```txt
 sap_payments_readiness
 sap_payments_call_paid_tool
+sap_payments_finalize_transaction
 sap_payments_prepare_challenge
 sap_payments_sign_challenge
 sap_payments_verify_receipt
 sap_x402_paid_call
-sap_profile_current
-sap_x402_estimate_cost
 ```
 
-This bridge obtains x402 challenges, signs payment proofs locally with the active SAP MCP profile, retries hosted tool calls, and inspects receipts.
+This bridge obtains x402 challenges, signs payment proofs locally with the active SAP MCP profile, retries hosted tool calls, finalizes unsigned hosted transactions, and inspects receipts.
 
 ## 03.7 Config CLI
 

@@ -69,7 +69,7 @@ export const MCP_SERVER_INSTRUCTIONS = [
   'Use exact tool names from tools/list. Do not rewrite hyphenated tool names such as spl-token_getTokenAccounts.',
   'Hosted paid/write tools return HTTP 402 x402/pay.sh challenges. This is normal. Prefer the local sap_payments_call_paid_tool bridge for paid hosted calls; it signs locally and retries without exposing keypair bytes.',
   'If sap_payments is missing, ask the user to run the SAP MCP wizard repair flow and restart the agent runtime. Do not claim hosted SAP MCP can custody or see local wallet config.',
-  'When a tool returns an unsigned or partially signed Solana transaction, use sap_preview_transaction, then sap_sign_transaction, then sap_submit_signed_transaction. Never create temporary signing scripts, read keypair JSON, export secret bytes, or sign raw messages outside SAP MCP tools.',
+  'When a hosted tool returns an unsigned or partially signed Solana transaction, use local sap_payments_finalize_transaction. For local stdio transactions, use sap_preview_transaction, then sap_sign_transaction, then sap_submit_signed_transaction. Never create temporary signing scripts, read keypair JSON, export secret bytes, or sign raw messages outside SAP MCP tools.',
   'Escrow writes are V2-only. Use sap_create_escrow_v2 and related V2 tools. Default settlementSecurity is DisputeWindow (2); never default to SelfReport (0). Amounts are smallest units: lamports for SOL, micro-USDC for USDC.',
 ].join('\n');
 /**
@@ -83,7 +83,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.3';
+export const MCP_SERVER_VERSION = '0.9.4';
 
 /**
  * Tool categories

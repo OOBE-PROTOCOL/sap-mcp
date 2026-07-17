@@ -155,6 +155,12 @@ and arguments, `confirm: true`, and `maxAttempts: 5` so a fresh payment payload
 is created. Use `sap_x402_paid_call` only when a runtime still exposes the
 legacy alias.
 
+When a hosted paid/write builder returns `transactionBase64`, `transaction`, or
+another unsigned Solana transaction payload, finalize it locally with
+`sap_payments_finalize_transaction`. Do not call hosted `sap_sign_transaction`
+for a user-owned signer, do not create `.js`/`.mjs` signing scripts, and do not
+read keypair JSON.
+
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or
 external signer." Avoid saying "signer not configured", "read-only only",

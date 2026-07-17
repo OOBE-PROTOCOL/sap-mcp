@@ -38,6 +38,11 @@ Do not hard-code MagicBlock prices in agents. Call `sap_x402_estimate_cost` or
 the local `sap_payments_call_paid_tool` helper and enforce the user profile's
 `maxPriceUsd` / spend policy.
 
+When a hosted MagicBlock builder returns an unsigned transaction, hosted SAP MCP
+remains non-custodial. Finalize the returned `transactionBase64` with the local
+`sap_payments_finalize_transaction` bridge. Do not call hosted
+`sap_sign_transaction`, create temporary signing scripts, or read keypair JSON.
+
 ---
 
 ## Tools (20 total)
@@ -130,9 +135,13 @@ Write tools return an unsigned transaction:
 Expected flow:
 
 1. Call the MagicBlock tool (e.g. `magicblock_deposit`) → get `transactionBase64`
-2. Preview with `sap_preview_transaction`
-3. Sign with `sap_sign_transaction`
-4. Submit with `sap_submit_signed_transaction` to the RPC indicated by `sendTo`
+2. If the transaction came from hosted SAP MCP, call local
+   `sap_payments_finalize_transaction` with `confirm: true` and `submit: false`
+   for preview/sign, or `submit: true` after user approval.
+3. If the transaction came from local stdio SAP MCP, use
+   `sap_preview_transaction` → `sap_sign_transaction` →
+   `sap_submit_signed_transaction`.
+4. Record the signed transaction or submitted signature in the audit trail.
 
 Agents must not create temporary JavaScript signing scripts, read keypair JSON,
 or sign raw message bytes outside SAP MCP transaction tools.

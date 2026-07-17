@@ -66,7 +66,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(270);
+    expect(names).toHaveLength(271);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -110,6 +110,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_payments_profile_current');
     expect(names).toContain('sap_payments_readiness');
     expect(names).toContain('sap_payments_call_paid_tool');
+    expect(names).toContain('sap_payments_finalize_transaction');
     expect(names).toContain('sap_payments_prepare_challenge');
     expect(names).toContain('sap_payments_sign_challenge');
     expect(names).toContain('sap_payments_verify_receipt');
@@ -179,6 +180,7 @@ describe('createSapMcpServer', () => {
         'sap_payments_profile_current',
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',
+        'sap_payments_finalize_transaction',
         'sap_payments_prepare_challenge',
         'sap_payments_sign_challenge',
         'sap_payments_verify_receipt',
@@ -188,6 +190,69 @@ describe('createSapMcpServer', () => {
       expect(names).not.toContain('sap_register_agent');
       expect(names).not.toContain('sol_get_balance');
     } finally {
+      if (previous === undefined) {
+        delete process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+      } else {
+        process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = previous;
+      }
+    }
+  });
+
+  it('lets the local sap_payments bridge finalize unsigned hosted transactions without scripts', async () => {
+    const previous = process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+    process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = 'true';
+    const keypair = Keypair.generate();
+    const walletPath = join(mkdtempSync(join(tmpdir(), 'sap-mcp-payments-finalize-')), 'agent-keypair.json');
+    writeFileSync(walletPath, JSON.stringify(Array.from(keypair.secretKey)), 'utf-8');
+
+    try {
+      const server = registeredServer(await createSapMcpServer(baseConfig({
+        mode: 'local-dev-keypair',
+        walletPath,
+      })));
+
+      const tx = new Transaction().add(SystemProgram.transfer({
+        fromPubkey: keypair.publicKey,
+        toPubkey: keypair.publicKey,
+        lamports: 1,
+      }));
+      tx.recentBlockhash = '11111111111111111111111111111111';
+      tx.feePayer = keypair.publicKey;
+
+      const transactionBase64 = tx.serialize({
+        requireAllSignatures: false,
+        verifySignatures: false,
+      }).toString('base64');
+
+      const missingConfirm = await server.toolHandlers?.sap_payments_finalize_transaction({
+        transactionBase64,
+        confirm: false,
+      });
+      const finalized = await server.toolHandlers?.sap_payments_finalize_transaction({
+        transactionBase64,
+        confirm: true,
+        submit: false,
+        intentId: 'test-private-swap',
+      });
+
+      expect(missingConfirm?.content[0]?.text).toContain('confirm: true is required');
+      const parsed = JSON.parse(finalized?.content[0]?.text ?? '{}');
+      expect(parsed).toMatchObject({
+        success: true,
+        action: 'preview-sign',
+        submitted: false,
+        signerPublicKey: keypair.publicKey.toBase58(),
+        encoding: 'base64',
+        audit: {
+          intentId: 'test-private-swap',
+          signedLocally: true,
+          secretMaterial: 'keypair-bytes-never-returned',
+        },
+      });
+      expect(parsed.signedTransaction).toEqual(expect.any(String));
+      expect(parsed.audit.rule).toContain('No temporary scripts');
+    } finally {
+      rmSync(walletPath, { force: true });
       if (previous === undefined) {
         delete process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
       } else {

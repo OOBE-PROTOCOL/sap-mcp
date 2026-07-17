@@ -16,6 +16,7 @@ The agent should then:
 3. use exact tool names from `tools/list`;
 4. call `sap_payments_readiness` if the local `sap_payments` bridge is visible;
 5. use `sap_payments_call_paid_tool` for paid hosted tools that return x402 payment requirements.
+6. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
 
 If `sap_payments` is missing, run the wizard repair flow and restart the agent
 runtime:
@@ -86,6 +87,7 @@ Use transactions:
 - `sap_preview_transaction`
 - `sap_sign_transaction`
 - `sap_submit_signed_transaction`
+- `sap_payments_finalize_transaction` for hosted builder transactions that must be finalized locally
 
 ## 4. Agent Safety
 

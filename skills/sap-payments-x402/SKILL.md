@@ -9,6 +9,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_x402_get_balance`
 - `sap_payments_profile_current`
 - `sap_payments_call_paid_tool`
+- `sap_payments_finalize_transaction`
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`
 - `sap_payments_verify_receipt`
@@ -80,6 +81,12 @@ receipt. Do not ask the user to install a separate x402 plugin when the local
 SAP MCP `sap_payments` bridge is already configured. The legacy
 `sap_x402_paid_call` alias is acceptable only when a runtime has not refreshed
 to the new tool name.
+
+If the hosted paid tool returns `transactionBase64`, `transaction`, or an
+unsigned transaction object, call `sap_payments_finalize_transaction` with
+`confirm: true`. Set `submit: false` for preview/sign only, or `submit: true`
+after the user approves execution. Never create temporary signing scripts, read
+keypair JSON, or call hosted `sap_sign_transaction` for user-owned signatures.
 
 Use low-level helpers only for custom clients:
 

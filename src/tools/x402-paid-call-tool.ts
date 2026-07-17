@@ -19,6 +19,7 @@ import {
   type X402ChallengeSignInput,
   type X402PaidCallInput,
 } from '../payments/x402-paid-call.js';
+import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
 
 interface X402PaidCallToolInput {
   endpoint?: string;
@@ -61,6 +62,17 @@ interface X402ChallengeSignToolInput {
 interface X402ReceiptToolInput {
   receiptHeader?: string;
   paymentResponse?: string;
+}
+
+interface PaymentsFinalizeTransactionToolInput {
+  transaction?: string;
+  transactionBase64?: string;
+  encoding?: TransactionEncoding;
+  submit?: boolean;
+  skipPreflight?: boolean;
+  maxRetries?: number;
+  confirm?: boolean;
+  intentId?: string;
 }
 
 const paidCallInputSchema = {
@@ -154,12 +166,90 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsReadinessTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
+  registerPaymentsFinalizeTransactionTool(server, _context);
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
   registerPaymentsVerifyReceiptTool(server);
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
+}
+
+function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcpContext): void {
+  registerTool(
+    server,
+    'sap_payments_finalize_transaction',
+    {
+      title: 'Finalize Transaction With Local Signer',
+      description: 'Local non-custodial transaction finalizer for hosted SAP MCP builders. Use this when a hosted tool returns transactionBase64, transaction, or an unsigned Solana transaction. It previews, signs with the active local SAP MCP profile signer, and optionally submits through the configured RPC. Never create temporary signing scripts, read keypair JSON, or call hosted sap_sign_transaction for user-owned signatures. Requires confirm: true.',
+      inputSchema: {
+        transaction: {
+          type: 'string',
+          description: 'Serialized unsigned or partially signed Solana transaction. Accepts base64 by default.',
+        },
+        transactionBase64: {
+          type: 'string',
+          description: 'Alias for transaction when the builder returns transactionBase64.',
+        },
+        encoding: {
+          type: 'string',
+          enum: ['base64', 'base58'],
+          description: 'Encoding for transaction or transactionBase64. Defaults to base64.',
+        },
+        submit: {
+          type: 'boolean',
+          description: 'When true, submit the signed transaction after preview and signing. When false or omitted, return the signed transaction for inspection.',
+        },
+        skipPreflight: {
+          type: 'boolean',
+          description: 'Optional Solana RPC sendRawTransaction skipPreflight flag, used only when submit is true.',
+        },
+        maxRetries: {
+          type: 'number',
+          description: 'Optional Solana RPC sendRawTransaction maxRetries value, used only when submit is true.',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true. Confirms the user allows the local SAP MCP signer to sign this transaction.',
+        },
+        intentId: {
+          type: 'string',
+          description: 'Optional caller-provided id used to bind preview, signature, submission, and audit output.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether finalization succeeded.' },
+          action: { type: 'string', description: 'preview-sign or preview-sign-submit.' },
+          submitted: { type: 'boolean', description: 'Whether the signed transaction was submitted to RPC.' },
+          signature: { type: 'string', description: 'Solana transaction signature when submit is true.' },
+          signerPublicKey: { type: 'string', description: 'Public key of the local signer that signed the transaction.' },
+          nativeTransferSol: { type: 'number', description: 'Estimated native SOL transferred by the transaction.' },
+          preview: { type: 'object', description: 'Decoded transaction preview and policy result.' },
+          signedTransaction: { type: 'string', description: 'Base64 signed transaction when submit is false or for audit.' },
+          encoding: { type: 'string', description: 'Encoding of signedTransaction.' },
+          audit: { type: 'object', description: 'Proof object binding intent, local signer, preview, signing, submission, and secret-material guarantee.' },
+        },
+        required: ['success', 'action', 'submitted', 'signerPublicKey', 'nativeTransferSol', 'preview', 'audit'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const parsed = parseFinalizeTransactionInput(input);
+        const result = await finalizeTransactionWithLocalSigner(context, parsed);
+        return createTextResponse(JSON.stringify(result, null, 2));
+      } catch (error) {
+        return createTextResponse(formatFinalizeTransactionError(error), { isError: true });
+      }
+    },
+  );
 }
 
 function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpContext): void {
@@ -514,6 +604,28 @@ function parseReceiptInput(input: unknown): string {
   return header;
 }
 
+function parseFinalizeTransactionInput(input: unknown): PaymentsFinalizeTransactionToolInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('sap_payments_finalize_transaction requires an input object.');
+  }
+
+  const record = input as PaymentsFinalizeTransactionToolInput;
+  if (!record.transaction && !record.transactionBase64) {
+    throw new Error('transaction or transactionBase64 is required.');
+  }
+
+  return {
+    transaction: record.transaction,
+    transactionBase64: record.transactionBase64,
+    encoding: record.encoding,
+    submit: record.submit === true,
+    skipPreflight: record.skipPreflight,
+    maxRetries: record.maxRetries,
+    confirm: record.confirm === true,
+    intentId: record.intentId,
+  };
+}
+
 type X402PaidCallErrorCategory = 'x402_transient_rpc' | 'x402_client_or_config';
 
 interface X402PaidCallErrorPayload {
@@ -542,6 +654,20 @@ function formatPaidCallError(error: unknown): string {
   };
 
   return JSON.stringify(payload, null, 2);
+}
+
+function formatFinalizeTransactionError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return JSON.stringify({
+    success: false,
+    error: message,
+    retryable: isRetryablePaymentError(message),
+    category: message.toLowerCase().includes('no local signer') || message.toLowerCase().includes('no signer')
+      ? 'local_signer_missing'
+      : 'local_transaction_finalization_failed',
+    agentInstruction: 'Do not create temporary signing scripts, do not read keypair JSON, and do not call hosted sap_sign_transaction for user-owned signatures. Use sap_payments_finalize_transaction from the local sap_payments bridge. If this tool is missing or no signer is configured, ask the user to run the SAP MCP wizard full setup or repair flow and restart the agent runtime.',
+    nextAction: 'Call sap_payments_readiness. If the local signer is ready, retry sap_payments_finalize_transaction with confirm: true. If readiness says missing bridge or signer, run the wizard repair flow.',
+  }, null, 2);
 }
 
 function isRetryablePaymentError(message: string): boolean {

@@ -663,7 +663,7 @@ export function renderIntegrationPath(model: LandingPageModel): string {
             <li><b>1</b><span>Run the CLI wizard command.</span></li>
             <li><b>2</b><span>Accept the default <code>hosted-api</code> mode for remote SAP MCP.</span></li>
             <li><b>3</b><span>Let the wizard configure hosted <code>sap</code> plus local <code>sap_payments</code>.</span></li>
-            <li><b>4</b><span>Call <code>sap_payments_readiness</code>, then use <code>sap_payments_call_paid_tool</code> when hosted tools require x402 payment.</span></li>
+            <li><b>4</b><span>Call <code>sap_payments_readiness</code>; use <code>sap_payments_call_paid_tool</code> for x402 challenges and <code>sap_payments_finalize_transaction</code> for unsigned hosted transactions.</span></li>
           </ol>
           <pre class="code-block"><code>${escapeHtml(model.wizardCommand)}</code></pre>
           <div class="inline-actions">
@@ -734,7 +734,8 @@ export function renderPayments(model: LandingPageModel): string {
             <div class="timeline-item"><b>1</b><p>Agent checks <code>sap_payments_readiness</code> for local profile, signer, balance, and policy status.</p></div>
             <div class="timeline-item"><b>2</b><p>Paid tools return an x402 challenge with resource, amount, asset, and payTo.</p></div>
             <div class="timeline-item"><b>3</b><p>Local <code>sap_payments_call_paid_tool</code> signs payment proof and retries the call.</p></div>
-            <div class="timeline-item"><b>4</b><p>Hosted MCP verifies settlement and returns the tool output plus receipt.</p></div>
+            <div class="timeline-item"><b>4</b><p>If the output is an unsigned transaction, local <code>sap_payments_finalize_transaction</code> previews, signs, and optionally submits it.</p></div>
+            <div class="timeline-item"><b>5</b><p>Hosted MCP verifies settlement and the local bridge returns receipt, signed transaction, or signature.</p></div>
           </div>
           <pre class="code-block"><code>${escapeHtml(model.paidCallCommand)}</code></pre>
         </article>

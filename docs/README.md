@@ -91,8 +91,11 @@ Hosted paid tools use x402 and pay.sh:
 - value flows: fixed or percentage pricing only where it is operationally appropriate
 
 For agents that cannot replay x402 challenges natively, configure the local
-`sap_payments` MCP bridge and call `sap_payments_call_paid_tool`. The standalone
-helper remains available as a terminal/custom-wrapper fallback:
+`sap_payments` MCP bridge and call `sap_payments_call_paid_tool`. If a hosted
+builder returns an unsigned transaction, finalize it with
+`sap_payments_finalize_transaction` so the local signer previews, signs, and
+optionally submits without exposing keypair bytes. The standalone helper remains
+available as a terminal/custom-wrapper fallback:
 
 ```bash
 npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call \

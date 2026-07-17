@@ -45,7 +45,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 
 [mcp_servers.sap_payments]
 command = "npx.cmd"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.3", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.4", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -65,7 +65,7 @@ the complete local stdio SAP MCP process instead of using the hosted endpoint, u
 ```toml
 [mcp_servers.sap]
 command = "npx.cmd"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.3", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.4", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
@@ -182,19 +182,23 @@ bridge shown above. It exposes only:
 ```txt
 sap_payments_readiness
 sap_payments_call_paid_tool
+sap_payments_finalize_transaction
 sap_payments_prepare_challenge
 sap_payments_sign_challenge
 sap_payments_verify_receipt
 sap_x402_paid_call
-sap_profile_current
-sap_x402_estimate_cost
 ```
+
+Use `sap_payments_finalize_transaction` when a hosted builder returns
+`transactionBase64`, `transaction`, or another unsigned Solana transaction. Do
+not create temporary signing scripts, read keypair JSON, or ask the hosted
+server to sign user-owned transactions.
 
 For Claude Code, use the official MCP CLI pattern:
 
 ```bash
 claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp
-claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server@0.9.3 sap-mcp-server
+claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server@0.9.4 sap-mcp-server
 ```
 
 Set `SAP_MCP_PAYMENTS_BRIDGE_ONLY=true` and `SAP_ALLOWED_TOOLS=all` in the

@@ -54,6 +54,7 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wi
 2. Create or import the dedicated local SAP MCP wallet profile.
 3. Let the wizard configure hosted `sap` plus local `sap_payments` for supported runtimes.
 4. Use `sap_payments_call_paid_tool` when a hosted tool requires x402 payment.
+5. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.
 
 Show the active profile:
 

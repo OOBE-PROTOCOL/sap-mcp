@@ -66,7 +66,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 ```toml
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.3", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.4", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -128,12 +128,11 @@ Every supported runtime may also receive a local `sap_payments` server with only
 ```txt
 sap_payments_readiness
 sap_payments_call_paid_tool
+sap_payments_finalize_transaction
 sap_payments_prepare_challenge
 sap_payments_sign_challenge
 sap_payments_verify_receipt
 sap_x402_paid_call
-sap_profile_current
-sap_x402_estimate_cost
 ```
 
 The hosted `sap` entry must not include wallet paths, RPC API-key overrides, profile names, keypair bytes, or private signer data.

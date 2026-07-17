@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.4 - 2026-07-17
+
+### Added
+
+- Added `sap_payments_finalize_transaction`, a free local `sap_payments` bridge
+  tool that previews, policy-checks, signs, and optionally submits unsigned
+  transactions returned by hosted SAP MCP builders.
+- Added regression coverage proving the bridge-only process exposes the local
+  finalizer and can sign a hosted-style transaction without temporary scripts or
+  keypair-byte exposure.
+
+### Fixed
+
+- Updated agent prompts, skills, docs, wizard copy, and public dashboard
+  guidance so hosted builders route transaction finalization through the local
+  bridge instead of hosted `sap_sign_transaction` or ad-hoc `.js`/`.mjs`
+  signing scripts.
+- Tightened the bridge-only tool list in docs to match the actual
+  `sap_payments` surface.
+
 ## 0.9.3 - 2026-07-17
 
 ### Changed
