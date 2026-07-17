@@ -109,8 +109,8 @@ describe('MCP client injection', () => {
     const plan = planMcpClientInjection(target(configPath, 'yaml'), canonical, 'override');
 
     expect(plan.hadSapConfig).toBe(true);
-    expect(plan.nextContent).toContain('mcp_servers:\n  sap:\n    command: node');
-    expect(plan.nextContent).toContain('    - /repo/sap-mcp-server/dist/cli.js');
+    expect(plan.nextContent).toContain('mcp_servers:\n  sap:\n    command: "node"');
+    expect(plan.nextContent).toContain('      - "/repo/sap-mcp-server/dist/cli.js"');
     expect(plan.nextContent).toContain('      SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"');
     expect(plan.nextContent).toContain('  other:\n    command: other');
     expect(plan.nextContent).not.toContain('SAP_RPC_URL');
@@ -184,15 +184,15 @@ describe('MCP client injection', () => {
     expect(codexHosted?.content).toContain('[mcp_servers.sap]');
     expect(codexHosted?.content).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(codexHosted?.content).not.toContain('transport = "streamable-http"');
-    expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
-    expect(openClawProfile?.content).toContain('mcp:\n  servers:\n    sap:\n      url: https://mcp.sap.oobeprotocol.ai/mcp\n      transport: streamable-http');
+    expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"\n    transport: "streamable-http"');
+    expect(openClawProfile?.content).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"\n      transport: "streamable-http"');
     expect(JSON.parse(local?.content ?? '{}').mcpServers.sap.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
     });
     expect(codexLocal?.content).toContain('[mcp_servers.sap]');
     expect(codexLocal?.content).toContain('--package');
-    expect(codexLocal?.content).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.6');
+    expect(codexLocal?.content).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.7');
   });
 
   it('discovers Codex config as a create-capable target', () => {
@@ -205,7 +205,7 @@ describe('MCP client injection', () => {
   it('builds portable Codex npx stdio config without wallet or RPC overrides', () => {
     const config = createNpxCodexServerConfig();
 
-    expect(config.args).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.6');
+    expect(config.args).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.7');
     expect(config.args).toContain('sap-mcp-server');
     expect(config.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
@@ -370,7 +370,8 @@ describe('MCP client injection', () => {
     const codexToml = buildHostedPaymentBridgeContent(codexTarget, '', 'win32').nextContent;
 
     expect(hermesJson.sap_payments.command).toBe('npx.cmd');
-    expect(hermesYaml).toContain('  sap_payments:\n    command: npx.cmd');
+    expect(hermesYaml).toContain('  sap_payments:\n    command: "npx.cmd"');
+    expect(hermesYaml).toContain('      - "@oobe-protocol-labs/sap-mcp-server@0.9.7"');
     expect(codexToml).toContain('[mcp_servers.sap_payments]');
     expect(codexToml).toContain('command = "npx.cmd"');
     expect(codexToml).toContain('startup_timeout_sec = 300');
@@ -396,9 +397,10 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.hadSapConfig).toBe(true);
-    expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: https://mcp.sap.oobeprotocol.ai/mcp\n    transport: streamable-http');
+    expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"\n    transport: "streamable-http"');
     expect(built.nextContent).toContain('  sap_payments:\n    command:');
-    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: all');
+    expect(built.nextContent).toContain('      - "@oobe-protocol-labs/sap-mcp-server@0.9.7"');
+    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).toContain('  keep:\n    command: keep');
     expect(built.nextContent).not.toContain('command: old');
   });
@@ -423,9 +425,10 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.hadSapConfig).toBe(true);
-    expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: https://mcp.sap.oobeprotocol.ai/mcp\n      transport: streamable-http');
+    expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"\n      transport: "streamable-http"');
     expect(built.nextContent).toContain('    sap_payments:\n      command:');
-    expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: all');
+    expect(built.nextContent).toContain('        - "@oobe-protocol-labs/sap-mcp-server@0.9.7"');
+    expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).toContain('    keep:\n      command: keep');
     expect(built.nextContent).not.toContain('command: old');
   });
@@ -502,7 +505,7 @@ describe('MCP client injection', () => {
     expect(parsed.mcpServers.sap_payments.args).toEqual([
       '--yes',
       '--package',
-      '@oobe-protocol-labs/sap-mcp-server@0.9.6',
+      '@oobe-protocol-labs/sap-mcp-server@0.9.7',
       'sap-mcp-server',
     ]);
     expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');

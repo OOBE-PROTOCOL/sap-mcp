@@ -171,6 +171,14 @@ function shellQuote(value: string): string {
 }
 
 /**
+ * @name yamlScalar
+ * @description Renders a string as a YAML-safe double-quoted scalar.
+ */
+function yamlScalar(value: string): string {
+  return JSON.stringify(value);
+}
+
+/**
  * @name readTargetContent
  * @description Reads an existing target file or returns a format-appropriate empty config.
  */
@@ -263,8 +271,8 @@ export function createManualMcpJsonSnippets(
       content: [
         'mcp_servers:',
         `  ${SAP_SERVER_NAME}:`,
-        `    url: ${hostedUrl}`,
-        '    transport: streamable-http',
+        `    url: ${yamlScalar(hostedUrl)}`,
+        `    transport: ${yamlScalar('streamable-http')}`,
         '',
       ].join('\n'),
     },
@@ -275,8 +283,8 @@ export function createManualMcpJsonSnippets(
         'mcp:',
         '  servers:',
         `    ${SAP_SERVER_NAME}:`,
-        `      url: ${hostedUrl}`,
-        '      transport: streamable-http',
+        `      url: ${yamlScalar(hostedUrl)}`,
+        `      transport: ${yamlScalar('streamable-http')}`,
         '',
       ].join('\n'),
     },
@@ -398,15 +406,8 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
       description: 'Use this inside Hermes profile config.yaml under mcp_servers when Hermes cannot natively replay hosted x402 challenges.',
       content: [
         'mcp_servers:',
-        `  ${SAP_SERVER_NAME}:`,
-        `    url: ${HOSTED_SAP_MCP_URL}`,
-        '    transport: streamable-http',
-        `  ${SAP_PAYMENT_BRIDGE_SERVER_NAME}:`,
-        `    command: ${paymentBridge.command}`,
-        '    args:',
-        ...paymentBridge.args.map((arg) => `    - ${arg}`),
-        '    env:',
-        ...Object.entries(paymentBridge.env).map(([key, value]) => `      ${key}: ${value === 'false' || value === 'true' ? `"${value}"` : value}`),
+        ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
+        ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
         '',
       ].join('\n'),
     },
@@ -844,22 +845,21 @@ function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): s
   const grandchild = ' '.repeat(baseIndent + 4);
   const lines = [
     `${indent}${SAP_SERVER_NAME}:`,
-    `${child}command: ${canonical.command}`,
+    `${child}command: ${yamlScalar(canonical.command)}`,
     `${child}args:`,
   ];
 
   for (const arg of canonical.args) {
-    lines.push(`${child}- ${arg}`);
+    lines.push(`${grandchild}- ${yamlScalar(arg)}`);
   }
 
   if (canonical.cwd) {
-    lines.push(`${child}cwd: ${canonical.cwd}`);
+    lines.push(`${child}cwd: ${yamlScalar(canonical.cwd)}`);
   }
 
   lines.push(`${child}env:`);
   for (const [key, value] of Object.entries(canonical.env)) {
-    const rendered = value === 'false' || value === 'true' ? `"${value}"` : value;
-    lines.push(`${grandchild}${key}: ${rendered}`);
+    lines.push(`${grandchild}${key}: ${yamlScalar(value)}`);
   }
 
   return lines;
@@ -874,8 +874,8 @@ function yamlHostedServerBlock(serverName: string, baseIndent = 0): string[] {
   const child = ' '.repeat(baseIndent + 2);
   return [
     `${indent}${serverName}:`,
-    `${child}url: ${HOSTED_SAP_MCP_URL}`,
-    `${child}transport: streamable-http`,
+    `${child}url: ${yamlScalar(HOSTED_SAP_MCP_URL)}`,
+    `${child}transport: ${yamlScalar('streamable-http')}`,
   ];
 }
 
@@ -889,22 +889,21 @@ function yamlCommandServerBlock(serverName: string, canonical: McpServerInjectio
   const grandchild = ' '.repeat(baseIndent + 4);
   const lines = [
     `${indent}${serverName}:`,
-    `${child}command: ${canonical.command}`,
+    `${child}command: ${yamlScalar(canonical.command)}`,
     `${child}args:`,
   ];
 
   for (const arg of canonical.args) {
-    lines.push(`${child}- ${arg}`);
+    lines.push(`${grandchild}- ${yamlScalar(arg)}`);
   }
 
   if (canonical.cwd) {
-    lines.push(`${child}cwd: ${canonical.cwd}`);
+    lines.push(`${child}cwd: ${yamlScalar(canonical.cwd)}`);
   }
 
   lines.push(`${child}env:`);
   for (const [key, value] of Object.entries(canonical.env)) {
-    const rendered = value === 'false' || value === 'true' ? `"${value}"` : value;
-    lines.push(`${grandchild}${key}: ${rendered}`);
+    lines.push(`${grandchild}${key}: ${yamlScalar(value)}`);
   }
 
   return lines;

@@ -45,7 +45,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 
 [mcp_servers.sap_payments]
 command = "npx.cmd"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.6", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.7", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -65,7 +65,7 @@ the complete local stdio SAP MCP process instead of using the hosted endpoint, u
 ```toml
 [mcp_servers.sap]
 command = "npx.cmd"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.6", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.7", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
@@ -92,8 +92,8 @@ Hermes profile YAML uses `mcp_servers` with a flat server block:
 ```yaml
 mcp_servers:
   sap:
-    url: https://mcp.sap.oobeprotocol.ai/mcp
-    transport: streamable-http
+    url: "https://mcp.sap.oobeprotocol.ai/mcp"
+    transport: "streamable-http"
 ```
 
 Do not nest `mcpServers.sap` inside a Hermes `mcp_servers.sap` block.
@@ -198,7 +198,7 @@ For Claude Code, use the official MCP CLI pattern:
 
 ```bash
 claude mcp add --transport http sap https://mcp.sap.oobeprotocol.ai/mcp
-claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server@0.9.6 sap-mcp-server
+claude mcp add --transport stdio sap_payments -- npx --yes --package @oobe-protocol-labs/sap-mcp-server@0.9.7 sap-mcp-server
 ```
 
 Set `SAP_MCP_PAYMENTS_BRIDGE_ONLY=true` and `SAP_ALLOWED_TOOLS=all` in the

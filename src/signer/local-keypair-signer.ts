@@ -1,7 +1,9 @@
 /**
- * Local keypair signer (for development only)
+ * Local keypair signer.
  * 
- * WARNING: NEVER use in production or hosted environments.
+ * WARNING: This is a local hot-key signer. The hosted SAP MCP server never
+ * receives keypair bytes, but production custody should prefer an external
+ * signer, hardware wallet, delegated session, or a tightly capped profile.
  */
 
 import { Transaction, VersionedTransaction } from '@solana/web3.js';
@@ -17,7 +19,11 @@ export function createLocalKeypairSigner(walletPath: string): Signer {
   
   const keypair = loadKeypairFromFile(walletPath);
   
-  logger.warn('Local keypair signer created - DO NOT USE IN PRODUCTION');
+  logger.warn('Local hot-key signer created', {
+    custody: 'user-local',
+    secretMaterial: 'never-exposed-to-hosted-server',
+    recommendation: 'Use external signer, hardware wallet, or capped profile for production/value funds.',
+  });
   
   return {
     publicKey: keypair.publicKey,

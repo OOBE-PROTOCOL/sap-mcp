@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.7 - 2026-07-17
+
+### Fixed
+
+- Fixed Hermes/OpenClaw YAML generation for hosted SAP MCP plus local
+  `sap_payments` bridge configs. The wizard and repair flow now double-quote
+  YAML scalar values such as scoped npm package names
+  (`@oobe-protocol-labs/sap-mcp-server@...`) and indent `args` list items with
+  parser-safe YAML.
+- Updated user docs and generated manual snippets so copied Hermes YAML no
+  longer fails on reserved leading characters such as `@`.
+- Clarified local keypair signer logs: hosted SAP MCP never receives keypair
+  bytes, while production/value funds should prefer external signer, hardware
+  wallet, delegated session, or a capped local profile.
+
 ## 0.9.6 - 2026-07-17
 
 ### Added
