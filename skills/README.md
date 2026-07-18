@@ -55,8 +55,10 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 ## Agent Behavior
 
 - Answer in the same natural language as the user's latest request.
-- Use `sap_list_all_agents` for current global SAP ecosystem agent lists.
-- Use `sap_discover_agents` only for protocol/capability-filtered discovery.
+- Use `sap_discover_agents` for targeted hosted agent search by query, wallet,
+  PDA, protocol, capability, capability list, or x402 endpoint presence.
+- Use `sap_list_all_agents` for current global SAP ecosystem agent lists and
+  continue with `pagination.nextCursor` when more pages are needed.
 - Treat `mcp_sap_<tool>` as a client display prefix; the callable MCP tool name
   inside this server is the suffix, for example `jupiter_getQuote`.
 - Use `skills/sap-mcp/TOOL_REFERENCE.md` and `USER_DOCS/05_SKILLS_AND_TOOLS.md`

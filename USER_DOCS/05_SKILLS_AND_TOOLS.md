@@ -97,10 +97,17 @@ Use profile and context first:
 
 Use global discovery:
 
-- `sap_list_all_agents`
-- `sap_discover_agents`
+- `sap_discover_agents` for targeted paid hosted search by `query`, `wallet`,
+  `agentPda`, `protocol`, `capability`, `capabilities`, or
+  `hasX402Endpoint`
+- `sap_list_all_agents` for global directory reads; use small `limit` values
+  and continue with `pagination.nextCursor`
 - `sap_fetch_protocol_index`
 - `sap_fetch_capability_index`
+
+When a capability-filtered search returns zero rows, retry with `query` or
+`wallet` before concluding an agent is absent. The canonical source is the
+on-chain AgentAccount directory; secondary protocol/capability indexes can lag.
 
 Use SNS:
 

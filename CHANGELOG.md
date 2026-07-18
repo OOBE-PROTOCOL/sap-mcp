@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.9 - 2026-07-18
+
+### Improved
+
+- Reworked paid hosted SAP agent discovery so `sap_discover_agents`,
+  `sap_list_agents`, and `sap_list_all_agents` enumerate the canonical
+  on-chain `AgentAccount` directory and then apply server-side filters. This
+  avoids stale capability/protocol index false negatives for agents such as
+  XONA while preserving paid hosted monetization.
+- Added first-class hosted directory filters for `query`, `wallet`, `agentPda`,
+  `protocol`, `capability`, `capabilities`, `capabilityMode`,
+  `hasX402Endpoint`, `view`, `limit`, `offset`, and opaque
+  `pagination.nextCursor`.
+- Kept legacy response aliases (`count`, `returned`, `offset`, `limit`,
+  `truncated`, `totalEnumerated`) and the deprecated `hydrate` input so older
+  agent recipes continue to work while newer agents use the paginated response.
+- Updated bundled skills, startup guidance, and user docs so agents prefer
+  targeted paid discovery, follow cursors, and retry with `query` or `wallet`
+  before claiming an on-chain SAP agent is absent.
+
 ## 0.9.8 - 2026-07-18
 
 ### Fixed

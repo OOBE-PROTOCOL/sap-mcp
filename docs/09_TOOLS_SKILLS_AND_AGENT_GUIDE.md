@@ -26,6 +26,13 @@ Agents should:
 8. Answer in the user's language unless the user asks otherwise.
 9. Avoid showing internal thinking, keypair bytes, raw request secrets, or private config.
 10. Ask for approval before signing or value-moving operations when required by policy.
+11. For paid hosted agent discovery, use targeted `sap_discover_agents` filters
+    before broad scans: `query`, `wallet`, `agentPda`, `protocol`,
+    `capability`, `capabilities`, `hasX402Endpoint`, small `limit`, then
+    `pagination.nextCursor`.
+12. If a capability lookup returns zero agents, retry with `query` or `wallet`
+    before saying the agent is absent; AgentAccount rows are canonical and
+    indexes can lag.
 
 The intended user command is short:
 

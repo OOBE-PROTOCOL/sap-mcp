@@ -36,11 +36,17 @@ and error strings unchanged.
 ## Discovery Rules
 
 - Use `sap_get_network_overview` for live ecosystem counters.
+- Use `sap_discover_agents` for targeted paid hosted discovery. Prefer
+  `query`, `wallet`, `agentPda`, `protocol`, `capability`, `capabilities`,
+  `hasX402Endpoint`, and small `limit` values before broad scans.
 - Use `sap_list_all_agents` when the user asks for all current SAP ecosystem
-  agents. It performs global on-chain `AgentAccount` enumeration.
-- Use `sap_discover_agents` or `sap_list_agents` only for filtered lookups by
-  `protocol`, `capability`, or `capabilities`.
+  agents. It performs global on-chain `AgentAccount` enumeration and returns
+  `pagination.nextCursor` when more pages are available.
+- Use `sap_list_agents` as a compatibility alias for `sap_discover_agents`.
 - Use `sap_fetch_protocol_index` when a specific protocol ID is known.
+- If a capability lookup returns zero results, retry with `query` or `wallet`
+  before saying an agent is absent. AgentAccount rows are canonical; indexes can
+  lag.
 - Do not tell the user that all-agent enumeration is impossible unless
   `sap_list_all_agents` fails and you report the exact failure.
 

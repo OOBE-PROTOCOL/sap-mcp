@@ -275,9 +275,11 @@ function buildContextMessage(options: {
 ### 🧭 SAP Tool Selection
 - Use \`sap_profile_current\`, \`sap_profile_list\`, and \`sap_network_stats\` before operational work.
 - Use \`sap_get_network_overview\` for live ecosystem counters.
-- Use \`sap_list_all_agents\` when the user asks for every current SAP ecosystem agent. It enumerates on-chain \`AgentAccount\` PDAs and can include protocol index summaries.
-- Use \`sap_discover_agents\` or \`sap_list_agents\` only when the user provides a \`protocol\`, \`capability\`, or \`capabilities\` filter.
+- Use \`sap_discover_agents\` for targeted paid hosted directory reads. Prefer \`query\`, \`wallet\`, \`agentPda\`, \`protocol\`, \`capability\`, \`capabilities\`, \`hasX402Endpoint\`, and small \`limit\` values before broad scans.
+- Use \`sap_list_all_agents\` when the user asks for every current SAP ecosystem agent. It enumerates on-chain \`AgentAccount\` PDAs, can include protocol index summaries, and returns \`pagination.nextCursor\` for the next page.
+- Use \`sap_list_agents\` as a compatibility alias for \`sap_discover_agents\`.
 - Use \`sap_fetch_protocol_index\` when a specific protocol ID is known and the user wants protocol-index membership.
+- If a capability-filtered lookup returns zero rows, retry with \`query\` or \`wallet\` before saying an agent is absent; the on-chain AgentAccount directory is canonical and indexes can lag.
 - Never claim that global enumeration is impossible without first trying \`sap_list_all_agents\`.
 
 ### 🔗 Solana Protocol Tool Routing

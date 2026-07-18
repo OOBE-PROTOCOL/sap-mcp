@@ -49,9 +49,12 @@ SAP registry and discovery:
 `sap_deactivate_tool`, `sap_reactivate_tool`,
 `sap_report_tool_invocations`, `sap_report_calls`.
 
-Use `sap_list_all_agents` for user requests such as "give me a list of all
-agents in the SAP ecosystem rn". Use `sap_discover_agents` only when the user
-provides a protocol or capability filter.
+Use `sap_discover_agents` for targeted paid hosted agent search by `query`,
+`wallet`, `agentPda`, `protocol`, `capability`, `capabilities`, or
+`hasX402Endpoint`. Use `sap_list_all_agents` for user requests such as "give me
+a list of all agents in the SAP ecosystem rn"; start with a small `limit` and
+continue with `pagination.nextCursor`. If a capability lookup returns zero,
+retry with `query` or `wallet` before reporting that the agent is absent.
 
 SAP memory and sessions:
 

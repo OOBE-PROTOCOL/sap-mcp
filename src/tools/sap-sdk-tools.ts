@@ -158,6 +158,51 @@ interface ProtocolIndexSummary {
   lastUpdated: string;
 }
 
+interface AgentDirectoryFilters {
+  includeInactive: boolean;
+  protocol?: string;
+  capability?: string;
+  capabilities?: string[];
+  capabilityMode?: 'any' | 'all';
+  query?: string;
+  wallet?: string;
+  agentPda?: string;
+  hasX402Endpoint?: boolean;
+}
+
+interface AgentDirectoryPageOptions extends AgentDirectoryFilters {
+  limit: number;
+  offset: number;
+  view: 'compact' | 'full';
+  includeProtocolIndexes: boolean;
+}
+
+interface AgentDirectoryPage {
+  source: string;
+  overview: unknown;
+  filters: JsonRecord;
+  count: number;
+  totalEnumerated: number;
+  returned: number;
+  offset: number;
+  limit: number;
+  truncated: boolean;
+  pagination: {
+    total: number;
+    returned: number;
+    offset: number;
+    limit: number;
+    hasMore: boolean;
+    nextOffset: number | null;
+    nextCursor: string | null;
+  };
+  totalAgentAccounts: number;
+  activeAgentAccounts: number;
+  protocolIndexes?: ProtocolIndexSummary[];
+  agents: Array<AgentDirectoryEntry | JsonRecord>;
+  agentGuidance: JsonRecord;
+}
+
 /**
  * @name jsonReplacer
  * @description Serializes SDK values such as PublicKey, BN, bigint, Buffer, and Uint8Array into JSON-safe output.
@@ -250,6 +295,46 @@ function summarizeProtocolIndexes(protocolIndexes: Array<AnchorAccountResult<Pro
     .sort((left, right) => left.protocolId.localeCompare(right.protocolId));
 }
 
+function normalizeDirectoryToken(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function matchesNormalizedValue(values: readonly string[], expected: string): boolean {
+  const normalizedExpected = normalizeDirectoryToken(expected);
+  return values.some((value) => normalizeDirectoryToken(value) === normalizedExpected);
+}
+
+function matchesNormalizedSubstring(values: readonly string[], query: string): boolean {
+  return values.some((value) => normalizeDirectoryToken(value).includes(query));
+}
+
+function encodeDirectoryCursor(offset: number): string {
+  return encodeDirectoryCursorPayload(offset);
+}
+
+function decodeDirectoryCursor(cursor: string | undefined): number | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+  try {
+    const parsed = decodeDirectoryCursorPayload(cursor);
+    const offset = parsed.offset;
+    return typeof offset === 'number' && Number.isInteger(offset) && offset >= 0 ? offset : undefined;
+  } catch {
+    throw new Error('cursor must be a nextCursor value returned by sap_list_all_agents or sap_discover_agents');
+  }
+}
+
+function encodeDirectoryCursorPayload(offset: number): string {
+  const base64 = Buffer.from(JSON.stringify({ offset }), 'utf-8').toString('base64');
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
+
+function decodeDirectoryCursorPayload(cursor: string): JsonRecord {
+  const padded = cursor.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(cursor.length / 4) * 4, '=');
+  return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8')) as JsonRecord;
+}
+
 /**
  * @name buildAgentDirectoryEntry
  * @description Converts an AgentAccount into a compact directory row with optional stats and protocol-index membership.
@@ -294,20 +379,295 @@ function matchesAgentDirectoryFilters(entry: AgentDirectoryEntry, filters: {
   includeInactive: boolean;
   protocol?: string;
   capability?: string;
+  capabilities?: string[];
+  capabilityMode?: 'any' | 'all';
+  query?: string;
+  wallet?: string;
+  agentPda?: string;
+  hasX402Endpoint?: boolean;
 }): boolean {
   if (!filters.includeInactive && !entry.isActive) {
     return false;
   }
 
-  if (filters.protocol && !entry.protocols.includes(filters.protocol) && !entry.indexedProtocols.includes(filters.protocol)) {
+  if (filters.wallet && normalizeDirectoryToken(entry.wallet) !== normalizeDirectoryToken(filters.wallet)) {
     return false;
   }
 
-  if (filters.capability && !entry.capabilities.includes(filters.capability)) {
+  if (filters.agentPda && normalizeDirectoryToken(entry.agentPda) !== normalizeDirectoryToken(filters.agentPda)) {
     return false;
+  }
+
+  if (filters.hasX402Endpoint !== undefined && Boolean(entry.x402Endpoint) !== filters.hasX402Endpoint) {
+    return false;
+  }
+
+  if (
+    filters.protocol
+    && !matchesNormalizedValue(entry.protocols, filters.protocol)
+    && !matchesNormalizedValue(entry.indexedProtocols, filters.protocol)
+  ) {
+    return false;
+  }
+
+  const requiredCapabilities = [
+    ...(filters.capability ? [filters.capability] : []),
+    ...(filters.capabilities ?? []),
+  ];
+  if (requiredCapabilities.length > 0) {
+    const mode = filters.capabilityMode ?? 'any';
+    const predicate = (capability: string) => matchesNormalizedValue(entry.capabilities, capability);
+    if (mode === 'all' ? !requiredCapabilities.every(predicate) : !requiredCapabilities.some(predicate)) {
+      return false;
+    }
+  }
+
+  const query = filters.query ? normalizeDirectoryToken(filters.query) : undefined;
+  if (query) {
+    const searchableValues = [
+      entry.agentPda,
+      entry.wallet,
+      entry.name,
+      entry.description,
+      entry.agentId,
+      entry.agentUri,
+      entry.x402Endpoint,
+      ...entry.protocols,
+      ...entry.indexedProtocols,
+      ...entry.capabilities,
+      ...entry.activePlugins,
+    ].filter((value): value is string => typeof value === 'string');
+
+    if (!matchesNormalizedSubstring(searchableValues, query)) {
+      return false;
+    }
   }
 
   return true;
+}
+
+function compactAgentDirectoryEntry(entry: AgentDirectoryEntry): JsonRecord {
+  return {
+    agentPda: entry.agentPda,
+    wallet: entry.wallet,
+    name: entry.name,
+    description: entry.description,
+    agentId: entry.agentId,
+    x402Endpoint: entry.x402Endpoint,
+    isActive: entry.isActive,
+    protocols: entry.protocols,
+    indexedProtocols: entry.indexedProtocols,
+    capabilities: entry.capabilities,
+    reputationScore: entry.reputationScore,
+    totalCallsServed: entry.totalCallsServed,
+    uptimePercent: entry.uptimePercent,
+    createdAt: entry.createdAt,
+  };
+}
+
+function directoryAgentGuidance(page: {
+  hasMore: boolean;
+  nextCursor: string | null;
+  filters: AgentDirectoryFilters;
+}): JsonRecord {
+  return {
+    paidHostedRead: true,
+    useThisWhen: [
+      'The user asks to find SAP agents, list the ecosystem, inspect available on-chain agents, or discover x402-enabled agents.',
+      'Use query/protocol/capability/capabilities filters first; avoid repeated broad scans.',
+    ],
+    pagination: page.hasMore
+      ? `Call the same tool with cursor="${page.nextCursor}" to fetch the next page.`
+      : 'No further page is available for the current filters.',
+    nextTools: [
+      'sap_get_agent_profile with wallet for one hydrated owner profile.',
+      'sap_fetch_protocol_index with protocolId when the user wants protocol membership.',
+      'sap_fetch_capability_index with capabilityId when the user wants a capability-specific index.',
+      'sap_x402_estimate_cost before calling a paid x402 endpoint exposed by a discovered agent.',
+    ],
+    matchingNotes: {
+      query: 'Matches name, description, agentId, wallet, PDA, endpoint, protocols, capabilities, and active plugin labels.',
+      capability: 'Capability matching is case-insensitive and exact after trimming. For multiple capabilities set capabilityMode to any or all.',
+      x402: 'Set hasX402Endpoint=true to find agents that advertise paid HTTP/x402 resources.',
+    },
+  };
+}
+
+async function buildAgentDirectoryPage(client: SapClient, options: AgentDirectoryPageOptions): Promise<AgentDirectoryPage> {
+  const accounts = getSapAnchorAccounts(client);
+
+  const [agentAccounts, statsAccounts, protocolIndexes, overview] = await Promise.all([
+    accounts.agentAccount.all(),
+    accounts.agentStats.all(),
+    accounts.protocolIndex.all(),
+    client.discovery.getNetworkOverview(),
+  ]);
+
+  const statsByAgent = new Map(
+    statsAccounts.map(({ account }) => [account.agent.toBase58(), account] as const)
+  );
+  const indexedProtocolsByAgent = buildProtocolMembership(protocolIndexes);
+  const filteredAgents = agentAccounts
+    .map((account) => buildAgentDirectoryEntry(account, statsByAgent, indexedProtocolsByAgent))
+    .filter((entry) => matchesAgentDirectoryFilters(entry, options))
+    .sort((left, right) => Number(right.createdAt) - Number(left.createdAt));
+
+  const page = filteredAgents.slice(options.offset, options.offset + options.limit);
+  const hasMore = options.offset + page.length < filteredAgents.length;
+  const nextOffset = hasMore ? options.offset + page.length : null;
+  const nextCursor = nextOffset === null ? null : encodeDirectoryCursor(nextOffset);
+  const agents = options.view === 'compact' ? page.map(compactAgentDirectoryEntry) : page;
+
+  return {
+    source: 'program.account.agentAccount.all + program.account.protocolIndex.all',
+    overview,
+    filters: {
+      includeInactive: options.includeInactive,
+      protocol: options.protocol ?? null,
+      capability: options.capability ?? null,
+      capabilities: options.capabilities ?? [],
+      capabilityMode: options.capabilityMode ?? 'any',
+      query: options.query ?? null,
+      wallet: options.wallet ?? null,
+      agentPda: options.agentPda ?? null,
+      hasX402Endpoint: options.hasX402Endpoint ?? null,
+      view: options.view,
+    },
+    count: page.length,
+    totalEnumerated: filteredAgents.length,
+    returned: page.length,
+    offset: options.offset,
+    limit: options.limit,
+    truncated: hasMore,
+    pagination: {
+      total: filteredAgents.length,
+      returned: page.length,
+      offset: options.offset,
+      limit: options.limit,
+      hasMore,
+      nextOffset,
+      nextCursor,
+    },
+    totalAgentAccounts: agentAccounts.length,
+    activeAgentAccounts: agentAccounts.filter(({ account }) => account.isActive).length,
+    protocolIndexes: options.includeProtocolIndexes ? summarizeProtocolIndexes(protocolIndexes) : undefined,
+    agents,
+    agentGuidance: directoryAgentGuidance({ hasMore, nextCursor, filters: options }),
+  };
+}
+
+function parseCapabilityMode(input: JsonRecord): 'any' | 'all' {
+  const mode = optionalString(input, 'capabilityMode')?.trim().toLowerCase();
+  if (!mode) {
+    return 'any';
+  }
+  if (mode === 'any' || mode === 'all') {
+    return mode;
+  }
+  throw new Error('capabilityMode must be "any" or "all"');
+}
+
+function parseOptionalStringArray(input: JsonRecord, field: string): string[] {
+  const value = input[field];
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array of strings`);
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim());
+}
+
+function parseDirectoryOffset(input: JsonRecord): number {
+  return Math.max(0, decodeDirectoryCursor(optionalString(input, 'cursor')) ?? optionalNumber(input, 'offset') ?? 0);
+}
+
+function parseDirectoryView(input: JsonRecord): 'compact' | 'full' {
+  const view = optionalString(input, 'view');
+  if (!view && input.hydrate === true) {
+    return 'full';
+  }
+  if (!view || view === 'compact') {
+    return 'compact';
+  }
+  if (view === 'full') {
+    return 'full';
+  }
+  throw new Error('view must be "compact" or "full"');
+}
+
+function parseHasX402Endpoint(input: JsonRecord): boolean | undefined {
+  return optionalBoolean(input, 'hasX402Endpoint');
+}
+
+function makeAgentDirectoryInputSchema(defaultLimit: number): JsonRecord {
+  return {
+    query: {
+      type: 'string',
+      description: 'Optional text search across name, description, agentId, wallet, PDA, x402 endpoint, protocols, capabilities, and active plugins. Example: "XONA" or "creative".',
+    },
+    wallet: {
+      type: 'string',
+      description: 'Optional exact owner wallet public key filter. Use this when a wallet is known; it is the most reliable lookup path.',
+    },
+    agentPda: {
+      type: 'string',
+      description: 'Optional exact SAP agent PDA filter.',
+    },
+    protocol: {
+      type: 'string',
+      description: 'Optional protocol filter matched case-insensitively against agent protocols and protocol-index membership. Example: "jupiter", "creative", "payments".',
+    },
+    capability: {
+      type: 'string',
+      description: 'Optional single capability ID filter matched case-insensitively. Example: "creative:imageGeneration" or "jupiter:swap".',
+    },
+    capabilities: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Optional list of capability IDs. Use capabilityMode="all" when the agent must have every capability.',
+    },
+    capabilityMode: {
+      type: 'string',
+      enum: ['any', 'all'],
+      description: 'How to match the capability/capabilities filters. Defaults to "any".',
+    },
+    hasX402Endpoint: {
+      type: 'boolean',
+      description: 'Optional filter for agents that advertise a paid HTTP/x402 endpoint.',
+    },
+    includeInactive: {
+      type: 'boolean',
+      description: 'Include inactive agents. Defaults to false.',
+    },
+    limit: {
+      type: 'number',
+      description: `Maximum rows to return. Defaults to ${defaultLimit}; hard-capped at 500.`,
+    },
+    offset: {
+      type: 'number',
+      description: 'Zero-based pagination offset. Defaults to 0. Prefer cursor after the first page when nextCursor is returned.',
+    },
+    cursor: {
+      type: 'string',
+      description: 'Opaque pagination cursor returned as pagination.nextCursor by a previous sap_list_all_agents or sap_discover_agents call.',
+    },
+    view: {
+      type: 'string',
+      enum: ['compact', 'full'],
+      description: 'Result shape. Use compact for broad discovery and full for detailed rows. Defaults to compact.',
+    },
+    hydrate: {
+      type: 'boolean',
+      description: 'Deprecated compatibility alias. Use view="full" for full rows or view="compact" for directory rows.',
+    },
+    includeProtocolIndexes: {
+      type: 'boolean',
+      description: 'Include compact protocol index summaries. Defaults to false for sap_discover_agents and true for sap_list_all_agents.',
+    },
+  };
 }
 
 /**
@@ -1053,114 +1413,61 @@ const discoveryTools: ToolRegistration[] = [
   {
     name: 'sap_discover_agents',
     title: 'Discover SAP Agents',
-    description: 'Discover agents by protocol, capability, or capability list. For unfiltered global listing, use sap_list_all_agents.',
-    inputSchema: {
-      protocol: { type: 'string', description: 'Protocol identifier to filter agents by (e.g. "jupiter", "drift")' },
-      capability: { type: 'string', description: 'Single capability ID to filter agents by (e.g. "jupiter:swap")' },
-      capabilities: { type: 'array', items: { type: 'string' }, description: 'Array of capability IDs to filter agents by (requires at least one)' },
-      hydrate: { type: 'boolean', description: 'Whether to include full hydrated agent profiles in results (default: true)' },
-      limit: { type: 'number', description: 'Maximum number of agents to return (default: 50)' },
-    },
+    description: 'Paid hosted discovery for SAP agents. Search and filter the current on-chain AgentAccount directory by query, wallet, protocol, capability, x402 endpoint presence, and cursor pagination. Use this for targeted agent discovery before calling per-agent fetch tools.',
+    inputSchema: makeAgentDirectoryInputSchema(50),
     handler: async (input, client) => {
-      const hydrate = input.hydrate !== false;
-      const limit = optionalNumber(input, 'limit') ?? 50;
-      const capabilities = Array.isArray(input.capabilities)
-        ? input.capabilities.filter((item): item is string => typeof item === 'string' && item.length > 0)
-        : [];
-      const protocol = optionalString(input, 'protocol');
+      const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 50, 500));
       const capability = optionalString(input, 'capability');
+      const capabilities = parseOptionalStringArray(input, 'capabilities');
 
-      if (protocol) {
-        const agents = await client.discovery.findAgentsByProtocol(protocol, { hydrate });
-        return { count: Math.min(agents.length, limit), agents: agents.slice(0, limit) };
-      }
-      if (capability) {
-        const agents = await client.discovery.findAgentsByCapability(capability, { hydrate });
-        return { count: Math.min(agents.length, limit), agents: agents.slice(0, limit) };
-      }
-      if (capabilities.length > 0) {
-        const agents = await client.discovery.findAgentsByCapabilities(capabilities, { hydrate });
-        return { count: Math.min(agents.length, limit), agents: agents.slice(0, limit) };
-      }
-
-      return {
-        count: 0,
-        agents: [],
-        overview: await client.discovery.getNetworkOverview(),
-        note: 'SDK filtered discovery requires a protocol or capability. For global on-chain directory snapshots, call sap_list_all_agents.',
-      };
+      return buildAgentDirectoryPage(client, {
+        includeInactive: input.includeInactive === true,
+        protocol: optionalString(input, 'protocol'),
+        capability,
+        capabilities,
+        capabilityMode: parseCapabilityMode(input),
+        query: optionalString(input, 'query'),
+        wallet: optionalString(input, 'wallet'),
+        agentPda: optionalString(input, 'agentPda'),
+        hasX402Endpoint: parseHasX402Endpoint(input),
+        limit,
+        offset: parseDirectoryOffset(input),
+        view: parseDirectoryView(input),
+        includeProtocolIndexes: input.includeProtocolIndexes === true,
+      });
     },
   },
   {
     name: 'sap_list_agents',
     title: 'List SAP Agents',
-    description: 'Compatibility alias for filtered SAP agent discovery. Requires protocol or capability. Use sap_list_all_agents for a global on-chain directory snapshot.',
-    inputSchema: {
-      protocol: { type: 'string', description: 'Protocol identifier to filter agents by (e.g. "jupiter", "drift")' },
-      capability: { type: 'string', description: 'Single capability ID to filter agents by (e.g. "jupiter:swap")' },
-      capabilities: { type: 'array', items: { type: 'string' }, description: 'Array of capability IDs to filter agents by (requires at least one)' },
-      hydrate: { type: 'boolean', description: 'Whether to include full hydrated agent profiles in results (default: true)' },
-      limit: { type: 'number', description: 'Maximum number of agents to return (default: 50)' },
-    },
+    description: 'Compatibility alias for sap_discover_agents. Supports query, wallet, protocol, capability, x402 endpoint filtering, and cursor pagination.',
+    inputSchema: makeAgentDirectoryInputSchema(50),
     handler: async (input, client) => discoveryTools[3].handler(input, client),
   },
   {
     name: 'sap_list_all_agents',
     title: 'List All SAP Agents',
-    description: 'Enumerate SAP AgentAccount PDAs directly from the on-chain program account set. Use this for current global directory requests such as "list all agents in the SAP ecosystem rn".',
-    inputSchema: {
-      limit: { type: 'number', description: 'Maximum rows to return. Defaults to 100; hard-capped at 500.' },
-      offset: { type: 'number', description: 'Zero-based pagination offset. Defaults to 0.' },
-      includeInactive: { type: 'boolean', description: 'Include inactive agents. Defaults to false.' },
-      protocol: { type: 'string', description: 'Optional protocol filter matched against agent profile protocols and protocol-index membership.' },
-      capability: { type: 'string', description: 'Optional capability ID filter such as jupiter:swap.' },
-      includeProtocolIndexes: { type: 'boolean', description: 'Include compact protocol index summaries. Defaults to true.' },
-    },
+    description: 'Paid hosted global SAP agent directory read. Enumerates current on-chain AgentAccount PDAs and supports query, wallet, protocol, capability, x402 endpoint filtering, compact/full views, and cursor pagination.',
+    inputSchema: makeAgentDirectoryInputSchema(100),
     handler: async (input, client) => {
       const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 100, 500));
-      const offset = Math.max(0, optionalNumber(input, 'offset') ?? 0);
-      const includeInactive = input.includeInactive === true;
-      const includeProtocolIndexes = input.includeProtocolIndexes !== false;
-      const protocol = optionalString(input, 'protocol');
       const capability = optionalString(input, 'capability');
-      const accounts = getSapAnchorAccounts(client);
 
-      const [agentAccounts, statsAccounts, protocolIndexes, overview] = await Promise.all([
-        accounts.agentAccount.all(),
-        accounts.agentStats.all(),
-        accounts.protocolIndex.all(),
-        client.discovery.getNetworkOverview(),
-      ]);
-
-      const statsByAgent = new Map(
-        statsAccounts.map(({ account }) => [account.agent.toBase58(), account] as const)
-      );
-      const indexedProtocolsByAgent = buildProtocolMembership(protocolIndexes);
-      const filteredAgents = agentAccounts
-        .map((account) => buildAgentDirectoryEntry(account, statsByAgent, indexedProtocolsByAgent))
-        .filter((entry) => matchesAgentDirectoryFilters(entry, { includeInactive, protocol, capability }))
-        .sort((left, right) => Number(right.createdAt) - Number(left.createdAt));
-      const page = filteredAgents.slice(offset, offset + limit);
-
-      return {
-        source: 'program.account.agentAccount.all + program.account.protocolIndex.all',
-        overview,
-        filters: {
-          includeInactive,
-          protocol: protocol ?? null,
-          capability: capability ?? null,
-        },
-        totalEnumerated: filteredAgents.length,
-        totalAgentAccounts: agentAccounts.length,
-        activeAgentAccounts: agentAccounts.filter(({ account }) => account.isActive).length,
-        returned: page.length,
-        offset,
+      return buildAgentDirectoryPage(client, {
+        includeInactive: input.includeInactive === true,
+        protocol: optionalString(input, 'protocol'),
+        capability,
+        capabilities: parseOptionalStringArray(input, 'capabilities'),
+        capabilityMode: parseCapabilityMode(input),
+        query: optionalString(input, 'query'),
+        wallet: optionalString(input, 'wallet'),
+        agentPda: optionalString(input, 'agentPda'),
+        hasX402Endpoint: parseHasX402Endpoint(input),
         limit,
-        truncated: offset + page.length < filteredAgents.length,
-        protocolIndexes: includeProtocolIndexes ? summarizeProtocolIndexes(protocolIndexes) : undefined,
-        agents: page,
-        note: 'This is global account enumeration, not filtered DiscoveryRegistry lookup. Use sap_discover_agents for protocol/capability search and sap_fetch_protocol_index when you already know a protocol ID.',
-      };
+        offset: parseDirectoryOffset(input),
+        view: parseDirectoryView(input),
+        includeProtocolIndexes: input.includeProtocolIndexes !== false,
+      });
     },
   },
   {

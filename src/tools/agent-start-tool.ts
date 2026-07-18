@@ -140,6 +140,8 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'Hosted SAP MCP is accountless and non-custodial. OOBE never has user keypair bytes.',
       'Do not report hosted profile default as the user local profile.',
       'For local wallet/profile questions, prefer sap_payments_profile_current when available.',
+      'For hosted SAP agent discovery, prefer sap_discover_agents with query, wallet, agentPda, protocol, capability, capabilities, hasX402Endpoint, small limit, and pagination.nextCursor before broad scans.',
+      'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
       'For free reads, call hosted tools directly.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',

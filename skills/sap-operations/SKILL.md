@@ -30,9 +30,10 @@ Use:
 - `sap_list_agents`
 - `sap_list_all_agents`
 
-Use `sap_list_all_agents` for global current ecosystem requests. Use
-`sap_discover_agents` and `sap_list_agents` only when the user provides a
-protocol or capability filter.
+Use `sap_discover_agents` for targeted hosted directory reads by `query`,
+`wallet`, `agentPda`, `protocol`, `capability`, `capabilities`, or
+`hasX402Endpoint`. Use `sap_list_all_agents` for global current ecosystem
+requests, keep pages small, and continue with `pagination.nextCursor`.
 
 ## Memory
 

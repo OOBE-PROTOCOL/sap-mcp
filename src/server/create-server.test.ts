@@ -173,6 +173,34 @@ describe('createSapMcpServer', () => {
     expect(schema.initialDeposit?.description).toContain('smallest unit');
   });
 
+  it('exposes paginated hosted SAP agent directory filters for paid discovery', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+    const discoverAgents = toolsByName.get('sap_discover_agents');
+    const listAllAgents = toolsByName.get('sap_list_all_agents');
+    const discoverSchema = discoverAgents?.inputSchema?.properties ?? {};
+    const listAllSchema = listAllAgents?.inputSchema?.properties ?? {};
+
+    expect(discoverAgents?.description).toContain('cursor pagination');
+    expect(listAllAgents?.description).toContain('global SAP agent directory');
+
+    for (const schema of [discoverSchema, listAllSchema]) {
+      expect(schema).toHaveProperty('query');
+      expect(schema).toHaveProperty('wallet');
+      expect(schema).toHaveProperty('agentPda');
+      expect(schema).toHaveProperty('protocol');
+      expect(schema).toHaveProperty('capability');
+      expect(schema).toHaveProperty('capabilities');
+      expect(schema).toHaveProperty('capabilityMode');
+      expect(schema).toHaveProperty('hasX402Endpoint');
+      expect(schema).toHaveProperty('cursor');
+      expect(schema).toHaveProperty('view');
+      expect(schema).toHaveProperty('hydrate');
+      expect(schema.query?.description).toContain('x402 endpoint');
+      expect(schema.cursor?.description).toContain('pagination');
+    }
+  });
+
   it('limits the local sap_payments bridge process to payment helper tools', async () => {
     const previous = process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
     process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = 'true';
