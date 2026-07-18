@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.8 - 2026-07-18
+
+### Fixed
+
+- Added a hosted-accountless execution guard so direct write tools that require
+  a user-owned signer are rejected before x402 verification or settlement. Tools
+  such as `sap_register_agent`, `sap_sns_register_agent_domain`,
+  `sap_sign_transaction`, direct swaps, token transfers, NFT mints, and bridge
+  writes now return `hosted_local_signer_required` with
+  `paymentNotCharged: true` when called against the non-custodial hosted
+  server.
+- Made single-domain SNS availability checks free with
+  `sap_sns_check_domain`, so agents can discover whether a `.sol` name is
+  available before routing the user into a local signer flow.
+- Updated prompts, bundled skills, and payment docs so agents use local
+  `sap_payments_call_paid_tool` for paid hosted calls and
+  `sap_payments_finalize_transaction` for unsigned hosted builders, instead of
+  retrying impossible hosted signer writes or creating temporary signing
+  scripts.
+
 ## 0.9.7 - 2026-07-17
 
 ### Fixed

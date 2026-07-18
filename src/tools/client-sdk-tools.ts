@@ -134,7 +134,7 @@ const AGENTKIT_CONTEXT_BY_PREFIX: Array<[string, AgentKitToolContext]> = [
     protocol: 'sns',
     risk: 'write',
     usage: 'Use for AgentKit SNS domain helpers. For SAP-linked domains prefer sap_sns_* tools because they include MCP signer policy and SAP agent-domain context.',
-    workflow: 'Use sap_sns_register_agent_domain when binding a .sol domain to an SAP agent profile.',
+    workflow: 'Use sap_sns_register_agent_domain only from a local SAP MCP profile with a local wallet or external signer when binding a .sol domain to an SAP agent profile.',
   }],
   ['alldomains_', {
     protocol: 'alldomains',
@@ -372,7 +372,7 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
   // Tools blocked because their AgentKit implementation does not produce an executable operation.
   // Agents should use the SAP SDK equivalents instead.
   const BLOCKED_AGENTKIT_TOOLS = new Set<string>([
-    'sns_registerDomain',        // Returns { status: 'instruction_ready' } — use sap_sns_register_agent_domain instead
+    'sns_registerDomain',        // Returns { status: 'instruction_ready' } — use local sap_sns_register_agent_domain instead
   ]);
 
   let registeredCount = 0;

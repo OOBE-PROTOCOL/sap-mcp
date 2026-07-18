@@ -294,12 +294,14 @@ Use the exact names returned by \`tools/list\`. Do not replace hyphens with unde
 | NFTs and domains | \`metaplex-nft_*\`, \`3land_*\`, \`sap_sns_*\`, \`sns_*\`, \`alldomains_*\` |
 | Bridges, staking, actions | \`bridging_*\`, \`staking_*\`, \`jito_*\`, \`blinks_*\`, \`lulo_*\` |
 
-### ⚠️ SNS Domain Registration — Critical Tool Selection
-- **DO NOT use \`sns_registerDomain\`** (AgentKit) — it returns \`{ status: 'instruction_ready' }\` without building a real transaction. It cannot register domains.
-- **DO NOT use \`sap_sns_build_register_domain_transaction\`** — it has an SDK bug that causes "The domain name is malformed" error.
-- **USE \`sap_sns_register_agent_domain\`** — this is the only working SNS domain registration tool. It builds, signs, and submits the transaction with USDC payment in one call.
-- SNS domain registration fees are paid in **USDC** (not SOL). SOL is only for rent-exempt and gas. The wallet must have both USDC and SOL.
-- For availability checks, use \`sap_sns_check_domain\` or \`sap_sns_batch_check_domains\`.
+### SNS Domain Registration — Hosted/Local Safe Flow
+- **Availability checks are free:** use \`sap_sns_check_domain\` for one .sol domain and \`sap_sns_batch_check_domains\` only when batch discovery is needed.
+- **Do not call \`sns_registerDomain\`** (AgentKit) for real registration. It returns instruction metadata and is not the SAP MCP registration path.
+- **Do not call hosted \`sap_sns_register_agent_domain\` from an accountless remote server.** Hosted SAP MCP cannot sign user-owned SNS purchases and will reject the request before any x402 charge.
+- **Use \`sap_sns_register_agent_domain\` only on a local SAP MCP profile** with \`local-dev-keypair\` or an external signer, after user confirmation.
+- **Hosted record updates use builder/finalizer flow:** call \`sap_sns_build_manage_record_transaction\`, preview the returned unsigned transaction, then finalize locally with \`sap_payments_finalize_transaction\`.
+- If an SNS operation has no unsigned builder, stop and tell the user to run it through the local SAP MCP profile or wizard-managed local signer. Do not pay/retry a hosted direct write.
+- SNS domain registration fees are paid in **USDC** (not SOL). SOL is still required for rent-exempt accounts and transaction fees.
 
 For transactions, preview first with \`sap_preview_transaction\`; sign only with \`sap_sign_transaction\` after policy checks and user approval when required.
 
@@ -316,6 +318,7 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 - x402/pay.sh payment payloads must be signed by the user's wizard-created SAP profile wallet or external signer, never by the hosted server.
 - Prefer the local \`sap_payments_call_paid_tool\` bridge with \`maxAttempts\` for hosted paid/write tools when readiness is ready/degraded and the runtime cannot natively replay x402 challenges. \`sap_x402_paid_call\` is a legacy alias.
 - If a hosted paid/write tool returns \`transactionBase64\`, \`transaction\`, or an unsigned transaction object, call local \`sap_payments_finalize_transaction\` to preview, sign, and optionally submit with the active local SAP profile.
+- If hosted SAP MCP returns \`hosted_local_signer_required\`, treat it as a no-charge routing guard: the requested tool needs a local user signature or is not available as a hosted unsigned builder. Do not retry the same hosted direct write. Switch to a local SAP MCP profile or a hosted builder plus \`sap_payments_finalize_transaction\` when one exists.
 - Do not create \`.js\` or \`.mjs\` signing scripts, do not read keypair JSON, do not pass keypair bytes through env vars, and do not call hosted \`sap_sign_transaction\` for user-owned signing.
 - Use low-level \`sap_payments_prepare_challenge\`, \`sap_payments_sign_challenge\`, and \`sap_payments_verify_receipt\` only for custom x402 clients or troubleshooting; normal paid tool execution should go through \`sap_payments_call_paid_tool\`.
 - If x402 returns \`BlockhashNotFound\`, \`transaction_simulation_failed\`, \`node is behind\`, or another retryable facilitator/RPC error, do not declare SAP MCP down and do not reuse the old signed payment payload. Re-run the local \`sap_payments_call_paid_tool\` helper or create a fresh payment challenge/payload with the same MCP method and params.

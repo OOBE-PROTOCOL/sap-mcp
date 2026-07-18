@@ -385,6 +385,233 @@ describe('MCP monetization gate readiness', () => {
     }
   });
 
+  it('fails hosted accountless local-signer writes before issuing x402 challenges', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-hosted-write-guard-test-'));
+    const fetchCalls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      fetchCalls.push(String(input));
+      return new Response(JSON.stringify({
+        kinds: [{
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+        }],
+        signers: {},
+        extensions: [],
+      }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 44,
+        method: 'tools/call',
+        params: {
+          name: 'sap_register_agent',
+          arguments: {
+            name: 'Solking',
+            capabilities: ['jupiter:swap'],
+            protocols: ['sap', 'mcp'],
+          },
+        },
+      }));
+      const response = createResponse();
+      const next = vi.fn();
+
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        }),
+        response.response,
+        next,
+      );
+
+      const payload = JSON.parse(response.body) as {
+        error?: {
+          message?: string;
+          data?: {
+            paymentNotCharged?: boolean;
+            blockedTools?: string[];
+          };
+        };
+      };
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(response.headers['payment-response']).toBeUndefined();
+      expect(payload.error?.message).toBe('hosted_local_signer_required');
+      expect(payload.error?.data?.paymentNotCharged).toBe(true);
+      expect(payload.error?.data?.blockedTools).toEqual(['sap_register_agent']);
+      expect(fetchCalls).toEqual(['http://127.0.0.1:8788/facilitator/supported']);
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('fails hosted accountless local-signer writes before verifying signed x402 headers', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-hosted-write-paid-guard-test-'));
+    const fetchCalls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      fetchCalls.push(String(input));
+      return new Response(JSON.stringify({
+        kinds: [{
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+        }],
+        signers: {},
+        extensions: [],
+      }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 45,
+        method: 'tools/call',
+        params: {
+          name: 'sap_sns_register_agent_domain',
+          arguments: {
+            domain: 'solkingchad.sol',
+            agentWallet: '11111111111111111111111111111111',
+            pic: 'https://example.com/profile.png',
+          },
+        },
+      }));
+      const paymentHeader = Buffer.from(JSON.stringify({
+        x402Version: 2,
+        payload: { transaction: 'already-signed-payment' },
+      }), 'utf-8').toString('base64');
+      const response = createResponse();
+      const next = vi.fn();
+
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          'payment-signature': paymentHeader,
+        }),
+        response.response,
+        next,
+      );
+
+      const payload = JSON.parse(response.body) as {
+        error?: {
+          message?: string;
+          data?: {
+            paymentNotCharged?: boolean;
+            blockedTools?: string[];
+          };
+        };
+      };
+
+      expect(next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(response.headers['payment-response']).toBeUndefined();
+      expect(payload.error?.message).toBe('hosted_local_signer_required');
+      expect(payload.error?.data?.paymentNotCharged).toBe(true);
+      expect(payload.error?.data?.blockedTools).toEqual(['sap_sns_register_agent_domain']);
+      expect(fetchCalls).toEqual(['http://127.0.0.1:8788/facilitator/supported']);
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('fails unavailable hosted builders before x402 payment', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-hosted-builder-guard-test-'));
+    const fetchCalls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      fetchCalls.push(String(input));
+      return new Response(JSON.stringify({
+        kinds: [{
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+        }],
+        signers: {},
+        extensions: [],
+      }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 46,
+        method: 'tools/call',
+        params: {
+          name: 'sap_sns_build_set_primary_domain_transaction',
+          arguments: {
+            domain: 'solkingchad.sol',
+            owner: '11111111111111111111111111111111',
+          },
+        },
+      }));
+      const response = createResponse();
+
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        }),
+        response.response,
+        vi.fn(),
+      );
+
+      const payload = JSON.parse(response.body) as {
+        error?: {
+          message?: string;
+          data?: {
+            paymentNotCharged?: boolean;
+            blockedTools?: string[];
+          };
+        };
+      };
+
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(payload.error?.message).toBe('hosted_local_signer_required');
+      expect(payload.error?.data?.paymentNotCharged).toBe(true);
+      expect(payload.error?.data?.blockedTools).toEqual(['sap_sns_build_set_primary_domain_transaction']);
+      expect(fetchCalls).toEqual(['http://127.0.0.1:8788/facilitator/supported']);
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
   it('verifies signed retries with the client accepted requirements and facilitator auth', async () => {
     const previousXdgDataHome = process.env.XDG_DATA_HOME;
     process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-ledger-test-'));

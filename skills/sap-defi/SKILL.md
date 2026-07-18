@@ -40,12 +40,16 @@ staking protocols.
 ## Flow
 
 1. Use quote/read tools first.
-2. For swaps, prefer `jupiter_getQuote` then `jupiter_smartSwap` or
-   `jupiter_swapInstructions`.
+2. In hosted mode, prefer quote/read tools and unsigned builders such as
+   `jupiter_getOrder`, `jupiter_swapInstructions`, or supported private swap
+   builders. Direct signer tools such as `jupiter_swap`, `jupiter_smartSwap`,
+   and `jupiter_executeOrder` require a local SAP MCP profile or external
+   signer and are rejected before x402 payment on hosted accountless servers.
 3. Explain slippage, route, token mints, amount units, and expected output.
 4. Preview and policy-check before signing.
-5. For any unsigned or partially signed transaction returned by Jupiter, use
-   `sap_preview_transaction`, `sap_sign_transaction`, and
+5. For any unsigned or partially signed transaction returned by hosted SAP MCP,
+   use `sap_payments_finalize_transaction`. For local SAP MCP stdio builders,
+   use `sap_preview_transaction`, `sap_sign_transaction`, and
    `sap_submit_signed_transaction`. Do not write ad-hoc signing scripts.
 
 ## Safety

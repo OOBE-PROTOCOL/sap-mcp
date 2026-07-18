@@ -101,6 +101,13 @@ has a user-controlled wallet profile:
 The public hosted server should not advertise the signing helpers in
 non-custodial mode because signing belongs on the user's machine.
 
+When hosted accountless SAP MCP returns `hosted_local_signer_required`, the
+request was rejected before any x402 verification or settlement. Treat it as a
+no-charge routing guard, not a payment failure: the tool needs a local user
+signature or has no production hosted builder yet. Switch to a local SAP MCP
+profile, external signer, or a hosted unsigned builder plus
+`sap_payments_finalize_transaction`.
+
 Transient settlement errors such as `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is
 behind`, `minimum context slot`, or `fetch failed` should be retried with a

@@ -12,14 +12,14 @@
  * - `sns-standalone` (SnsSdk) is deprecated and not used by SAP MCP.
  *
  * Tool groups:
- * - Registration: `sap_sns_register_agent_domain` (SnsModule — signs + submits with USDC)
+ * - Registration: `sap_sns_register_agent_domain` (SnsModule — local signer only; signs + submits with USDC)
  * - Availability: `sap_sns_check_domain`, `sap_sns_batch_check_domains` (SnsModule)
  * - Resolution: `sap_sns_resolve_domain` (SnsModule), `sap_sns_resolve_wallet` (Bonfida)
  * - Records: `sap_sns_get_domain_records`, `sap_sns_get_record` (Bonfida)
  * - Ownership: `sap_sns_check_ownership` (Bonfida)
  * - PDA: `sap_sns_get_domain_pda`, `sap_sns_get_record_pda` (SnsModule)
  * - Validation: `sap_sns_validate_records` (SnsModule)
- * - Record management: `sap_sns_build_manage_record_transaction`, `sap_sns_build_set_primary_domain_transaction` (Bonfida)
+ * - Record management: `sap_sns_build_manage_record_transaction` (Bonfida unsigned builder)
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -607,11 +607,11 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
       }),
     },
 
-    // --- SnsModule: Domain registration (the primary tool) ---
+    // --- SnsModule: Domain registration (local signer only) ---
     {
       name: 'sap_sns_register_agent_domain',
       title: 'Register SAP Agent SNS Domain',
-      description: 'Register a .sol domain for the configured local SAP agent wallet using the SAP SDK SnsModule. Builds, signs, and submits the full registration transaction with USDC payment in one call. Domain registration fees are paid in USDC plus SOL for rent and transaction fees. The SOL record is NOT set during registration (it requires a separate Ed25519 signature) — set it after using sap_sns_build_manage_record_transaction.',
+      description: 'Local-signer-only tool: register a .sol domain for the configured SAP agent wallet using the SAP SDK SnsModule. This tool builds, signs, and submits the full registration transaction with the local profile signer or external signer. Hosted accountless SAP MCP rejects this tool before x402 payment because OOBE never custodies user keys. Domain registration fees are paid in USDC plus SOL for rent and transaction fees. The SOL record is NOT set during registration (it requires a separate Ed25519 signature) — set it after using sap_sns_build_manage_record_transaction.',
       inputSchema: {
         domain: { type: 'string', description: 'The .sol domain name to register for the SAP agent (with or without .sol suffix)' },
         agentWallet: { type: 'string', description: 'The Solana public key (base58) of the SAP agent wallet that will own the domain' },
@@ -682,7 +682,7 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
     {
       name: 'sap_sns_build_manage_record_transaction',
       title: 'Build SNS Manage Record Transaction',
-      description: 'Build an unsigned SNS record create/update/delete transaction using the Bonfida SDK. The returned transaction must be signed with sap_sign_transaction before submission. Use null value to delete a record. Note: SOL record is not supported — it requires a separate Ed25519 signature flow.',
+      description: 'Build an unsigned SNS record create/update/delete transaction using the Bonfida SDK. In hosted mode, finalize the returned transaction locally with sap_payments_finalize_transaction. In local mode, preview and sign with sap_sign_transaction before submission. Use null value to delete a record. Note: SOL record is not supported — it requires a separate Ed25519 signature flow.',
       inputSchema: {
         domain: { type: 'string', description: 'The .sol domain name whose record should be created, updated, or deleted' },
         recordType: { type: 'string', description: 'The SNS record type to manage (e.g. TXT, Url, IPFS, ETH, BTC, etc.)' },
@@ -709,7 +709,7 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
     {
       name: 'sap_sns_build_set_primary_domain_transaction',
       title: 'Build SNS Set Primary Domain Transaction',
-      description: 'Build an unsigned transaction to set a .sol domain as primary for the owner using the Bonfida SDK. The returned transaction must be signed with sap_sign_transaction before submission.',
+      description: 'Unavailable builder: setting primary domain requires the Bonfida SNS CLI or direct program interaction. Hosted accountless SAP MCP rejects this tool before x402 payment until a production unsigned builder is available.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to set as primary for the owner' }, owner: { type: 'string', description: 'The Solana public key (base58) of the domain owner setting their primary domain' } },
       handler: async () => {
         throw new Error(

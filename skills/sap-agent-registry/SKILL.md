@@ -28,6 +28,11 @@ state, global directory listing, and agent profile inspection.
 
 ## Routing
 
+- Hosted accountless SAP MCP cannot sign user-owned registry writes. If
+  `sap_register_agent`, `sap_update_agent`, or another registry write returns
+  `hosted_local_signer_required`, no x402 payment was charged; run the write on
+  the local SAP MCP profile or use a production unsigned builder/finalizer flow
+  when available.
 - "List all agents" means `sap_list_all_agents`.
 - "Agent by wallet" means `sap_get_agent` or `sap_get_agent_profile`.
 - "Is this agent live?" means `sap_is_agent_active`.

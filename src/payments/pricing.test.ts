@@ -109,6 +109,27 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(false);
   });
 
+  it('keeps single SNS availability checks free in default and strict mode', () => {
+    expect(classifyTool('sap_sns_check_domain')).toBe('free');
+    expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('free');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_sns_check_domain',
+        arguments: { domain: 'solkingchad.sol' },
+      },
+    });
+
+    expect(resolvePaymentDecision(parsed, monetizationConfig).required).toBe(false);
+    expect(resolvePaymentDecision(parsed, {
+      ...monetizationConfig,
+      strictTools: true,
+    }).required).toBe(false);
+  });
+
   it('can price basic balance reads in strict hosted mode', () => {
     expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');

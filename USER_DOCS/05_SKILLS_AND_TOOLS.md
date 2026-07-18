@@ -104,10 +104,16 @@ Use global discovery:
 
 Use SNS:
 
-- `sap_sns_check_domain`
+- `sap_sns_check_domain` for a free single-domain availability check
 - `sap_sns_batch_check_domains`
 - `sap_sns_resolve_domain`
-- `sap_sns_register_agent_domain`
+- `sap_sns_register_agent_domain` only from a local SAP MCP profile with a
+  local wallet or external signer
+
+Hosted accountless SAP MCP cannot directly sign SNS registrations. If a hosted
+direct write returns `hosted_local_signer_required`, no x402 payment was charged;
+run the local profile flow or use hosted unsigned builders plus
+`sap_payments_finalize_transaction` where a builder exists.
 
 Use transactions:
 

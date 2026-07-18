@@ -23,6 +23,7 @@ import { registerExactSvmScheme } from '@x402/svm/exact/server';
 import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { logger } from '../core/logger.js';
 import { NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
+import { evaluateHostedToolEligibility } from './hosted-tool-eligibility.js';
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
@@ -217,6 +218,17 @@ export class McpMonetizationGate {
 
     const parsedMcp = parseJsonRpcBody(parsedBody);
     const decision = resolvePaymentDecision(parsedMcp, this.monetization);
+    const hostedEligibilityFailure = evaluateHostedToolEligibility(parsedMcp, this.appConfig);
+    if (hostedEligibilityFailure) {
+      writeJsonRpcError(
+        response,
+        parsedBody,
+        hostedEligibilityFailure.code,
+        hostedEligibilityFailure.message,
+        hostedEligibilityFailure.data,
+      );
+      return;
+    }
 
     // For non-MCP clients (x402 scanners, curl without Accept header), always
     // return 402 — the paywall must fire before body validation per the x402

@@ -92,12 +92,15 @@ SAP SNS and direct SNS domain workflows:
 `sap_sns_get_domain_records`, `sap_sns_get_record`,
 `sap_sns_resolve_wallet`, `sap_sns_check_ownership`,
 `sap_sns_get_domain_pda`, `sap_sns_get_record_pda`,
-`sap_sns_build_register_domain_transaction`,
 `sap_sns_build_manage_record_transaction`,
-`sap_sns_build_set_primary_domain_transaction`,
 `sap_sns_register_agent_domain`, `sns_registerDomain`, `sns_resolveDomain`,
 `sns_reverseLookup`, `alldomains_getOwnedDomains`,
 `alldomains_registerDomain`, `alldomains_resolveDomain`.
+
+`sap_sns_register_agent_domain` is local-signer-only. Hosted accountless SAP MCP
+rejects that direct write before x402 payment. For hosted record changes, use
+`sap_sns_build_manage_record_transaction` and finalize the unsigned transaction
+locally with `sap_payments_finalize_transaction`.
 
 ## `sap-agentkit`
 

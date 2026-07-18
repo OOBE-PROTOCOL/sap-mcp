@@ -108,7 +108,7 @@ export function registerSapAgentPrompt(server: Server, _context: SapMcpContext) 
       '',
       '## Step 3: Register Agent On-Chain',
       '',
-      'Use the MCP tool `sap_register_agent`. The SAP MCP server will sign with the configured profile signer internally.',
+      'Use `sap_register_agent` only when the active SAP MCP server is local or has an external signer. Hosted accountless SAP MCP cannot sign on-chain registration and will reject direct registration before x402 payment. If the user is connected to hosted SAP MCP, use the local SAP MCP profile or wizard-managed signing flow instead of paying/retrying the hosted direct write.',
       '',
       'Do **not** read `SAP_WALLET_PATH`, do **not** open keypair JSON files, and do **not** print private key bytes.',
       '',
@@ -145,7 +145,7 @@ export function registerSapAgentPrompt(server: Server, _context: SapMcpContext) 
       content.push(
         '## Step 5 (Optional): Register SNS Domain',
         '',
-        'Use `sap_sns_check_domain` to verify availability, then `sap_sns_build_register_domain_transaction` for unsigned registration or `sap_sns_register_agent_domain` when the MCP profile is in `local-dev-keypair` mode.',
+        'Use `sap_sns_check_domain` to verify availability. Hosted accountless SAP MCP cannot directly register a .sol domain because the purchase requires the user wallet signature, so do not call hosted `sap_sns_register_agent_domain` after paying x402. Run `sap_sns_register_agent_domain` only from a local SAP MCP profile with `local-dev-keypair` or an external signer. For hosted record changes, use `sap_sns_build_manage_record_transaction`, preview the unsigned transaction, then finalize locally with `sap_payments_finalize_transaction`.',
         '',
       );
     }

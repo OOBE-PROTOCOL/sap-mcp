@@ -899,7 +899,7 @@ function buildSapSdkToolDescription(definition: ToolRegistration): string {
 
 function getSapSdkToolContext(name: string): string {
   if (name === 'sap_register_agent') {
-    return 'SAP MCP context: This is the primary on-chain SAP agent registration tool for the connected profile signer. Use agentUri or metadataUri for off-chain metadata, including a Metaplex or DAS-backed identity document when the agent also has NFT/collection metadata. After registration, use sap_publish_tool_by_name for advertised MCP capabilities and AgentKit metaplex-nft_* tools for NFT collection, badge, or metadata workflows.';
+    return 'SAP MCP context: This is the primary on-chain SAP agent registration tool for a local profile signer or external signer. Hosted accountless SAP MCP rejects direct registration before x402 payment because OOBE never custodies user wallet keys. Use agentUri or metadataUri for off-chain metadata, including a Metaplex or DAS-backed identity document when the agent also has NFT/collection metadata. After registration, use sap_publish_tool_by_name for advertised MCP capabilities and AgentKit metaplex-nft_* tools for NFT collection, badge, or metadata workflows.';
   }
 
   if (name === 'sap_update_agent') {
@@ -937,7 +937,7 @@ const agentTools: ToolRegistration[] = [
   {
     name: 'sap_register_agent',
     title: 'Register SAP Agent',
-    description: 'Register the connected wallet as a SAP agent using SDK AgentModule.register.',
+    description: 'Local-signer-only: register the connected wallet as a SAP agent using SDK AgentModule.register. Hosted accountless SAP MCP rejects this direct write before x402 payment; run it through a local SAP MCP profile or external signer.',
     inputSchema: {
       name: { type: 'string', description: 'Human-readable name for the SAP agent' },
       description: { type: 'string', description: 'Detailed description of the agent\'s purpose and capabilities' },

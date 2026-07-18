@@ -116,6 +116,12 @@ Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bri
 
 Basic wallet reads do not require x402. Call `sol_get_balance`, `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on hosted SAP MCP. They should not be routed through the local payment bridge and should not depend on the facilitator.
 
+If hosted SAP MCP returns `hosted_local_signer_required`, no x402 payment was
+charged. The requested tool requires a user-owned Solana signature or is not
+available as a hosted unsigned builder. Do not retry the same hosted direct
+write. Use a local SAP MCP profile, an external signer, or a hosted unsigned
+builder followed by `sap_payments_finalize_transaction` when a builder exists.
+
 Security boundaries:
 
 - keypair bytes stay local and are never included in MCP client config;
