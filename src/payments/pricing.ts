@@ -92,6 +92,7 @@ const FREE_TOOLS = new Set([
   'sap_payments_prepare_challenge',
   'sap_payments_sign_challenge',
   'sap_payments_call_paid_tool',
+  'sap_payments_call_external_x402',
   'sap_payments_finalize_transaction',
   'sap_payments_verify_receipt',
 ]);
@@ -116,6 +117,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_payments_prepare_challenge',
   'sap_payments_sign_challenge',
   'sap_payments_call_paid_tool',
+  'sap_payments_call_external_x402',
   'sap_payments_finalize_transaction',
   'sap_payments_verify_receipt',
 ]);

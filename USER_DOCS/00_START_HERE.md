@@ -63,8 +63,9 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 1. Full setup creates or imports the dedicated local SAP MCP wallet profile.
 2. Repair keeps the active profile and only fixes OOBE `sap`/`sap_payments` runtime entries.
 3. Let the wizard configure hosted `sap` plus local `sap_payments` for supported runtimes.
-4. Use `sap_payments_call_paid_tool` when a hosted tool requires x402 payment.
-5. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.
+4. Use `sap_payments_call_paid_tool` when a hosted SAP MCP tool requires x402 payment.
+5. Use `sap_payments_call_external_x402` when an external HTTP x402 agent endpoint is discovered through SAP registry metadata.
+6. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.
 
 Agents can discover the same recovery path without guessing. The hosted SAP MCP
 server exposes these free maintenance tools:

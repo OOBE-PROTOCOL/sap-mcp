@@ -16,8 +16,9 @@ The agent should then:
 3. call `sap_skills_upgrade_plan` if skills are missing or stale;
 4. use exact tool names from `tools/list`;
 5. call `sap_payments_readiness` if the local `sap_payments` bridge is visible;
-6. use `sap_payments_call_paid_tool` for paid hosted tools that return x402 payment requirements;
-7. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
+6. use `sap_payments_call_paid_tool` for paid hosted SAP MCP tools that return x402 payment requirements;
+7. use `sap_payments_call_external_x402` for external HTTP x402 agent endpoints discovered through SAP registry metadata;
+8. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
 
 If `sap_payments` is missing, run the wizard repair flow and restart the agent
 runtime:

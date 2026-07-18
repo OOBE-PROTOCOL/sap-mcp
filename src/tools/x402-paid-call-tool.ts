@@ -11,12 +11,14 @@ import type { SapMcpContext } from '../core/types.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import {
   executeX402PaidCall,
+  executeExternalX402Call,
   getX402PaymentReadiness,
   inspectX402Receipt,
   probeX402PaymentChallenge,
   signX402PaymentChallenge,
   type X402ChallengeProbeInput,
   type X402ChallengeSignInput,
+  type X402ExternalCallInput,
   type X402PaidCallInput,
 } from '../payments/x402-paid-call.js';
 import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
@@ -31,6 +33,17 @@ interface X402PaidCallToolInput {
     method: string;
     params?: unknown;
   };
+  profileName?: string;
+  maxPriceUsd?: number;
+  maxAttempts?: number;
+  confirm?: boolean;
+}
+
+interface X402ExternalCallToolInput {
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
   profileName?: string;
   maxPriceUsd?: number;
   maxAttempts?: number;
@@ -166,6 +179,7 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsReadinessTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
+  registerPaymentsCallExternalX402Tool(server);
   registerPaymentsFinalizeTransactionTool(server, _context);
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
@@ -173,6 +187,71 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
+}
+
+function registerPaymentsCallExternalX402Tool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_call_external_x402',
+    {
+      title: 'Pay And Call External x402 Endpoint',
+      description: 'High-level local payment bridge for generic HTTP x402 endpoints outside hosted SAP MCP, such as another SAP agent endpoint discovered from the registry. It sends the request once to obtain the 402 payment challenge, signs with the user-controlled local SAP MCP profile wallet, retries the same HTTP request with PAYMENT-SIGNATURE, and returns the response plus receipt. Use sap_payments_call_paid_tool for hosted SAP MCP tools; use this only for external HTTP x402 providers. Requires confirm: true and maxPriceUsd.',
+      inputSchema: {
+        url: {
+          type: 'string',
+          description: 'External HTTP or HTTPS x402 endpoint URL to call, for example an agent endpoint discovered from SAP registry metadata.',
+        },
+        method: {
+          type: 'string',
+          enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+          description: 'HTTP method for the external request. Defaults to POST.',
+        },
+        headers: {
+          type: 'object',
+          description: 'Optional non-sensitive headers for the external request. Do not include PAYMENT-SIGNATURE, X-PAYMENT, Authorization, or cookies.',
+        },
+        body: {
+          type: 'object',
+          description: 'Optional JSON request body for POST, PUT, PATCH, or DELETE calls. Strings are sent as-is; objects are JSON-encoded.',
+        },
+        profileName: paidCallInputSchema.profileName,
+        maxPriceUsd: paidCallInputSchema.maxPriceUsd,
+        maxAttempts: paidCallInputSchema.maxAttempts,
+        confirm: paidCallInputSchema.confirm,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the external x402 call completed successfully.' },
+          url: { type: 'string', description: 'External endpoint URL called.' },
+          method: { type: 'string', description: 'HTTP method used.' },
+          signerAddress: { type: 'string', description: 'Public address of the local SAP MCP signer. Secret bytes are never returned.' },
+          payment: { type: 'object', description: 'Selected payment requirements, including amountUsd, network, asset, and payTo, when a 402 challenge was paid.' },
+          settlement: { type: 'object', description: 'x402 settlement response returned by the provider/facilitator when available.' },
+          response: { type: 'object', description: 'External HTTP response status, safe headers, and parsed body.' },
+          attempts: { type: 'number', description: 'Number of attempts used.' },
+          transientRetries: { type: 'array', items: { type: 'string' }, description: 'Retryable errors encountered before success.' },
+          audit: { type: 'object', description: 'Agent-readable proof object with intent id, profile, payment receipt, attempts, and secret-material guarantee.' },
+        },
+        required: ['success', 'url', 'method', 'signerAddress', 'response', 'attempts', 'transientRetries', 'audit'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const parsed = parseExternalInput(input);
+        const result = await executeExternalX402Call(parsed);
+        return createTextResponse(JSON.stringify(result, null, 2));
+      } catch (error) {
+        return createTextResponse(formatPaidCallError(error), { isError: true });
+      }
+    },
+  );
 }
 
 function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcpContext): void {
@@ -545,6 +624,31 @@ function parseInput(input: unknown): X402PaidCallInput {
     endpoint: record.endpoint,
     toolName: record.toolName,
     arguments: record.arguments,
+    body: record.body,
+    profileName: record.profileName,
+    maxPriceUsd: record.maxPriceUsd,
+    maxAttempts: record.maxAttempts,
+    confirm: record.confirm === true,
+  };
+}
+
+function parseExternalInput(input: unknown): X402ExternalCallInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('sap_payments_call_external_x402 requires an input object.');
+  }
+
+  const record = input as X402ExternalCallToolInput;
+  if (!record.url) {
+    throw new Error('url is required.');
+  }
+  if (record.maxPriceUsd === undefined) {
+    throw new Error('maxPriceUsd is required.');
+  }
+
+  return {
+    url: record.url,
+    method: record.method,
+    headers: record.headers,
     body: record.body,
     profileName: record.profileName,
     maxPriceUsd: record.maxPriceUsd,

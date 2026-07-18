@@ -469,7 +469,7 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
     },
     {
       title: 'Local MCP Tool Alternative',
-      description: 'When the local SAP MCP stdio bridge is installed, agents should call sap_payments_call_paid_tool for x402 challenges and sap_payments_finalize_transaction for unsigned hosted transactions. The sap_x402_paid_call alias is legacy.',
+      description: 'When the local SAP MCP stdio bridge is installed, agents should call sap_payments_call_paid_tool for hosted SAP MCP x402 challenges, sap_payments_call_external_x402 for external HTTP x402 agents, and sap_payments_finalize_transaction for unsigned hosted transactions. The sap_x402_paid_call alias is legacy.',
       content: formatJson({
         name: 'sap_payments_call_paid_tool',
         arguments: {
@@ -506,10 +506,11 @@ export function installX402PaidCallAddon(
     localMcpToolNames: [
       'sap_payments_readiness',
       'sap_payments_call_paid_tool',
+      'sap_payments_call_external_x402',
       'sap_payments_finalize_transaction',
       'sap_x402_paid_call',
     ],
-    description: 'Native local SAP MCP payment bridge reference bundle for hosted paid tools and unsigned hosted transaction finalization. The sap_payments MCP server signs x402 payloads and transactions with the user-controlled SAP MCP profile signer.',
+    description: 'Native local SAP MCP payment bridge reference bundle for hosted paid tools, external HTTP x402 agent calls, and unsigned hosted transaction finalization. The sap_payments MCP server signs x402 payloads and transactions with the user-controlled SAP MCP profile signer.',
     security: {
       readsLocalKeypairFileForSigning: true,
       printsKeypairBytes: false,
@@ -522,7 +523,7 @@ export function installX402PaidCallAddon(
   writeFileSync(readmePath, [
     '# SAP MCP Local Payment Bridge',
     '',
-    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges and unsigned hosted transaction finalization. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_readiness`, `sap_payments_call_paid_tool`, and `sap_payments_finalize_transaction`.',
+    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges, external HTTP x402 agent calls, and unsigned hosted transaction finalization. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_readiness`, `sap_payments_call_paid_tool`, `sap_payments_call_external_x402`, and `sap_payments_finalize_transaction`.',
     '',
     'Legacy command fallback for custom wrappers:',
     '',
@@ -530,7 +531,7 @@ export function installX402PaidCallAddon(
     `${X402_PAID_CALL_COMMAND} --tool sap_list_all_agents --arguments '{"limit":5}' --max-usd 0.02 --confirm`,
     '```',
     '',
-    'Prefer calling `sap_payments_readiness` first, then `sap_payments_call_paid_tool` when the `sap_payments` MCP bridge is available. If a hosted builder returns `transactionBase64` or another unsigned transaction payload, call `sap_payments_finalize_transaction`; never create temporary signing scripts or read keypair JSON. `sap_x402_paid_call` remains a backward-compatible alias.',
+    'Prefer calling `sap_payments_readiness` first, then `sap_payments_call_paid_tool` for hosted SAP MCP paid tools. For external HTTP x402 agents discovered from registry metadata, call `sap_payments_call_external_x402`. If a hosted builder returns `transactionBase64` or another unsigned transaction payload, call `sap_payments_finalize_transaction`; never create temporary signing scripts or read keypair JSON. `sap_x402_paid_call` remains a backward-compatible alias.',
     '',
     'Security rules:',
     '',

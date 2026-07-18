@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.10 - 2026-07-18
+
+### Added
+
+- Added `sap_payments_call_external_x402`, a local free `sap_payments` bridge
+  tool for generic HTTP x402 endpoints discovered through SAP registry
+  metadata. The helper performs the standard unpaid request, parses the 402
+  challenge, signs locally with the user's SAP MCP profile, retries with
+  `PAYMENT-SIGNATURE`, and returns the provider response plus receipt/audit
+  data without exposing keypair bytes.
+
+### Improved
+
+- Updated agent startup guidance, bundled x402 skills, client config reference
+  bundles, and user docs so agents use `sap_payments_call_paid_tool` for hosted
+  SAP MCP tools and `sap_payments_call_external_x402` for external x402 agents
+  instead of hand-rolling temporary HTTP/sign/retry scripts.
+- Added guardrails to the generic external x402 bridge: sensitive caller
+  headers are rejected, local/private/link-local targets are blocked, and
+  request bodies are capped to keep the tool safe for agent runtimes.
+
 ## 0.9.9 - 2026-07-18
 
 ### Improved

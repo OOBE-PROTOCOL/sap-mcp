@@ -330,6 +330,7 @@ function buildRuntimeRepairPlan(input: SkillToolInput, context: SapMcpContext): 
         'sap_payments_profile_current',
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',
+        'sap_payments_call_external_x402',
         'sap_payments_finalize_transaction',
         'sap_payments_verify_receipt',
       ],
@@ -597,7 +598,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
             expectedAfterRestart: {
               hostedNamespace: 'sap',
               localBridgeNamespace: 'sap_payments',
-              requiredBridgeTools: ['sap_payments_profile_current', 'sap_payments_readiness', 'sap_payments_call_paid_tool'],
+              requiredBridgeTools: ['sap_payments_profile_current', 'sap_payments_readiness', 'sap_payments_call_paid_tool', 'sap_payments_call_external_x402'],
             },
             agentInstructions: ['Show this structured error, run the pinned repair command locally, then restart the agent runtime.'],
             error: error instanceof Error ? error.message : 'Unknown error',

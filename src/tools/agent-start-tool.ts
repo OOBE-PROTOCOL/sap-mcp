@@ -144,6 +144,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
       'For free reads, call hosted tools directly.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
+      'For external HTTP x402 agent endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402 instead of hand-rolled HTTP/sign/retry scripts.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
       'If hosted SAP MCP returns hosted_local_signer_required, do not retry the same hosted direct write. No x402 payment was charged; switch to a local SAP MCP profile or an unsigned hosted builder plus sap_payments_finalize_transaction when one exists.',
       'If a hosted tool returns transactionBase64, transaction, or an unsigned transaction object, use local sap_payments_finalize_transaction. Never call hosted sap_sign_transaction for user-owned signing, create local .js/.mjs signing scripts, or read keypair JSON.',
@@ -152,6 +153,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
     paymentFlow: {
       challenge: 'Hosted paid tools return 402 Payment Required with x402/pay.sh requirements.',
       preferredHelper: 'sap_payments_call_paid_tool',
+      externalHttpHelper: 'sap_payments_call_external_x402',
       readinessHelper: 'sap_payments_readiness',
       legacyAlias: 'sap_x402_paid_call',
       retryPolicy: 'On BlockhashNotFound, transaction_simulation_failed, node-behind, or expired payment payload, create a fresh challenge and retry through sap_payments_call_paid_tool. Do not reuse an old signed payload.',

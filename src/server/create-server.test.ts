@@ -68,7 +68,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(273);
+    expect(names).toHaveLength(274);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -114,6 +114,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_payments_profile_current');
     expect(names).toContain('sap_payments_readiness');
     expect(names).toContain('sap_payments_call_paid_tool');
+    expect(names).toContain('sap_payments_call_external_x402');
     expect(names).toContain('sap_payments_finalize_transaction');
     expect(names).toContain('sap_payments_prepare_challenge');
     expect(names).toContain('sap_payments_sign_challenge');
@@ -212,6 +213,7 @@ describe('createSapMcpServer', () => {
         'sap_payments_profile_current',
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',
+        'sap_payments_call_external_x402',
         'sap_payments_finalize_transaction',
         'sap_payments_prepare_challenge',
         'sap_payments_sign_challenge',
@@ -430,6 +432,7 @@ describe('createSapMcpServer', () => {
     const toolNames = (server.tools ?? []).map((tool) => tool.name);
     expect(toolNames).not.toContain('sap_payments_profile_current');
     expect(toolNames).not.toContain('sap_payments_call_paid_tool');
+    expect(toolNames).not.toContain('sap_payments_call_external_x402');
     expect(toolNames).not.toContain('sap_payments_prepare_challenge');
     expect(toolNames).not.toContain('sap_payments_sign_challenge');
     expect(toolNames).not.toContain('sap_payments_verify_receipt');

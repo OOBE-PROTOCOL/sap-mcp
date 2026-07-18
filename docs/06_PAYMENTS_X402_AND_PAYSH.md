@@ -92,6 +92,7 @@ has a user-controlled wallet profile:
 | --- | --- |
 | `sap_payments_readiness` | Free local readiness check for hosted MCP, active profile, signer, SOL/USDC balance, and commerce policy limits. Call this first for paid/write workflows. |
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
+| `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
 | `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits. |
 | `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
@@ -107,6 +108,14 @@ no-charge routing guard, not a payment failure: the tool needs a local user
 signature or has no production hosted builder yet. Switch to a local SAP MCP
 profile, external signer, or a hosted unsigned builder plus
 `sap_payments_finalize_transaction`.
+
+External x402 agents are a separate flow. If an SAP registry lookup returns an
+agent-owned HTTP x402 endpoint, call the local
+`sap_payments_call_external_x402` bridge instead of `sap_payments_call_paid_tool`.
+The external helper performs the standard HTTP flow: request, receive 402
+challenge, sign locally, retry with `PAYMENT-SIGNATURE`, and return the response
+plus receipt. It refuses caller-supplied payment headers, Authorization headers,
+and cookies so payment authorization stays explicit and local.
 
 Transient settlement errors such as `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is

@@ -20,6 +20,7 @@ const MCP_PROTOCOL_VERSION = '2025-06-18';
 const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_ALLOWED_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 500;
+const MAX_EXTERNAL_BODY_BYTES = 256 * 1024;
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 
@@ -32,6 +33,21 @@ export interface X402PaidCallInput {
   toolName?: string;
   arguments?: unknown;
   body?: JsonRpcRequest;
+  profileName?: string;
+  maxPriceUsd: number;
+  maxAttempts?: number;
+  confirm: boolean;
+}
+
+/**
+ * @name X402ExternalCallInput
+ * @description Request shape accepted by the local helper for generic HTTP x402 endpoints outside hosted SAP MCP.
+ */
+export interface X402ExternalCallInput {
+  url: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
   profileName?: string;
   maxPriceUsd: number;
   maxAttempts?: number;
@@ -225,6 +241,60 @@ export interface X402PaidCallAudit {
   secretMaterial: 'keypair-bytes-never-returned';
 }
 
+/**
+ * @name X402ExternalCallResult
+ * @description Result returned after a generic HTTP x402 request is completed through the local signer.
+ */
+export interface X402ExternalCallResult {
+  success: boolean;
+  url: string;
+  method: string;
+  signerAddress: string;
+  payment?: {
+    amountUsd: number;
+    network: string;
+    asset: string;
+    payTo: string;
+  };
+  settlement?: SettleResponse;
+  response: {
+    status: number;
+    headers: Record<string, string>;
+    body: unknown;
+  };
+  attempts: number;
+  transientRetries: readonly string[];
+  audit: X402ExternalCallAudit;
+}
+
+/**
+ * @name X402ExternalCallAudit
+ * @description Agent-readable proof object for one generic x402 HTTP request.
+ */
+export interface X402ExternalCallAudit {
+  intentId: string;
+  profileName: string;
+  signerAddress: string;
+  url: string;
+  method: string;
+  payment?: {
+    amountUsd: number;
+    network: string;
+    asset: string;
+    payTo: string;
+  };
+  receipt: {
+    present: boolean;
+    transaction?: string;
+    network?: string;
+    amount?: string;
+    payer?: string;
+  };
+  attempts: number;
+  transientRetries: readonly string[];
+  secretMaterial: 'keypair-bytes-never-returned';
+}
+
 interface JsonRpcRequest {
   jsonrpc: '2.0';
   id?: string | number | null;
@@ -289,6 +359,50 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
   }
 
   throw new Error('x402 paid call exhausted retries.');
+}
+
+/**
+ * @name executeExternalX402Call
+ * @description Calls a generic HTTP x402 endpoint by fetching its challenge, signing locally, retrying with the payment header, and returning the receipt.
+ */
+export async function executeExternalX402Call(input: X402ExternalCallInput): Promise<X402ExternalCallResult> {
+  validateExternalInput(input);
+
+  const url = normalizeExternalUrl(input.url);
+  const method = normalizeHttpMethod(input.method);
+  const profileName = input.profileName ?? getActiveProfile();
+  const config = loadPaymentProfile(input.profileName);
+  const signer = await loadClientSigner(config);
+  const httpClient = createHttpPaymentClient(signer);
+  const maxAttempts = normalizeMaxAttempts(input.maxAttempts);
+  const transientRetries: string[] = [];
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await executeExternalPaidAttempt({
+        url,
+        method,
+        headers: normalizeExternalHeaders(input.headers),
+        body: input.body,
+        signerAddress: String(signer.address),
+        httpClient,
+        profileName,
+        maxPriceUsd: input.maxPriceUsd,
+        attempt,
+        transientRetries,
+      });
+    } catch (error) {
+      const retry = classifyPaidCallRetry(error);
+      if (!retry.retryable || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      transientRetries.push(retry.reason);
+      await sleep(RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
+
+  throw new Error('external x402 call exhausted retries.');
 }
 
 /**
@@ -556,6 +670,126 @@ async function executePaidAttempt(options: {
   };
 }
 
+async function executeExternalPaidAttempt(options: {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: unknown;
+  signerAddress: string;
+  httpClient: x402HTTPClient;
+  profileName: string;
+  maxPriceUsd: number;
+  attempt: number;
+  transientRetries: readonly string[];
+}): Promise<X402ExternalCallResult> {
+  const unpaid = await fetchExternal(options.url, options.method, options.headers, options.body);
+  if (unpaid.response.status !== 402) {
+    return buildExternalResultWithoutPayment(options, unpaid);
+  }
+
+  const paymentRequired = getPaymentRequiredResponse(options.httpClient, unpaid.response, unpaid.body);
+  const selectedRequirements = selectSingleRequirement(paymentRequired, options.maxPriceUsd);
+  const amountUsd = paymentRequirementsAmountUsd(selectedRequirements);
+  const paymentPayload = await options.httpClient.createPaymentPayload({
+    ...paymentRequired,
+    accepts: [selectedRequirements],
+  });
+  const paymentHeaders = options.httpClient.encodePaymentSignatureHeader(paymentPayload);
+  const paid = await fetchExternal(options.url, options.method, {
+    ...options.headers,
+    ...paymentHeaders,
+  }, options.body);
+  const paymentResult = await options.httpClient.processPaymentResult(
+    paymentPayload,
+    name => paid.response.headers.get(name),
+    paid.response.status,
+  );
+
+  if (!paid.response.ok) {
+    throw new Error(`External x402 call failed with HTTP ${paid.response.status}: ${JSON.stringify(paid.body)}`);
+  }
+
+  const audit: X402ExternalCallAudit = {
+    intentId: buildExternalIntentId(options.url, options.method),
+    profileName: options.profileName,
+    signerAddress: options.signerAddress,
+    url: options.url,
+    method: options.method,
+    payment: {
+      amountUsd,
+      network: selectedRequirements.network,
+      asset: selectedRequirements.asset,
+      payTo: selectedRequirements.payTo,
+    },
+    receipt: {
+      present: Boolean(paymentResult.settleResponse),
+      ...(paymentResult.settleResponse?.transaction ? { transaction: paymentResult.settleResponse.transaction } : {}),
+      ...(paymentResult.settleResponse?.network ? { network: paymentResult.settleResponse.network } : {}),
+      ...(paymentResult.settleResponse?.amount ? { amount: paymentResult.settleResponse.amount } : {}),
+      ...(paymentResult.settleResponse?.payer ? { payer: paymentResult.settleResponse.payer } : {}),
+    },
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
+    secretMaterial: 'keypair-bytes-never-returned',
+  };
+
+  return {
+    success: true,
+    url: options.url,
+    method: options.method,
+    signerAddress: options.signerAddress,
+    payment: audit.payment,
+    settlement: paymentResult.settleResponse,
+    response: {
+      status: paid.response.status,
+      headers: safeResponseHeaders(paid.response.headers),
+      body: paid.body,
+    },
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
+    audit,
+  };
+}
+
+function buildExternalResultWithoutPayment(
+  options: {
+    url: string;
+    method: string;
+    signerAddress: string;
+    profileName: string;
+    attempt: number;
+    transientRetries: readonly string[];
+  },
+  result: { response: Response; body: unknown },
+): X402ExternalCallResult {
+  const audit: X402ExternalCallAudit = {
+    intentId: buildExternalIntentId(options.url, options.method),
+    profileName: options.profileName,
+    signerAddress: options.signerAddress,
+    url: options.url,
+    method: options.method,
+    receipt: { present: false },
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
+    secretMaterial: 'keypair-bytes-never-returned',
+  };
+
+  return {
+    success: result.response.ok,
+    url: options.url,
+    method: options.method,
+    signerAddress: options.signerAddress,
+    response: {
+      status: result.response.status,
+      headers: safeResponseHeaders(result.response.headers),
+      body: result.body,
+    },
+    attempts: options.attempt,
+    transientRetries: options.transientRetries,
+    audit,
+  };
+}
+
 function validateInput(input: X402PaidCallInput): void {
   if (!input.confirm) {
     throw new Error('x402 paid calls require confirm: true because they sign a payment payload.');
@@ -565,6 +799,18 @@ function validateInput(input: X402PaidCallInput): void {
   }
   if (!input.body && !input.toolName) {
     throw new Error('Provide either body or toolName.');
+  }
+}
+
+function validateExternalInput(input: X402ExternalCallInput): void {
+  if (!input.confirm) {
+    throw new Error('external x402 calls require confirm: true because they sign a payment payload.');
+  }
+  if (!Number.isFinite(input.maxPriceUsd) || input.maxPriceUsd <= 0) {
+    throw new Error('external x402 calls require a positive maxPriceUsd spending cap.');
+  }
+  if (!input.url || typeof input.url !== 'string') {
+    throw new Error('url is required for external x402 calls.');
   }
 }
 
@@ -662,6 +908,58 @@ async function postMcp(
     response,
     body: parseMcpHttpBody(text, response.headers.get('content-type') ?? ''),
   };
+}
+
+async function fetchExternal(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: unknown,
+): Promise<{ response: Response; body: unknown }> {
+  const hasBody = method !== 'GET' && method !== 'HEAD' && body !== undefined;
+  const requestHeaders: Record<string, string> = {
+    Accept: 'application/json',
+    ...headers,
+  };
+  let requestBody: BodyInit | undefined;
+
+  if (hasBody) {
+    if (typeof body === 'string') {
+      requestBody = body;
+    } else {
+      requestHeaders['Content-Type'] = requestHeaders['Content-Type'] ?? requestHeaders['content-type'] ?? 'application/json';
+      requestBody = JSON.stringify(body);
+    }
+
+    if (Buffer.byteLength(requestBody) > MAX_EXTERNAL_BODY_BYTES) {
+      throw new Error(`External x402 request body exceeds ${MAX_EXTERNAL_BODY_BYTES} bytes.`);
+    }
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers: requestHeaders,
+    ...(requestBody !== undefined ? { body: requestBody } : {}),
+  });
+  const text = await response.text();
+  return {
+    response,
+    body: parseExternalHttpBody(text, response.headers.get('content-type') ?? ''),
+  };
+}
+
+function parseExternalHttpBody(text: string, contentType: string): unknown {
+  if (!text.trim()) {
+    return null;
+  }
+  if (contentType.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return text;
+    }
+  }
+  return text;
 }
 
 function getPaymentRequiredResponse(
@@ -774,6 +1072,79 @@ function normalizeMaxAttempts(value: number | undefined): number {
     throw new Error(`maxAttempts must be an integer between 1 and ${MAX_ALLOWED_ATTEMPTS}.`);
   }
   return value;
+}
+
+function normalizeExternalUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error('External x402 URL must use http or https.');
+  }
+  if (url.username || url.password) {
+    throw new Error('External x402 URL must not contain embedded credentials.');
+  }
+  assertExternalHostAllowed(url.hostname);
+  return url.toString();
+}
+
+function assertExternalHostAllowed(hostname: string): void {
+  const normalized = hostname.toLowerCase();
+  if (normalized === 'localhost' || normalized.endsWith('.localhost') || normalized.endsWith('.local')) {
+    throw new Error('External x402 URL must not target local hostnames.');
+  }
+
+  if (normalized === '0.0.0.0' || normalized === '::' || normalized === '::1' || normalized.startsWith('127.')) {
+    throw new Error('External x402 URL must not target loopback addresses.');
+  }
+
+  if (
+    normalized.startsWith('10.') ||
+    normalized.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized) ||
+    normalized.startsWith('169.254.')
+  ) {
+    throw new Error('External x402 URL must not target private or link-local addresses.');
+  }
+}
+
+function normalizeHttpMethod(value: string | undefined): string {
+  const method = (value ?? 'POST').toUpperCase();
+  const allowed = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+  if (!allowed.has(method)) {
+    throw new Error('method must be one of GET, POST, PUT, PATCH, or DELETE.');
+  }
+  return method;
+}
+
+function normalizeExternalHeaders(value: Record<string, string> | undefined): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, rawValue] of Object.entries(value ?? {})) {
+    const normalized = key.toLowerCase();
+    if (normalized === 'payment-signature' || normalized === 'x-payment' || normalized === 'payment-response' || normalized === 'x-payment-response') {
+      throw new Error(`Do not provide ${key}; the local x402 helper creates payment headers itself.`);
+    }
+    if (normalized === 'authorization' || normalized === 'cookie' || normalized === 'set-cookie') {
+      throw new Error(`Refusing to forward sensitive header ${key} through generic x402 helper.`);
+    }
+    headers[key] = String(rawValue);
+  }
+  return headers;
+}
+
+function safeResponseHeaders(headers: Headers): Record<string, string> {
+  const safe = new Set([
+    'content-type',
+    'payment-response',
+    'x-payment-response',
+    'x402-version',
+    'x-request-id',
+  ]);
+  const out: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    if (safe.has(key.toLowerCase())) {
+      out[key] = value;
+    }
+  });
+  return out;
 }
 
 function classifyPaidCallRetry(error: unknown): { retryable: boolean; reason: string } {
@@ -989,6 +1360,15 @@ function buildIntentId(requestBody: JsonRpcRequest, sessionId: string): string {
     at: Date.now(),
   });
   return `sap-intent-${createHash('sha256').update(source).digest('hex').slice(0, 16)}`;
+}
+
+function buildExternalIntentId(url: string, method: string): string {
+  const source = JSON.stringify({
+    url,
+    method,
+    at: Date.now(),
+  });
+  return `sap-external-x402-${createHash('sha256').update(source).digest('hex').slice(0, 16)}`;
 }
 
 function parseCliArgs(argv: string[]): ParsedCliArgs {

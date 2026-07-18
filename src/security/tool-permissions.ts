@@ -103,6 +103,7 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
   ],
   'payments:write': [
     'sap_payments_call_paid_tool',
+    'sap_payments_call_external_x402',
     'sap_payments_finalize_transaction',
     'sap_payments_sign_challenge',
     'sap_x402_paid_call',

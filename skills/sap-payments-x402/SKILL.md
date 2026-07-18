@@ -9,6 +9,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_x402_get_balance`
 - `sap_payments_profile_current`
 - `sap_payments_call_paid_tool`
+- `sap_payments_call_external_x402`
 - `sap_payments_finalize_transaction`
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`
@@ -81,6 +82,14 @@ receipt. Do not ask the user to install a separate x402 plugin when the local
 SAP MCP `sap_payments` bridge is already configured. The legacy
 `sap_x402_paid_call` alias is acceptable only when a runtime has not refreshed
 to the new tool name.
+
+For external x402 agents discovered through SAP registry metadata, do not
+hand-roll HTTP payment scripts. Call `sap_payments_call_external_x402` with
+`url`, `method`, optional JSON `body`, `maxPriceUsd`, `maxAttempts`, and
+`confirm: true`. Use this for non-SAP-hosted HTTP providers such as another
+agent's own x402 endpoint. It fetches the external 402 challenge, signs locally,
+retries the same HTTP request with `PAYMENT-SIGNATURE`, and returns the response
+plus receipt without exposing keypair bytes.
 
 If the hosted paid tool returns `transactionBase64`, `transaction`, or an
 unsigned transaction object, call `sap_payments_finalize_transaction` with
