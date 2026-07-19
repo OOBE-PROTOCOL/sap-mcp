@@ -102,8 +102,12 @@ SAP registry transaction locally, and does not charge a hosted x402 access fee.
 If the hosted paid tool returns `transactionBase64`, `transaction`, or an
 unsigned transaction object, call `sap_payments_finalize_transaction` with
 `confirm: true`. Set `submit: false` for preview/sign only, or `submit: true`
-after the user approves execution. Never create temporary signing scripts, read
-keypair JSON, or call hosted `sap_sign_transaction` for user-owned signatures.
+after the user approves execution. With `submit: true`, the bridge submits
+already-signed bytes through `https://mcp.sap.oobeprotocol.ai/tx/submit` by
+default and returns `confirmationStatus` plus `retrySafe`. Treat
+`expired_or_not_landed` as unresolved, not success. Never create temporary
+signing scripts, read keypair JSON, or call hosted `sap_sign_transaction` for
+user-owned signatures.
 
 Use low-level helpers only for custom clients:
 

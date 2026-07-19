@@ -66,7 +66,7 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 4. Use `sap_payments_call_paid_tool` when a hosted SAP MCP tool requires x402 payment.
 5. Use `sap_payments_call_external_x402` when an external HTTP x402 agent endpoint is discovered through SAP registry metadata.
 6. Use `sap_payments_register_agent` when hosted `sap_register_agent` returns `hosted_local_signer_required`.
-7. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign, and optionally submit locally.
+7. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign locally, and optionally submit already-signed bytes through the hosted OOBE relay.
 
 Agents can discover the same recovery path without guessing. The hosted SAP MCP
 server exposes these free maintenance tools:

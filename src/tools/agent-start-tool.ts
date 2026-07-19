@@ -148,7 +148,9 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
       'If hosted sap_register_agent returns hosted_local_signer_required, do not retry the hosted direct write. No x402 payment was charged; call local sap_payments_register_agent with the same registration fields and confirm: true.',
       'If another hosted write returns hosted_local_signer_required, switch to a local SAP MCP profile or an unsigned hosted builder plus sap_payments_finalize_transaction when one exists.',
-      'If a hosted tool returns transactionBase64, transaction, or an unsigned transaction object, use local sap_payments_finalize_transaction. Never call hosted sap_sign_transaction for user-owned signing, create local .js/.mjs signing scripts, or read keypair JSON.',
+      'If a hosted tool returns transactionBase64, transaction, or an unsigned transaction object, use local sap_payments_finalize_transaction with submit:true. It signs locally and submits through the hosted OOBE relay by default; the relay only broadcasts already-signed bytes.',
+      'Never call hosted sap_sign_transaction for user-owned signing, create local .js/.mjs signing scripts, read keypair JSON, or export signer bytes.',
+      'Treat expired_or_not_landed as unresolved, not success. Retry only when retrySafe is true and the user confirms.',
       'Preview value-moving actions and ask for confirmation when policy requires it.',
     ],
     paymentFlow: {
@@ -172,7 +174,8 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       ],
       localBridgePath: ['sap_payments_finalize_transaction'],
       localServerPath: ['sap_preview_transaction', 'sap_sign_transaction', 'sap_submit_signed_transaction'],
-      rule: 'For hosted builders, finalize with local sap_payments_finalize_transaction. For local SAP MCP stdio builders, use sap_preview_transaction -> sap_sign_transaction -> sap_submit_signed_transaction. Do not write temporary signing scripts, shell commands that read keypair files, or raw transaction signers.',
+      submitRelay: 'https://mcp.sap.oobeprotocol.ai/tx/submit',
+      rule: 'For hosted builders, finalize with local sap_payments_finalize_transaction and submit:true so the signed transaction uses the hosted submit relay and returns confirmed/failed/expired_or_not_landed. For local SAP MCP stdio builders, use sap_preview_transaction -> sap_sign_transaction -> sap_submit_signed_transaction. Do not write temporary signing scripts, shell commands that read keypair files, or raw transaction signers.',
     },
     connectionCheck: {
       intent: 'Use this when the user asks "are you connected?", "is SAP MCP connected?", "check SAP", or similar status-only questions.',

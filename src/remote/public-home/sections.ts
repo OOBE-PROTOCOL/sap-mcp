@@ -740,8 +740,8 @@ export function renderPayments(model: LandingPageModel): string {
             <div class="timeline-item"><b>1</b><p>Agent checks <code>sap_payments_readiness</code> for local profile, signer, balance, and policy status.</p></div>
             <div class="timeline-item"><b>2</b><p>Paid tools return an x402 challenge with resource, amount, asset, and payTo.</p></div>
             <div class="timeline-item"><b>3</b><p>Local <code>sap_payments_call_paid_tool</code> signs payment proof and retries the call.</p></div>
-            <div class="timeline-item"><b>4</b><p>If the output is an unsigned transaction, local <code>sap_payments_finalize_transaction</code> previews, signs, and optionally submits it.</p></div>
-            <div class="timeline-item"><b>5</b><p>Hosted MCP verifies settlement and the local bridge returns receipt, signed transaction, or signature.</p></div>
+            <div class="timeline-item"><b>4</b><p>If the output is an unsigned transaction, local <code>sap_payments_finalize_transaction</code> previews, signs, and optionally submits already-signed bytes through the hosted relay.</p></div>
+            <div class="timeline-item"><b>5</b><p>The bridge returns receipt, signature, confirmation status, and retry guidance instead of treating a bare signature as success.</p></div>
           </div>
           <pre class="code-block"><code>${escapeHtml(model.paidCallCommand)}</code></pre>
         </article>
@@ -754,6 +754,7 @@ export function renderPayments(model: LandingPageModel): string {
             <li>x402 discovery: <a href="${escapeHtml(model.info.endpoints.x402Discovery)}">/.well-known/x402</a></li>
             <li>pay.sh provider YAML: <a href="${escapeHtml(model.info.endpoints.payShProvider)}">/pay/provider.yml</a></li>
             <li>OpenAPI catalog spec: <a href="${escapeHtml(model.info.endpoints.openApi)}">/openapi.json</a></li>
+            <li>Signed transaction relay: <a href="${escapeHtml(model.info.endpoints.txSubmit)}">/tx/submit</a> (submit-only, never signs)</li>
             <li>Addon path: <code>${escapeHtml(model.paidCallAddonPath)}</code></li>
           </ul>
         </article>
@@ -769,6 +770,7 @@ export function renderPayments(model: LandingPageModel): string {
 export function renderEndpointMap(model: LandingPageModel): string {
   const endpoints = [
     ['POST', model.info.endpoints.mcp],
+    ['POST', model.info.endpoints.txSubmit],
     ['GET', model.info.endpoints.docs],
     ['GET', model.info.endpoints.health],
     ['GET', model.info.endpoints.serverInfo],

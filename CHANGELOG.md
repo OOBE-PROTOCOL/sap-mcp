@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.13-rc - 2026-07-19
+
+### Added
+
+- Added a hosted submit-only relay at `POST /tx/submit` for already-signed
+  Solana transactions. The relay never signs, never receives keypair bytes, and
+  returns confirmation status, explorer URL, and retry guidance.
+
+### Improved
+
+- Upgraded transaction finalization from "signature returned" to a bounded
+  lifecycle result: `confirmed` / `finalized` / `failed` /
+  `expired_or_not_landed`, plus `retrySafe` for agent-guided retries.
+- Made `sap_payments_finalize_transaction` submit through the hosted relay by
+  default when `submit:true`, while preserving `submitViaRelay:false` for fully
+  local RPC submission.
+- Updated `sap_submit_signed_transaction`, agent bootstrap instructions,
+  Smithery config schema, public metadata, and the hosted dashboard so agents
+  stop creating temporary signing scripts and use the supported local-signer +
+  relay flow.
+
 ## 0.9.12 - 2026-07-19
 
 ### Improved

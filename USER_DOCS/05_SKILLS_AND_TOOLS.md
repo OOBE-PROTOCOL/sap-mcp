@@ -131,7 +131,7 @@ Use transactions:
 - `sap_preview_transaction`
 - `sap_sign_transaction`
 - `sap_submit_signed_transaction`
-- `sap_payments_finalize_transaction` for hosted builder transactions that must be finalized locally
+- `sap_payments_finalize_transaction` for hosted builder transactions that must be previewed and signed locally; with `submit: true`, it submits already-signed bytes through the hosted OOBE relay and returns confirmation status plus retry guidance
 - `sap_payments_register_agent` for SAP agent registration through the local signer bridge
 
 ## 4. Agent Safety

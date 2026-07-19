@@ -54,6 +54,13 @@
       "description": "Copy this command into a local terminal when paid/write tools should work from a non-custodial user profile.",
       "const": "npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard",
       "default": "npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config wizard"
+    },
+    "submitRelayUrl": {
+      "type": "string",
+      "title": "Signed transaction submit relay",
+      "description": "Optional submit-only relay for already-signed Solana transactions returned by local sap_payments_finalize_transaction. The relay never signs and never receives keypair bytes.",
+      "const": "https://mcp.sap.oobeprotocol.ai/tx/submit",
+      "default": "https://mcp.sap.oobeprotocol.ai/tx/submit"
     }
   }
 }

@@ -85,6 +85,10 @@ interface PaymentsFinalizeTransactionToolInput {
   submit?: boolean;
   skipPreflight?: boolean;
   maxRetries?: number;
+  confirmationTimeoutMs?: number;
+  commitment?: 'processed' | 'confirmed' | 'finalized';
+  submitViaRelay?: boolean;
+  submitRelayUrl?: string;
   confirm?: boolean;
   intentId?: string;
 }
@@ -452,7 +456,7 @@ function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcp
     'sap_payments_finalize_transaction',
     {
       title: 'Finalize Transaction With Local Signer',
-      description: 'Local non-custodial transaction finalizer for hosted SAP MCP builders. Use this when a hosted tool returns transactionBase64, transaction, or an unsigned Solana transaction. It previews, signs with the active local SAP MCP profile signer, and optionally submits through the configured RPC. Never create temporary signing scripts, read keypair JSON, or call hosted sap_sign_transaction for user-owned signatures. Requires confirm: true.',
+      description: 'Local non-custodial transaction finalizer for hosted SAP MCP builders. Use this when a hosted tool returns transactionBase64, transaction, or an unsigned Solana transaction. It previews, signs with the active local SAP MCP profile signer, and optionally submits through the OOBE hosted submit relay for reliable confirmation. The relay only broadcasts already-signed bytes and never receives keypair material. Never create temporary signing scripts, read keypair JSON, or call hosted sap_sign_transaction for user-owned signatures. Requires confirm: true.',
       inputSchema: {
         transaction: {
           type: 'string',
@@ -479,6 +483,23 @@ function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcp
           type: 'number',
           description: 'Optional Solana RPC sendRawTransaction maxRetries value, used only when submit is true.',
         },
+        confirmationTimeoutMs: {
+          type: 'number',
+          description: 'Optional bounded confirmation wait in milliseconds. Defaults to 90000; maximum 180000.',
+        },
+        commitment: {
+          type: 'string',
+          enum: ['processed', 'confirmed', 'finalized'],
+          description: 'Desired confirmation status before returning success. Defaults to confirmed.',
+        },
+        submitViaRelay: {
+          type: 'boolean',
+          description: 'When submit is true, defaults to true. Set false only when the user explicitly wants local RPC submission instead of the OOBE hosted submit relay.',
+        },
+        submitRelayUrl: {
+          type: 'string',
+          description: 'Optional submit relay URL. Must be HTTPS, localhost, or 127.0.0.1. Defaults to https://mcp.sap.oobeprotocol.ai/tx/submit.',
+        },
         confirm: {
           type: 'boolean',
           description: 'Must be true. Confirms the user allows the local SAP MCP signer to sign this transaction.',
@@ -495,6 +516,9 @@ function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcp
           action: { type: 'string', description: 'preview-sign or preview-sign-submit.' },
           submitted: { type: 'boolean', description: 'Whether the signed transaction was submitted to RPC.' },
           signature: { type: 'string', description: 'Solana transaction signature when submit is true.' },
+          confirmationStatus: { type: 'string', description: 'Confirmed/finalized/failed/expired_or_not_landed status when submit is true.' },
+          retrySafe: { type: 'boolean', description: 'Whether the agent may ask the user to retry without risking a known landed duplicate.' },
+          explorerUrl: { type: 'string', description: 'Solana explorer URL for the submitted signature.' },
           signerPublicKey: { type: 'string', description: 'Public key of the local signer that signed the transaction.' },
           nativeTransferSol: { type: 'number', description: 'Estimated native SOL transferred by the transaction.' },
           preview: { type: 'object', description: 'Decoded transaction preview and policy result.' },
@@ -930,6 +954,10 @@ function parseFinalizeTransactionInput(input: unknown): PaymentsFinalizeTransact
     submit: record.submit === true,
     skipPreflight: record.skipPreflight,
     maxRetries: record.maxRetries,
+    confirmationTimeoutMs: record.confirmationTimeoutMs,
+    commitment: record.commitment,
+    submitViaRelay: record.submitViaRelay !== false,
+    submitRelayUrl: record.submitRelayUrl,
     confirm: record.confirm === true,
     intentId: record.intentId,
   };
@@ -997,8 +1025,8 @@ function formatFinalizeTransactionError(error: unknown): string {
     category: message.toLowerCase().includes('no local signer') || message.toLowerCase().includes('no signer')
       ? 'local_signer_missing'
       : 'local_transaction_finalization_failed',
-    agentInstruction: 'Do not create temporary signing scripts, do not read keypair JSON, and do not call hosted sap_sign_transaction for user-owned signatures. Use sap_payments_finalize_transaction from the local sap_payments bridge. If this tool is missing or no signer is configured, ask the user to run the SAP MCP wizard full setup or repair flow and restart the agent runtime.',
-    nextAction: 'Call sap_payments_readiness. If the local signer is ready, retry sap_payments_finalize_transaction with confirm: true. If readiness says missing bridge or signer, run the wizard repair flow.',
+    agentInstruction: 'Do not create temporary signing scripts, do not read keypair JSON, and do not call hosted sap_sign_transaction for user-owned signatures. Use sap_payments_finalize_transaction from the local sap_payments bridge. For submit:true, prefer the default hosted submit relay unless the user explicitly requests local RPC submission.',
+    nextAction: 'Call sap_payments_readiness. If the local signer is ready, retry sap_payments_finalize_transaction with confirm: true, submit: true, and the same transaction only when retrySafe is true or the prior attempt never submitted. If readiness says missing bridge or signer, run the wizard repair flow.',
   }, null, 2);
 }
 

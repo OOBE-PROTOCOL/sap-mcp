@@ -371,6 +371,7 @@ describe('remote MCP server config', () => {
     });
     expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(info.endpoints.txSubmit).toBe('https://mcp.sap.oobeprotocol.ai/tx/submit');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(info.endpoints.smitheryConfigSchema).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');

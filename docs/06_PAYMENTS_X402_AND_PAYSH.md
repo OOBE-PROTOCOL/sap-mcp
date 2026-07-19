@@ -94,7 +94,7 @@ has a user-controlled wallet profile:
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
 | `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
 | `sap_payments_register_agent` | Local non-custodial SAP agent registration for hosted users when `sap_register_agent` returns `hosted_local_signer_required`. |
-| `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits. |
+| `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits already-signed bytes through the hosted OOBE relay. |
 | `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
 | `sap_payments_verify_receipt` | Decode a payment response/receipt header for inspection. |
@@ -108,7 +108,12 @@ request was rejected before any x402 verification or settlement. Treat it as a
 no-charge routing guard, not a payment failure: the tool needs a local user
 signature or has no production hosted builder yet. Switch to a local SAP MCP
 profile, external signer, or a hosted unsigned builder plus
-`sap_payments_finalize_transaction`. For SAP agent registration specifically,
+`sap_payments_finalize_transaction`. With `submit: true`, the local bridge uses
+`https://mcp.sap.oobeprotocol.ai/tx/submit` by default. That endpoint is
+submit-only: it broadcasts already-signed bytes, waits for a bounded
+confirmation result, and never signs or receives keypair material. Treat
+`expired_or_not_landed` as unresolved, not success; retry only when
+`retrySafe: true` and the user confirms. For SAP agent registration specifically,
 call local `sap_payments_register_agent` with the same registration fields and
 `confirm: true`.
 

@@ -19,6 +19,11 @@ interface TransactionInput {
   encoding?: TransactionEncoding;
   skipPreflight?: boolean;
   maxRetries?: number;
+  confirmationTimeoutMs?: number;
+  commitment?: TransactionSubmitCommitment;
+  submitViaRelay?: boolean;
+  submitRelayUrl?: string;
+  intentId?: string;
 }
 
 interface DecodedTransaction {
@@ -48,12 +53,61 @@ export interface FinalizeTransactionInput {
   submit?: boolean;
   skipPreflight?: boolean;
   maxRetries?: number;
+  confirmationTimeoutMs?: number;
+  commitment?: TransactionSubmitCommitment;
+  submitViaRelay?: boolean;
+  submitRelayUrl?: string;
   confirm?: boolean;
   intentId?: string;
 }
 
 const SYSTEM_TRANSFER_INSTRUCTION_INDEX = 2;
 const SYSTEM_TRANSFER_LAYOUT_BYTES = 12;
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 90_000;
+const MAX_CONFIRMATION_TIMEOUT_MS = 180_000;
+const DEFAULT_TX_SUBMIT_RELAY_URL = 'https://mcp.sap.oobeprotocol.ai/tx/submit';
+
+export type TransactionSubmitCommitment = 'processed' | 'confirmed' | 'finalized';
+
+export interface TransactionSubmitLifecycleInput {
+  signedTransaction: string;
+  encoding?: TransactionEncoding;
+  skipPreflight?: boolean;
+  maxRetries?: number;
+  confirmationTimeoutMs?: number;
+  commitment?: TransactionSubmitCommitment;
+  intentId?: string;
+}
+
+export interface TransactionSubmitLifecycleResult {
+  success: boolean;
+  submitted: true;
+  signature: string;
+  confirmationStatus: string;
+  retrySafe: boolean;
+  slot?: number;
+  explorerUrl: string;
+  audit: {
+    intentId: string;
+    submittedVia: 'local-rpc';
+    confirmationTimeoutMs: number;
+    desiredCommitment: TransactionSubmitCommitment;
+    retrySafe: boolean;
+    rule: string;
+  };
+}
+
+interface RelaySubmitInput extends TransactionSubmitLifecycleInput {
+  submitRelayUrl?: string;
+}
+
+type RelaySubmitResult = Omit<TransactionSubmitLifecycleResult, 'audit'> & {
+  audit: Omit<TransactionSubmitLifecycleResult['audit'], 'submittedVia'> & {
+    submittedVia: 'hosted-submit-relay';
+    relayUrl: string;
+    signerBoundary: 'local-signer-remote-submit-only';
+  };
+};
 
 /**
  * @name decodeInputBytes
@@ -206,6 +260,194 @@ export function serializeTransaction(transaction: SolanaTransaction): string {
 }
 
 /**
+ * @name submitSignedTransactionWithLifecycle
+ * @description Submits a signed transaction through the configured local RPC and waits for a bounded confirmation result.
+ * @param context - Shared MCP runtime context.
+ * @param input - Signed transaction plus send/confirmation options.
+ * @returns Submission lifecycle result with retry guidance.
+ */
+export async function submitSignedTransactionWithLifecycle(
+  context: SapMcpContext,
+  input: TransactionSubmitLifecycleInput,
+): Promise<TransactionSubmitLifecycleResult> {
+  const signedTransaction = input.signedTransaction;
+  const encoding = input.encoding ?? 'base64';
+  const rawTransaction = decodeInputBytes(signedTransaction, encoding);
+
+  await assertTransactionPolicy(context, deserializeTransaction(signedTransaction, encoding));
+
+  const signature = await context.connection.sendRawTransaction(rawTransaction, {
+    skipPreflight: input.skipPreflight,
+    maxRetries: input.maxRetries ?? context.config.maxRetries,
+  });
+  const confirmationTimeoutMs = boundConfirmationTimeout(input.confirmationTimeoutMs);
+  const desiredCommitment = input.commitment ?? 'confirmed';
+  const confirmation = await waitForSignatureStatus(
+    context,
+    signature,
+    confirmationTimeoutMs,
+    desiredCommitment,
+  );
+
+  return {
+    success: confirmation.success,
+    submitted: true,
+    signature,
+    confirmationStatus: confirmation.status,
+    retrySafe: confirmation.retrySafe,
+    ...(confirmation.slot === undefined ? {} : { slot: confirmation.slot }),
+    explorerUrl: `https://solscan.io/tx/${signature}`,
+    audit: {
+      intentId: input.intentId ?? `sap-tx-${Date.now()}`,
+      submittedVia: 'local-rpc',
+      confirmationTimeoutMs,
+      desiredCommitment,
+      retrySafe: confirmation.retrySafe,
+      rule: confirmation.success
+        ? 'The signed transaction was submitted and observed on-chain before returning success.'
+        : 'The signed transaction was submitted but did not reach the requested confirmation state before timeout; retry only when retrySafe is true and the user confirms.',
+    },
+  };
+}
+
+/**
+ * @name submitSignedTransactionViaRelay
+ * @description Submits a signed transaction to the hosted OOBE submit relay. The relay never signs; it only broadcasts and confirms already-signed bytes.
+ * @param input - Signed transaction plus send/confirmation options.
+ * @returns Relay lifecycle result with retry guidance.
+ */
+export async function submitSignedTransactionViaRelay(input: RelaySubmitInput): Promise<RelaySubmitResult> {
+  const relayUrl = input.submitRelayUrl ?? process.env.SAP_MCP_TX_SUBMIT_RELAY_URL ?? DEFAULT_TX_SUBMIT_RELAY_URL;
+  validateRelayUrl(relayUrl);
+
+  const response = await fetch(relayUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      signedTransaction: input.signedTransaction,
+      encoding: input.encoding ?? 'base64',
+      skipPreflight: input.skipPreflight,
+      maxRetries: input.maxRetries,
+      confirmationTimeoutMs: input.confirmationTimeoutMs,
+      commitment: input.commitment,
+      intentId: input.intentId,
+    }),
+  });
+
+  const body = await response.json().catch(() => undefined) as unknown;
+  if (!response.ok) {
+    const message = typeof body === 'object' && body && 'error' in body
+      ? String((body as { error: unknown }).error)
+      : `submit relay returned HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  if (!isRelaySubmitResult(body)) {
+    throw new Error('submit relay returned an invalid transaction lifecycle response.');
+  }
+
+  return {
+    ...body,
+    audit: {
+      ...body.audit,
+      submittedVia: 'hosted-submit-relay',
+      relayUrl,
+      signerBoundary: 'local-signer-remote-submit-only',
+    },
+  };
+}
+
+async function waitForSignatureStatus(
+  context: SapMcpContext,
+  signature: string,
+  timeoutMs: number,
+  desiredCommitment: TransactionSubmitCommitment,
+): Promise<{ success: boolean; retrySafe: boolean; status: string; slot?: number }> {
+  const startedAt = Date.now();
+  let lastStatus = 'missing';
+  let lastSlot: number | undefined;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const statuses = await context.connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    const status = statuses.value[0];
+    if (status?.err) {
+      return {
+        success: false,
+        retrySafe: true,
+        status: 'failed',
+        ...(status.slot === undefined ? {} : { slot: status.slot }),
+      };
+    }
+
+    if (status) {
+      lastStatus = status.confirmationStatus ?? 'processed';
+      lastSlot = status.slot;
+      if (commitmentReached(lastStatus, desiredCommitment)) {
+        return {
+          success: true,
+          retrySafe: false,
+          status: lastStatus,
+          ...(lastSlot === undefined ? {} : { slot: lastSlot }),
+        };
+      }
+    }
+
+    await sleep(2_000);
+  }
+
+  return {
+    success: false,
+    retrySafe: lastStatus === 'missing',
+    status: lastStatus === 'missing' ? 'expired_or_not_landed' : lastStatus,
+    ...(lastSlot === undefined ? {} : { slot: lastSlot }),
+  };
+}
+
+function commitmentReached(current: string, desired: TransactionSubmitCommitment): boolean {
+  const rank: Record<string, number> = {
+    processed: 1,
+    confirmed: 2,
+    finalized: 3,
+  };
+  return (rank[current] ?? 0) >= rank[desired];
+}
+
+function boundConfirmationTimeout(value: number | undefined): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_CONFIRMATION_TIMEOUT_MS;
+  }
+  return Math.max(15_000, Math.min(Number(value), MAX_CONFIRMATION_TIMEOUT_MS));
+}
+
+function validateRelayUrl(value: string): void {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' && url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') {
+    throw new Error('submitRelayUrl must use https, localhost, or 127.0.0.1.');
+  }
+}
+
+function isRelaySubmitResult(value: unknown): value is RelaySubmitResult {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const record = value as Partial<RelaySubmitResult>;
+  return typeof record.success === 'boolean'
+    && record.submitted === true
+    && typeof record.signature === 'string'
+    && typeof record.confirmationStatus === 'string'
+    && typeof record.retrySafe === 'boolean'
+    && typeof record.explorerUrl === 'string'
+    && typeof record.audit === 'object';
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * @name describeTransaction
  * @description Builds a stable JSON preview from a Solana transaction.
  * @param transaction - Deserialized transaction.
@@ -316,20 +558,39 @@ export async function finalizeTransactionWithLocalSigner(
   };
 
   if (input.submit === true) {
-    const signature = await context.connection.sendRawTransaction(
-      decodeInputBytes(signedTransactionBase64, 'base64'),
-      {
+    const submitResult = input.submitViaRelay === false
+      ? await submitSignedTransactionWithLifecycle(context, {
+        signedTransaction: signedTransactionBase64,
+        encoding: 'base64',
         skipPreflight: input.skipPreflight,
         maxRetries: input.maxRetries,
-      },
-    );
+        confirmationTimeoutMs: input.confirmationTimeoutMs,
+        commitment: input.commitment,
+        intentId: input.intentId,
+      })
+      : await submitSignedTransactionViaRelay({
+        signedTransaction: signedTransactionBase64,
+        encoding: 'base64',
+        skipPreflight: input.skipPreflight,
+        maxRetries: input.maxRetries,
+        confirmationTimeoutMs: input.confirmationTimeoutMs,
+        commitment: input.commitment,
+        submitRelayUrl: input.submitRelayUrl,
+        intentId: input.intentId,
+      });
 
-    result.submitted = true;
-    result.signature = signature;
+    result.success = submitResult.success;
+    result.submitted = submitResult.submitted;
+    result.signature = submitResult.signature;
+    result.confirmationStatus = submitResult.confirmationStatus;
+    result.retrySafe = submitResult.retrySafe;
+    result.explorerUrl = submitResult.explorerUrl;
     result.audit = {
       ...(result.audit as Record<string, unknown>),
-      submitted: true,
-      signature,
+      ...submitResult.audit,
+      submitted: submitResult.submitted,
+      signature: submitResult.signature,
+      transactionLanded: submitResult.success,
     };
   }
 
@@ -444,6 +705,11 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
         skipPreflight: { type: 'boolean', description: 'Skip RPC preflight checks' },
         maxRetries: { type: 'number', description: 'Maximum RPC send retries' },
+        confirmationTimeoutMs: { type: 'number', description: 'Bounded confirmation wait in milliseconds. Defaults to 90000; maximum 180000.' },
+        commitment: { type: 'string', enum: ['processed', 'confirmed', 'finalized'], description: 'Desired confirmation status before returning success. Defaults to confirmed.' },
+        submitViaRelay: { type: 'boolean', description: 'When true, submit through the hosted OOBE relay. The relay only broadcasts already-signed bytes and never signs. Defaults to false for this local tool.' },
+        submitRelayUrl: { type: 'string', description: 'Optional submit relay URL. Must be HTTPS, localhost, or 127.0.0.1.' },
+        intentId: { type: 'string', description: 'Optional caller-provided id binding submission, confirmation, and audit output.' },
       },
     },
     async (input: TransactionInput) => {
@@ -452,20 +718,28 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           throw new Error('signedTransaction is required');
         }
 
-        const rawTransaction = decodeInputBytes(input.signedTransaction, input.encoding);
-        await assertTransactionPolicy(
-          context,
-          deserializeTransaction(input.signedTransaction, input.encoding)
-        );
-        const signature = await context.connection.sendRawTransaction(rawTransaction, {
-          skipPreflight: input.skipPreflight,
-          maxRetries: input.maxRetries,
-        });
+        const result = input.submitViaRelay === true
+          ? await submitSignedTransactionViaRelay({
+            signedTransaction: input.signedTransaction,
+            encoding: input.encoding,
+            skipPreflight: input.skipPreflight,
+            maxRetries: input.maxRetries,
+            confirmationTimeoutMs: input.confirmationTimeoutMs,
+            commitment: input.commitment,
+            submitRelayUrl: input.submitRelayUrl,
+            intentId: input.intentId,
+          })
+          : await submitSignedTransactionWithLifecycle(context, {
+            signedTransaction: input.signedTransaction,
+            encoding: input.encoding,
+            skipPreflight: input.skipPreflight,
+            maxRetries: input.maxRetries,
+            confirmationTimeoutMs: input.confirmationTimeoutMs,
+            commitment: input.commitment,
+            intentId: input.intentId,
+          });
 
-        return createTextResponse(JSON.stringify({
-          success: true,
-          signature,
-        }, null, 2));
+        return createTextResponse(JSON.stringify(result, null, 2), { isError: !result.success });
       } catch (error) {
         return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }

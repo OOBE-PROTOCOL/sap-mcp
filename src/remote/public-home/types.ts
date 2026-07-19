@@ -19,6 +19,7 @@ export interface LandingPublicServerInfo {
     landing: string;
     docs: string;
     mcp: string;
+    txSubmit: string;
     health: string;
     serverInfo: string;
     openApi: string;
