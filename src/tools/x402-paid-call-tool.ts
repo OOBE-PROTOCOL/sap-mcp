@@ -99,6 +99,7 @@ interface PaymentsRegisterAgentToolInput {
   agentUri?: string;
   metadataUri?: string;
   x402Endpoint?: string;
+  confirmationTimeoutMs?: number;
   confirm?: boolean;
 }
 
@@ -221,19 +222,24 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
         agentUri: { type: 'string', description: 'Optional URI to the agent off-chain metadata or service endpoint.' },
         metadataUri: { type: 'string', description: 'Alias for agentUri; URI to off-chain agent metadata JSON.' },
         x402Endpoint: { type: 'string', description: 'Optional x402 payment/discovery endpoint URL advertised by this agent.' },
+        confirmationTimeoutMs: {
+          type: 'number',
+          description: 'Optional local confirmation wait in milliseconds. Defaults to 90000 so the tool can distinguish confirmed registration from an expired/not-landed transaction.',
+        },
         confirm: { type: 'boolean', description: 'Must be true. Confirms the user wants the local signer to submit this SAP registry transaction.' },
       },
       outputSchema: {
         type: 'object',
         properties: {
-          success: { type: 'boolean', description: 'Whether the local SAP agent registration transaction was submitted.' },
+          success: { type: 'boolean', description: 'Whether the local SAP agent registration account was confirmed on-chain.' },
           signature: { type: 'string', description: 'Solana transaction signature returned by the SAP SDK.' },
+          confirmationStatus: { type: 'string', description: 'Final local confirmation result: confirmed, finalized, processed, expired, missing, or failed.' },
           signerPublicKey: { type: 'string', description: 'Public key of the local SAP MCP signer that registered the agent.' },
           profile: { type: 'string', description: 'Active local SAP MCP profile used for registration when available.' },
           agent: { type: 'object', description: 'Agent registration fields submitted on-chain.' },
           audit: { type: 'object', description: 'Agent-readable proof that the write was local, non-custodial, and did not use hosted x402.' },
         },
-        required: ['success', 'signature', 'signerPublicKey', 'agent', 'audit'],
+        required: ['success', 'signature', 'confirmationStatus', 'signerPublicKey', 'agent', 'audit'],
       },
       annotations: {
         readOnlyHint: false,
@@ -253,11 +259,48 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
 
         const args = parseRegisterAgentArgs(parsed as Record<string, unknown>);
         const signature = await context.sapClient.agent.register(args);
+        const confirmation = await waitForLocalAgentRegistration(context, signature, parsed.confirmationTimeoutMs);
+        if (!confirmation.confirmed) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            signature,
+            confirmationStatus: confirmation.status,
+            signerPublicKey,
+            profile: activeProfile,
+            agentPda: confirmation.agentPda,
+            agent: {
+              name: args.name,
+              description: args.description,
+              agentId: args.agentId,
+              agentUri: args.agentUri,
+              x402Endpoint: args.x402Endpoint,
+              protocols: args.protocols,
+              capabilityCount: args.capabilities.length,
+              pricingTierCount: args.pricing.length,
+            },
+            audit: {
+              action: 'sap_payments_register_agent',
+              registeredLocally: true,
+              hostedX402Charged: false,
+              signerBoundary: 'local-sap-payments-bridge',
+              secretMaterial: 'keypair-bytes-never-returned',
+              transactionLanded: false,
+              retrySafe: confirmation.retrySafe,
+              rule: 'The local signer submitted the SAP registry transaction, but the transaction did not confirm or the agent account was not found inside the local confirmation window.',
+              nextAction: confirmation.retrySafe
+                ? 'Ask the user for confirmation, then retry sap_payments_register_agent once with the same fields and confirm: true. Do not call hosted sap_register_agent.'
+                : 'Do not retry automatically. Inspect the signature and local RPC health first.',
+            },
+          }, null, 2), { isError: true });
+        }
+
         return createTextResponse(JSON.stringify({
           success: true,
           signature,
+          confirmationStatus: confirmation.status,
           signerPublicKey,
           profile: activeProfile,
+          agentPda: confirmation.agentPda,
           agent: {
             name: args.name,
             description: args.description,
@@ -274,6 +317,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
             hostedX402Charged: false,
             signerBoundary: 'local-sap-payments-bridge',
             secretMaterial: 'keypair-bytes-never-returned',
+            transactionLanded: true,
             rule: 'Hosted sap_register_agent is accountless and cannot sign user-owned registry writes. This local bridge submitted the SAP registry transaction with the user-controlled profile signer.',
           },
         }, null, 2));
@@ -282,6 +326,59 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
       }
     },
   );
+}
+
+async function waitForLocalAgentRegistration(
+  context: SapMcpContext,
+  signature: string,
+  timeoutMs = 90_000,
+): Promise<{
+  confirmed: boolean;
+  retrySafe: boolean;
+  status: string;
+  agentPda: string;
+}> {
+  const boundedTimeoutMs = Math.max(15_000, Math.min(timeoutMs, 180_000));
+  const startedAt = Date.now();
+  const [agentPda] = context.sapClient.agent.deriveAgent();
+  let lastStatus = 'missing';
+
+  while (Date.now() - startedAt < boundedTimeoutMs) {
+    const statuses = await context.connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    const status = statuses.value[0];
+    if (status?.err) {
+      return {
+        confirmed: false,
+        retrySafe: true,
+        status: 'failed',
+        agentPda: agentPda.toBase58(),
+      };
+    }
+
+    lastStatus = status?.confirmationStatus ?? lastStatus;
+    const agent = await context.sapClient.agent.fetchNullable();
+    if (agent) {
+      return {
+        confirmed: true,
+        retrySafe: false,
+        status: status?.confirmationStatus ?? 'confirmed',
+        agentPda: agentPda.toBase58(),
+      };
+    }
+
+    await sleep(2_000);
+  }
+
+  return {
+    confirmed: false,
+    retrySafe: lastStatus === 'missing',
+    status: lastStatus === 'missing' ? 'expired_or_not_landed' : lastStatus,
+    agentPda: agentPda.toBase58(),
+  };
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function registerPaymentsCallExternalX402Tool(server: Server): void {

@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.12 - 2026-07-19
+
+### Improved
+
+- Hardened `sap_payments_register_agent` so local SAP agent registration no
+  longer reports a bare submitted signature as success. The bridge now waits
+  for the signature/account to appear on-chain, returns the derived agent PDA,
+  and clearly distinguishes confirmed registration from expired/not-landed
+  transactions.
+- Added agent-readable retry guidance for local registration submissions that
+  do not land inside the confirmation window. Agents should ask the user before
+  retrying once with the same fields, and must not fall back to hosted
+  `sap_register_agent`.
+
 ## 0.9.11 - 2026-07-19
 
 ### Added
