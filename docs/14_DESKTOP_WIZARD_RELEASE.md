@@ -66,7 +66,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 ```toml
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.13-rc", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.13", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
