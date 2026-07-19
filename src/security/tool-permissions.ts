@@ -61,6 +61,7 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
   ],
   'registry:write': [
     'sap_register_agent',
+    'sap_payments_register_agent',
     'sap_update_agent',
     'sap_deactivate_agent',
     'sap_reactivate_agent',

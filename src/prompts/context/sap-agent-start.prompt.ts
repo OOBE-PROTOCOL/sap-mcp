@@ -100,7 +100,8 @@ Do not infer that tools are callable from startup logs alone. A tool is callable
 - Paid hosted tools return HTTP 402 with x402/pay.sh payment requirements. Treat that as the normal payment handshake, not as a failure.
 - Prefer local \`sap_payments_call_paid_tool\` for paid/write hosted calls. \`sap_x402_paid_call\` is a legacy alias.
 - If a hosted paid/write tool returns \`transactionBase64\`, \`transaction\`, or an unsigned transaction object, finalize it through local \`sap_payments_finalize_transaction\`.
-- If hosted SAP MCP returns \`hosted_local_signer_required\`, no x402 payment was charged. Do not retry the same hosted direct write; switch to the local SAP MCP profile or a hosted unsigned builder plus \`sap_payments_finalize_transaction\` when one exists.
+- If hosted \`sap_register_agent\` returns \`hosted_local_signer_required\`, no x402 payment was charged. Do not retry hosted \`sap_register_agent\`; call local \`sap_payments_register_agent\` with the same registration fields and \`confirm: true\`.
+- If another hosted write returns \`hosted_local_signer_required\`, no x402 payment was charged. Switch to the local SAP MCP profile or a hosted unsigned builder plus \`sap_payments_finalize_transaction\` when one exists.
 - Never create temporary signing scripts, read keypair JSON, export keypair bytes, or call hosted \`sap_sign_transaction\` for user-owned signing.
 - Never ask the user for private key bytes. The local SAP profile or external signer signs payment payloads.
 - If a payment retry sees \`BlockhashNotFound\`, \`transaction_simulation_failed\`, \`node is behind\`, or an expired payload, create a fresh challenge through \`sap_payments_call_paid_tool\`. Do not reuse old signed payment payloads.

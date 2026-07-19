@@ -33,9 +33,12 @@ state, global directory listing, and agent profile inspection.
 
 - Hosted accountless SAP MCP cannot sign user-owned registry writes. If
   `sap_register_agent`, `sap_update_agent`, or another registry write returns
-  `hosted_local_signer_required`, no x402 payment was charged; run the write on
-  the local SAP MCP profile or use a production unsigned builder/finalizer flow
-  when available.
+  `hosted_local_signer_required`, no x402 payment was charged. For agent
+  registration, call the local `sap_payments.sap_payments_register_agent`
+  bridge with the same fields and `confirm: true`; it signs locally with the
+  active SAP MCP profile. For other registry writes, run the write on the local
+  SAP MCP profile or use a production unsigned builder/finalizer flow when
+  available.
 - "Find XONA Agent" or "find an agent by name" means `sap_discover_agents` with
   `query`.
 - "Find x402 agents" means `sap_discover_agents` with
@@ -49,4 +52,4 @@ state, global directory listing, and agent profile inspection.
 ## Safety
 
 Registration and update tools are write operations. Explain the action, read
-policy context, and never inspect keypair files.
+policy context, require explicit confirmation, and never inspect keypair files.

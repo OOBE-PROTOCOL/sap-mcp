@@ -22,6 +22,7 @@ import {
   type X402PaidCallInput,
 } from '../payments/x402-paid-call.js';
 import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
+import { parseRegisterAgentArgs } from './sap-sdk-tools.js';
 
 interface X402PaidCallToolInput {
   endpoint?: string;
@@ -86,6 +87,19 @@ interface PaymentsFinalizeTransactionToolInput {
   maxRetries?: number;
   confirm?: boolean;
   intentId?: string;
+}
+
+interface PaymentsRegisterAgentToolInput {
+  name?: string;
+  description?: string;
+  capabilities?: unknown[];
+  pricing?: unknown[];
+  protocols?: string[];
+  agentId?: string;
+  agentUri?: string;
+  metadataUri?: string;
+  x402Endpoint?: string;
+  confirm?: boolean;
 }
 
 const paidCallInputSchema = {
@@ -180,6 +194,7 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsReadinessTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
   registerPaymentsCallExternalX402Tool(server);
+  registerPaymentsRegisterAgentTool(server, _context);
   registerPaymentsFinalizeTransactionTool(server, _context);
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
@@ -187,6 +202,86 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
+}
+
+function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContext): void {
+  registerTool(
+    server,
+    'sap_payments_register_agent',
+    {
+      title: 'Register SAP Agent With Local Signer',
+      description: 'Local non-custodial SAP registry write for hosted users. Use this when hosted sap_register_agent returns hosted_local_signer_required. It registers the active local SAP MCP profile wallet as an on-chain SAP agent with the local signer; OOBE never receives keypair bytes. This tool does not pay a hosted x402 fee because it runs locally through sap_payments. Requires confirm: true.',
+      inputSchema: {
+        name: { type: 'string', description: 'Human-readable SAP agent name.' },
+        description: { type: 'string', description: 'Detailed description of the agent purpose and capabilities.' },
+        capabilities: { type: 'array', description: 'Capability objects or strings identifying what the agent can do, for example "jupiter:swap" or "sns:identity".' },
+        pricing: { type: 'array', description: 'Pricing tier objects defining per-call costs, rate limits, and settlement terms. Use micro-USDC/base token units where applicable.' },
+        protocols: { type: 'array', items: { type: 'string' }, description: 'Protocol identifiers supported by the agent, for example sap, mcp, jupiter, sns, metaplex, or x402.' },
+        agentId: { type: 'string', description: 'Optional stable agent identifier, for example solking.' },
+        agentUri: { type: 'string', description: 'Optional URI to the agent off-chain metadata or service endpoint.' },
+        metadataUri: { type: 'string', description: 'Alias for agentUri; URI to off-chain agent metadata JSON.' },
+        x402Endpoint: { type: 'string', description: 'Optional x402 payment/discovery endpoint URL advertised by this agent.' },
+        confirm: { type: 'boolean', description: 'Must be true. Confirms the user wants the local signer to submit this SAP registry transaction.' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the local SAP agent registration transaction was submitted.' },
+          signature: { type: 'string', description: 'Solana transaction signature returned by the SAP SDK.' },
+          signerPublicKey: { type: 'string', description: 'Public key of the local SAP MCP signer that registered the agent.' },
+          profile: { type: 'string', description: 'Active local SAP MCP profile used for registration when available.' },
+          agent: { type: 'object', description: 'Agent registration fields submitted on-chain.' },
+          audit: { type: 'object', description: 'Agent-readable proof that the write was local, non-custodial, and did not use hosted x402.' },
+        },
+        required: ['success', 'signature', 'signerPublicKey', 'agent', 'audit'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const parsed = parseRegisterAgentInput(input);
+        const activeProfile = getActiveProfile();
+        const signerPublicKey = context.signer?.publicKey.toBase58();
+        if (!signerPublicKey) {
+          throw new Error('No local signer configured. Run the SAP MCP wizard full setup or repair the local sap_payments bridge, then restart the agent runtime.');
+        }
+
+        const args = parseRegisterAgentArgs(parsed as Record<string, unknown>);
+        const signature = await context.sapClient.agent.register(args);
+        return createTextResponse(JSON.stringify({
+          success: true,
+          signature,
+          signerPublicKey,
+          profile: activeProfile,
+          agent: {
+            name: args.name,
+            description: args.description,
+            agentId: args.agentId,
+            agentUri: args.agentUri,
+            x402Endpoint: args.x402Endpoint,
+            protocols: args.protocols,
+            capabilityCount: args.capabilities.length,
+            pricingTierCount: args.pricing.length,
+          },
+          audit: {
+            action: 'sap_payments_register_agent',
+            registeredLocally: true,
+            hostedX402Charged: false,
+            signerBoundary: 'local-sap-payments-bridge',
+            secretMaterial: 'keypair-bytes-never-returned',
+            rule: 'Hosted sap_register_agent is accountless and cannot sign user-owned registry writes. This local bridge submitted the SAP registry transaction with the user-controlled profile signer.',
+          },
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(formatLocalRegistryError(error), { isError: true });
+      }
+    },
+  );
 }
 
 function registerPaymentsCallExternalX402Tool(server: Server): void {
@@ -657,6 +752,19 @@ function parseExternalInput(input: unknown): X402ExternalCallInput {
   };
 }
 
+function parseRegisterAgentInput(input: unknown): PaymentsRegisterAgentToolInput {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('sap_payments_register_agent requires an input object.');
+  }
+
+  const record = input as PaymentsRegisterAgentToolInput;
+  if (record.confirm !== true) {
+    throw new Error('confirm: true is required to submit a local SAP registry transaction.');
+  }
+
+  return record;
+}
+
 function parseProbeInput(input: unknown): X402ChallengeProbeInput {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('sap_payments_prepare_challenge requires an input object.');
@@ -731,6 +839,7 @@ function parseFinalizeTransactionInput(input: unknown): PaymentsFinalizeTransact
 }
 
 type X402PaidCallErrorCategory = 'x402_transient_rpc' | 'x402_client_or_config';
+type LocalRegistryErrorCategory = 'local_signer_missing' | 'local_registry_write_failed';
 
 interface X402PaidCallErrorPayload {
   success: false;
@@ -758,6 +867,28 @@ function formatPaidCallError(error: unknown): string {
   };
 
   return JSON.stringify(payload, null, 2);
+}
+
+function formatLocalRegistryError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  const signerMissing = normalized.includes('no local signer') || normalized.includes('no signer configured');
+  const retryable = isRetryablePaymentError(message);
+  const category: LocalRegistryErrorCategory = signerMissing
+    ? 'local_signer_missing'
+    : 'local_registry_write_failed';
+
+  return JSON.stringify({
+    success: false,
+    error: message,
+    retryable,
+    category,
+    hostedX402Charged: false,
+    agentInstruction: 'For SAP agent registration from hosted-user setups, call sap_payments_register_agent from the local sap_payments bridge. Do not retry hosted sap_register_agent after hosted_local_signer_required, and do not create temporary signing scripts or read keypair JSON.',
+    nextAction: signerMissing
+      ? 'Call sap_payments_readiness. If signerConfigured is false, run the SAP MCP wizard full setup or repair flow and restart the agent runtime.'
+      : 'Check the registration fields, local profile, SOL fee balance, and SAP program/RPC status. Retry sap_payments_register_agent only after explicit user confirmation.',
+  }, null, 2);
 }
 
 function formatFinalizeTransactionError(error: unknown): string {

@@ -93,6 +93,7 @@ has a user-controlled wallet profile:
 | `sap_payments_readiness` | Free local readiness check for hosted MCP, active profile, signer, SOL/USDC balance, and commerce policy limits. Call this first for paid/write workflows. |
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
 | `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
+| `sap_payments_register_agent` | Local non-custodial SAP agent registration for hosted users when `sap_register_agent` returns `hosted_local_signer_required`. |
 | `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits. |
 | `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
@@ -107,7 +108,9 @@ request was rejected before any x402 verification or settlement. Treat it as a
 no-charge routing guard, not a payment failure: the tool needs a local user
 signature or has no production hosted builder yet. Switch to a local SAP MCP
 profile, external signer, or a hosted unsigned builder plus
-`sap_payments_finalize_transaction`.
+`sap_payments_finalize_transaction`. For SAP agent registration specifically,
+call local `sap_payments_register_agent` with the same registration fields and
+`confirm: true`.
 
 External x402 agents are a separate flow. If an SAP registry lookup returns an
 agent-owned HTTP x402 endpoint, call the local

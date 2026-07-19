@@ -177,9 +177,12 @@ read keypair JSON.
 
 If hosted SAP MCP returns `hosted_local_signer_required`, no x402 payment was
 charged. The tool requires a local user signature or has no hosted unsigned
-builder yet. Do not retry the same hosted direct write; use the local SAP MCP
-profile or an unsigned hosted builder plus `sap_payments_finalize_transaction`
-when one exists.
+builder yet. For `sap_register_agent`, call
+`sap_payments.sap_payments_register_agent` with the same registration fields and
+`confirm: true`; it runs the SAP registry write through the local signer bridge
+without charging a hosted x402 access fee. For other direct writes, do not retry
+the same hosted tool; use the local SAP MCP profile or an unsigned hosted
+builder plus `sap_payments_finalize_transaction` when one exists.
 
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or

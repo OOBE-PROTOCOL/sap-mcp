@@ -963,7 +963,7 @@ function parseProtocols(value: unknown): string[] {
  * @name parseRegisterAgentArgs
  * @description Builds strongly typed `RegisterAgentArgs` from MCP JSON input.
  */
-function parseRegisterAgentArgs(input: JsonRecord): RegisterAgentArgs {
+export function parseRegisterAgentArgs(input: JsonRecord): RegisterAgentArgs {
   return {
     name: requiredString(input, 'name'),
     description: requiredString(input, 'description'),

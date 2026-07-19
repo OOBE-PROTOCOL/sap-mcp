@@ -109,6 +109,7 @@ For hosted paid/write tools, clients may also need a local `sap_payments` bridge
 sap_payments_readiness
 sap_payments_call_paid_tool
 sap_payments_call_external_x402
+sap_payments_register_agent
 sap_payments_finalize_transaction
 sap_payments_prepare_challenge
 sap_payments_sign_challenge

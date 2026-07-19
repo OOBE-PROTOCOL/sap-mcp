@@ -106,7 +106,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.10", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.11", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -119,7 +119,7 @@ SAP_LOG_LEVEL = "info"
 
 On Windows, the command is `npx.cmd`.
 
-The hosted `sap` server lists and executes remote SAP MCP tools. The local `sap_payments` bridge signs x402 payment proofs with the active local SAP MCP profile, retries paid hosted calls, and finalizes unsigned hosted transactions with `sap_payments_finalize_transaction` without exposing keypair bytes.
+The hosted `sap` server lists and executes remote SAP MCP tools. The local `sap_payments` bridge signs x402 payment proofs with the active local SAP MCP profile, retries paid hosted calls, registers SAP agents locally with `sap_payments_register_agent` when hosted direct registration is blocked, and finalizes unsigned hosted transactions with `sap_payments_finalize_transaction` without exposing keypair bytes.
 
 ## 6. Runtime Configs Written By The GUI
 
@@ -138,7 +138,7 @@ Claude Desktop uses a root `mcpServers` JSON object:
     },
     "sap_payments": {
       "command": "npx",
-      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.10", "sap-mcp-server"],
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.11", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
         "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",
@@ -170,7 +170,7 @@ Hermes global `mcp.json` uses flat server entries:
   },
   "sap_payments": {
     "command": "npx",
-    "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.10", "sap-mcp-server"],
+    "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.11", "sap-mcp-server"],
     "env": {
       "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
       "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",
@@ -193,7 +193,7 @@ mcp_servers:
     args:
       - "--yes"
       - "--package"
-      - "@oobe-protocol-labs/sap-mcp-server@0.9.10"
+      - "@oobe-protocol-labs/sap-mcp-server@0.9.11"
       - "sap-mcp-server"
     env:
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: "false"
@@ -215,7 +215,7 @@ OpenClaw MCP JSON uses the same root `mcpServers` structure as generic MCP clien
     },
     "sap_payments": {
       "command": "npx",
-      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.10", "sap-mcp-server"],
+      "args": ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.11", "sap-mcp-server"],
       "env": {
         "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
         "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",

@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.11 - 2026-07-19
+
+### Added
+
+- Added `sap_payments_register_agent`, a local `sap_payments` bridge tool for
+  non-custodial SAP agent registration from hosted-user setups. Agents should
+  call it when hosted `sap_register_agent` returns
+  `hosted_local_signer_required`, using the same registration fields plus
+  `confirm: true`. The write is submitted by the user's local SAP profile
+  signer and does not charge a hosted x402 access fee.
+
+### Improved
+
+- Updated the wizard repair manifest, bundled skills, and user docs so Codex,
+  Hermes, Claude, OpenClaw, and compatible runtimes can verify that the local
+  `sap_payments` bridge exposes profile, readiness, hosted paid-call, external
+  x402, local registration, and transaction finalization tools after restart.
+- Added agent-readable local registry error output that tells agents not to
+  retry impossible hosted accountless registry writes or create temporary
+  signing scripts.
+
 ## 0.9.10 - 2026-07-18
 
 ### Added

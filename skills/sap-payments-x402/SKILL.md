@@ -10,6 +10,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_payments_profile_current`
 - `sap_payments_call_paid_tool`
 - `sap_payments_call_external_x402`
+- `sap_payments_register_agent`
 - `sap_payments_finalize_transaction`
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`
@@ -90,6 +91,13 @@ hand-roll HTTP payment scripts. Call `sap_payments_call_external_x402` with
 agent's own x402 endpoint. It fetches the external 402 challenge, signs locally,
 retries the same HTTP request with `PAYMENT-SIGNATURE`, and returns the response
 plus receipt without exposing keypair bytes.
+
+For hosted-user SAP agent registration, do not retry hosted
+`sap_register_agent` after `hosted_local_signer_required`. The hosted server is
+accountless by design and cannot sign user-owned registry writes. Call local
+`sap_payments_register_agent` with the same registration fields and
+`confirm: true`; it uses the active local SAP MCP profile signer, submits the
+SAP registry transaction locally, and does not charge a hosted x402 access fee.
 
 If the hosted paid tool returns `transactionBase64`, `transaction`, or an
 unsigned transaction object, call `sap_payments_finalize_transaction` with
