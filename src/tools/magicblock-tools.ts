@@ -327,8 +327,7 @@ interface VrfResultInput {
 interface ToolSuccessResponse<T> {
   readonly success: true;
   readonly tool: string;
-  readonly priceUsd: string;
-  readonly priceBaseUnits: string;
+  readonly hostedPricing: string;
   readonly data: T;
 }
 
@@ -356,29 +355,7 @@ const VRF_PROGRAM_IDENTITY = new PublicKey('9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe
 const DEFAULT_QUEUE = new PublicKey('Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh');
 const DEFAULT_EPHEMERAL_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc');
 
-// ─── Pricing Constants ────────────────────────────────────────────
-
-const READ_PRICE_USDC = 10_000n;
-const WRITE_PRICE_USDC = 50_000n;
-
-const READ_TOOLS = new Set<string>([
-  'magicblock_getRoutes', 'magicblock_getIdentity', 'magicblock_getDelegationStatus',
-  'magicblock_getAccountInfo', 'magicblock_getBlockhashForAccounts', 'magicblock_getSignatureStatuses',
-  'magicblock_health', 'magicblock_challenge', 'magicblock_login',
-  'magicblock_balance', 'magicblock_privateBalance', 'magicblock_swapQuote',
-  'magicblock_isMintInitialized', 'magicblock_getRandomnessResult',
-]);
-
-const WRITE_TOOLS = new Set<string>([
-  'magicblock_deposit', 'magicblock_transfer', 'magicblock_withdraw',
-  'magicblock_swap', 'magicblock_initializeMint', 'magicblock_requestRandomness',
-]);
-
-function getPriceForTool(toolName: string): bigint {
-  if (READ_TOOLS.has(toolName)) return READ_PRICE_USDC;
-  if (WRITE_TOOLS.has(toolName)) return WRITE_PRICE_USDC;
-  throw new Error(`No pricing defined for tool: ${toolName}`);
-}
+const WRAPPED_SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 // ═══════════════════════════════════════════════════════════════════
 //  HTTP Helpers (stateless — zero external deps, uses global fetch)
@@ -470,6 +447,55 @@ const endpointField = f.enum("MagicBlock Router endpoint: 'mainnet' or 'devnet'"
 const clusterField = f.string("Cluster: 'mainnet', 'devnet', or custom RPC URL");
 const validatorField = f.string('Optional ER validator pubkey. Defaults to the selected ephemeral RPC identity.');
 
+function requireValidPubkey(value: string | undefined, fieldName: string): void {
+  if (!value) {
+    throw new Error(`missing_required_field: ${fieldName}`);
+  }
+
+  try {
+    void new PublicKey(value);
+  } catch {
+    throw new Error(`invalid_solana_pubkey: ${fieldName}`);
+  }
+}
+
+function requirePositiveSafeInteger(value: number, fieldName: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer in token base units`);
+  }
+}
+
+function isWrappedSolMint(mint: string | undefined): boolean {
+  return mint === WRAPPED_SOL_MINT;
+}
+
+function validateMagicBlockTransferInput(input: TransferInput): void {
+  requireValidPubkey(input.from, 'from');
+  requireValidPubkey(input.to, 'to');
+  requireValidPubkey(input.mint, 'mint');
+  requirePositiveSafeInteger(input.amount, 'amount');
+
+  if (input.visibility === 'private' && !input.authToken) {
+    throw new Error('magicblock_private_transfer_auth_required: call magicblock_challenge and magicblock_login first, then pass authToken.');
+  }
+}
+
+function validateMagicBlockSwapInput(input: SwapInput): void {
+  requireValidPubkey(input.userPublicKey, 'userPublicKey');
+
+  if (input.visibility !== 'private') {
+    return;
+  }
+
+  requireValidPubkey(input.destination, 'destination');
+
+  if (isWrappedSolMint(input.quoteResponse?.outputMint)) {
+    throw new Error(
+      'magicblock_private_swap_wsol_output_blocked: private swaps that output wSOL are disabled because live mainnet testing found Hydra delivery can leave wSOL stuck in the mixer pool. Use visibility="public", swap into a non-SOL SPL token, or wait for MagicBlock shuttle delivery recovery support.',
+    );
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  Registration
 // ═══════════════════════════════════════════════════════════════════
@@ -505,13 +531,10 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   }
 
   function success<T>(data: T, toolName: string) {
-    const price = getPriceForTool(toolName);
-    const priceUsd = Number(price) / 1e6;
     const response: ToolSuccessResponse<T> = {
       success: true,
       tool: toolName,
-      priceUsd: `$${priceUsd.toFixed(2)}`,
-      priceBaseUnits: price.toString(),
+      hostedPricing: 'Resolved by the SAP MCP x402/payment gate. Use sap_x402_estimate_cost or sap_payments_call_paid_tool maxPriceUsd; do not rely on MagicBlock response payload pricing.',
       data,
     };
     return createTextResponse(JSON.stringify(response, null, 2));
@@ -714,6 +737,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     async (raw) => {
       try {
         const input = parseInput<TransferInput>(raw);
+        validateMagicBlockTransferInput(input);
         const result = await apiPost<UnsignedTransactionResponse>('/v1/spl/transfer', {
           from: input.from, to: input.to, mint: input.mint, amount: input.amount,
           visibility: input.visibility, fromBalance: input.fromBalance, toBalance: input.toBalance,
@@ -775,11 +799,12 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<SwapInput>('magicblock_swap',
-    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter, 'private' mode routes output through a scheduled private transfer with delay and split. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
+    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter. 'private' mode routes output through scheduled private transfer with delay and split, requires destination, and currently rejects wSOL output because live mainnet testing found stuck-fund risk in MagicBlock shuttle delivery. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
     schema({ userPublicKey: f.pubkey('Wallet that will sign the swap transaction'), quoteResponse: f.object('Quote response object from magicblock_swapQuote (pass as-is)', {}), visibility: f.enum("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']), destination: f.pubkey("Final private-transfer recipient (required when visibility='private')"), minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle"), maxDelayMs: f.string("Private only. Latest (ms) the queued transfer may settle (<= 600000)"), split: f.number('Private only. Number of queue entries to split across (1-14)'), clientRefId: f.string('Private only. Optional u64 client correlation ID'), validator: f.string('Optional validator pubkey for the transfer-queue PDA'), wrapAndUnwrapSol: f.boolean('Auto wrap/unwrap native SOL when needed (default true)'), asLegacyTransaction: f.boolean('Build a legacy transaction (not allowed when visibility=private, default false)') }, ['userPublicKey', 'quoteResponse']),
     async (raw) => {
       try {
         const input = parseInput<SwapInput>(raw);
+        validateMagicBlockSwapInput(input);
         const result = await apiPost<SwapTransactionResponse>('/v1/swap/swap', {
           userPublicKey: input.userPublicKey, quoteResponse: input.quoteResponse,
           ...stripNullish({

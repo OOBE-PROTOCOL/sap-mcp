@@ -101,6 +101,8 @@ Do not infer that tools are callable from startup logs alone. A tool is callable
 - Prefer local \`sap_payments_call_paid_tool\` for paid/write hosted calls. \`sap_x402_paid_call\` is a legacy alias.
 - If a hosted paid/write tool returns \`transactionBase64\`, \`transaction\`, or an unsigned transaction object, finalize it through local \`sap_payments_finalize_transaction\`.
 - If hosted \`sap_register_agent\` returns \`hosted_local_signer_required\`, no x402 payment was charged. Do not retry hosted \`sap_register_agent\`; call local \`sap_payments_register_agent\` with the same registration fields and \`confirm: true\`.
+- If hosted \`sap_update_agent\` returns \`hosted_local_signer_required\`, no x402 payment was charged. Do not retry hosted \`sap_update_agent\`; call local \`sap_payments_update_agent\` with the intended replacement fields and \`confirm: true\`.
+- For Escrow V2 hosted flows, use \`sap_escrow_build_create_transaction\`, \`sap_escrow_build_deposit_transaction\`, \`sap_escrow_build_settle_transaction\`, \`sap_escrow_build_finalize_transaction\`, \`sap_escrow_build_withdraw_transaction\`, or \`sap_escrow_build_close_transaction\`, then finalize locally with \`sap_payments_finalize_transaction\`.
 - If another hosted write returns \`hosted_local_signer_required\`, no x402 payment was charged. Switch to the local SAP MCP profile or a hosted unsigned builder plus \`sap_payments_finalize_transaction\` when one exists.
 - Never create temporary signing scripts, read keypair JSON, export keypair bytes, or call hosted \`sap_sign_transaction\` for user-owned signing.
 - Never ask the user for private key bytes. The local SAP profile or external signer signs payment payloads.

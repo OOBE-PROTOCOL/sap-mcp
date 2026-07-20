@@ -17,6 +17,16 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 
 Do not apply percentage fees blindly to swaps or financial routing. Those workflows may create compliance, custody, and routing implications.
 
+Machine-readable pricing is exposed from the same hosted pricing registry at:
+
+```text
+GET https://mcp.sap.oobeprotocol.ai/pricing.json
+```
+
+Agents can also call the free hosted tool `sap_pricing_catalog`. Use these
+surfaces for planning and UI copy, then treat the actual x402 challenge returned
+by the paid `tools/call` request as the final payment source of truth.
+
 ## 06.3 x402 Role
 
 x402 is the native payment gate used by SAP MCP for paid hosted requests.
@@ -94,6 +104,7 @@ has a user-controlled wallet profile:
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
 | `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
 | `sap_payments_register_agent` | Local non-custodial SAP agent registration for hosted users when `sap_register_agent` returns `hosted_local_signer_required`. |
+| `sap_payments_update_agent` | Local non-custodial SAP agent profile update for hosted users when `sap_update_agent` returns `hosted_local_signer_required`; use for public `agentUri`/`metadataUri`, capabilities, protocols, pricing, and x402 endpoint updates. |
 | `sap_payments_finalize_transaction` | Local non-custodial finalizer for unsigned transactions returned by hosted builders. It previews, signs with the active local profile, and optionally submits already-signed bytes through the hosted OOBE relay. |
 | `sap_payments_prepare_challenge` | Fetch and parse a hosted x402 challenge without signing. |
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
@@ -102,6 +113,11 @@ has a user-controlled wallet profile:
 
 The public hosted server should not advertise the signing helpers in
 non-custodial mode because signing belongs on the user's machine.
+
+For runtime routing, call the free hosted `sap_agent_runtime_status` tool before
+paid/write work. It tells the agent whether the request should use hosted SAP,
+the local `sap_payments` bridge, a hosted unsigned transaction builder plus
+`sap_payments_finalize_transaction`, or a repair path.
 
 When hosted accountless SAP MCP returns `hosted_local_signer_required`, the
 request was rejected before any x402 verification or settlement. Treat it as a
@@ -115,7 +131,28 @@ confirmation result, and never signs or receives keypair material. Treat
 `expired_or_not_landed` as unresolved, not success; retry only when
 `retrySafe: true` and the user confirms. For SAP agent registration specifically,
 call local `sap_payments_register_agent` with the same registration fields and
-`confirm: true`.
+`confirm: true`. For SAP agent profile/image updates, call local
+`sap_payments_update_agent` with the replacement fields and `confirm: true`.
+Upload images or metadata JSON to IPFS, Arweave, Kommodo, or HTTPS first, then
+set `agentUri` or `metadataUri`; desktop file paths cannot become on-chain
+metadata.
+
+Escrow V2 follows the same hosted-builder pattern. Hosted users should call the
+matching unsigned builder first:
+
+| Intent | Hosted builder | Local finalizer |
+| --- | --- | --- |
+| Create escrow | `sap_escrow_build_create_transaction` | `sap_payments_finalize_transaction` |
+| Deposit | `sap_escrow_build_deposit_transaction` | `sap_payments_finalize_transaction` |
+| Settle calls | `sap_escrow_build_settle_transaction` | `sap_payments_finalize_transaction` |
+| Finalize pending settlement | `sap_escrow_build_finalize_transaction` | `sap_payments_finalize_transaction` |
+| Withdraw unlocked balance | `sap_escrow_build_withdraw_transaction` | `sap_payments_finalize_transaction` |
+| Close empty escrow | `sap_escrow_build_close_transaction` | `sap_payments_finalize_transaction` |
+
+Direct escrow tools such as `sap_create_escrow_v2` remain local-signer-only.
+The hosted builders return a real unsigned Solana transaction, required signer,
+derived accounts, token mode, blockhash, and next-step instructions. They do not
+sign, submit, or receive keypair bytes.
 
 External x402 agents are a separate flow. If an SAP registry lookup returns an
 agent-owned HTTP x402 endpoint, call the local

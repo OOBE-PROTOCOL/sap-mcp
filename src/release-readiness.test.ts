@@ -107,8 +107,11 @@ describe('release readiness documentation and package surface', () => {
       readText('skills/README.md'),
       readText('skills/sap-escrow-settlement/SKILL.md'),
       readText('skills/sap-mcp/TOOL_REFERENCE.md'),
+      readText('skills/sap-mcp/SKILL.md'),
       readText('skills/sap-operations/SKILL.md'),
       readText('skills/sap-payments-x402/SKILL.md'),
+      readText('USER_DOCS/00_START_HERE.md'),
+      readText('docs/06_PAYMENTS_X402_AND_PAYSH.md'),
       readText('src/prompts/context/sap-agent-start.prompt.ts'),
       readText('src/prompts/payments/explain-x402-settlement.prompt.ts'),
     ].join('\n');
@@ -132,10 +135,20 @@ describe('release readiness documentation and package surface', () => {
     expect(activeSkillText).toContain('DisputeWindow');
     expect(activeSkillText).toContain('micro-USDC');
     expect(activeSkillText).toContain('sap_payments_call_paid_tool');
+    expect(activeSkillText).toContain('sap_agent_runtime_status');
+    expect(activeSkillText).toContain('sap_pricing_catalog');
+    expect(activeSkillText).toContain('/pricing.json');
+    expect(activeSkillText).toContain('sap_payments_finalize_transaction');
+    expect(activeSkillText).toContain('sap_payments_register_agent');
+    expect(activeSkillText).toContain('sap_payments_update_agent');
+    expect(activeSkillText).toContain('sap_payments_call_external_x402');
     expect(activeSkillText).toContain('402 challenge');
     expect(activeSkillText).toContain('retry');
+    expect(activeSkillText).toContain('do not create');
+    expect(activeSkillText).toContain('temporary');
     expect(activeSkillText).not.toContain('v0.21.0');
     expect(activeSkillText).not.toContain('SDK v0.20');
+    expect(activeSkillText).not.toContain('248 tools');
     expect(activeSkillText).not.toContain('280 tools');
     expect(activeSkillText).not.toContain('createEscrow(');
     expect(activeSkillText).not.toContain('settleEscrow(');

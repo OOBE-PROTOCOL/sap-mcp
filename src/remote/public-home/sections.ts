@@ -179,6 +179,7 @@ export function renderTopNavigation(model: LandingPageModel): string {
 
   const machineLinks = [
     ['Server JSON', model.info.endpoints.serverInfo, 'Public server metadata for runtimes and marketplaces.'],
+    ['Pricing JSON', model.info.endpoints.pricing, 'Machine-readable x402/pay.sh pricing tiers and routing rules.'],
     ['OpenAPI', model.info.endpoints.openApi, 'pay.sh catalog and HTTP integration schema.'],
     ['Downloads JSON', model.info.endpoints.wizardDownloads, 'Native wizard release links by operating system.'],
     ['Agent card', model.info.endpoints.agentCard, 'A2A-compatible agent card metadata.'],
@@ -752,6 +753,7 @@ export function renderPayments(model: LandingPageModel): string {
             <li><strong>x402:</strong> paid MCP tool calls return HTTP 402 with payment requirements, then settle through the OOBE facilitator.</li>
             <li><strong>pay.sh:</strong> public provider YAML is available for catalog and proxy workflows.</li>
             <li>x402 discovery: <a href="${escapeHtml(model.info.endpoints.x402Discovery)}">/.well-known/x402</a></li>
+            <li>Pricing catalog: <a href="${escapeHtml(model.info.endpoints.pricing)}">/pricing.json</a></li>
             <li>pay.sh provider YAML: <a href="${escapeHtml(model.info.endpoints.payShProvider)}">/pay/provider.yml</a></li>
             <li>OpenAPI catalog spec: <a href="${escapeHtml(model.info.endpoints.openApi)}">/openapi.json</a></li>
             <li>Signed transaction relay: <a href="${escapeHtml(model.info.endpoints.txSubmit)}">/tx/submit</a> (submit-only, never signs)</li>
@@ -774,6 +776,7 @@ export function renderEndpointMap(model: LandingPageModel): string {
     ['GET', model.info.endpoints.docs],
     ['GET', model.info.endpoints.health],
     ['GET', model.info.endpoints.serverInfo],
+    ['GET', model.info.endpoints.pricing],
     ['GET', model.info.endpoints.openApi],
     ['GET', model.info.endpoints.x402Discovery],
     ['GET', model.info.endpoints.payShProvider],
@@ -835,6 +838,7 @@ export function renderFooter(model: LandingPageModel): string {
         <div>
           <strong>Discovery</strong>
           <a href="${escapeHtml(model.info.endpoints.serverInfo)}">Server JSON</a>
+          <a href="${escapeHtml(model.info.endpoints.pricing)}">Pricing JSON</a>
           <a href="${escapeHtml(model.info.endpoints.openApi)}">OpenAPI</a>
           <a href="${escapeHtml(model.info.endpoints.agentCard)}">Agent card</a>
           <a href="${escapeHtml(model.info.endpoints.smitheryServerCard)}">MCP server card</a>

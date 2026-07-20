@@ -469,7 +469,7 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
     },
     {
       title: 'Local MCP Tool Alternative',
-      description: 'When the local SAP MCP stdio bridge is installed, agents should call sap_payments_call_paid_tool for hosted SAP MCP x402 challenges, sap_payments_call_external_x402 for external HTTP x402 agents, sap_payments_register_agent for local non-custodial SAP agent registration, and sap_payments_finalize_transaction for unsigned hosted transactions. The sap_x402_paid_call alias is legacy.',
+      description: 'When the local SAP MCP stdio bridge is installed, agents should call sap_payments_call_paid_tool for hosted SAP MCP x402 challenges, sap_payments_call_external_x402 for external HTTP x402 agents, sap_payments_register_agent for local non-custodial SAP agent registration, sap_payments_update_agent for local non-custodial SAP agent profile updates, and sap_payments_finalize_transaction for unsigned hosted transactions. The sap_x402_paid_call alias is legacy.',
       content: formatJson({
         name: 'sap_payments_call_paid_tool',
         arguments: {
@@ -508,6 +508,7 @@ export function installX402PaidCallAddon(
       'sap_payments_call_paid_tool',
       'sap_payments_call_external_x402',
       'sap_payments_register_agent',
+      'sap_payments_update_agent',
       'sap_payments_finalize_transaction',
       'sap_x402_paid_call',
     ],
@@ -524,7 +525,7 @@ export function installX402PaidCallAddon(
   writeFileSync(readmePath, [
     '# SAP MCP Local Payment Bridge',
     '',
-    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges, external HTTP x402 agent calls, local SAP agent registration, and unsigned hosted transaction finalization. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_readiness`, `sap_payments_call_paid_tool`, `sap_payments_call_external_x402`, `sap_payments_register_agent`, and `sap_payments_finalize_transaction`.',
+    'This reference bundle documents the native local SAP MCP payment bridge for hosted x402 tool challenges, external HTTP x402 agent calls, local SAP agent registration/profile updates, and unsigned hosted transaction finalization. Runtime configs should prefer a local `sap_payments` MCP server exposing `sap_payments_readiness`, `sap_payments_call_paid_tool`, `sap_payments_call_external_x402`, `sap_payments_register_agent`, `sap_payments_update_agent`, and `sap_payments_finalize_transaction`.',
     '',
     'Legacy command fallback for custom wrappers:',
     '',
@@ -532,7 +533,7 @@ export function installX402PaidCallAddon(
     `${X402_PAID_CALL_COMMAND} --tool sap_list_all_agents --arguments '{"limit":5}' --max-usd 0.02 --confirm`,
     '```',
     '',
-    'Prefer calling `sap_payments_readiness` first, then `sap_payments_call_paid_tool` for hosted SAP MCP paid tools. For external HTTP x402 agents discovered from registry metadata, call `sap_payments_call_external_x402`. If hosted `sap_register_agent` returns `hosted_local_signer_required`, call `sap_payments_register_agent` instead of retrying the hosted direct write. If a hosted builder returns `transactionBase64` or another unsigned transaction payload, call `sap_payments_finalize_transaction`; never create temporary signing scripts or read keypair JSON. `sap_x402_paid_call` remains a backward-compatible alias.',
+    'Prefer calling `sap_payments_readiness` first, then `sap_payments_call_paid_tool` for hosted SAP MCP paid tools. For external HTTP x402 agents discovered from registry metadata, call `sap_payments_call_external_x402`. If hosted `sap_register_agent` returns `hosted_local_signer_required`, call `sap_payments_register_agent` instead of retrying the hosted direct write. If hosted `sap_update_agent` returns `hosted_local_signer_required`, call `sap_payments_update_agent` with the same update fields instead of retrying hosted. If a hosted builder returns `transactionBase64` or another unsigned transaction payload, call `sap_payments_finalize_transaction`; never create temporary signing scripts or read keypair JSON. `sap_x402_paid_call` remains a backward-compatible alias.',
     '',
     'Security rules:',
     '',

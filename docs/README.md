@@ -64,6 +64,7 @@ For paid/write hosted tools, also configure the local `sap_payments` bridge. The
 - [Client Configs](user/04_CLIENT_CONFIGS.md)
 - [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
 - [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
+- [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
 
 ## What The Hosted Server Provides
 
@@ -116,6 +117,7 @@ Read these first:
 5. [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
 6. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
 7. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
+8. [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
 
 ## Public Endpoints
 

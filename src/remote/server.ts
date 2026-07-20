@@ -16,7 +16,7 @@ import { MCP_SERVER_VERSION } from '../core/constants.js';
 import { logger, initLogger } from '../core/logger.js';
 import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
-import { McpMonetizationGate, resolvePaymentNetwork } from '../payments/index.js';
+import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '../payments/index.js';
 import { generatePayShProviderYaml } from '../payments/pay-sh-spec.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
@@ -240,6 +240,7 @@ export interface PublicServerInfo {
     txSubmit: string;
     health: string;
     serverInfo: string;
+    pricing: string;
     openApi: string;
     x402Discovery: string;
     smitheryConfigSchema: string;
@@ -1359,6 +1360,7 @@ export function buildPublicServerInfo(
       txSubmit: `${baseUrl}${TX_SUBMIT_PATH}`,
       health: `${baseUrl}/health`,
       serverInfo: `${baseUrl}/server.json`,
+      pricing: `${baseUrl}/pricing.json`,
       openApi: `${baseUrl}/openapi.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
       smitheryConfigSchema: `${baseUrl}/smithery.config.schema.json`,
@@ -1569,7 +1571,7 @@ export function buildOpenApiSpec(
     info: {
       title: 'SAP MCP Server',
       version: MCP_SERVER_VERSION,
-      description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments. 248 tools across Jupiter, Drift, Metaplex, Pump.fun, Raydium, Orca, and more.',
+      description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments across Jupiter, Drift, Metaplex, Pump.fun, Raydium, Orca, and more.',
       'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use the local sap_payments_call_paid_tool bridge or npx sap-mcp-x402-paid-call to self-pay and retry.',
       contact: {
         name: 'OOBE Protocol Labs',
@@ -1580,6 +1582,7 @@ export function buildOpenApiSpec(
     'x-discovery': {
       resources: [`${baseUrl}/mcp`],
       openApi: `${baseUrl}/openapi.json`,
+      pricing: `${baseUrl}/pricing.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
       payShProvider: `${baseUrl}/pay/provider.yml`,
       ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
@@ -2361,6 +2364,13 @@ export class RemoteMCPServer {
 
       if (isPublicReadMethod(req.method) && url.pathname === '/server.json') {
         writeJson(res, 200, buildPublicServerInfo(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/pricing.json') {
+        writeJson(res, 200, buildPricingCatalog(this.appConfig.monetization), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
         return;

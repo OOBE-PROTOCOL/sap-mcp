@@ -19,6 +19,8 @@ This skill corresponds to upstream SAP SDK v1.0.x domains such as
 
 Use:
 
+- `sap_protocol_invariants`
+- `sap_agent_identity_plan`
 - `sap_register_agent`
 - `sap_update_agent`
 - `sap_deactivate_agent`
@@ -34,6 +36,21 @@ Use `sap_discover_agents` for targeted hosted directory reads by `query`,
 `wallet`, `agentPda`, `protocol`, `capability`, `capabilities`, or
 `hasX402Endpoint`. Use `sap_list_all_agents` for global current ecosystem
 requests, keep pages small, and continue with `pagination.nextCursor`.
+
+Before registering or updating an agent profile, call free
+`sap_protocol_invariants` when treasury, registration fee, hosted write route,
+or local signer route is unclear. Then call `sap_agent_identity_plan`. The
+planner tells the agent which fields are missing, whether the action should use
+hosted reads or local signing, whether Metaplex or SNS identity is involved,
+and how to verify the write afterward.
+
+Hosted accountless SAP MCP cannot sign wallet-owned registry writes. If hosted
+`sap_register_agent` or `sap_update_agent` returns
+`hosted_local_signer_required`, do not retry the hosted write. Use local
+`sap_payments_register_agent` or `sap_payments_update_agent` with
+`confirm: true`. After registration, verify `success`, `agentPda`,
+`confirmationStatus`, and `protocolFee.status`; after update, fetch the agent
+profile again and compare the changed fields.
 
 ## Memory
 

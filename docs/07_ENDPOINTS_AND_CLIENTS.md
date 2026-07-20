@@ -8,6 +8,7 @@
 | `GET` | `/docs` | Docsify-powered public documentation site for install, start, configuration, hosted remote MCP, x402/pay.sh, and client setup. | Public. |
 | `GET` | `/docs/*.md` | Read-only markdown files used by the docs site. Supports `docs/` and `USER_DOCS/` through `/docs/user/*.md`. | Public. |
 | `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
+| `GET` | `/pricing.json` | Machine-readable x402/pay.sh pricing catalog generated from the hosted pricing registry. | Public. |
 | `GET` | `/openapi.json` | OpenAPI 3.1 discovery document for the hosted MCP endpoint, x402 metadata, and pay.sh catalog link. | Public. |
 | `GET` | `/.well-known/x402` | x402 discovery document for paid hosted MCP resources. | Public. |
 | `GET` | `/pay/provider.yml` | Secret-free pay.sh provider YAML for the hosted SAP MCP catalog/proxy workflow. | Public. |
@@ -131,7 +132,7 @@ Codex supports Streamable HTTP MCP servers with URL-based TOML entries. Use loca
 ```toml
 [mcp_servers.sap]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.13", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.15", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"

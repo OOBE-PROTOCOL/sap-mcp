@@ -372,6 +372,7 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.docs).toBe('https://mcp.sap.oobeprotocol.ai/docs');
     expect(info.endpoints.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(info.endpoints.txSubmit).toBe('https://mcp.sap.oobeprotocol.ai/tx/submit');
+    expect(info.endpoints.pricing).toBe('https://mcp.sap.oobeprotocol.ai/pricing.json');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(info.endpoints.smitheryConfigSchema).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');
@@ -462,8 +463,12 @@ describe('remote MCP server config', () => {
       type: 'streamable-http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(card.tools).toHaveLength(265);
+    expect(card.tools).toHaveLength(275);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_start')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_agent_runtime_status')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_pricing_catalog')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_protocol_invariants')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_agent_identity_plan')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_skills_upgrade_plan')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_runtime_repair_plan')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_create_escrow')).toBe(false);
@@ -553,6 +558,7 @@ describe('remote MCP server config', () => {
     expect(openApi.info.version).toBe(MCP_SERVER_VERSION);
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
     expect(openApi['x-discovery'].openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
+    expect(openApi['x-discovery'].pricing).toBe('https://mcp.sap.oobeprotocol.ai/pricing.json');
     expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(openApi['x-discovery'].payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-pay-sh'].providerYaml).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');

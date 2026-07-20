@@ -64,13 +64,15 @@ export const MCP_SERVER_DESCRIPTION = 'Solana-native MCP gateway for Synapse Age
  */
 export const MCP_SERVER_INSTRUCTIONS = [
   'SAP MCP is a Solana-native, non-custodial MCP gateway. Hosted mode is accountless: OOBE never receives user keypair bytes.',
-  'When the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or asks to use SAP MCP, first call free tool sap_agent_start, then sap_skills_bundle with includeContents=true, and load the returned skills before selecting tools.',
+  'When the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", asks whether SAP MCP is connected, or asks to use SAP MCP, first call free tool sap_agent_start, then sap_agent_runtime_status with the closest intent, then sap_skills_bundle with includeContents=true before selecting advanced tools. Use sap_pricing_catalog for planning paid hosted calls. Use hosted tools for reads, sap_payments_* for local payment/signing, hosted unsigned builders plus sap_payments_finalize_transaction for user-signed transactions, and never create temporary signing scripts or read keypair JSON.',
+  'Before SAP registry writes, call free tool sap_protocol_invariants when treasury, registration fee, hosted/local routing, or lifecycle-complete rules are unclear.',
   'For simple connection/status questions, answer briefly with endpoint, mode, non-custodial status, local sap_payments readiness only if checked, and one next action. Do not dump the full tool catalog unless asked.',
   'Use exact tool names from tools/list. Do not rewrite hyphenated tool names such as spl-token_getTokenAccounts.',
   'Hosted paid/write tools return HTTP 402 x402/pay.sh challenges. This is normal. Prefer the local sap_payments_call_paid_tool bridge for paid hosted calls; it signs locally and retries without exposing keypair bytes.',
   'If sap_payments is missing, ask the user to run the SAP MCP wizard repair flow and restart the agent runtime. Do not claim hosted SAP MCP can custody or see local wallet config.',
   'When a hosted tool returns an unsigned or partially signed Solana transaction, use local sap_payments_finalize_transaction. For local stdio transactions, use sap_preview_transaction, then sap_sign_transaction, then sap_submit_signed_transaction. Never create temporary signing scripts, read keypair JSON, export secret bytes, or sign raw messages outside SAP MCP tools.',
-  'Escrow writes are V2-only. Use sap_create_escrow_v2 and related V2 tools. Default settlementSecurity is DisputeWindow (2); never default to SelfReport (0). Amounts are smallest units: lamports for SOL, micro-USDC for USDC.',
+  'For SAP agent registration and profile updates, hosted accountless writes return hosted_local_signer_required. Use local sap_payments_register_agent or sap_payments_update_agent, then verify the agent account, transaction signature, and registration protocolFee audit before calling the lifecycle complete.',
+  'Escrow writes are V2-only. In hosted mode, use sap_escrow_build_*_transaction tools and finalize locally with sap_payments_finalize_transaction. In local SAP MCP signer mode, direct sap_create_escrow_v2 and related V2 tools may sign locally. Default settlementSecurity is DisputeWindow (2); never default to SelfReport (0). Amounts are smallest units: lamports for SOL, micro-USDC for USDC.',
 ].join('\n');
 /**
  * Public homepage for hosted SAP MCP documentation and runtime onboarding.
@@ -83,7 +85,17 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.13';
+export const MCP_SERVER_VERSION = '0.9.15';
+
+/**
+ * SAP protocol treasury that should receive protocol-owned registration fees.
+ */
+export const SAP_PROTOCOL_TREASURY = 'J7PyZAGKvprCz4SQ5DKBLAHstJxgVqZcz6kguUoWpP7P';
+
+/**
+ * Current SAP agent registration protocol fee in lamports.
+ */
+export const SAP_REGISTRATION_FEE_LAMPORTS = 100_000_000n;
 
 /**
  * Tool categories

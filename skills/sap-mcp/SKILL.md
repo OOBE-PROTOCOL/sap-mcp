@@ -8,19 +8,29 @@ safe signing behavior.
 
 If the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or "SAP
 mode", treat it as the activation command. Call `sap_agent_start` when it is
-available, then call `sap_skills_bundle` with `includeContents: true` and load
-the returned SAP MCP skill contents into context.
+available, then call `sap_agent_runtime_status` with the closest intent and
+`sap_skills_bundle` with `includeContents: true`. Load the returned SAP MCP
+skill contents into context before selecting advanced tools.
 
 Always inspect runtime context through MCP tools, not by reading config files:
 
 1. `sap_agent_start`
-2. `sap_skills_bundle` with `includeContents: true`
-3. `sap_skills_upgrade_plan` when local skills are missing or stale
-4. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
-5. `sap_profile_current`
-6. `sap_profile_list`
-7. `sap_profile_public_key`
-8. `sap_network_stats`
+2. `sap_agent_runtime_status` with `intent: "connection"`, `"paid-call"`, `"registry-write"`, `"transaction-finalize"`, `"escrow"`, `"identity"`, or `"general"`
+3. `sap_skills_bundle` with `includeContents: true`
+4. `sap_pricing_catalog` before estimating hosted paid call tiers
+5. `sap_skills_upgrade_plan` when local skills are missing or stale
+6. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
+7. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
+8. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
+9. `sap_profile_current`
+10. `sap_profile_list`
+11. `sap_profile_public_key`
+12. `sap_network_stats`
+
+For simple "are you connected?" checks, do not dump tool counts or inspect
+local files. Use `sap_agent_runtime_status` first and answer with the hosted
+endpoint, accountless/non-custodial model, local bridge readiness if visible,
+and the next exact action.
 
 The server profile is the source of truth. Environment variables from the MCP
 client must not override profile-owned RPC or wallet settings unless
@@ -70,11 +80,12 @@ Use the bundled routing map for local MCP tool selection:
 - `USER_DOCS/05_SKILLS_AND_TOOLS.md`
 
 SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
-`sap_agent_start`, `sap_skills_list`, `sap_skills_bundle`,
-`sap_skills_upgrade_plan`, `sap_runtime_repair_plan`, and local
-`sap_skills_install` directly. Do not route startup, skill listing, bundling,
+`sap_agent_start`, `sap_agent_runtime_status`, `sap_pricing_catalog`,
+`sap_skills_list`, `sap_skills_bundle`, `sap_skills_upgrade_plan`,
+`sap_runtime_repair_plan`, and local `sap_skills_install` directly. Do not
+route startup, runtime status, pricing catalog, skill listing, bundling,
 upgrade planning, runtime repair planning, or installation through
-`sap_x402_paid_call`. On hosted remote MCP, use
+`sap_x402_paid_call` or `sap_payments_call_paid_tool`. On hosted remote MCP, use
 `sap_skills_bundle` to download skill contents; the hosted server cannot
 install files onto the caller's local machine. Local installation belongs to the
 wizard, desktop app, addon installer, or a local stdio SAP MCP process.
@@ -128,12 +139,13 @@ actions. The hosted MCP server is not a wallet custodian.
 
 For hosted paid tools, use the native x402 flow. If the client runtime cannot
 attach `PAYMENT-SIGNATURE` itself, use the local SAP MCP `sap_payments` bridge.
-Call `sap_payments_readiness` first to verify the active profile, signer,
-SOL/USDC balance, policy limits, and bridge status. Then call
-`sap_payments_call_paid_tool` for the hosted paid tool. This is not a separate
-hosted signing plugin: it is the local SAP MCP process using the user's
-configured SAP profile wallet or external signer to sign the x402 payment
-payload, retry the hosted tool call, and return the receipt.
+Call `sap_agent_runtime_status` first for routing, then
+`sap_payments_readiness` to verify the active profile, signer, SOL/USDC
+balance, policy limits, and bridge status. Then call `sap_payments_call_paid_tool`
+for the hosted paid tool. This is not a separate hosted signing plugin: it is
+the local SAP MCP process using the user's configured SAP profile wallet or
+external signer to sign the x402 payment payload, retry the hosted tool call,
+and return the receipt.
 `sap_x402_paid_call` is a backward-compatible alias only for older runtime
 snippets. Neither helper must be treated as a remote hosted signing service.
 
@@ -180,9 +192,36 @@ charged. The tool requires a local user signature or has no hosted unsigned
 builder yet. For `sap_register_agent`, call
 `sap_payments.sap_payments_register_agent` with the same registration fields and
 `confirm: true`; it runs the SAP registry write through the local signer bridge
-without charging a hosted x402 access fee. For other direct writes, do not retry
-the same hosted tool; use the local SAP MCP profile or an unsigned hosted
-builder plus `sap_payments_finalize_transaction` when one exists.
+without charging a hosted x402 access fee. For `sap_update_agent`, call
+`sap_payments.sap_payments_update_agent` with the intended replacement fields
+and `confirm: true`; use it for public agent image/profile metadata updates via
+`agentUri` or `metadataUri`. For Escrow V2, call the matching
+`sap_escrow_build_*_transaction` hosted builder and finalize with
+`sap_payments_finalize_transaction`. For other direct writes, do not retry the
+same hosted tool; use the local SAP MCP profile or an unsigned hosted builder
+plus `sap_payments_finalize_transaction` when one exists.
+
+For registry lifecycle completion, do not treat a transaction signature alone
+as enough. After `sap_payments_register_agent`, verify `success`,
+`agentRegistered`, `agentPda`, `confirmationStatus`, `protocolComplete`, and
+the returned `protocolFee.status`. `success: true` means both the agent account
+and protocol fee invariant were verified. If `success` is false while
+`agentRegistered` is true, report that the account may exist but the SAP
+protocol registration lifecycle is not complete. After
+`sap_payments_update_agent`, fetch the agent again and confirm the changed
+fields before saying an image, metadata, pricing, or capability update is done.
+
+Before any write-like operation, use this routing order:
+
+1. Hosted read or paid hosted read: direct hosted tool, or
+   `sap_payments_call_paid_tool` when x402 is required.
+2. Hosted unsigned transaction builder: finalize with
+   `sap_payments_finalize_transaction` and `submit: true` when the user confirms.
+3. SAP registry registration/update: use `sap_payments_register_agent` or
+   `sap_payments_update_agent`; do not retry hosted accountless writes.
+4. External x402 HTTP provider: use `sap_payments_call_external_x402`.
+5. Missing bridge: call `sap_runtime_repair_plan`, then tell the user to run the
+   pinned repair command or desktop wizard repair path.
 
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or
@@ -203,6 +242,18 @@ If `sap_payments` tools are missing after the user says the wizard completed,
 call `sap_runtime_repair_plan`. Do not ask the user to manually rebuild their
 runtime config unless the repair plan has already failed or runtime startup logs
 show a concrete package/runtime error.
+
+For agent identity work, load the matching focused skills before acting:
+
+- register, update, profile image, capability, pricing, or x402 endpoint:
+  `sap-agent-registry`
+- NFT-backed identity, MPL Core, Metaplex metadata, creator/collection flows:
+  `sap-nft-metaplex`
+- `.sol` domain ownership, records, or primary identity:
+  `sap-sns`
+
+The canonical field and pipeline reference is
+`docs/16_SAP_AGENT_IDENTITY_PIPELINE.md`. Follow it before registry writes.
 
 ## Profile Tools
 

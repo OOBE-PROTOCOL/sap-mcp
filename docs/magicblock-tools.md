@@ -38,6 +38,10 @@ Do not hard-code MagicBlock prices in agents. Call `sap_x402_estimate_cost` or
 the local `sap_payments_call_paid_tool` helper and enforce the user profile's
 `maxPriceUsd` / spend policy.
 
+Successful MagicBlock tool payloads intentionally do not report their own
+price. Hosted cost is authoritative only in the SAP MCP x402 challenge and the
+payment receipt returned by `sap_payments_call_paid_tool`.
+
 When a hosted MagicBlock builder returns an unsigned transaction, hosted SAP MCP
 remains non-custodial. Finalize the returned `transactionBase64` with the local
 `sap_payments_finalize_transaction` bridge. Do not call hosted
@@ -145,6 +149,28 @@ Expected flow:
 
 Agents must not create temporary JavaScript signing scripts, read keypair JSON,
 or sign raw message bytes outside SAP MCP transaction tools.
+
+## Safety Guardrails
+
+SAP MCP fails closed for MagicBlock flows that live testing has shown to be
+unsafe:
+
+- `magicblock_swap` with `visibility: "private"` requires a valid
+  `destination`. The server rejects the request before contacting MagicBlock if
+  the destination is missing or invalid.
+- `magicblock_swap` with `visibility: "private"` and
+  `quoteResponse.outputMint = So11111111111111111111111111111111111111112`
+  is blocked. Mainnet testing found that private swaps outputting wSOL can leave
+  funds stuck in the Hydra mixer pool when shuttle delivery fails. Use
+  `visibility: "public"` for SOL output, or swap privately into a non-SOL SPL
+  token until MagicBlock provides shuttle delivery recovery.
+- `magicblock_transfer` requires `from`, `to`, `mint`, `amount`,
+  `visibility`, `fromBalance`, and `toBalance`. `amount` must be a positive
+  JavaScript-safe integer in token base units because the upstream API expects a
+  JSON number, not a string.
+- Private transfers require a bearer token from `magicblock_challenge` and
+  `magicblock_login`. Private SOL transfers may deliver wSOL, not native SOL;
+  agents should say that clearly before asking for confirmation.
 
 ---
 

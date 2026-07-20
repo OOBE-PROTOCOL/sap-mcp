@@ -19,7 +19,8 @@ The agent should then:
 6. use `sap_payments_call_paid_tool` for paid hosted SAP MCP tools that return x402 payment requirements;
 7. use `sap_payments_call_external_x402` for external HTTP x402 agent endpoints discovered through SAP registry metadata;
 8. use `sap_payments_register_agent` for local non-custodial SAP agent registration when hosted `sap_register_agent` is blocked;
-9. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
+9. use `sap_payments_update_agent` for local non-custodial SAP agent profile/image/metadata updates when hosted `sap_update_agent` is blocked;
+10. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
 
 If `sap_payments` is missing, run the wizard repair flow and restart the agent
 runtime:
@@ -122,9 +123,12 @@ Use SNS:
 Hosted accountless SAP MCP cannot directly sign SNS registrations. If a hosted
 direct write returns `hosted_local_signer_required`, no x402 payment was charged;
 for `sap_register_agent`, call local `sap_payments_register_agent` with the
-same fields and `confirm: true`. For other writes, run the local profile flow or
-use hosted unsigned builders plus `sap_payments_finalize_transaction` where a
-builder exists.
+same fields and `confirm: true`. For `sap_update_agent`, call local
+`sap_payments_update_agent` with the intended replacement fields and
+`confirm: true`; upload images or metadata JSON to a public URI first and set
+`agentUri` or `metadataUri`. For other writes, run the local profile flow or use
+hosted unsigned builders plus `sap_payments_finalize_transaction` where a builder
+exists.
 
 Use transactions:
 
@@ -133,6 +137,7 @@ Use transactions:
 - `sap_submit_signed_transaction`
 - `sap_payments_finalize_transaction` for hosted builder transactions that must be previewed and signed locally; with `submit: true`, it submits already-signed bytes through the hosted OOBE relay and returns confirmation status plus retry guidance
 - `sap_payments_register_agent` for SAP agent registration through the local signer bridge
+- `sap_payments_update_agent` for SAP agent profile, image metadata, capabilities, protocols, pricing, and x402 endpoint updates through the local signer bridge
 
 ## 4. Agent Safety
 

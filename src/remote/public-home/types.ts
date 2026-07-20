@@ -22,6 +22,7 @@ export interface LandingPublicServerInfo {
     txSubmit: string;
     health: string;
     serverInfo: string;
+    pricing: string;
     openApi: string;
     x402Discovery: string;
     smitheryServerCard: string;

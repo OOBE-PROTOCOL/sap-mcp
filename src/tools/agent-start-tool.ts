@@ -8,6 +8,7 @@ import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
+import { buildPricingCatalog } from '../payments/pricing.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
@@ -66,6 +67,76 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
       return createStructuredJsonResponse(buildAgentStartPayload(context, goal));
     },
   );
+
+  registerTool(
+    server,
+    'sap_agent_runtime_status',
+    {
+      title: 'Check SAP MCP Runtime Status',
+      description: 'Free machine-readable readiness and routing summary for SAP MCP. Use this for "are you connected?", paid/write readiness, local profile visibility, and exact next actions without dumping the whole tool catalog.',
+      inputSchema: {
+        intent: {
+          type: 'string',
+          enum: ['connection', 'paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity', 'general'],
+          description: 'Optional user intent so the status can highlight the correct next tool path.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether runtime status was generated.' },
+          intent: { type: 'string', description: 'Status intent used for routing.' },
+          hosted: { type: 'object', description: 'Observable hosted SAP MCP status for this server process.' },
+          localBridge: { type: 'object', description: 'Expected local sap_payments bridge status and verification tools.' },
+          routing: { type: 'object', description: 'Canonical tool routes for reads, paid calls, writes, and unsigned transactions.' },
+          nextToolCalls: { type: 'array', description: 'Exact next tool calls agents should make when available.', items: { type: 'object' } },
+          userFacingSummary: { type: 'string', description: 'Short summary safe to show to the user.' },
+          forbiddenActions: { type: 'array', description: 'Actions agents must not perform.', items: { type: 'string' } },
+        },
+        required: ['success', 'intent', 'hosted', 'localBridge', 'routing', 'nextToolCalls', 'userFacingSummary', 'forbiddenActions'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      const intent = parseStatusIntent(input);
+      return createStructuredJsonResponse(buildRuntimeStatusPayload(context, intent));
+    },
+  );
+
+  registerTool(
+    server,
+    'sap_pricing_catalog',
+    {
+      title: 'Get SAP MCP Pricing Catalog',
+      description: 'Free machine-readable x402/pay.sh pricing catalog generated from the hosted SAP MCP pricing registry. Use before paid calls to understand free, read-premium, builder, value-action, and batch tiers.',
+      inputSchema: {},
+      outputSchema: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', description: 'Pricing catalog source identifier.' },
+          version: { type: 'number', description: 'Pricing catalog schema version.' },
+          strictTools: { type: 'boolean', description: 'Whether strict hosted tool pricing is enabled.' },
+          currency: { type: 'string', description: 'Display currency for USD-denominated prices.' },
+          tiers: { type: 'object', description: 'Tier pricing rules and examples.' },
+          toolSets: { type: 'object', description: 'Current built-in tool sets for each tier.' },
+          runtimeRules: { type: 'array', description: 'Agent routing rules for paid and write flows.', items: { type: 'string' } },
+        },
+        required: ['source', 'version', 'strictTools', 'currency', 'tiers', 'toolSets', 'runtimeRules'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => createStructuredJsonResponse({ ...buildPricingCatalog(context.config.monetization) }),
+  );
 }
 
 function parseGoal(input: unknown): string | undefined {
@@ -74,6 +145,141 @@ function parseGoal(input: unknown): string | undefined {
   }
   const goal = (input as Record<string, unknown>).goal;
   return typeof goal === 'string' && goal.trim().length > 0 ? goal.trim() : undefined;
+}
+
+function parseStatusIntent(input: unknown): string {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return 'general';
+  }
+  const intent = (input as Record<string, unknown>).intent;
+  if (typeof intent !== 'string') {
+    return 'general';
+  }
+  if (['connection', 'paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity', 'general'].includes(intent)) {
+    return intent;
+  }
+  return 'general';
+}
+
+function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Record<string, unknown> {
+  const signerConfigured = Boolean(context.signer || context.config.walletPath || context.config.externalSignerUrl);
+  const hostedMode = context.config.mode === 'hosted-api';
+  const localBridgeStatus = hostedMode
+    ? 'unknown_from_hosted_server'
+    : signerConfigured ? 'same_process_signer_available' : 'not_configured';
+
+  return {
+    success: true,
+    intent,
+    hosted: {
+      endpoint: HOSTED_MCP_URL,
+      mode: context.config.mode,
+      accountModel: hostedMode ? 'hosted-remote-accountless' : 'local-or-delegated',
+      network: context.config.rpcUrl.includes('devnet') ? 'devnet' : 'mainnet-beta',
+      programId: context.config.programId,
+      signerConfiguredOnThisServer: signerConfigured,
+      canSeeUserLocalProfile: !hostedMode,
+      note: hostedMode
+        ? 'Hosted SAP MCP cannot read the user local profile, wallet path, or keypair. Use local sap_payments tools for that.'
+        : 'This process can inspect its configured local/delegated signer according to policy.',
+    },
+    localBridge: {
+      namespace: 'sap_payments',
+      status: localBridgeStatus,
+      verificationTool: 'sap_payments_readiness',
+      profileTool: 'sap_payments_profile_current',
+      requiredTools: [
+        'sap_payments_readiness',
+        'sap_payments_profile_current',
+        'sap_payments_call_paid_tool',
+        'sap_payments_call_external_x402',
+        'sap_payments_register_agent',
+        'sap_payments_update_agent',
+        'sap_payments_finalize_transaction',
+        'sap_payments_verify_receipt',
+      ],
+      repairTool: 'sap_runtime_repair_plan',
+      repairCommand: REPAIR_COMMAND,
+    },
+    routing: {
+      reads: {
+        route: 'hosted sap',
+        rule: 'Use hosted reads directly with exact schemas and narrow filters. Use cursors/pagination where returned.',
+      },
+      paidHostedTools: {
+        route: 'local sap_payments -> sap_payments_call_paid_tool',
+        rule: 'The local bridge resolves x402/pay.sh challenges, signs payment payloads locally, retries transient RPC failures with fresh challenges, and returns receipts.',
+      },
+      externalX402Agents: {
+        route: 'local sap_payments -> sap_payments_call_external_x402',
+        rule: 'Use only for external HTTP x402 endpoints discovered through SAP registry metadata, not hosted SAP MCP tools.',
+      },
+      registryWrites: {
+        route: 'local sap_payments',
+        register: 'sap_payments_register_agent',
+        update: 'sap_payments_update_agent',
+        rule: 'Do not retry hosted sap_register_agent or sap_update_agent after hosted_local_signer_required.',
+      },
+      escrowWrites: {
+        route: 'hosted builder -> local finalize',
+        builders: [
+          'sap_escrow_build_create_transaction',
+          'sap_escrow_build_deposit_transaction',
+          'sap_escrow_build_settle_transaction',
+          'sap_escrow_build_finalize_transaction',
+          'sap_escrow_build_withdraw_transaction',
+          'sap_escrow_build_close_transaction',
+        ],
+        finalizer: 'sap_payments_finalize_transaction',
+      },
+      unsignedTransactions: {
+        route: 'sap_payments_finalize_transaction',
+        rule: 'When a hosted tool returns transactionBase64 or an unsigned transaction, finalize locally with submit:true and confirm:true.',
+      },
+    },
+    nextToolCalls: buildRuntimeStatusNextCalls(intent),
+    userFacingSummary: hostedMode
+      ? 'Hosted SAP MCP is reachable and accountless. For paid/write flows, verify the local sap_payments bridge and use it for payments, registry writes, and transaction finalization.'
+      : 'SAP MCP is running with a local/delegated profile. Verify signer readiness before value-moving actions.',
+    forbiddenActions: [
+      'Do not read or print keypair JSON.',
+      'Do not create temporary signing scripts.',
+      'Do not call hosted signing tools for user-owned signatures.',
+      'Do not treat hosted profile default as the user local profile.',
+      'Do not retry hosted local-signer-required writes after the routing guard.',
+    ],
+  };
+}
+
+function buildRuntimeStatusNextCalls(intent: string): Record<string, unknown>[] {
+  const calls: Record<string, unknown>[] = [
+    { namespace: 'hosted sap', tool: 'sap_agent_start', arguments: {}, reason: 'Load startup rules.' },
+  ];
+  if (['paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity'].includes(intent)) {
+    calls.push({
+      namespace: 'local sap_payments',
+      tool: 'sap_payments_readiness',
+      arguments: {},
+      reason: 'Verify the local profile, signer, balances, and bridge tool surface before paid/write work.',
+    });
+  }
+  if (intent === 'registry-write' || intent === 'identity') {
+    calls.push({
+      namespace: 'hosted sap',
+      tool: 'sap_agent_identity_plan',
+      arguments: { intendedAction: intent === 'registry-write' ? 'register' : 'full-identity' },
+      reason: 'Normalize registry fields and metadata requirements before local signing.',
+    });
+  }
+  if (intent === 'escrow') {
+    calls.push({
+      namespace: 'hosted sap',
+      tool: 'sap_pricing_catalog',
+      arguments: {},
+      reason: 'Confirm builder/value-action pricing before escrow workflow.',
+    });
+  }
+  return calls;
 }
 
 function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined): Record<string, unknown> {
@@ -98,6 +304,13 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'hosted sap',
+        tool: 'sap_agent_runtime_status',
+        arguments: { intent: goal ? 'general' : 'connection' },
+        required: true,
+        reason: 'Get the concise hosted/accountless/local-bridge truth table before answering connection or write-readiness questions.',
+      },
+      {
+        namespace: 'hosted sap',
         tool: 'sap_skills_bundle',
         arguments: { includeContents: true },
         required: true,
@@ -105,9 +318,27 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'hosted sap',
+        tool: 'sap_pricing_catalog',
+        required: false,
+        reason: 'Read the machine-readable x402/pay.sh pricing tiers before paid hosted tools or marketplace execution.',
+      },
+      {
+        namespace: 'hosted sap',
         tool: 'sap_skills_upgrade_plan',
         required: false,
         reason: 'If local skills are missing or stale, return exact latest-release commands and target directories before retrying.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_protocol_invariants',
+        required: false,
+        reason: 'Before SAP registry writes, read the canonical program id, protocol treasury, registration fee invariant, and hosted/local signer routing rules.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_agent_identity_plan',
+        required: false,
+        reason: 'Before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup, return the exact local-signer route and verification checklist.',
       },
       {
         namespace: 'hosted sap',
@@ -137,6 +368,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
     routingRules: [
       'Use exact tool names returned by tools/list; do not rewrite hyphens to underscores.',
       'For a simple connection question, answer briefly. Do not dump the full tool catalog, categories, or every protocol unless the user asks what tools are available.',
+      'For connection/readiness questions, call sap_agent_runtime_status and use its hosted/localBridge/routing fields as the source of truth.',
       'Hosted SAP MCP is accountless and non-custodial. OOBE never has user keypair bytes.',
       'Do not report hosted profile default as the user local profile.',
       'For local wallet/profile questions, prefer sap_payments_profile_current when available.',
@@ -144,9 +376,14 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
       'For free reads, call hosted tools directly.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
+      'Before paid calls, use sap_pricing_catalog or the x402 challenge itself as the price source of truth.',
       'For external HTTP x402 agent endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402 instead of hand-rolled HTTP/sign/retry scripts.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
       'If hosted sap_register_agent returns hosted_local_signer_required, do not retry the hosted direct write. No x402 payment was charged; call local sap_payments_register_agent with the same registration fields and confirm: true.',
+      'If hosted sap_update_agent returns hosted_local_signer_required, do not retry the hosted direct write. No x402 payment was charged; call local sap_payments_update_agent with the intended replacement fields and confirm: true.',
+      'After sap_payments_register_agent, verify success, agentRegistered, agentPda, confirmationStatus, protocolComplete, and protocolFee.status. success:true means the agent account exists and the protocol fee invariant was verified. If success:false with agentRegistered:true, treat the account as present but not SAP protocol-complete and inspect the deployed SAP program/treasury before retrying.',
+      'After sap_payments_update_agent, fetch the agent profile again and verify the changed fields. For picture updates, metadataUri/agentUri must resolve to public metadata that contains the image URL.',
+      'For Escrow V2 hosted workflows, use sap_escrow_build_create_transaction, sap_escrow_build_deposit_transaction, sap_escrow_build_settle_transaction, sap_escrow_build_finalize_transaction, sap_escrow_build_withdraw_transaction, or sap_escrow_build_close_transaction, then finalize locally with sap_payments_finalize_transaction.',
       'If another hosted write returns hosted_local_signer_required, switch to a local SAP MCP profile or an unsigned hosted builder plus sap_payments_finalize_transaction when one exists.',
       'If a hosted tool returns transactionBase64, transaction, or an unsigned transaction object, use local sap_payments_finalize_transaction with submit:true. It signs locally and submits through the hosted OOBE relay by default; the relay only broadcasts already-signed bytes.',
       'Never call hosted sap_sign_transaction for user-owned signing, create local .js/.mjs signing scripts, read keypair JSON, or export signer bytes.',
@@ -179,7 +416,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
     },
     connectionCheck: {
       intent: 'Use this when the user asks "are you connected?", "is SAP MCP connected?", "check SAP", or similar status-only questions.',
-      minimumChecks: ['sap_agent_start when available', 'sap_profile_current for hosted server state', 'sap_payments_readiness only when the user asks about paid/write readiness'],
+      minimumChecks: ['sap_agent_start when available', 'sap_agent_runtime_status with intent: connection', 'sap_profile_current for hosted server state only when needed', 'sap_payments_readiness only when the user asks about paid/write readiness'],
       responseShape: [
         'Connected: yes/no',
         'Endpoint and mode',

@@ -28,6 +28,8 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
   ],
   'registry:read': [
     'sol_get_balance',
+    'sap_protocol_invariants',
+    'sap_agent_identity_plan',
     'sap_decode_transaction',
     'sap_preview_transaction',
     'sap_get_agent',
@@ -62,6 +64,7 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
   'registry:write': [
     'sap_register_agent',
     'sap_payments_register_agent',
+    'sap_payments_update_agent',
     'sap_update_agent',
     'sap_deactivate_agent',
     'sap_reactivate_agent',
@@ -124,6 +127,12 @@ const TOOL_PERMISSION_GROUPS: Record<SapPermission, readonly string[]> = {
     'sap_next_settlement_index',
   ],
   'settlement:write': [
+    'sap_escrow_build_create_transaction',
+    'sap_escrow_build_deposit_transaction',
+    'sap_escrow_build_settle_transaction',
+    'sap_escrow_build_finalize_transaction',
+    'sap_escrow_build_withdraw_transaction',
+    'sap_escrow_build_close_transaction',
     'sap_create_escrow_v2',
     'sap_deposit_escrow_v2',
     'sap_settle_escrow_v2',

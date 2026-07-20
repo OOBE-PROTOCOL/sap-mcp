@@ -7,9 +7,9 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction, type AccountMeta } from '@solana/web3.js';
 import BN from 'bn.js';
-import { TOOL_CATEGORY_VALUES } from '@oobe-protocol-labs/synapse-sap-sdk';
+import { Pda, TOOL_CATEGORY_VALUES, USDC_MINT_DEVNET, USDC_MINT_MAINNET } from '@oobe-protocol-labs/synapse-sap-sdk';
 import {
   SettlementMode,
   TokenType,
@@ -18,8 +18,10 @@ import {
   type CreateAttestationArgs,
   type CreateEscrowV2Args,
   type CreateSubscriptionArgs,
+  type EscrowAccountV2Data,
   type GiveFeedbackArgs,
   type InscribeMemoryArgs,
+  type PendingSettlementData,
   type PricingTier,
   type RegisterAgentArgs,
   type UpdateAgentArgs,
@@ -39,6 +41,11 @@ import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { getSapClient, isSapClientInitialized } from '../sap/sap-client-manager.js';
 import { logger } from '../core/logger.js';
+import {
+  DEFAULT_SAP_PROGRAM_ID,
+  SAP_PROTOCOL_TREASURY,
+  SAP_REGISTRATION_FEE_LAMPORTS,
+} from '../core/constants.js';
 
 type JsonRecord = Record<string, unknown>;
 type SapToolHandler = (input: JsonRecord, client: SapClient) => Promise<unknown>;
@@ -57,6 +64,224 @@ const ESCROW_AMOUNT_DESCRIPTION =
 const ESCROW_V2_COSIGNED_MODE = 1;
 const ESCROW_V2_DISPUTE_WINDOW_MODE = 2;
 const DEFAULT_ESCROW_V2_DISPUTE_WINDOW_SLOTS = new BN(2160);
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+export const SAP_AGENT_CAPABILITY_INPUT_SCHEMA = {
+  oneOf: [
+    {
+      type: 'string',
+      description: 'Capability id shorthand, for example jupiter:swap, pyth:price, metaplex:identity, sns:identity, or risk:management.',
+    },
+    {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Required stable capability id. Use protocol:action naming, for example jupiter:swap, pyth:price, metaplex:identity, sns:identity, x402:payments, or risk:management.',
+        },
+        description: {
+          type: 'string',
+          description: 'Optional human-readable capability description for agents and explorers.',
+        },
+        protocolId: {
+          type: 'string',
+          description: 'Optional protocol namespace backing this capability, for example sap, mcp, jupiter, pyth, metaplex, sns, x402, or custom.',
+        },
+        version: {
+          type: 'string',
+          description: 'Optional capability version string. Use semver when the capability maps to an API contract.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  ],
+} as const;
+
+export const SAP_AGENT_PRICING_TIER_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    tierId: {
+      type: 'string',
+      description: 'Stable tier id, for example default, read, premium, value-action, or enterprise.',
+    },
+    pricePerCall: {
+      type: 'string',
+      description: 'Price per call in the smallest unit of tokenType: lamports for sol, micro-USDC for usdc, or base units for spl.',
+    },
+    minPricePerCall: {
+      type: 'string',
+      description: 'Optional floor price per call in the smallest unit of tokenType.',
+    },
+    maxPricePerCall: {
+      type: 'string',
+      description: 'Optional ceiling price per call in the smallest unit of tokenType.',
+    },
+    rateLimit: {
+      type: 'number',
+      description: 'Maximum calls per second allowed by this tier. Defaults to 60.',
+    },
+    maxCallsPerSession: {
+      type: 'number',
+      description: 'Maximum calls allowed per session for this tier. Defaults to 1000.',
+    },
+    burstLimit: {
+      type: 'number',
+      description: 'Optional short-window burst allowance for this tier.',
+    },
+    tokenType: {
+      type: 'string',
+      enum: ['sol', 'usdc', 'spl'],
+      description: 'Payment token type. Use usdc for x402/pay.sh agent commerce. Use spl only with tokenMint.',
+    },
+    tokenMint: {
+      type: 'string',
+      description: 'Optional SPL token mint public key. Required when tokenType is spl. For mainnet USDC use EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v.',
+    },
+    tokenDecimals: {
+      type: 'number',
+      description: 'Decimals for the payment token. Defaults to 6 for usdc and 9 for sol when omitted.',
+    },
+    settlementMode: {
+      type: 'string',
+      enum: ['instant', 'escrow', 'batched', 'x402'],
+      description: 'Settlement strategy. Use x402 for HTTP 402/pay.sh flows, escrow for prepaid SAP usage ledgers, instant for direct pay-per-call, and batched for periodic settlement.',
+    },
+    minEscrowDeposit: {
+      type: 'string',
+      description: 'Optional minimum escrow deposit in the smallest unit of tokenType.',
+    },
+    batchIntervalSec: {
+      type: 'number',
+      description: 'Optional settlement batch interval in seconds when settlementMode is batched.',
+    },
+    volumeCurve: {
+      type: 'array',
+      description: 'Optional volume discounts. Each item lowers pricePerCall after a call threshold.',
+      items: {
+        type: 'object',
+        properties: {
+          afterCalls: { type: 'number', description: 'Call count threshold where this price starts.' },
+          pricePerCall: { type: 'string', description: 'Discounted price per call in the smallest unit of tokenType.' },
+        },
+        required: ['afterCalls', 'pricePerCall'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['pricePerCall'],
+  additionalProperties: false,
+} as const;
+
+export const SAP_AGENT_REGISTER_INPUT_SCHEMA = {
+  name: {
+    type: 'string',
+    description: 'Required public display name for the SAP agent. Keep it stable enough for explorers and humans.',
+  },
+  description: {
+    type: 'string',
+    description: 'Required public description of what the agent does, which protocols it can use, and its safety/trust boundaries.',
+  },
+  capabilities: {
+    type: 'array',
+    description: 'Required capability list. Prefer object form for production; strings are accepted as shorthand.',
+    items: SAP_AGENT_CAPABILITY_INPUT_SCHEMA,
+  },
+  pricing: {
+    type: 'array',
+    description: 'Optional pricing tiers advertised by the agent. Use tokenType usdc + settlementMode x402 for pay.sh/x402 agent commerce.',
+    items: SAP_AGENT_PRICING_TIER_INPUT_SCHEMA,
+  },
+  protocols: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Required protocol tags the agent supports, for example sap, mcp, jupiter, pyth, metaplex, sns, x402, payments.',
+  },
+  agentId: {
+    type: 'string',
+    description: 'Optional stable lowercase agent id, for example solking. This is separate from the on-chain agent PDA.',
+  },
+  agentUri: {
+    type: 'string',
+    description: 'Optional public HTTPS/IPFS/Arweave/Kommodo URI for the agent profile metadata or profile page. Never use local desktop file paths.',
+  },
+  metadataUri: {
+    type: 'string',
+    description: 'Alias for agentUri. Prefer a public JSON metadata document containing name, description, image, external_url, attributes, sap, metaplex, sns, and x402 fields.',
+  },
+  x402Endpoint: {
+    type: 'string',
+    description: 'Optional public x402 discovery/payment endpoint, usually https://host/.well-known/x402 for external agent services.',
+  },
+} as const;
+
+export const SAP_AGENT_UPDATE_INPUT_SCHEMA = {
+  name: {
+    type: 'string',
+    description: 'Optional replacement display name. Omit to keep the current name.',
+  },
+  description: {
+    type: 'string',
+    description: 'Optional replacement description. Omit to keep the current description.',
+  },
+  capabilities: {
+    type: 'array',
+    description: 'Optional full replacement capability list. Omit to keep current capabilities; do not send only the new item unless replacing the whole list is intended.',
+    items: SAP_AGENT_CAPABILITY_INPUT_SCHEMA,
+  },
+  pricing: {
+    type: 'array',
+    description: 'Optional full replacement pricing tier list. Omit to keep current pricing.',
+    items: SAP_AGENT_PRICING_TIER_INPUT_SCHEMA,
+  },
+  protocols: {
+    type: 'array',
+    items: { type: 'string' },
+    description: 'Optional full replacement protocol list. Omit to keep current protocols.',
+  },
+  agentId: {
+    type: 'string',
+    description: 'Optional replacement stable agent id. Omit to keep current agentId.',
+  },
+  agentUri: {
+    type: 'string',
+    description: 'Optional replacement public URI for agent metadata/profile. Use this to update pictures after uploading metadata to IPFS, Arweave, Kommodo, or HTTPS.',
+  },
+  metadataUri: {
+    type: 'string',
+    description: 'Alias for agentUri. Use a public metadata JSON URI; never use a desktop file path.',
+  },
+  x402Endpoint: {
+    type: 'string',
+    description: 'Optional replacement x402 discovery/payment endpoint. Omit to keep current endpoint.',
+  },
+} as const;
+
+const SAP_AGENT_IDENTITY_PLAN_INPUT_SCHEMA = {
+  intendedAction: {
+    type: 'string',
+    enum: ['register', 'update', 'link-metaplex', 'link-sns', 'full-identity'],
+    description: 'Agent identity lifecycle step to plan. Use register for a new SAP agent, update for profile/image/capability changes, link-metaplex for NFT/MPL Core identity, link-sns for .sol identity, or full-identity for the recommended end-to-end flow.',
+  },
+  ...SAP_AGENT_REGISTER_INPUT_SCHEMA,
+  snsDomain: {
+    type: 'string',
+    description: 'Optional .sol domain to link after ownership or registration is verified.',
+  },
+  imageUrl: {
+    type: 'string',
+    description: 'Optional public image URL. This must be HTTPS, IPFS, Arweave, or another public URI; desktop file paths are not valid.',
+  },
+  metaplexAsset: {
+    type: 'string',
+    description: 'Optional Metaplex NFT or MPL Core asset/collection address to reference from public agent metadata.',
+  },
+  ownerWallet: {
+    type: 'string',
+    description: 'Optional expected SAP owner wallet. Use this for verification planning only; signing still comes from the active local SAP profile.',
+  },
+} as const;
 
 const escrowV2CreateInputSchema = {
   agentWallet: {
@@ -109,6 +334,127 @@ const escrowV2CreateInputSchema = {
     description: 'Optional arbiter public key kept for IDL compatibility and dispute workflows.',
   },
 };
+
+const escrowV2CreateBuilderInputSchema = {
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58). This wallet signs locally and funds the escrow; hosted SAP MCP never receives its private key.',
+  },
+  ...escrowV2CreateInputSchema,
+} as const;
+
+const escrowV2DepositBuilderInputSchema = {
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58). This wallet signs locally and provides the additional escrow funds.',
+  },
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58). The escrow PDA is derived from agentWallet, depositorWallet, and nonce.',
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+  amount: {
+    type: 'string',
+    description: `Deposit amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}`,
+  },
+} as const;
+
+const escrowV2WithdrawBuilderInputSchema = {
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58). Only the depositor can locally sign a withdrawal from this escrow.',
+  },
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58). The escrow PDA is derived from agentWallet, depositorWallet, and nonce.',
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+  amount: {
+    type: 'string',
+    description: `Withdrawal amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}`,
+  },
+} as const;
+
+const escrowV2SettleBuilderInputSchema = {
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58). This wallet signs locally because settlement releases funds to the serving agent.',
+  },
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58) for the escrow being settled.',
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+  callsToSettle: {
+    type: 'string',
+    description: 'Number of served calls to settle as a decimal string.',
+  },
+  serviceHash: {
+    oneOf: [
+      {
+        type: 'array',
+        items: { type: 'number' },
+        description: '32-byte service/audit hash as byte array.',
+      },
+      {
+        type: 'string',
+        description: '32-byte service/audit hash encoded as 64-char hex or base64 string.',
+      },
+    ],
+    description: '32-byte service/audit hash. Use a stable hash of the fulfilled paid work.',
+  },
+  coSigner: {
+    type: 'string',
+    description: 'Optional co-signer public key for CoSigned escrows when the escrow account requires it.',
+  },
+} as const;
+
+const escrowV2FinalizeBuilderInputSchema = {
+  payerWallet: {
+    type: 'string',
+    description: 'Wallet public key (base58) that signs and pays transaction fees to finalize the pending settlement.',
+  },
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58).',
+  },
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58).',
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+  settlementIndex: {
+    type: 'string',
+    description: 'Pending settlement index as a decimal string.',
+  },
+} as const;
+
+const escrowV2CloseBuilderInputSchema = {
+  depositorWallet: {
+    type: 'string',
+    description: 'Depositor wallet public key (base58). The depositor signs locally to close the empty escrow.',
+  },
+  agentWallet: {
+    type: 'string',
+    description: 'Agent owner wallet public key (base58).',
+  },
+  nonce: {
+    type: 'string',
+    description: 'Optional escrow nonce as a decimal string. Defaults to 0.',
+  },
+} as const;
 
 interface AnchorAccountResult<TAccount> {
   publicKey: PublicKey;
@@ -807,6 +1153,51 @@ function parseVolumeCurve(value: unknown): VolumeCurveBreakpoint[] {
 }
 
 /**
+ * @name optionalTokenType
+ * @description Converts public tokenType strings into SDK Anchor enum variants.
+ */
+function optionalTokenType(input: JsonRecord): { tokenType: typeof TokenType[keyof typeof TokenType]; decimalsFallback: number } {
+  const raw = optionalString(input, 'tokenType') ?? 'sol';
+  const normalized = raw.trim().toLowerCase();
+
+  if (normalized === 'sol' || normalized === 'native' || normalized === 'lamports') {
+    return { tokenType: TokenType.Sol, decimalsFallback: 9 };
+  }
+  if (normalized === 'usdc' || normalized === 'micro-usdc' || normalized === 'micro_usdc') {
+    return { tokenType: TokenType.Usdc, decimalsFallback: 6 };
+  }
+  if (normalized === 'spl' || normalized === 'token') {
+    return { tokenType: TokenType.Spl, decimalsFallback: 0 };
+  }
+
+  throw new Error('tokenType must be one of sol, usdc, or spl');
+}
+
+/**
+ * @name optionalSettlementMode
+ * @description Converts public settlementMode strings into SDK Anchor enum variants.
+ */
+function optionalSettlementMode(input: JsonRecord): typeof SettlementMode[keyof typeof SettlementMode] {
+  const raw = optionalString(input, 'settlementMode') ?? 'escrow';
+  const normalized = raw.trim().toLowerCase();
+
+  if (normalized === 'instant') {
+    return SettlementMode.Instant;
+  }
+  if (normalized === 'escrow') {
+    return SettlementMode.Escrow;
+  }
+  if (normalized === 'batched' || normalized === 'batch') {
+    return SettlementMode.Batched;
+  }
+  if (normalized === 'x402' || normalized === 'pay.sh' || normalized === 'paysh') {
+    return SettlementMode.X402;
+  }
+
+  throw new Error('settlementMode must be one of instant, escrow, batched, or x402');
+}
+
+/**
  * @name requiredBytes
  * @description Reads byte-array fields used for hashes, nonces, and encrypted payloads.
  */
@@ -921,6 +1312,12 @@ function parsePricingTiers(value: unknown): PricingTier[] {
   return value.map((item) => {
     const record = asRecord(item);
     const pricePerCall = optionalBn(record, 'pricePerCall', new BN(0));
+    const { tokenType, decimalsFallback } = optionalTokenType(record);
+    const tokenMint = optionalPublicKey(record, 'tokenMint') ?? null;
+    if (tokenType === TokenType.Spl && tokenMint === null) {
+      throw new Error('pricing.tokenMint is required when tokenType is spl');
+    }
+    const volumeCurve = parseVolumeCurve(record.volumeCurve);
     return {
       tierId: optionalString(record, 'tierId') ?? 'default',
       pricePerCall,
@@ -929,13 +1326,13 @@ function parsePricingTiers(value: unknown): PricingTier[] {
       rateLimit: optionalNumber(record, 'rateLimit') ?? 60,
       maxCallsPerSession: optionalNumber(record, 'maxCallsPerSession') ?? 1_000,
       burstLimit: optionalNumber(record, 'burstLimit') ?? null,
-      tokenType: TokenType.Sol,
-      tokenMint: optionalPublicKey(record, 'tokenMint') ?? null,
-      tokenDecimals: optionalNumber(record, 'tokenDecimals') ?? null,
-      settlementMode: SettlementMode.Escrow,
+      tokenType,
+      tokenMint,
+      tokenDecimals: optionalNumber(record, 'tokenDecimals') ?? decimalsFallback,
+      settlementMode: optionalSettlementMode(record),
       minEscrowDeposit: record.minEscrowDeposit === undefined ? null : requiredBn(record, 'minEscrowDeposit'),
       batchIntervalSec: optionalNumber(record, 'batchIntervalSec') ?? null,
-      volumeCurve: null,
+      volumeCurve: volumeCurve.length > 0 ? volumeCurve : null,
     };
   });
 }
@@ -980,7 +1377,7 @@ export function parseRegisterAgentArgs(input: JsonRecord): RegisterAgentArgs {
  * @name parseUpdateAgentArgs
  * @description Builds strongly typed `UpdateAgentArgs` from MCP JSON input.
  */
-function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
+export function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
   return {
     name: optionalString(input, 'name') ?? null,
     description: optionalString(input, 'description') ?? null,
@@ -990,6 +1387,173 @@ function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
     agentId: optionalString(input, 'agentId') ?? null,
     agentUri: optionalString(input, 'agentUri') ?? optionalString(input, 'metadataUri') ?? null,
     x402Endpoint: optionalString(input, 'x402Endpoint') ?? null,
+  };
+}
+
+function parseIdentityPlanAction(input: JsonRecord): string {
+  const value = optionalString(input, 'intendedAction') ?? 'full-identity';
+  if (['register', 'update', 'link-metaplex', 'link-sns', 'full-identity'].includes(value)) {
+    return value;
+  }
+  throw new Error('intendedAction must be one of register, update, link-metaplex, link-sns, full-identity');
+}
+
+function optionalPublicMetadataUri(input: JsonRecord): string | null {
+  return optionalString(input, 'metadataUri') ?? optionalString(input, 'agentUri') ?? null;
+}
+
+function buildSapAgentIdentityPlan(input: JsonRecord): JsonRecord {
+  const intendedAction = parseIdentityPlanAction(input);
+  const metadataUri = optionalPublicMetadataUri(input);
+  const imageUrl = optionalString(input, 'imageUrl') ?? null;
+  const metaplexAsset = optionalString(input, 'metaplexAsset') ?? null;
+  const snsDomain = optionalString(input, 'snsDomain') ?? null;
+  const ownerWallet = optionalString(input, 'ownerWallet') ?? null;
+  const missingRegisterFields = ['name', 'description', 'capabilities', 'protocols']
+    .filter((field) => input[field] === undefined || input[field] === null);
+  const hasCompleteRegisterFields = missingRegisterFields.length === 0;
+  const registerArgs = hasCompleteRegisterFields
+    ? parseRegisterAgentArgs({
+        ...input,
+        capabilities: input.capabilities ?? [],
+        pricing: input.pricing ?? [],
+        protocols: input.protocols ?? [],
+      })
+    : null;
+  const updateArgs = parseUpdateAgentArgs(input);
+
+  return {
+    intendedAction,
+    trustBoundary: {
+      hostedSap: 'Use hosted sap for reads, paid hosted tools, and unsigned builders.',
+      localSapPayments: 'Use local sap_payments for x402 payment signing, SAP registry writes, and transaction finalization.',
+      keypairMaterial: 'Never read or export keypair JSON. Only local SAP MCP signer tools may sign.',
+    },
+    nextTools: {
+      readiness: 'sap_payments_readiness',
+      register: intendedAction === 'register' || intendedAction === 'full-identity' ? 'sap_payments_register_agent' : null,
+      update: intendedAction !== 'register' ? 'sap_payments_update_agent' : null,
+      metaplex: metaplexAsset ? 'metaplex-nft_* or DAS verification tools before SAP metadata update' : null,
+      sns: snsDomain ? ['sap_sns_check_domain', 'sap_sns_check_ownership', 'sap_sns_build_manage_record_transaction when managing records'] : null,
+      profileVerification: 'sap_get_agent_profile',
+    },
+    missingRegisterFields,
+    normalizedRegistration: registerArgs
+      ? {
+          name: registerArgs.name,
+          description: registerArgs.description,
+          agentId: registerArgs.agentId,
+          agentUri: registerArgs.agentUri,
+          x402Endpoint: registerArgs.x402Endpoint,
+          protocols: registerArgs.protocols,
+          capabilities: registerArgs.capabilities,
+          pricing: registerArgs.pricing,
+          confirm: true,
+        }
+      : null,
+    normalizedUpdate: {
+      name: updateArgs.name,
+      description: updateArgs.description,
+      agentId: updateArgs.agentId,
+      agentUri: updateArgs.agentUri,
+      x402Endpoint: updateArgs.x402Endpoint,
+      protocols: updateArgs.protocols,
+      capabilities: updateArgs.capabilities,
+      pricing: updateArgs.pricing,
+      confirm: true,
+    },
+    publicMetadataContract: {
+      requiredForImages: true,
+      metadataUri,
+      imageUrl,
+      metaplexAsset,
+      snsDomain,
+      recommendedShape: {
+        name: input.name ?? '<agent name>',
+        description: input.description ?? '<agent description>',
+        image: imageUrl ?? '<public image URL>',
+        external_url: ownerWallet ? `https://explorer.oobeprotocol.ai/agents/${ownerWallet}` : '<public agent page>',
+        attributes: [
+          { trait_type: 'Protocol', value: 'SAP' },
+          { trait_type: 'Identity', value: [metaplexAsset ? 'Metaplex' : null, snsDomain ? 'SNS' : null].filter(Boolean).join(' + ') || 'SAP' },
+        ],
+        sap: {
+          ownerWallet: ownerWallet ?? '<owner wallet>',
+          agentId: optionalString(input, 'agentId') ?? '<stable id>',
+          capabilities: Array.isArray(input.capabilities) ? input.capabilities : [],
+        },
+        metaplex: metaplexAsset ? { asset: metaplexAsset } : null,
+        sns: snsDomain ? { domain: snsDomain } : null,
+        x402: optionalString(input, 'x402Endpoint') ? { endpoint: optionalString(input, 'x402Endpoint') } : null,
+      },
+    },
+    verificationChecklist: [
+      'Call sap_payments_readiness before paid/write actions.',
+      'For registration, call sap_payments_register_agent with confirm:true; do not call hosted sap_register_agent after hosted_local_signer_required.',
+      'Verify sap_payments_register_agent success, confirmationStatus, agentPda, and protocolFee.status.',
+      'Fetch sap_get_agent_profile by owner wallet after registration or update.',
+      'For update, verify every intended replacement field because arrays are full replacements.',
+      'For Metaplex identity, verify the asset/collection metadata URI and update authority before linking it from SAP metadata.',
+      'For SNS identity, verify domain ownership and records before claiming the .sol identity is linked.',
+    ],
+    forbiddenActions: [
+      'Do not create temporary signing scripts.',
+      'Do not read keypair JSON.',
+      'Do not reuse stale x402 payment signatures.',
+      'Do not pay hosted x402 fees for hosted_local_signer_required registry writes.',
+      'Do not announce lifecycle complete if protocolFee.status is missing_or_underpaid.',
+    ],
+  };
+}
+
+function buildSapProtocolInvariants(): JsonRecord {
+  return {
+    protocol: {
+      name: 'Synapse Agent Protocol',
+      programId: DEFAULT_SAP_PROGRAM_ID,
+      network: 'mainnet-beta',
+      custodyModel: 'non-custodial',
+    },
+    registrationFee: {
+      sourceExpected: true,
+      treasury: SAP_PROTOCOL_TREASURY,
+      lamports: SAP_REGISTRATION_FEE_LAMPORTS.toString(10),
+      sol: Number(SAP_REGISTRATION_FEE_LAMPORTS) / 1_000_000_000,
+      verification: 'sap_payments_register_agent verifies the landed transaction pre/post balance delta for the treasury account because deployed program behavior can drift from the source-level invariant.',
+      failureStatus: 'missing_or_underpaid',
+      failureRule: 'If protocolFee.status is missing_or_underpaid, the agent account can still exist, but sap_payments_register_agent must return success:false, agentRegistered:true, and protocolComplete:false. Do not retry registration automatically; inspect the signature, deployed SAP program, and treasury delta first.',
+    },
+    hostedWritePolicy: {
+      register: 'Hosted sap_register_agent is accountless and returns hosted_local_signer_required before x402 payment.',
+      update: 'Hosted sap_update_agent is accountless and returns hosted_local_signer_required before x402 payment.',
+      sns: 'Hosted direct SNS writes require a local signer or unsigned builder. If no builder exists, stop and route through local SAP MCP.',
+      noChargeRule: 'hosted_local_signer_required is a routing guard, not a paid failure; no hosted x402 fee should be charged for that blocked write.',
+    },
+    localSignerRoutes: {
+      readiness: 'sap_payments_readiness',
+      registerAgent: 'sap_payments_register_agent',
+      updateAgent: 'sap_payments_update_agent',
+      finalizeUnsignedTransaction: 'sap_payments_finalize_transaction',
+      paidHostedTool: 'sap_payments_call_paid_tool',
+      externalX402Http: 'sap_payments_call_external_x402',
+    },
+    identityPipeline: [
+      'Call sap_agent_identity_plan for register, update, Metaplex, SNS, or full-identity intent.',
+      'Upload image and metadata to a public URL before writing agentUri or metadataUri.',
+      'Use sap_payments_register_agent for local non-custodial registration.',
+      'Verify success, agentRegistered, confirmationStatus, agentPda, protocolComplete, and protocolFee.status.',
+      'Use Metaplex/MPL Core tools only after metadata authority and URI are clear.',
+      'Use SNS tools only after domain availability/ownership and user confirmation are clear.',
+      'Use sap_payments_update_agent for profile image, metadata, capabilities, pricing, protocols, or x402 endpoint updates.',
+      'Fetch sap_get_agent_profile after every registry write and compare intended fields.',
+    ],
+    forbiddenActions: [
+      'Do not create temporary signing scripts.',
+      'Do not read keypair JSON.',
+      'Do not call hosted sap_sign_transaction for user-owned signatures.',
+      'Do not call hosted sap_register_agent or sap_update_agent again after hosted_local_signer_required.',
+      'Do not call an agent lifecycle complete when protocolFee.status is missing_or_underpaid, unavailable, or anything other than verified.',
+    ],
   };
 }
 
@@ -1128,6 +1692,526 @@ function parseEscrowV2Args(input: JsonRecord): CreateEscrowV2Args {
   };
 }
 
+interface HostedEscrowBuilderResult {
+  action: string;
+  transactionBase64: string;
+  encoding: 'base64';
+  requiredSigner: string;
+  requiredSignerRole: 'depositor' | 'agentWallet' | 'payer';
+  submitWith: 'sap_payments_finalize_transaction';
+  nextStep: string;
+  accounts: JsonRecord;
+  tokenMode: 'SOL' | 'SPL';
+  security?: JsonRecord;
+  warnings?: string[];
+}
+
+type AnchorInstructionBuilder = {
+  accounts(accounts: JsonRecord): {
+    remainingAccounts(accounts: AccountMeta[]): { instruction(): Promise<unknown> };
+    instruction(): Promise<unknown>;
+  };
+  accountsPartial(accounts: JsonRecord): {
+    remainingAccounts(accounts: AccountMeta[]): { instruction(): Promise<unknown> };
+  };
+};
+
+type AnchorMethods = Record<string, (...args: unknown[]) => AnchorInstructionBuilder>;
+
+function publicKeyOrNull(value: unknown): PublicKey | null {
+  return value instanceof PublicKey ? value : null;
+}
+
+function bnToBigInt(value: BN | number | bigint | { toString(): string }): bigint {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return BigInt(value);
+  }
+  return BigInt(value.toString());
+}
+
+function bnToPdaSeed(value: BN, field: string): bigint {
+  const asBigInt = BigInt(value.toString(10));
+  if (asBigInt < 0n) {
+    throw new Error(`${field} must be >= 0`);
+  }
+  return asBigInt;
+}
+
+function serializeAccountMetas(accounts: AccountMeta[]): JsonRecord[] {
+  return accounts.map((account) => ({
+    pubkey: account.pubkey.toBase58(),
+    isSigner: account.isSigner,
+    isWritable: account.isWritable,
+  }));
+}
+
+function validateEscrowPaymentMint(tokenMint: PublicKey | null): void {
+  if (!tokenMint) {
+    return;
+  }
+  if (!tokenMint.equals(USDC_MINT_MAINNET) && !tokenMint.equals(USDC_MINT_DEVNET)) {
+    throw new Error('Escrow V2 hosted builders only accept native SOL or USDC mints supported by the current SAP program.');
+  }
+}
+
+function deriveAssociatedTokenAddress(tokenMint: PublicKey, owner: PublicKey): PublicKey {
+  const [address] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), tokenMint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  );
+  return address;
+}
+
+function getEscrowPdas(client: SapClient, agentWallet: PublicKey, depositorWallet: PublicKey, nonce: BN) {
+  const [agentPda] = Pda.deriveAgent(agentWallet, client.programId);
+  const [escrowPda] = Pda.deriveEscrowV2(agentPda, depositorWallet, bnToPdaSeed(nonce, 'nonce'), client.programId);
+  const [agentStake] = Pda.deriveStake(agentPda, client.programId);
+  const [agentStats] = Pda.deriveAgentStats(agentPda, client.programId);
+  const [pricingMenu] = Pda.derivePricingMenu(agentPda, client.programId);
+  return { agentPda, escrowPda, agentStake, agentStats, pricingMenu };
+}
+
+function buildSplRemainingAccounts(
+  tokenMint: PublicKey | null,
+  sourceOwner: PublicKey,
+  destinationOwner: PublicKey,
+): AccountMeta[] {
+  if (!tokenMint) {
+    return [];
+  }
+  return [
+    {
+      pubkey: deriveAssociatedTokenAddress(tokenMint, sourceOwner),
+      isSigner: false,
+      isWritable: true,
+    },
+    {
+      pubkey: deriveAssociatedTokenAddress(tokenMint, destinationOwner),
+      isSigner: false,
+      isWritable: true,
+    },
+    { pubkey: tokenMint, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+  ];
+}
+
+function buildEscrowSettlementRemainingAccounts(params: {
+  tokenMint: PublicKey | null;
+  escrowPda: PublicKey;
+  agentWallet: PublicKey;
+  pendingSettlementPda?: PublicKey;
+  coSigner?: PublicKey | null;
+}): AccountMeta[] {
+  const accounts: AccountMeta[] = params.tokenMint
+    ? [
+        ...buildSplRemainingAccounts(params.tokenMint, params.escrowPda, params.agentWallet),
+        {
+          pubkey: deriveAssociatedTokenAddress(params.tokenMint, new PublicKey(SAP_PROTOCOL_TREASURY)),
+          isSigner: false,
+          isWritable: true,
+        },
+      ]
+    : [
+        {
+          pubkey: new PublicKey(SAP_PROTOCOL_TREASURY),
+          isSigner: false,
+          isWritable: true,
+        },
+      ];
+
+  if (params.pendingSettlementPda) {
+    accounts.push({ pubkey: params.pendingSettlementPda, isSigner: false, isWritable: true });
+  }
+  if (params.coSigner) {
+    accounts.push({ pubkey: params.coSigner, isSigner: true, isWritable: false });
+  }
+  return accounts;
+}
+
+async function serializeUnsignedTransaction(
+  client: SapClient,
+  feePayer: PublicKey,
+  instructions: unknown[],
+): Promise<{ transactionBase64: string; blockhash: string; lastValidBlockHeight: number }> {
+  const latestBlockhash = await client.connection.getLatestBlockhash('confirmed');
+  const tx = new Transaction();
+  tx.feePayer = feePayer;
+  tx.recentBlockhash = latestBlockhash.blockhash;
+  for (const instruction of instructions) {
+    tx.add(instruction as Parameters<Transaction['add']>[0]);
+  }
+  return {
+    transactionBase64: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64'),
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  };
+}
+
+async function fetchEscrowV2Nullable(client: SapClient, escrowPda: PublicKey): Promise<EscrowAccountV2Data | null> {
+  const accounts = getSapAnchorAccounts(client) as unknown as Record<string, {
+    fetchNullable(address: PublicKey): Promise<EscrowAccountV2Data | null>;
+  }>;
+  return accounts.escrowAccountV2.fetchNullable(escrowPda);
+}
+
+async function fetchPendingSettlementNullable(client: SapClient, pendingPda: PublicKey): Promise<PendingSettlementData | null> {
+  const accounts = getSapAnchorAccounts(client) as unknown as Record<string, {
+    fetchNullable(address: PublicKey): Promise<PendingSettlementData | null>;
+  }>;
+  return accounts.pendingSettlement.fetchNullable(pendingPda);
+}
+
+function isDisputeWindowEscrow(escrow: EscrowAccountV2Data): boolean {
+  const security = escrow.settlementSecurity as unknown;
+  return typeof security === 'object' && security !== null && 'disputeWindow' in security;
+}
+
+function isCoSignedEscrow(escrow: EscrowAccountV2Data): boolean {
+  const security = escrow.settlementSecurity as unknown;
+  return typeof security === 'object' && security !== null && 'coSigned' in security;
+}
+
+function escrowBuilderResponse(params: {
+  action: string;
+  transactionBase64: string;
+  requiredSigner: PublicKey;
+  requiredSignerRole: HostedEscrowBuilderResult['requiredSignerRole'];
+  accounts: JsonRecord;
+  tokenMint: PublicKey | null;
+  blockhash: string;
+  lastValidBlockHeight: number;
+  security?: JsonRecord;
+  warnings?: string[];
+}): HostedEscrowBuilderResult {
+  return {
+    action: params.action,
+    transactionBase64: params.transactionBase64,
+    encoding: 'base64',
+    requiredSigner: params.requiredSigner.toBase58(),
+    requiredSignerRole: params.requiredSignerRole,
+    submitWith: 'sap_payments_finalize_transaction',
+    nextStep: 'Call sap_payments_finalize_transaction with transactionBase64, submit:true, confirm:true, and the same user-approved intent. Do not create temporary signing scripts and do not read keypair JSON.',
+    accounts: {
+      ...params.accounts,
+      blockhash: params.blockhash,
+      lastValidBlockHeight: params.lastValidBlockHeight,
+    },
+    tokenMode: params.tokenMint ? 'SPL' : 'SOL',
+    ...(params.security ? { security: params.security } : {}),
+    ...(params.warnings && params.warnings.length > 0 ? { warnings: params.warnings } : {}),
+  };
+}
+
+async function buildEscrowCreateTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const args = parseEscrowV2Args(input);
+  validateEscrowPaymentMint(args.tokenMint);
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, args.escrowNonce);
+  const remainingAccounts = buildSplRemainingAccounts(args.tokenMint, depositorWallet, pdas.escrowPda);
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.createEscrowV2(
+    args.escrowNonce,
+    args.pricePerCall,
+    args.maxCalls,
+    args.initialDeposit,
+    args.expiresAt,
+    args.volumeCurve,
+    args.tokenMint,
+    args.tokenDecimals,
+    args.settlementSecurity,
+    args.disputeWindowSlots,
+    args.coSigner,
+    args.arbiter,
+  )
+    .accounts({
+      depositor: depositorWallet,
+      agent: pdas.agentPda,
+      agentStake: pdas.agentStake,
+      agentStats: pdas.agentStats,
+      pricingMenu: pdas.pricingMenu,
+      escrow: pdas.escrowPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, depositorWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'create_escrow_v2',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: depositorWallet,
+    requiredSignerRole: 'depositor',
+    tokenMint: args.tokenMint,
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      agentWallet,
+      depositorWallet,
+      agentPda: pdas.agentPda,
+      escrowPda: pdas.escrowPda,
+      agentStake: pdas.agentStake,
+      agentStats: pdas.agentStats,
+      pricingMenu: pdas.pricingMenu,
+      remainingAccounts: serializeAccountMetas(remainingAccounts),
+    },
+    security: {
+      settlementSecurity: args.settlementSecurity,
+      disputeWindowSlots: args.disputeWindowSlots,
+      coSigner: args.coSigner,
+      arbiter: args.arbiter,
+    },
+  });
+}
+
+async function buildEscrowDepositTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const nonce = optionalBn(input, 'nonce', new BN(0));
+  const amount = requiredBn(input, 'amount');
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, nonce);
+  const escrow = await fetchEscrowV2Nullable(client, pdas.escrowPda);
+  if (!escrow) {
+    throw new Error(`Escrow V2 PDA ${pdas.escrowPda.toBase58()} does not exist. Build and finalize sap_escrow_build_create_transaction first.`);
+  }
+  const tokenMint = publicKeyOrNull(escrow.tokenMint);
+  const remainingAccounts = buildSplRemainingAccounts(tokenMint, depositorWallet, pdas.escrowPda);
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.depositEscrowV2(nonce, amount)
+    .accounts({
+      depositor: depositorWallet,
+      escrow: pdas.escrowPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, depositorWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'deposit_escrow_v2',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: depositorWallet,
+    requiredSignerRole: 'depositor',
+    tokenMint,
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      agentWallet,
+      depositorWallet,
+      escrowPda: pdas.escrowPda,
+      amount,
+      remainingAccounts: serializeAccountMetas(remainingAccounts),
+    },
+  });
+}
+
+async function buildEscrowWithdrawTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const nonce = optionalBn(input, 'nonce', new BN(0));
+  const amount = requiredBn(input, 'amount');
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, nonce);
+  const escrow = await fetchEscrowV2Nullable(client, pdas.escrowPda);
+  if (!escrow) {
+    throw new Error(`Escrow V2 PDA ${pdas.escrowPda.toBase58()} does not exist.`);
+  }
+  const balance = bnToBigInt(escrow.balance);
+  const pendingAmount = bnToBigInt(escrow.pendingAmount);
+  const withdrawable = balance > pendingAmount ? balance - pendingAmount : 0n;
+  if (BigInt(amount.toString(10)) > withdrawable) {
+    throw new Error(`Withdraw amount exceeds withdrawable escrow balance. requested=${amount.toString(10)}, withdrawable=${withdrawable.toString()}.`);
+  }
+  const tokenMint = publicKeyOrNull(escrow.tokenMint);
+  const remainingAccounts = buildSplRemainingAccounts(tokenMint, pdas.escrowPda, depositorWallet);
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.withdrawEscrowV2(amount)
+    .accounts({
+      depositor: depositorWallet,
+      escrow: pdas.escrowPda,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, depositorWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'withdraw_escrow_v2',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: depositorWallet,
+    requiredSignerRole: 'depositor',
+    tokenMint,
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      agentWallet,
+      depositorWallet,
+      escrowPda: pdas.escrowPda,
+      amount,
+      withdrawable: withdrawable.toString(),
+      remainingAccounts: serializeAccountMetas(remainingAccounts),
+    },
+  });
+}
+
+async function buildEscrowSettleTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const nonce = optionalBn(input, 'nonce', new BN(0));
+  const callsToSettle = requiredBn(input, 'callsToSettle');
+  const serviceHash = requiredBytes(input, 'serviceHash', 32);
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, nonce);
+  const escrow = await fetchEscrowV2Nullable(client, pdas.escrowPda);
+  if (!escrow) {
+    throw new Error(`Escrow V2 PDA ${pdas.escrowPda.toBase58()} does not exist.`);
+  }
+  const tokenMint = publicKeyOrNull(escrow.tokenMint);
+  const pendingSettlementIndex = bnToBigInt(escrow.settlementIndex);
+  let pendingSettlementPda: PublicKey | undefined;
+  if (isDisputeWindowEscrow(escrow)) {
+    [pendingSettlementPda] = Pda.derivePendingSettlement(pdas.escrowPda, pendingSettlementIndex, client.programId);
+    const existing = await fetchPendingSettlementNullable(client, pendingSettlementPda);
+    if (existing) {
+      throw new Error(`Pending settlement ${pendingSettlementPda.toBase58()} already exists for settlementIndex=${pendingSettlementIndex.toString()}. Finalize or quarantine it before building another DisputeWindow settlement.`);
+    }
+  }
+  const coSigner = isCoSignedEscrow(escrow) ? publicKeyOrNull(escrow.coSigner) : optionalPublicKey(input, 'coSigner') ?? null;
+  if (isCoSignedEscrow(escrow) && !coSigner) {
+    throw new Error('CoSigned escrow requires coSigner in the escrow account.');
+  }
+  const remainingAccounts = buildEscrowSettlementRemainingAccounts({
+    tokenMint,
+    escrowPda: pdas.escrowPda,
+    agentWallet,
+    pendingSettlementPda,
+    coSigner,
+  });
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.settleCallsV2(nonce, callsToSettle, serviceHash)
+    .accountsPartial({
+      wallet: agentWallet,
+      agent: pdas.agentPda,
+      agentStats: pdas.agentStats,
+      escrow: pdas.escrowPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, agentWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'settle_calls_v2',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: agentWallet,
+    requiredSignerRole: 'agentWallet',
+    tokenMint,
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      agentWallet,
+      depositorWallet,
+      agentPda: pdas.agentPda,
+      agentStats: pdas.agentStats,
+      escrowPda: pdas.escrowPda,
+      pendingSettlementPda: pendingSettlementPda ?? null,
+      pendingSettlementIndex: pendingSettlementIndex.toString(),
+      callsToSettle,
+      serviceHash,
+      remainingAccounts: serializeAccountMetas(remainingAccounts),
+    },
+    security: {
+      settlementSecurity: isDisputeWindowEscrow(escrow) ? ESCROW_V2_DISPUTE_WINDOW_MODE : ESCROW_V2_COSIGNED_MODE,
+      coSigner,
+    },
+  });
+}
+
+async function buildEscrowFinalizeTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const payerWallet = requiredPublicKey(input, 'payerWallet');
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const nonce = optionalBn(input, 'nonce', new BN(0));
+  const settlementIndex = requiredBn(input, 'settlementIndex');
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, nonce);
+  const [pendingSettlementPda] = Pda.derivePendingSettlement(pdas.escrowPda, bnToPdaSeed(settlementIndex, 'settlementIndex'), client.programId);
+  const escrow = await fetchEscrowV2Nullable(client, pdas.escrowPda);
+  if (!escrow) {
+    throw new Error(`Escrow V2 PDA ${pdas.escrowPda.toBase58()} does not exist.`);
+  }
+  const pending = await fetchPendingSettlementNullable(client, pendingSettlementPda);
+  if (!pending) {
+    throw new Error(`Pending settlement ${pendingSettlementPda.toBase58()} does not exist.`);
+  }
+  const tokenMint = publicKeyOrNull(escrow.tokenMint);
+  const remainingAccounts = buildSplRemainingAccounts(tokenMint, pdas.escrowPda, agentWallet);
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.finalizeSettlement()
+    .accounts({
+      payer: payerWallet,
+      agentWallet,
+      escrow: pdas.escrowPda,
+      pendingSettlement: pendingSettlementPda,
+      agentStats: pdas.agentStats,
+    })
+    .remainingAccounts(remainingAccounts)
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, payerWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'finalize_settlement',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: payerWallet,
+    requiredSignerRole: 'payer',
+    tokenMint,
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      payerWallet,
+      agentWallet,
+      depositorWallet,
+      escrowPda: pdas.escrowPda,
+      pendingSettlementPda,
+      settlementIndex,
+      releaseSlot: pending.releaseSlot,
+      remainingAccounts: serializeAccountMetas(remainingAccounts),
+    },
+  });
+}
+
+async function buildEscrowCloseTransaction(input: JsonRecord, client: SapClient): Promise<HostedEscrowBuilderResult> {
+  const depositorWallet = requiredPublicKey(input, 'depositorWallet');
+  const agentWallet = requiredPublicKey(input, 'agentWallet');
+  const nonce = optionalBn(input, 'nonce', new BN(0));
+  const pdas = getEscrowPdas(client, agentWallet, depositorWallet, nonce);
+  const escrow = await fetchEscrowV2Nullable(client, pdas.escrowPda);
+  if (!escrow) {
+    throw new Error(`Escrow V2 PDA ${pdas.escrowPda.toBase58()} does not exist.`);
+  }
+  if (bnToBigInt(escrow.balance) !== 0n || bnToBigInt(escrow.pendingAmount) !== 0n) {
+    throw new Error('Escrow cannot close until balance and pendingAmount are both zero.');
+  }
+  const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
+  const instruction = await methods.closeEscrowV2()
+    .accounts({
+      depositor: depositorWallet,
+      escrow: pdas.escrowPda,
+      agentStats: pdas.agentStats,
+    })
+    .instruction();
+  const tx = await serializeUnsignedTransaction(client, depositorWallet, [instruction]);
+  return escrowBuilderResponse({
+    action: 'close_escrow_v2',
+    transactionBase64: tx.transactionBase64,
+    requiredSigner: depositorWallet,
+    requiredSignerRole: 'depositor',
+    tokenMint: publicKeyOrNull(escrow.tokenMint),
+    blockhash: tx.blockhash,
+    lastValidBlockHeight: tx.lastValidBlockHeight,
+    accounts: {
+      agentWallet,
+      depositorWallet,
+      escrowPda: pdas.escrowPda,
+      agentStats: pdas.agentStats,
+    },
+  });
+}
+
 /**
  * @name parseFeedbackArgs
  * @description Builds typed feedback args from MCP JSON input.
@@ -1259,7 +2343,7 @@ function buildSapSdkToolDescription(definition: ToolRegistration): string {
 
 function getSapSdkToolContext(name: string): string {
   if (name === 'sap_register_agent') {
-    return 'SAP MCP context: This is the primary on-chain SAP agent registration tool for a local profile signer or external signer. Hosted accountless SAP MCP rejects direct registration before x402 payment because OOBE never custodies user wallet keys. Use agentUri or metadataUri for off-chain metadata, including a Metaplex or DAS-backed identity document when the agent also has NFT/collection metadata. After registration, use sap_publish_tool_by_name for advertised MCP capabilities and AgentKit metaplex-nft_* tools for NFT collection, badge, or metadata workflows.';
+    return 'SAP MCP context: Do not use this raw SDK wrapper for production registration. The canonical registration path is sap_payments_register_agent, because it confirms the account, audits the protocol treasury fee, and fails closed when protocolComplete is false. Hosted accountless SAP MCP rejects direct registration before x402 payment because OOBE never custodies user wallet keys. Use sap_agent_identity_plan first, then sap_payments_register_agent with confirm:true.';
   }
 
   if (name === 'sap_update_agent') {
@@ -1268,6 +2352,10 @@ function getSapSdkToolContext(name: string): string {
 
   if (name.startsWith('sap_publish_tool') || name.startsWith('sap_update_tool')) {
     return 'SAP MCP context: Use tool registry writes to advertise concrete capabilities that this MCP can serve, including AgentKit bridge tools such as bridging_bridgeWormhole and Metaplex tools such as metaplex-nft_mintNFT. Publish only schemas and descriptions that match the actual MCP tool surface.';
+  }
+
+  if (name.startsWith('sap_escrow_build_')) {
+    return 'SAP MCP context: Hosted-safe unsigned Escrow V2 builder. The output is not submitted and is not signed by hosted SAP MCP. Preview it, then call local sap_payments_finalize_transaction with submit:true and confirm:true. Never create temporary signing scripts or read keypair JSON.';
   }
 
   if (name.startsWith('sap_discover') || name.startsWith('sap_list') || name.startsWith('sap_find') || name.startsWith('sap_fetch') || name.startsWith('sap_get') || name.startsWith('sap_is')) {
@@ -1295,27 +2383,33 @@ function getSapSdkToolContext(name: string): string {
 
 const agentTools: ToolRegistration[] = [
   {
+    name: 'sap_protocol_invariants',
+    title: 'Get SAP Protocol Invariants',
+    description: 'Free read-only protocol invariant card for agents. Returns the current SAP program id, protocol treasury, source-level expected 0.1 SOL registration fee invariant, hosted write routing rules, local sap_payments routes, identity pipeline, and forbidden actions. Use this before SAP registry writes and whenever fee/treasury behavior is unclear.',
+    inputSchema: {},
+    handler: async () => buildSapProtocolInvariants(),
+  },
+  {
+    name: 'sap_agent_identity_plan',
+    title: 'Plan SAP Agent Identity',
+    description: 'Free read-only planner for SAP agent registration, profile/image updates, Metaplex/MPL Core identity linking, SNS linking, x402 pricing metadata, and post-write verification. Use this before sap_payments_register_agent or sap_payments_update_agent so agents know the exact local-signer route, metadata contract, forbidden actions, and protocol fee verification checklist. It does not touch chain and never signs.',
+    inputSchema: SAP_AGENT_IDENTITY_PLAN_INPUT_SCHEMA,
+    handler: async (input) => buildSapAgentIdentityPlan(input),
+  },
+  {
     name: 'sap_register_agent',
-    title: 'Register SAP Agent',
-    description: 'Local-signer-only: register the connected wallet as a SAP agent using SDK AgentModule.register. Hosted accountless SAP MCP rejects this direct write before x402 payment; run it through a local SAP MCP profile or external signer.',
-    inputSchema: {
-      name: { type: 'string', description: 'Human-readable name for the SAP agent' },
-      description: { type: 'string', description: 'Detailed description of the agent\'s purpose and capabilities' },
-      capabilities: { type: 'array', description: 'Array of capability objects or strings identifying what the agent can do (e.g. "jupiter:swap")' },
-      pricing: { type: 'array', description: 'Array of pricing tier objects defining per-call costs, rate limits, and settlement terms' },
-      protocols: { type: 'array', items: { type: 'string' }, description: 'Array of protocol identifiers the agent supports (e.g. "jupiter", "drift")' },
-      agentId: { type: 'string', description: 'Optional unique agent identifier string' },
-      agentUri: { type: 'string', description: 'Optional URI to the agent\'s off-chain metadata or service endpoint' },
-      metadataUri: { type: 'string', description: 'Alias for agentUri — URI to off-chain agent metadata JSON' },
-      x402Endpoint: { type: 'string', description: 'Optional x402 payment endpoint URL for HTTP-based agent payments' },
+    title: 'Register SAP Agent (Raw SDK Deprecated)',
+    description: 'Deprecated raw SDK wrapper. Production registration must use sap_payments_register_agent so the local signer path confirms the account, verifies the 0.1 SOL protocol treasury fee invariant, and returns protocolComplete. Hosted accountless SAP MCP rejects this direct write before x402 payment.',
+    inputSchema: SAP_AGENT_REGISTER_INPUT_SCHEMA,
+    handler: async () => {
+      throw new Error('sap_register_agent raw SDK path is disabled for production safety. Call sap_agent_identity_plan, then sap_payments_register_agent with the same registration fields and confirm: true. success is true only when the agent account exists and protocolFee.status is verified.');
     },
-    handler: async (input, client) => ({ signature: await client.agent.register(parseRegisterAgentArgs(input)) }),
   },
   {
     name: 'sap_update_agent',
     title: 'Update SAP Agent',
-    description: 'Update the connected wallet SAP agent using SDK AgentModule.update.',
-    inputSchema: { type: 'object', additionalProperties: true, description: 'Object containing any combination of agent fields to update (name, description, capabilities, pricing, protocols, agentId, agentUri, x402Endpoint)' },
+    description: 'Local-signer-only: update the connected wallet SAP agent using SDK AgentModule.update. Hosted accountless SAP MCP rejects this direct write before x402 payment; hosted users should call sap_payments_update_agent from the local sap_payments bridge.',
+    inputSchema: SAP_AGENT_UPDATE_INPUT_SCHEMA,
     handler: async (input, client) => ({ signature: await client.agent.update(parseUpdateAgentArgs(input)) }),
   },
   {
@@ -1757,23 +2851,65 @@ const paymentAndEscrowTools: ToolRegistration[] = [
 
 const escrowV2Tools: ToolRegistration[] = [
   {
+    name: 'sap_escrow_build_create_transaction',
+    title: 'Build SAP Escrow V2 Create Transaction',
+    description: 'Hosted-safe unsigned builder for create_escrow_v2. Use this from hosted SAP MCP, preview the result, then call local sap_payments_finalize_transaction with submit:true. The depositorWallet signs locally; keypair bytes never leave the user machine. Defaults to DisputeWindow settlementSecurity=2 and rejects SelfReport/0.',
+    inputSchema: escrowV2CreateBuilderInputSchema,
+    handler: buildEscrowCreateTransaction,
+  },
+  {
+    name: 'sap_escrow_build_deposit_transaction',
+    title: 'Build SAP Escrow V2 Deposit Transaction',
+    description: 'Hosted-safe unsigned builder for deposit_escrow_v2. Use this when a hosted workflow needs to add funds to an existing V2 escrow, then finalize locally with sap_payments_finalize_transaction.',
+    inputSchema: escrowV2DepositBuilderInputSchema,
+    handler: buildEscrowDepositTransaction,
+  },
+  {
+    name: 'sap_escrow_build_settle_transaction',
+    title: 'Build SAP Escrow V2 Settlement Transaction',
+    description: 'Hosted-safe unsigned builder for settle_calls_v2. The agent owner wallet signs locally. DisputeWindow escrows create a pending settlement PDA; CoSigned escrows require the coSigner account when configured.',
+    inputSchema: escrowV2SettleBuilderInputSchema,
+    handler: buildEscrowSettleTransaction,
+  },
+  {
+    name: 'sap_escrow_build_finalize_transaction',
+    title: 'Build SAP Escrow V2 Finalize Transaction',
+    description: 'Hosted-safe unsigned builder for finalize_settlement. Use after the dispute window has elapsed and a pending settlement exists; any payerWallet can locally sign to crank finalization.',
+    inputSchema: escrowV2FinalizeBuilderInputSchema,
+    handler: buildEscrowFinalizeTransaction,
+  },
+  {
+    name: 'sap_escrow_build_withdraw_transaction',
+    title: 'Build SAP Escrow V2 Withdraw Transaction',
+    description: 'Hosted-safe unsigned builder for withdraw_escrow_v2. The depositor signs locally and can only withdraw unlocked balance after pending amounts are excluded.',
+    inputSchema: escrowV2WithdrawBuilderInputSchema,
+    handler: buildEscrowWithdrawTransaction,
+  },
+  {
+    name: 'sap_escrow_build_close_transaction',
+    title: 'Build SAP Escrow V2 Close Transaction',
+    description: 'Hosted-safe unsigned builder for close_escrow_v2. The depositor signs locally; the builder refuses to close until balance and pendingAmount are both zero.',
+    inputSchema: escrowV2CloseBuilderInputSchema,
+    handler: buildEscrowCloseTransaction,
+  },
+  {
     name: 'sap_create_escrow_v2',
     title: 'Create SAP Escrow V2',
-    description: 'Create a V2 escrow using SDK EscrowV2Module.create. Defaults to DisputeWindow settlementSecurity=2; SelfReport/0 is rejected.',
+    description: 'Local-signer-only direct V2 escrow creation using SDK EscrowV2Module.create. Defaults to DisputeWindow settlementSecurity=2; SelfReport/0 is rejected. Hosted accountless SAP MCP rejects this before x402 payment; hosted users should call sap_escrow_build_create_transaction and finalize locally.',
     inputSchema: escrowV2CreateInputSchema,
     handler: async (input, client) => ({ signature: await client.escrowV2.create(requiredPublicKey(input, 'agentWallet'), parseEscrowV2Args(input)) }),
   },
   {
     name: 'sap_deposit_escrow_v2',
     title: 'Deposit SAP Escrow V2',
-    description: 'Deposit funds into a V2 escrow.',
+    description: 'Local-signer-only direct deposit into a V2 escrow. Hosted users should call sap_escrow_build_deposit_transaction and finalize locally.',
     inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: `Deposit amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` } },
     handler: async (input, client) => ({ signature: await client.escrowV2.deposit(requiredPublicKey(input, 'agentWallet'), optionalBn(input, 'nonce', new BN(0)), requiredBn(input, 'amount')) }),
   },
   {
     name: 'sap_settle_escrow_v2',
     title: 'Settle SAP Escrow V2',
-    description: 'Settle calls against a V2 escrow.',
+    description: 'Local-signer-only direct settlement against a V2 escrow. Hosted users should call sap_escrow_build_settle_transaction and finalize locally.',
     inputSchema: { depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, callsToSettle: { type: 'string', description: 'Number of calls to settle (as a decimal string)' }, serviceHash: { type: 'array', description: '32-byte service hash as a byte array, hex string, or base64 string' } },
     handler: async (input, client) => ({
       signature: await client.escrowV2.settle(
@@ -1800,7 +2936,7 @@ const escrowV2Tools: ToolRegistration[] = [
   {
     name: 'sap_finalize_settlement_v2',
     title: 'Finalize SAP Escrow V2 Settlement',
-    description: 'Finalize a V2 pending settlement.',
+    description: 'Local-signer-only direct finalization of a V2 pending settlement. Hosted users should call sap_escrow_build_finalize_transaction and finalize locally.',
     inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, depositorWallet: { type: 'string', description: 'Depositor wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, settlementIndex: { type: 'string', description: 'Settlement index to finalize (as a decimal string)' } },
     handler: async (input, client) => ({
       signature: await client.escrowV2.finalizeSettlement(
@@ -1828,14 +2964,14 @@ const escrowV2Tools: ToolRegistration[] = [
   {
     name: 'sap_withdraw_escrow_v2',
     title: 'Withdraw SAP Escrow V2',
-    description: 'Withdraw funds from a V2 escrow.',
+    description: 'Local-signer-only direct withdrawal from a V2 escrow. Hosted users should call sap_escrow_build_withdraw_transaction and finalize locally.',
     inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' }, amount: { type: 'string', description: `Withdrawal amount as a decimal string. ${ESCROW_AMOUNT_DESCRIPTION}` } },
     handler: async (input, client) => ({ signature: await client.escrowV2.withdraw(requiredPublicKey(input, 'agentWallet'), optionalBn(input, 'nonce', new BN(0)), requiredBn(input, 'amount')) }),
   },
   {
     name: 'sap_close_escrow_v2',
     title: 'Close SAP Escrow V2',
-    description: 'Close a V2 escrow.',
+    description: 'Local-signer-only direct close for an empty V2 escrow. Hosted users should call sap_escrow_build_close_transaction and finalize locally.',
     inputSchema: { agentWallet: { type: 'string', description: 'Agent wallet public key (base58)' }, nonce: { type: 'string', description: 'Escrow nonce (as a decimal string, default: 0)' } },
     handler: async (input, client) => ({ signature: await client.escrowV2.close(requiredPublicKey(input, 'agentWallet'), optionalBn(input, 'nonce', new BN(0))) }),
   },

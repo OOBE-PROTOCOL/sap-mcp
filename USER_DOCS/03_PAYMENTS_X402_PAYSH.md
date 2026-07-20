@@ -63,6 +63,7 @@ sap_payments_readiness
 sap_payments_call_paid_tool
 sap_payments_call_external_x402
 sap_payments_register_agent
+sap_payments_update_agent
 sap_payments_finalize_transaction
 ```
 
@@ -114,7 +115,7 @@ The wizard can also write a local reference bundle under:
 ~/.config/mcp-sap/addons/x402-paid-call
 ```
 
-Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge, `sap_payments_register_agent` for local SAP agent registration, `sap_payments_finalize_transaction` for local transaction preview/sign/submit, and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment and transaction signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
+Local stdio SAP MCP also exposes the `sap_payments_call_paid_tool` challenge bridge, `sap_payments_register_agent` for local SAP agent registration, `sap_payments_update_agent` for local SAP agent profile/image metadata updates, `sap_payments_finalize_transaction` for local transaction preview/sign/submit, and the legacy `sap_x402_paid_call` alias when the current process has a user-controlled wallet profile. The OOBE hosted server does not advertise these local signing helpers in non-custodial mode because payment and transaction signing must happen on the user's machine, not on `mcp.sap.oobeprotocol.ai`.
 
 When you call a non-OOBE external x402 HTTP endpoint discovered through SAP
 registry metadata, use `sap_payments_call_external_x402` instead of the hosted
@@ -129,6 +130,10 @@ charged. The requested tool requires a user-owned Solana signature or is not
 available as a hosted unsigned builder. Do not retry the same hosted direct
 write. Use a local SAP MCP profile, an external signer, or a hosted unsigned
 builder followed by `sap_payments_finalize_transaction` when a builder exists.
+For `sap_register_agent`, call local `sap_payments_register_agent`. For
+`sap_update_agent`, call local `sap_payments_update_agent`; upload images or
+metadata JSON to IPFS, Arweave, Kommodo, or HTTPS first, then set `agentUri` or
+`metadataUri`.
 
 Security boundaries:
 

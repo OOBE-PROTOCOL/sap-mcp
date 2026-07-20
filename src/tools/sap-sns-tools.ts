@@ -672,9 +672,17 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
       name: 'sap_sns_check_ownership',
       title: 'Check SNS Ownership',
       description: 'Check whether a wallet owns a .sol domain using the Bonfida SDK.',
-      inputSchema: { domain: { type: 'string', description: 'The .sol domain name to check ownership of' }, owner: { type: 'string', description: 'The Solana public key (base58) of the wallet to verify as the domain owner' } },
+      inputSchema: {
+        domain: { type: 'string', description: 'The .sol domain name to check ownership of' },
+        owner: { type: 'string', description: 'Canonical field: Solana public key (base58) of the wallet to verify as the domain owner' },
+        wallet: { type: 'string', description: 'Alias for owner, accepted for agent ergonomics when the user says wallet.' },
+      },
       handler: async (input) => ({
-        ownsDomain: await bonfidaCheckOwnership(context.connection, requiredString(input, 'domain'), requiredPublicKey(input, 'owner')),
+        ownsDomain: await bonfidaCheckOwnership(
+          context.connection,
+          requiredString(input, 'domain'),
+          input.owner === undefined ? requiredPublicKey(input, 'wallet') : requiredPublicKey(input, 'owner'),
+        ),
       }),
     },
 

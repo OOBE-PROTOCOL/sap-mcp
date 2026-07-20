@@ -29,6 +29,12 @@ describe('hosted accountless tool eligibility', () => {
       'jupiter_swapInstructions',
       'magicblock_swap',
       'sap_sns_build_manage_record_transaction',
+      'sap_escrow_build_create_transaction',
+      'sap_escrow_build_deposit_transaction',
+      'sap_escrow_build_settle_transaction',
+      'sap_escrow_build_finalize_transaction',
+      'sap_escrow_build_withdraw_transaction',
+      'sap_escrow_build_close_transaction',
       'sap_submit_signed_transaction',
     ]) {
       expect(isHostedAccountlessBlockedTool(toolName), toolName).toBe(false);

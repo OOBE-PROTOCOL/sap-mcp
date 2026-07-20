@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.15 - 2026-07-20
+
+### Added
+
+- Added free hosted `sap_agent_runtime_status`, a single runtime truth tool for
+  connection checks, hosted/accountless status, local `sap_payments` bridge
+  expectations, write routing, forbidden actions, and exact next tool calls.
+- Added free hosted `sap_pricing_catalog` and public `GET /pricing.json`, both
+  generated from the same monetization registry used by hosted x402/pay.sh
+  gating.
+
+### Improved
+
+- Strengthened initialize instructions, SAP MCP skills, and user docs so agents
+  use hosted tools for reads, `sap_payments_*` for local payment/signing,
+  hosted unsigned builders plus `sap_payments_finalize_transaction` for
+  user-signed transactions, and `sap_runtime_repair_plan` when the bridge is
+  missing.
+- Made pricing guidance explicit: `/pricing.json` and `sap_pricing_catalog`
+  are for planning and UI copy; the actual x402 challenge remains the payment
+  source of truth.
+- Added release-readiness coverage so the shipped skills/docs keep the runtime
+  status, pricing catalog, hosted builder finalization, and no-temporary-script
+  guidance visible to agents.
+
 ## 0.9.13 - 2026-07-19
 
 ### Added
@@ -15,6 +40,15 @@ All notable changes to this project are documented in this file.
 - Upgraded transaction finalization from "signature returned" to a bounded
   lifecycle result: `confirmed` / `finalized` / `failed` /
   `expired_or_not_landed`, plus `retrySafe` for agent-guided retries.
+- Hardened SAP agent registration into a fail-closed lifecycle: production
+  agents must use `sap_payments_register_agent`, and `success:true` now means
+  the agent account is confirmed and the 0.1 SOL source-level protocol treasury
+  fee invariant was verified. If the account exists but the protocol fee is
+  missing, underpaid, or unverifiable, the bridge returns
+  `success:false`, `agentRegistered:true`, and `protocolComplete:false`.
+- Deprecated the raw `sap_register_agent` wrapper for production registration
+  and added `sap_protocol_invariants` / `sap_agent_identity_plan` guidance so
+  agents can plan SAP + Metaplex + optional SNS identity flows before writes.
 - Made `sap_payments_finalize_transaction` submit through the hosted relay by
   default when `submit:true`, while preserving `submitViaRelay:false` for fully
   local RPC submission.

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { MCP_SERVER_VERSION } from '../core/constants.js';
 import {
   createDefaultDesktopWizardDraft,
   getDesktopProfileStatuses,
@@ -10,6 +11,7 @@ import {
 } from './desktop-flow.js';
 
 const ORIGINAL_ENV = { ...process.env };
+const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
 
 describe('desktop wizard flow', () => {
   afterEach(() => {
@@ -160,7 +162,7 @@ describe('desktop wizard flow', () => {
       expect(codex).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
       expect(codex).toContain('[mcp_servers.sap_payments]');
       expect(codex).toContain('command = "npx.cmd"');
-      expect(codex).toContain('@oobe-protocol-labs/sap-mcp-server@0.9.13');
+      expect(codex).toContain(NPM_PACKAGE);
       expect(codex).toContain('SAP_ALLOWED_TOOLS = "all"');
       expect(existsSync(join(addonPath, 'manifest.json'))).toBe(true);
       expect(result.runtimeActions.some((action) => action.path === addonPath)).toBe(true);

@@ -37,7 +37,7 @@ Profile, config, runtime context, and raw transaction lifecycle:
 
 SAP registry and discovery:
 
-`sap_register_agent`, `sap_update_agent`, `sap_deactivate_agent`,
+`sap_protocol_invariants`, `sap_agent_identity_plan`, `sap_register_agent`, `sap_update_agent`, `sap_deactivate_agent`,
 `sap_reactivate_agent`, `sap_close_agent`, `sap_get_agent`,
 `sap_get_agent_profile`, `sap_get_agent_stats`, `sap_get_global_state`,
 `sap_get_network_overview`, `sap_discover_agents`, `sap_list_agents`,
@@ -55,6 +55,14 @@ Use `sap_discover_agents` for targeted paid hosted agent search by `query`,
 a list of all agents in the SAP ecosystem rn"; start with a small `limit` and
 continue with `pagination.nextCursor`. If a capability lookup returns zero,
 retry with `query` or `wallet` before reporting that the agent is absent.
+
+Use `sap_protocol_invariants` before registry writes when the program id,
+protocol treasury, source-level 0.1 SOL registration fee invariant, hosted
+write route, or local signer route is unclear. Use `sap_agent_identity_plan`
+before registration,
+profile/image updates, Metaplex identity bridging, SNS linking, or x402
+endpoint publishing. It is a free planner and should run before any local
+signer write.
 
 SAP memory and sessions:
 
@@ -75,6 +83,12 @@ SAP payments, x402, subscriptions, Escrow V2, settlement, disputes, staking:
 `sap_x402_prepare_payment`, `sap_x402_get_balance`,
 `sap_create_subscription`, `sap_fund_subscription`,
 `sap_cancel_subscription`, `sap_fetch_subscription`,
+`sap_escrow_build_create_transaction`,
+`sap_escrow_build_deposit_transaction`,
+`sap_escrow_build_settle_transaction`,
+`sap_escrow_build_finalize_transaction`,
+`sap_escrow_build_withdraw_transaction`,
+`sap_escrow_build_close_transaction`,
 `sap_create_escrow_v2`, `sap_deposit_escrow_v2`,
 `sap_settle_escrow_v2`, `sap_finalize_settlement_v2`,
 `sap_file_dispute_v2`, `sap_withdraw_escrow_v2`, `sap_close_escrow_v2`,
@@ -85,6 +99,13 @@ SAP payments, x402, subscriptions, Escrow V2, settlement, disputes, staking:
 
 Use `sap_fetch_escrow` only for legacy read-only inspection. V1 escrow write
 tools are not part of the active SAP MCP surface.
+
+In hosted mode, prefer `sap_escrow_build_*_transaction` for Escrow V2 writes
+and finalize the returned unsigned transaction locally with
+`sap_payments_finalize_transaction`. Use direct `sap_create_escrow_v2`,
+`sap_deposit_escrow_v2`, `sap_settle_escrow_v2`,
+`sap_finalize_settlement_v2`, `sap_withdraw_escrow_v2`, and
+`sap_close_escrow_v2` only when running a local SAP MCP profile with a signer.
 
 ## `sap-sns`
 

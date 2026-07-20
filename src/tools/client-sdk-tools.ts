@@ -98,13 +98,13 @@ const AGENTKIT_CONTEXT_BY_PREFIX: Array<[string, AgentKitToolContext]> = [
     protocol: 'bridging',
     risk: 'write',
     usage: 'Use for cross-chain asset movement through Wormhole or deBridge. Confirm source chain, destination chain, token mint, amount, recipient, route fees, and finality expectations before invoking a bridge write.',
-    workflow: 'For bridge flows call the matching status tool after submission. If the bridge capability belongs to a registered SAP agent, advertise it with sap_publish_tool_by_name and include bridge capability IDs in sap_register_agent or sap_update_agent.',
+    workflow: 'For bridge flows call the matching status tool after submission. If the bridge capability belongs to a registered SAP agent, plan the profile with sap_agent_identity_plan, register through sap_payments_register_agent, then advertise bridge capability IDs with sap_payments_update_agent or sap_publish_tool_by_name.',
   }],
   ['metaplex-nft_', {
     protocol: 'metaplex-nft',
     risk: 'write',
     usage: 'Use for Metaplex NFT collection, mint, metadata, royalty, creator verification, collection verification, and authority workflows. Confirm metadata URI, collection mint, creators, royalties, update authority, and ownership before writes.',
-    workflow: 'For agent identity, keep sap_register_agent as the SAP on-chain registration step and use agentUri or metadataUri to point at off-chain or NFT-backed metadata. Use these Metaplex tools when the agent also needs an NFT collection, badge, or verifiable media asset.',
+    workflow: 'For agent identity, plan with sap_agent_identity_plan, register the SAP on-chain profile through sap_payments_register_agent, then use agentUri or metadataUri to point at off-chain or NFT-backed metadata. Use these Metaplex tools when the agent also needs an NFT collection, badge, or verifiable media asset.',
   }],
   ['3land_', {
     protocol: '3land',
@@ -499,7 +499,7 @@ function buildAgentKitToolDescription(name: string, sdkDescription?: string): st
   if (!context) {
     return [
       base,
-      `SAP MCP context: This Synapse AgentKit tool is served beside the sap_* SDK tools. Use sap_register_agent, sap_update_agent, and sap_publish_tool_by_name when the capability should become part of an on-chain SAP agent profile or tool registry entry.${aliasHint}`,
+      `SAP MCP context: This Synapse AgentKit tool is served beside the sap_* SDK tools. Use sap_agent_identity_plan, sap_payments_register_agent, sap_payments_update_agent, and sap_publish_tool_by_name when the capability should become part of an on-chain SAP agent profile or tool registry entry.${aliasHint}`,
     ].join(' ');
   }
 

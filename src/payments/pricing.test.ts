@@ -3,7 +3,7 @@ import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { parseJsonRpcBody } from './json-rpc.js';
 import { buildPaidVirtualPath } from './monetization-gate.js';
 import { generatePayShProviderYaml, resolvePayShNetwork } from './pay-sh-spec.js';
-import { classifyTool, resolvePaymentDecision } from './pricing.js';
+import { buildPricingCatalog, classifyTool, resolvePaymentDecision } from './pricing.js';
 
 const monetizationConfig: SapMcpMonetizationConfig = {
   enabled: true,
@@ -66,8 +66,17 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_profile_current')).toBe('free');
   });
 
+  it('keeps SAP protocol invariants and agent identity planning free', () => {
+    expect(classifyTool('sap_protocol_invariants')).toBe('free');
+    expect(classifyTool('sap_protocol_invariants', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_identity_plan')).toBe('free');
+    expect(classifyTool('sap_agent_identity_plan', { strictTools: true })).toBe('free');
+  });
+
   it('keeps SAP MCP skill bootstrap tools free', () => {
     expect(classifyTool('sap_agent_start')).toBe('free');
+    expect(classifyTool('sap_agent_runtime_status')).toBe('free');
+    expect(classifyTool('sap_pricing_catalog')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
     expect(classifyTool('sap_skills_install')).toBe('free');
@@ -76,7 +85,7 @@ describe('SAP MCP monetization pricing', () => {
   });
 
   it('canonicalizes client-normalized tool aliases before pricing', () => {
-    const parsed = parseJsonRpcBody({
+    const splParsed = parseJsonRpcBody({
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
@@ -86,11 +95,31 @@ describe('SAP MCP monetization pricing', () => {
       },
     });
 
-    expect(parsed.toolCalls[0]?.toolName).toBe('spl-token_getTokenAccounts');
+    const solParsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'sol_getBalance',
+        arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    expect(splParsed.toolCalls[0]?.toolName).toBe('spl-token_getTokenAccounts');
+    expect(solParsed.toolCalls[0]?.toolName).toBe('sol_get_balance');
   });
 
   it('keeps basic SOL and SPL balance reads free', () => {
     expect(classifyTool('sol_get_balance')).toBe('free');
+    expect(resolvePaymentDecision(parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sol_getBalance',
+        arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    }), monetizationConfig).required).toBe(false);
     expect(classifyTool('spl-token_getBalance')).toBe('free');
     expect(classifyTool('spl-token_getTokenAccounts')).toBe('free');
 
@@ -134,6 +163,8 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_skills_upgrade_plan', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_runtime_repair_plan', { strictTools: true })).toBe('free');
@@ -201,6 +232,8 @@ describe('SAP MCP monetization pricing', () => {
   it('keeps SAP payment readiness and transaction preflight free', () => {
     expect(classifyTool('sap_x402_estimate_cost')).toBe('free');
     expect(classifyTool('sap_payments_readiness')).toBe('free');
+    expect(classifyTool('sap_payments_register_agent')).toBe('free');
+    expect(classifyTool('sap_payments_update_agent')).toBe('free');
     expect(classifyTool('sap_decode_transaction')).toBe('free');
     expect(classifyTool('sap_preview_transaction')).toBe('free');
   });
@@ -229,6 +262,32 @@ describe('SAP MCP monetization pricing', () => {
     for (const toolName of ['jupiter_getOrder', 'jupiter_smartSwap', 'magicblock_swap']) {
       expect(classifyTool(toolName)).toBe('value-action');
     }
+  });
+
+  it('prices hosted Escrow V2 unsigned builders as builder calls', () => {
+    for (const toolName of [
+      'sap_escrow_build_create_transaction',
+      'sap_escrow_build_deposit_transaction',
+      'sap_escrow_build_settle_transaction',
+      'sap_escrow_build_finalize_transaction',
+      'sap_escrow_build_withdraw_transaction',
+      'sap_escrow_build_close_transaction',
+    ]) {
+      expect(classifyTool(toolName)).toBe('builder');
+    }
+  });
+
+  it('builds a machine-readable pricing catalog from the same registry', () => {
+    const catalog = buildPricingCatalog(monetizationConfig);
+
+    expect(catalog.source).toBe('sap-mcp-pricing-registry');
+    expect(catalog.tiers.free.paymentRequired).toBe(false);
+    expect(catalog.tiers['read-premium'].priceUsd).toBe(0.001);
+    expect(catalog.tiers.builder.priceUsd).toBe(0.008);
+    expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
+    expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
+    expect(catalog.toolSets.builders).toContain('sap_escrow_build_create_transaction');
+    expect(catalog.runtimeRules.join(' ')).toContain('sap_payments_finalize_transaction');
   });
 
   it('applies fixed plus basis-points fee to value-changing actions with USD notional', () => {

@@ -25,6 +25,31 @@ export interface ToolPricing {
 }
 
 /**
+ * @name PricingCatalog
+ * @description Public, machine-readable pricing and routing model exposed to agents.
+ */
+export interface PricingCatalog {
+  source: 'sap-mcp-pricing-registry';
+  version: 1;
+  strictTools: boolean;
+  currency: 'USD';
+  tiers: Record<PaymentTier, {
+    paymentRequired: boolean;
+    priceUsd?: number;
+    pricingRule: string;
+    examples: string[];
+  }>;
+  toolSets: {
+    free: string[];
+    readPremium: string[];
+    builders: string[];
+    valueActions: string[];
+    valueActionPrefixes: string[];
+  };
+  runtimeRules: string[];
+}
+
+/**
  * @name PaymentDecision
  * @description Aggregated payment requirement for a JSON-RPC MCP request.
  */
@@ -59,6 +84,10 @@ const FREE_MCP_METHODS = new Set([
 
 const FREE_TOOLS = new Set([
   'sap_agent_start',
+  'sap_agent_runtime_status',
+  'sap_pricing_catalog',
+  'sap_protocol_invariants',
+  'sap_agent_identity_plan',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',
@@ -94,12 +123,17 @@ const FREE_TOOLS = new Set([
   'sap_payments_call_paid_tool',
   'sap_payments_call_external_x402',
   'sap_payments_register_agent',
+  'sap_payments_update_agent',
   'sap_payments_finalize_transaction',
   'sap_payments_verify_receipt',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
   'sap_agent_start',
+  'sap_agent_runtime_status',
+  'sap_pricing_catalog',
+  'sap_protocol_invariants',
+  'sap_agent_identity_plan',
   'sap_profile_current',
   'sap_profile_list',
   'sap_profile_public_key',
@@ -120,6 +154,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_payments_call_paid_tool',
   'sap_payments_call_external_x402',
   'sap_payments_register_agent',
+  'sap_payments_update_agent',
   'sap_payments_finalize_transaction',
   'sap_payments_verify_receipt',
 ]);
@@ -166,6 +201,12 @@ const BUILDER_TOOLS = new Set([
   'sap_sns_validate_records',
   'sap_sns_build_manage_record_transaction',
   'sap_sns_build_set_primary_domain_transaction',
+  'sap_escrow_build_create_transaction',
+  'sap_escrow_build_deposit_transaction',
+  'sap_escrow_build_settle_transaction',
+  'sap_escrow_build_finalize_transaction',
+  'sap_escrow_build_withdraw_transaction',
+  'sap_escrow_build_close_transaction',
   'sap_x402_build_payment_headers',
   'sap_x402_build_headers_from_escrow',
   'jupiter_swapInstructions',
@@ -237,6 +278,72 @@ const READ_PREMIUM_KEYWORDS = [
   'protocol',
   'stats',
 ];
+
+/**
+ * @name buildPricingCatalog
+ * @description Returns the public pricing catalog used by docs, agents, and marketplace metadata.
+ */
+export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCatalog {
+  const freeTools = config.strictTools ? STRICT_FREE_TOOLS : FREE_TOOLS;
+  return {
+    source: 'sap-mcp-pricing-registry',
+    version: 1,
+    strictTools: Boolean(config.strictTools),
+    currency: 'USD',
+    tiers: {
+      free: {
+        paymentRequired: false,
+        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, local payment bridge control, and low-cost public balance checks.',
+        examples: [
+          'initialize',
+          'tools/list',
+          'sap_agent_start',
+          'sap_agent_runtime_status',
+          'sap_pricing_catalog',
+          'sap_payments_readiness',
+        ],
+      },
+      'read-premium': {
+        paymentRequired: true,
+        priceUsd: clampPrice(config.prices.readPremiumUsd, config),
+        pricingRule: 'Flat premium read/discovery fee per tool call. Narrow filters, small limits, and pagination are expected.',
+        examples: ['sap_discover_agents', 'sap_list_all_agents', 'jupiter_getQuote', 'pyth_getPrice', 'das_getAsset'],
+      },
+      builder: {
+        paymentRequired: true,
+        priceUsd: clampPrice(config.prices.builderUsd, config),
+        pricingRule: 'Flat builder fee for unsigned transaction builders, batched domain checks, payment-header builders, routing builders, and complex pre-execution preparation.',
+        examples: ['sap_escrow_build_create_transaction', 'sap_sns_build_manage_record_transaction', 'jupiter_swapInstructions'],
+      },
+      'value-action': {
+        paymentRequired: true,
+        priceUsd: clampPrice(config.prices.valueFixedUsd, config),
+        pricingRule: `Fixed ${formatUsdPrice(config.prices.valueFixedUsd)} plus ${config.prices.valueBps} bps of detected USD notional, clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
+        examples: ['jupiter_swap', 'magicblock_swap', 'sap_create_escrow_v2', 'sap_submit_signed_transaction'],
+      },
+      batch: {
+        paymentRequired: true,
+        pricingRule: `Sum paid calls in the JSON-RPC batch, then clamp the aggregate between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
+        examples: ['JSON-RPC batch with sap_discover_agents + sap_sns_batch_check_domains'],
+      },
+    },
+    toolSets: {
+      free: [...freeTools].sort(),
+      readPremium: [...READ_PREMIUM_TOOLS].sort(),
+      builders: [...BUILDER_TOOLS].sort(),
+      valueActions: [...VALUE_ACTION_TOOLS].sort(),
+      valueActionPrefixes: [...VALUE_ACTION_PREFIXES].sort(),
+    },
+    runtimeRules: [
+      'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
+      'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',
+      'Use sap_payments_call_external_x402 for external HTTP x402 agents discovered through SAP registry metadata.',
+      'Use hosted unsigned builders plus sap_payments_finalize_transaction for hosted non-custodial transaction flows.',
+      'Do not create temporary signing scripts, read keypair JSON, or call hosted signing tools for user-owned signatures.',
+      'If a hosted write returns hosted_local_signer_required, no hosted x402 payment was charged; route to the local sap_payments tool or an unsigned builder.',
+    ],
+  };
+}
 
 /**
  * @name resolvePaymentDecision

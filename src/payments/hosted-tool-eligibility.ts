@@ -112,6 +112,7 @@ const LOCAL_SIGNER_ONLY_PREFIXES = [
 ];
 
 const HOSTED_SAFE_PREFIXES = [
+  'sap_escrow_build_',
   'sap_sns_build_',
   'sap_x402_build_',
   'sap_x402_calculate_',
@@ -177,6 +178,8 @@ export function evaluateHostedToolEligibility(
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',
         'sap_payments_finalize_transaction',
+        'sap_escrow_build_create_transaction',
+        'sap_escrow_build_settle_transaction',
         'sap_sns_build_manage_record_transaction',
       ],
     },

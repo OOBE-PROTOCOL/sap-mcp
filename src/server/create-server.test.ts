@@ -38,6 +38,7 @@ type ToolHandlerForTest = (input: Record<string, unknown>) => Promise<ToolRespon
 interface RegisteredServerForTest extends Server {
   tools?: ToolDefinitionForTest[];
   toolHandlers?: Record<string, ToolHandlerForTest>;
+  _requestHandlers?: Map<string, (request: unknown, extra: unknown) => Promise<ToolResponseForTest>>;
 }
 
 function baseConfig(overrides: Partial<SapMcpConfig> = {}): SapMcpConfig {
@@ -68,7 +69,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(275);
+    expect(names).toHaveLength(286);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -78,6 +79,10 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('jupiter_smartSwap');
     expect(names).toContain('sap_skills_upgrade_plan');
     expect(names).toContain('sap_runtime_repair_plan');
+    expect(names).toContain('sap_protocol_invariants');
+    expect(names).toContain('sap_agent_identity_plan');
+    expect(names).toContain('sap_agent_runtime_status');
+    expect(names).toContain('sap_pricing_catalog');
     expect(names).toContain('bridging_bridgeWormhole');
     expect(names).toContain('bridging_bridgeWormholeStatus');
     expect(names).toContain('bridging_bridgeDeBridge');
@@ -107,6 +112,8 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_profile_public_key');
     expect(names).toContain('sap_profile_switch');
     expect(names).toContain('sap_agent_start');
+    expect(names).toContain('sap_agent_runtime_status');
+    expect(names).toContain('sap_pricing_catalog');
     expect(names).toContain('sap_skills_list');
     expect(names).toContain('sap_skills_bundle');
     expect(names).toContain('sap_skills_install');
@@ -116,6 +123,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_payments_call_paid_tool');
     expect(names).toContain('sap_payments_call_external_x402');
     expect(names).toContain('sap_payments_register_agent');
+    expect(names).toContain('sap_payments_update_agent');
     expect(names).toContain('sap_payments_finalize_transaction');
     expect(names).toContain('sap_payments_prepare_challenge');
     expect(names).toContain('sap_payments_sign_challenge');
@@ -133,6 +141,12 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_create_escrow_v2');
     expect(names).toContain('sap_deposit_escrow_v2');
     expect(names).toContain('sap_settle_escrow_v2');
+    expect(names).toContain('sap_escrow_build_create_transaction');
+    expect(names).toContain('sap_escrow_build_deposit_transaction');
+    expect(names).toContain('sap_escrow_build_settle_transaction');
+    expect(names).toContain('sap_escrow_build_finalize_transaction');
+    expect(names).toContain('sap_escrow_build_withdraw_transaction');
+    expect(names).toContain('sap_escrow_build_close_transaction');
     expect(names).toContain('sap_chat_derive_room');
     expect(names).toContain('sap_chat_start_room');
     expect(names).toContain('sap_chat_send_message');
@@ -154,6 +168,7 @@ describe('createSapMcpServer', () => {
     expect(server._instructions).toContain('sap_payments_call_paid_tool');
     expect(server._instructions).toContain('Escrow writes are V2-only');
     expect(server._instructions).not.toContain('280 tools');
+    expect(server._instructions).not.toContain('248 tools');
   });
 
   it('exposes Escrow V2 as the active escrow write surface', async () => {
@@ -173,6 +188,20 @@ describe('createSapMcpServer', () => {
     expect(schema).toHaveProperty('nonce');
     expect(schema.pricePerCall?.description).toContain('micro-USDC');
     expect(schema.initialDeposit?.description).toContain('smallest unit');
+  });
+
+  it('exposes hosted Escrow V2 builders with local finalizer guidance', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+    const builder = toolsByName.get('sap_escrow_build_create_transaction');
+    const schema = builder?.inputSchema?.properties ?? {};
+
+    expect(builder?.description).toContain('sap_payments_finalize_transaction');
+    expect(builder?.description).toContain('Hosted-safe unsigned Escrow V2 builder');
+    expect(schema).toHaveProperty('depositorWallet');
+    expect(schema).toHaveProperty('agentWallet');
+    expect(schema).toHaveProperty('initialDeposit');
+    expect(schema.depositorWallet?.description).toContain('signs locally');
   });
 
   it('exposes paginated hosted SAP agent directory filters for paid discovery', async () => {
@@ -203,6 +232,60 @@ describe('createSapMcpServer', () => {
     }
   });
 
+  it('describes SAP agent register/update schemas precisely for agent identity flows', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+    const propertiesOf = (value: unknown): Record<string, unknown> => (
+      value && typeof value === 'object' && 'properties' in value
+        ? ((value as { properties?: Record<string, unknown> }).properties ?? {})
+        : {}
+    );
+    const itemsOf = (value: unknown): unknown => (
+      value && typeof value === 'object' && 'items' in value ? (value as { items?: unknown }).items : undefined
+    );
+    const oneOf = (value: unknown): unknown[] => (
+      value && typeof value === 'object' && 'oneOf' in value && Array.isArray((value as { oneOf?: unknown }).oneOf)
+        ? (value as { oneOf: unknown[] }).oneOf
+        : []
+    );
+    const descriptionOf = (value: unknown): string => (
+      value && typeof value === 'object' && 'description' in value ? String((value as { description?: string }).description ?? '') : ''
+    );
+    const enumOf = (value: unknown): string[] => (
+      value && typeof value === 'object' && 'enum' in value && Array.isArray((value as { enum?: unknown }).enum)
+        ? (value as { enum: string[] }).enum
+        : []
+    );
+    const registerSchema = toolsByName.get('sap_register_agent')?.inputSchema?.properties ?? {};
+    const invariantsTool = toolsByName.get('sap_protocol_invariants');
+    const identityPlanTool = toolsByName.get('sap_agent_identity_plan');
+    const updateTool = toolsByName.get('sap_update_agent');
+    const updateSchema = updateTool?.inputSchema?.properties ?? {};
+    const localRegisterSchema = toolsByName.get('sap_payments_register_agent')?.inputSchema?.properties ?? {};
+    const localUpdateSchema = toolsByName.get('sap_payments_update_agent')?.inputSchema?.properties ?? {};
+    const capabilityObjectSchema = oneOf(itemsOf(registerSchema.capabilities))[1];
+    const registerPricingSchema = propertiesOf(itemsOf(registerSchema.pricing));
+    const localPricingSchema = propertiesOf(itemsOf(localRegisterSchema.pricing));
+
+    expect(invariantsTool?.description).toContain('0.1 SOL registration fee');
+    expect(identityPlanTool?.description).toContain('protocol fee verification checklist');
+    expect(identityPlanTool?.inputSchema?.properties).toHaveProperty('metaplexAsset');
+    expect(identityPlanTool?.inputSchema?.properties).toHaveProperty('snsDomain');
+    expect(descriptionOf(propertiesOf(capabilityObjectSchema).id)).toContain('protocol:action');
+    expect(enumOf(registerPricingSchema.tokenType)).toEqual(['sol', 'usdc', 'spl']);
+    expect(enumOf(registerPricingSchema.settlementMode)).toEqual(['instant', 'escrow', 'batched', 'x402']);
+    expect(descriptionOf(registerPricingSchema.pricePerCall)).toContain('micro-USDC');
+    expect(updateTool?.description).toContain('sap_payments_update_agent');
+    expect(updateTool?.inputSchema).not.toHaveProperty('additionalProperties');
+    expect(descriptionOf(updateSchema.metadataUri)).toContain('never use a desktop file path');
+    expect(descriptionOf(localRegisterSchema.confirm)).toContain('Must be true');
+    expect(enumOf(localPricingSchema.settlementMode)).toContain('x402');
+    expect(descriptionOf(localUpdateSchema.capabilities)).toContain('full replacement');
+    expect(toolsByName.get('sap_payments_register_agent')?.description).toContain('0.1 SOL SAP protocol registration fee');
+    expect(JSON.stringify(toolsByName.get('sap_payments_register_agent')?.outputSchema)).toContain('protocolFee');
+    expect(JSON.stringify(toolsByName.get('sap_payments_register_agent')?.outputSchema)).toContain('protocolComplete');
+  });
+
   it('limits the local sap_payments bridge process to payment helper tools', async () => {
     const previous = process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
     process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = 'true';
@@ -216,6 +299,7 @@ describe('createSapMcpServer', () => {
         'sap_payments_call_paid_tool',
         'sap_payments_call_external_x402',
         'sap_payments_register_agent',
+        'sap_payments_update_agent',
         'sap_payments_finalize_transaction',
         'sap_payments_prepare_challenge',
         'sap_payments_sign_challenge',
@@ -250,6 +334,8 @@ describe('createSapMcpServer', () => {
 
       expect(tool?.description).toContain('hosted_local_signer_required');
       expect(tool?.description).toContain('confirm: true');
+      expect(tool?.description).toContain('protocol registration fee');
+      expect(JSON.stringify(tool?.outputSchema)).toContain('protocolFee');
       expect(tool?.inputSchema?.properties).toHaveProperty('name');
       expect(tool?.inputSchema?.properties).toHaveProperty('capabilities');
       expect(tool?.inputSchema?.properties).toHaveProperty('protocols');
@@ -274,6 +360,85 @@ describe('createSapMcpServer', () => {
         process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = previous;
       }
     }
+  });
+
+  it('lets hosted users update SAP agent metadata through the local sap_payments bridge', async () => {
+    const previous = process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+    process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = 'true';
+    const keypair = Keypair.generate();
+    const walletPath = join(mkdtempSync(join(tmpdir(), 'sap-mcp-payments-update-')), 'agent-keypair.json');
+    writeFileSync(walletPath, JSON.stringify(Array.from(keypair.secretKey)), 'utf-8');
+
+    try {
+      const server = registeredServer(await createSapMcpServer(baseConfig({
+        mode: 'local-dev-keypair',
+        walletPath,
+      })));
+      const tool = (server.tools ?? []).find((item) => item.name === 'sap_payments_update_agent');
+
+      expect(tool?.description).toContain('hosted_local_signer_required');
+      expect(tool?.description).toContain('agent picture/profile metadata updates');
+      expect(tool?.description).toContain('confirm: true');
+      expect(tool?.inputSchema?.properties).toHaveProperty('agentUri');
+      expect(tool?.inputSchema?.properties).toHaveProperty('metadataUri');
+      expect(tool?.inputSchema?.properties).toHaveProperty('capabilities');
+      expect(tool?.inputSchema?.properties).toHaveProperty('confirm');
+
+      const missingConfirm = await server.toolHandlers?.sap_payments_update_agent({
+        agentUri: 'https://kommodo.ai/i/DTcPUOAXmna57enD3pPG',
+        confirm: false,
+      });
+      const missingField = await server.toolHandlers?.sap_payments_update_agent({
+        confirm: true,
+      });
+
+      expect(missingConfirm?.content[0]?.text).toContain('confirm: true is required');
+      expect(missingConfirm?.content[0]?.text).toContain('hostedX402Charged');
+      expect(missingConfirm?.content[0]?.text).toContain('sap_payments_update_agent');
+      expect(missingField?.content[0]?.text).toContain('At least one update field is required');
+    } finally {
+      rmSync(walletPath, { force: true });
+      if (previous === undefined) {
+        delete process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY;
+      } else {
+        process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = previous;
+      }
+    }
+  });
+
+  it('plans SAP agent identity writes without requiring a full registration payload', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const response = await server.toolHandlers?.sap_agent_identity_plan({
+      intendedAction: 'update',
+      metadataUri: 'https://kommodo.ai/i/DTcPUOAXmna57enD3pPG',
+      imageUrl: 'https://kommodo.ai/i/DTcPUOAXmna57enD3pPG/image.png',
+      snsDomain: 'solking.sol',
+    });
+    const plan = JSON.parse(response?.content[0]?.text ?? '{}');
+
+    expect(plan.intendedAction).toBe('update');
+    expect(plan.normalizedRegistration).toBeNull();
+    expect(plan.normalizedUpdate.agentUri).toBe('https://kommodo.ai/i/DTcPUOAXmna57enD3pPG');
+    expect(plan.nextTools.update).toBe('sap_payments_update_agent');
+    expect(plan.nextTools.sns).toContain('sap_sns_check_domain');
+    expect(plan.verificationChecklist).toContain('For update, verify every intended replacement field because arrays are full replacements.');
+    expect(plan.forbiddenActions).toContain('Do not read keypair JSON.');
+  });
+
+  it('exposes SAP protocol invariants before registry writes', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const response = await server.toolHandlers?.sap_protocol_invariants({});
+    const invariants = JSON.parse(response?.content[0]?.text ?? '{}');
+
+    expect(invariants.protocol.programId).toBe('SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ');
+    expect(invariants.registrationFee.sourceExpected).toBe(true);
+    expect(invariants.registrationFee.treasury).toBe('J7PyZAGKvprCz4SQ5DKBLAHstJxgVqZcz6kguUoWpP7P');
+    expect(invariants.registrationFee.lamports).toBe('100000000');
+    expect(invariants.registrationFee.failureStatus).toBe('missing_or_underpaid');
+    expect(invariants.hostedWritePolicy.noChargeRule).toContain('not a paid failure');
+    expect(invariants.localSignerRoutes.registerAgent).toBe('sap_payments_register_agent');
+    expect(invariants.localSignerRoutes.updateAgent).toBe('sap_payments_update_agent');
+    expect(invariants.forbiddenActions).toContain('Do not read keypair JSON.');
   });
 
   it('lets the local sap_payments bridge finalize unsigned hosted transactions without scripts', async () => {
@@ -346,9 +511,9 @@ describe('createSapMcpServer', () => {
     expect(toolsByName.get('bridging_bridgeWormhole')?.description).toContain('SAP MCP context');
     expect(toolsByName.get('bridging_bridgeWormhole')?.description).toContain('cross-chain asset movement');
     expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('SAP MCP context');
-    expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('sap_register_agent');
-    expect(toolsByName.get('sap_register_agent')?.description).toContain('primary on-chain SAP agent registration');
-    expect(toolsByName.get('sap_register_agent')?.description).toContain('metaplex-nft_*');
+    expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('sap_payments_register_agent');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('Deprecated raw SDK wrapper');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('sap_payments_register_agent');
   });
 
   it('exposes registry-grade tool metadata for discovery clients', async () => {
@@ -478,6 +643,7 @@ describe('createSapMcpServer', () => {
     expect(toolNames).not.toContain('sap_payments_call_paid_tool');
     expect(toolNames).not.toContain('sap_payments_call_external_x402');
     expect(toolNames).not.toContain('sap_payments_register_agent');
+    expect(toolNames).not.toContain('sap_payments_update_agent');
     expect(toolNames).not.toContain('sap_payments_prepare_challenge');
     expect(toolNames).not.toContain('sap_payments_sign_challenge');
     expect(toolNames).not.toContain('sap_payments_verify_receipt');
@@ -647,6 +813,33 @@ describe('createSapMcpServer', () => {
     expect(text).toContain('Do not list all tools or categories');
     expect(start?.structuredContent?.success).toBe(true);
     expect(start?.structuredContent?.repairCommand).toContain('sap-mcp-config repair');
+  });
+
+  it('returns structured SAP startup content through the MCP tools/call handler', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const callTool = server._requestHandlers?.get('tools/call');
+
+    expect(callTool).toBeDefined();
+
+    const start = await callTool?.(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'sap_agent_start',
+          arguments: { goal: 'register an agent' },
+        },
+      },
+      {},
+    );
+
+    expect(start?.structuredContent?.success).toBe(true);
+    expect(start?.structuredContent).not.toHaveProperty('content');
+    expect(start?.structuredContent?.immediateToolCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: 'sap_protocol_invariants' }),
+        expect.objectContaining({ tool: 'sap_agent_identity_plan' }),
+      ]),
+    );
   });
 
   it('exposes free maintenance plans for skill upgrades and runtime repair', async () => {

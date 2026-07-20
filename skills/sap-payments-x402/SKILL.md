@@ -11,6 +11,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_payments_call_paid_tool`
 - `sap_payments_call_external_x402`
 - `sap_payments_register_agent`
+- `sap_payments_update_agent`
 - `sap_payments_finalize_transaction`
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`
@@ -98,6 +99,22 @@ accountless by design and cannot sign user-owned registry writes. Call local
 `sap_payments_register_agent` with the same registration fields and
 `confirm: true`; it uses the active local SAP MCP profile signer, submits the
 SAP registry transaction locally, and does not charge a hosted x402 access fee.
+After it returns, verify `success`, `agentRegistered`, `confirmationStatus`,
+`agentPda`, `protocolComplete`, and `protocolFee.status`. The expected protocol
+fee is `100000000` lamports to treasury
+`J7PyZAGKvprCz4SQ5DKBLAHstJxgVqZcz6kguUoWpP7P`. `success: true` means the agent
+account and protocol fee invariant were both verified. If `success` is false
+while `agentRegistered` is true, the account may exist but registration is not
+SAP protocol-complete; report that state and do not retry automatically.
+
+For hosted-user SAP agent profile updates, do not retry hosted
+`sap_update_agent` after `hosted_local_signer_required`. Call local
+`sap_payments_update_agent` with the intended replacement fields and
+`confirm: true`; it signs locally and does not charge a hosted x402 access fee.
+Use this for agent picture/profile metadata by first uploading the image or
+metadata JSON to a public URI such as IPFS, Arweave, Kommodo, or HTTPS, then
+setting `agentUri` or `metadataUri`. Do not use desktop file paths.
+After update, fetch the agent profile again and verify the changed fields.
 
 If the hosted paid tool returns `transactionBase64`, `transaction`, or an
 unsigned transaction object, call `sap_payments_finalize_transaction` with
@@ -108,6 +125,16 @@ default and returns `confirmationStatus` plus `retrySafe`. Treat
 `expired_or_not_landed` as unresolved, not success. Never create temporary
 signing scripts, read keypair JSON, or call hosted `sap_sign_transaction` for
 user-owned signatures.
+
+For Escrow V2 hosted workflows, use the unsigned builder family first:
+`sap_escrow_build_create_transaction`,
+`sap_escrow_build_deposit_transaction`,
+`sap_escrow_build_settle_transaction`,
+`sap_escrow_build_finalize_transaction`,
+`sap_escrow_build_withdraw_transaction`, or
+`sap_escrow_build_close_transaction`, then finalize locally with
+`sap_payments_finalize_transaction`. Use direct escrow write tools only when a
+local SAP MCP profile with signer is the selected runtime.
 
 Use low-level helpers only for custom clients:
 

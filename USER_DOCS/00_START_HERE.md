@@ -65,8 +65,20 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 3. Let the wizard configure hosted `sap` plus local `sap_payments` for supported runtimes.
 4. Use `sap_payments_call_paid_tool` when a hosted SAP MCP tool requires x402 payment.
 5. Use `sap_payments_call_external_x402` when an external HTTP x402 agent endpoint is discovered through SAP registry metadata.
-6. Use `sap_payments_register_agent` when hosted `sap_register_agent` returns `hosted_local_signer_required`.
-7. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign locally, and optionally submit already-signed bytes through the hosted OOBE relay.
+6. Use `sap_protocol_invariants` before registry writes when treasury, fee, or hosted/local routing is unclear.
+7. Use `sap_payments_register_agent` when hosted `sap_register_agent` returns `hosted_local_signer_required`.
+8. Use `sap_payments_update_agent` when hosted `sap_update_agent` returns `hosted_local_signer_required`; this is the preferred path for public agent image/profile metadata updates.
+9. For registrations, check `success`, `agentRegistered`, `agentPda`, `protocolFee`, and `protocolComplete`. Local registration does not pay a hosted x402 fee. `success: true` means the agent account exists and the source-level protocol fee invariant was verified. If `success: false` with `agentRegistered: true`, the account may exist but SAP registration is not protocol-complete.
+10. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign locally, and optionally submit already-signed bytes through the hosted OOBE relay.
+11. Use `sap_agent_runtime_status` when asking an agent whether SAP MCP is connected or ready for paid/write work. It returns the hosted/local bridge routing truth without reading local files.
+12. Use `sap_pricing_catalog` or `https://mcp.sap.oobeprotocol.ai/pricing.json` to inspect generated hosted pricing tiers. The x402 challenge returned by a paid tool remains the final payment source of truth.
+
+Agent identity, profile images, Metaplex bridging, SNS linking, capabilities,
+pricing, and update fields are documented in:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/docs/#/16_SAP_AGENT_IDENTITY_PIPELINE
+```
 
 Agents can discover the same recovery path without guessing. The hosted SAP MCP
 server exposes these free maintenance tools:
@@ -74,6 +86,10 @@ server exposes these free maintenance tools:
 | Tool | Purpose |
 | --- | --- |
 | `sap_agent_start` | Load the canonical startup playbook. |
+| `sap_agent_runtime_status` | Free runtime truth table for hosted connection, local `sap_payments` readiness expectations, write routing, forbidden actions, and next tool calls. |
+| `sap_pricing_catalog` | Free machine-readable pricing catalog generated from the hosted pricing registry. Also available at `/pricing.json`. |
+| `sap_protocol_invariants` | Return the canonical SAP program id, protocol treasury, registration fee, hosted/local routing rules, and forbidden actions. |
+| `sap_agent_identity_plan` | Free planner for SAP registration, image/profile updates, Metaplex identity, SNS linking, and verification. |
 | `sap_skills_upgrade_plan` | Return latest-release skill upgrade commands and target directories. |
 | `sap_runtime_repair_plan` | Return the pinned repair command and expected `sap_payments` bridge tools after restart. |
 
@@ -96,6 +112,12 @@ Hosted documentation:
 
 ```txt
 https://mcp.sap.oobeprotocol.ai/docs
+```
+
+Hosted pricing catalog:
+
+```txt
+https://mcp.sap.oobeprotocol.ai/pricing.json
 ```
 
 Client config docs:
