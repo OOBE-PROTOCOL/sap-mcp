@@ -525,6 +525,7 @@ interface AgentDirectoryPageOptions extends AgentDirectoryFilters {
 
 interface AgentDirectoryPage {
   source: string;
+  cache?: JsonRecord;
   overview: unknown;
   filters: JsonRecord;
   count: number;
@@ -548,6 +549,10 @@ interface AgentDirectoryPage {
   agents: Array<AgentDirectoryEntry | JsonRecord>;
   agentGuidance: JsonRecord;
 }
+
+const DIRECTORY_CACHE_TTL_MS = 10_000;
+const directoryPageCache = new Map<string, { expiresAt: number; page: AgentDirectoryPage }>();
+const directoryPageInflight = new Map<string, Promise<AgentDirectoryPage>>();
 
 /**
  * @name jsonReplacer
@@ -597,6 +602,23 @@ function asObjectPayload(payload: unknown): JsonRecord {
  */
 function getSapAnchorAccounts(client: SapClient): SapAnchorAccounts {
   return (client.program as unknown as SapAnchorProgram).account;
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined) {
+    return 'undefined';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value !== 'object') {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(',')}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
 }
 
 /**
@@ -899,6 +921,121 @@ async function buildAgentDirectoryPage(client: SapClient, options: AgentDirector
     protocolIndexes: options.includeProtocolIndexes ? summarizeProtocolIndexes(protocolIndexes) : undefined,
     agents,
     agentGuidance: directoryAgentGuidance({ hasMore, nextCursor, filters: options }),
+  };
+}
+
+async function getCachedAgentDirectoryPage(client: SapClient, options: AgentDirectoryPageOptions): Promise<AgentDirectoryPage> {
+  const cacheKey = stableJson(options);
+  const now = Date.now();
+  const cached = directoryPageCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return {
+      ...cached.page,
+      cache: {
+        status: 'hit',
+        ttlMs: Math.max(0, cached.expiresAt - now),
+        key: cacheKey.slice(0, 24),
+      },
+    };
+  }
+
+  const inflight = directoryPageInflight.get(cacheKey);
+  if (inflight) {
+    const page = await inflight;
+    return {
+      ...page,
+      cache: {
+        status: 'joined_inflight',
+        ttlMs: DIRECTORY_CACHE_TTL_MS,
+        key: cacheKey.slice(0, 24),
+      },
+    };
+  }
+
+  const load = buildAgentDirectoryPage(client, options)
+    .then((page) => {
+      directoryPageCache.set(cacheKey, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, page });
+      return page;
+    })
+    .finally(() => {
+      directoryPageInflight.delete(cacheKey);
+    });
+  directoryPageInflight.set(cacheKey, load);
+
+  const page = await load;
+  return {
+    ...page,
+    cache: {
+      status: 'miss',
+      ttlMs: DIRECTORY_CACHE_TTL_MS,
+      key: cacheKey.slice(0, 24),
+    },
+  };
+}
+
+async function buildSapAgentContext(input: JsonRecord, client: SapClient): Promise<JsonRecord> {
+  const wallet = optionalString(input, 'wallet');
+  const agentPda = optionalString(input, 'agentPda');
+  const query = optionalString(input, 'query');
+  const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 10, 20));
+  const exact: JsonRecord = {};
+
+  if (wallet) {
+    const owner = new PublicKey(wallet);
+    const derivedAgentPda = client.agent.deriveAgent(owner)[0].toBase58();
+    const [agent, active, profile] = await Promise.all([
+      client.agent.fetchNullable(owner),
+      client.discovery.isAgentActive(owner).catch(() => false),
+      client.discovery.getAgentProfile(owner).catch((error) => ({
+        unavailable: true,
+        reason: error instanceof Error ? error.message : 'profile_fetch_failed',
+      })),
+    ]);
+    exact.wallet = wallet;
+    exact.agentPda = derivedAgentPda;
+    exact.active = active;
+    exact.agent = agent;
+    exact.profile = profile;
+  }
+
+  const directory = wallet
+    ? null
+    : await getCachedAgentDirectoryPage(client, {
+        includeInactive: false,
+        protocol: undefined,
+        capability: undefined,
+        capabilities: [],
+        capabilityMode: 'any',
+        query,
+        wallet: undefined,
+        agentPda,
+        hasX402Endpoint: undefined,
+        limit,
+        offset: 0,
+        view: 'compact',
+        includeProtocolIndexes: false,
+      });
+
+  return {
+    contextType: wallet ? 'exact-wallet' : agentPda ? 'exact-agent-pda' : query ? 'compact-query' : 'compact-orientation',
+    freeRead: true,
+    exact,
+    directory,
+    routing: {
+      firstReads: [
+        'Use sap_get_agent or sap_get_agent_profile when the owner wallet is known.',
+        'Use sap_list_agents with limit <= 20 and view: compact for free orientation.',
+        'Use sap_discover_agents or sap_list_all_agents only for paid search, enriched rows, large pages, or ecosystem-scale scans.',
+      ],
+      paidHostedTools: 'Use sap_payments_call_paid_tool when a hosted tool returns x402 payment_required and the runtime cannot replay x402 natively.',
+      registryWrites: 'Use sap_payments_register_agent and sap_payments_update_agent for wallet-owned SAP registry writes. Do not retry hosted accountless writes after hosted_local_signer_required.',
+      unsignedTransactions: 'Use hosted builders when available, then sap_payments_finalize_transaction with submit:true after user confirmation.',
+    },
+    nextActions: [
+      wallet ? 'If the user wants details, use the exact profile already returned here before paid discovery.' : 'If the user selects an agent row, call sap_get_agent_profile with that row wallet.',
+      'For registration or image/profile updates, call sap_agent_identity_plan before any write.',
+      'For paid or write flows, call sap_payments_readiness first when the local bridge is visible.',
+    ],
   };
 }
 
@@ -2455,7 +2592,7 @@ const agentTools: ToolRegistration[] = [
   {
     name: 'sap_get_agent',
     title: 'Get SAP Agent',
-    description: 'Fetch agent identity by owner wallet. If omitted, fetches the connected wallet agent.',
+    description: 'Free exact SAP agent identity read by owner wallet. If omitted, fetches the connected wallet agent. Use this before paid discovery when the wallet is known.',
     inputSchema: { wallet: { type: 'string', description: 'Solana public key of the agent owner wallet (base58). If omitted, uses the connected wallet.' } },
     handler: async (input, client) => {
       const wallet = optionalPublicKey(input, 'wallet');
@@ -2467,7 +2604,7 @@ const agentTools: ToolRegistration[] = [
   {
     name: 'sap_get_agent_stats',
     title: 'Get SAP Agent Stats',
-    description: 'Fetch agent stats by agent PDA.',
+    description: 'Free exact SAP agent stats read by agent PDA. Use after sap_get_agent or sap_get_agent_profile when stats are needed.',
     inputSchema: { agentPda: { type: 'string', description: 'Agent PDA (base58) to fetch stats for' } },
     handler: async (input, client) => ({
       stats: await client.agent.fetchStatsNullable(requiredPublicKey(input, 'agentPda')),
@@ -2476,7 +2613,7 @@ const agentTools: ToolRegistration[] = [
   {
     name: 'sap_get_global_state',
     title: 'Get SAP Global State',
-    description: 'Fetch the on-chain global registry through SDK AgentModule.fetchGlobalRegistry.',
+    description: 'Free compact global SAP registry state read. Use for initial orientation before paid network analytics.',
     inputSchema: {},
     handler: async (_input, client) => ({ state: await client.agent.fetchGlobalRegistry() }),
   },
@@ -2491,16 +2628,40 @@ const discoveryTools: ToolRegistration[] = [
     handler: async (_input, client) => ({ overview: await client.discovery.getNetworkOverview() }),
   },
   {
+    name: 'sap_agent_context',
+    title: 'Get SAP Agent Context',
+    description: 'Free one-shot SAP orientation context for agents. Use this when the user asks whether SAP MCP is connected, wants to understand an agent/wallet, or needs the next safe paid/write route. It combines exact reads or a compact directory page with routing guidance without triggering x402.',
+    inputSchema: {
+      wallet: {
+        type: 'string',
+        description: 'Optional exact owner wallet public key (base58). When supplied, returns the matching agent identity, PDA, active state, and hydrated profile when available.',
+      },
+      agentPda: {
+        type: 'string',
+        description: 'Optional exact SAP agent PDA (base58) for compact context lookup when the owner wallet is not known.',
+      },
+      query: {
+        type: 'string',
+        description: 'Optional text query for a free compact orientation search. Keep this narrow, for example "XONA" or "Solking".',
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum compact orientation rows to include when wallet is not supplied. Defaults to 10 and is capped at 20 to keep this tool free.',
+      },
+    },
+    handler: async (input, client) => buildSapAgentContext(input, client),
+  },
+  {
     name: 'sap_get_agent_profile',
     title: 'Get SAP Agent Profile',
-    description: 'Fetch a hydrated SAP agent profile by owner wallet.',
+    description: 'Free exact SAP agent profile read by owner wallet. Use this for a known agent before paid discovery or enrichment.',
     inputSchema: { wallet: { type: 'string', description: 'Solana public key of the agent owner wallet (base58)' } },
     handler: async (input, client) => ({ profile: await client.discovery.getAgentProfile(requiredPublicKey(input, 'wallet')) }),
   },
   {
     name: 'sap_is_agent_active',
     title: 'Check SAP Agent Active',
-    description: 'Check if a wallet owns an active SAP agent.',
+    description: 'Free exact activity check for an owner wallet. Use this before paid discovery when the wallet is known.',
     inputSchema: { wallet: { type: 'string', description: 'Solana public key of the wallet to check for an active SAP agent (base58)' } },
     handler: async (input, client) => ({ active: await client.discovery.isAgentActive(requiredPublicKey(input, 'wallet')) }),
   },
@@ -2514,7 +2675,7 @@ const discoveryTools: ToolRegistration[] = [
       const capability = optionalString(input, 'capability');
       const capabilities = parseOptionalStringArray(input, 'capabilities');
 
-      return buildAgentDirectoryPage(client, {
+      return getCachedAgentDirectoryPage(client, {
         includeInactive: input.includeInactive === true,
         protocol: optionalString(input, 'protocol'),
         capability,
@@ -2534,9 +2695,28 @@ const discoveryTools: ToolRegistration[] = [
   {
     name: 'sap_list_agents',
     title: 'List SAP Agents',
-    description: 'Compatibility alias for sap_discover_agents. Supports query, wallet, protocol, capability, x402 endpoint filtering, and cursor pagination.',
-    inputSchema: makeAgentDirectoryInputSchema(50),
-    handler: async (input, client) => discoveryTools[3].handler(input, client),
+    description: 'Compact SAP agent orientation list. Free only when limit <= 20, view is compact, hydrate is false, and includeProtocolIndexes is false; larger or enriched pages are paid read-premium.',
+    inputSchema: makeAgentDirectoryInputSchema(20),
+    handler: async (input, client) => {
+      const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 20, 500));
+      const capability = optionalString(input, 'capability');
+
+      return getCachedAgentDirectoryPage(client, {
+        includeInactive: input.includeInactive === true,
+        protocol: optionalString(input, 'protocol'),
+        capability,
+        capabilities: parseOptionalStringArray(input, 'capabilities'),
+        capabilityMode: parseCapabilityMode(input),
+        query: optionalString(input, 'query'),
+        wallet: optionalString(input, 'wallet'),
+        agentPda: optionalString(input, 'agentPda'),
+        hasX402Endpoint: parseHasX402Endpoint(input),
+        limit,
+        offset: parseDirectoryOffset(input),
+        view: parseDirectoryView(input),
+        includeProtocolIndexes: input.includeProtocolIndexes === true,
+      });
+    },
   },
   {
     name: 'sap_list_all_agents',
@@ -2547,7 +2727,7 @@ const discoveryTools: ToolRegistration[] = [
       const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 100, 500));
       const capability = optionalString(input, 'capability');
 
-      return buildAgentDirectoryPage(client, {
+      return getCachedAgentDirectoryPage(client, {
         includeInactive: input.includeInactive === true,
         protocol: optionalString(input, 'protocol'),
         capability,

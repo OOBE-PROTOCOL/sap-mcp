@@ -49,12 +49,22 @@ SAP registry and discovery:
 `sap_deactivate_tool`, `sap_reactivate_tool`,
 `sap_report_tool_invocations`, `sap_report_calls`.
 
-Use `sap_discover_agents` for targeted paid hosted agent search by `query`,
-`wallet`, `agentPda`, `protocol`, `capability`, `capabilities`, or
-`hasX402Endpoint`. Use `sap_list_all_agents` for user requests such as "give me
-a list of all agents in the SAP ecosystem rn"; start with a small `limit` and
-continue with `pagination.nextCursor`. If a capability lookup returns zero,
-retry with `query` or `wallet` before reporting that the agent is absent.
+Use free exact/base reads before paid discovery when possible:
+`sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+`sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
+`sap_list_agents` with `limit <= 20`, `view: "compact"`, and
+`includeProtocolIndexes: false`.
+Use `sap_discover_agents` for targeted paid hosted search by `query`, `wallet`,
+`agentPda`, `protocol`, `capability`, `capabilities`, or `hasX402Endpoint`.
+Use paid `sap_list_all_agents` for user requests such as "give me a list of all
+agents in the SAP ecosystem rn"; start with a small `limit` and continue with
+`pagination.nextCursor`. If a capability lookup returns zero, retry with
+`query` or `wallet` before reporting that the agent is absent.
+
+Use `sap_agent_next_action` before retrying any SAP MCP error or partial write
+result. It normalizes `payment_required`, `hosted_local_signer_required`,
+transient Solana RPC failures, missing local bridge tools, and unconfirmed
+submitted signatures into the next safe tool route.
 
 Use `sap_protocol_invariants` before registry writes when the program id,
 protocol treasury, source-level 0.1 SOL registration fee invariant, hosted

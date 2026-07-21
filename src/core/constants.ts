@@ -85,7 +85,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.15';
+export const MCP_SERVER_VERSION = '0.9.16';
 
 /**
  * SAP protocol treasury that should receive protocol-owned registration fees.

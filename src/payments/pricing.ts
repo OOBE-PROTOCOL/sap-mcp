@@ -41,6 +41,7 @@ export interface PricingCatalog {
   }>;
   toolSets: {
     free: string[];
+    conditionalFree: string[];
     readPremium: string[];
     builders: string[];
     valueActions: string[];
@@ -85,9 +86,16 @@ const FREE_MCP_METHODS = new Set([
 const FREE_TOOLS = new Set([
   'sap_agent_start',
   'sap_agent_runtime_status',
+  'sap_agent_next_action',
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
+  'sap_agent_context',
+  'sap_get_agent',
+  'sap_get_agent_profile',
+  'sap_get_agent_stats',
+  'sap_get_global_state',
+  'sap_is_agent_active',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',
@@ -131,9 +139,16 @@ const FREE_TOOLS = new Set([
 const STRICT_FREE_TOOLS = new Set([
   'sap_agent_start',
   'sap_agent_runtime_status',
+  'sap_agent_next_action',
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
+  'sap_agent_context',
+  'sap_get_agent',
+  'sap_get_agent_profile',
+  'sap_get_agent_stats',
+  'sap_get_global_state',
+  'sap_is_agent_active',
   'sap_profile_current',
   'sap_profile_list',
   'sap_profile_public_key',
@@ -162,7 +177,6 @@ const STRICT_FREE_TOOLS = new Set([
 const READ_PREMIUM_TOOLS = new Set([
   'sap_list_all_agents',
   'sap_discover_agents',
-  'sap_list_agents',
   'sap_network_stats',
   'sap_fetch_tool',
   'sap_sns_resolve_domain',
@@ -195,6 +209,12 @@ const READ_PREMIUM_TOOLS = new Set([
   'das_getAssetsByCollection',
   'das_searchAssets',
 ]);
+
+const CONDITIONAL_FREE_TOOLS = new Set([
+  'sap_list_agents',
+]);
+
+const FREE_DIRECTORY_LIMIT = 20;
 
 const BUILDER_TOOLS = new Set([
   'sap_sns_batch_check_domains',
@@ -293,21 +313,25 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     tiers: {
       free: {
         paymentRequired: false,
-        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, local payment bridge control, and low-cost public balance checks.',
+        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, low-cost public balance checks, and compact orientation lists.',
         examples: [
           'initialize',
           'tools/list',
           'sap_agent_start',
           'sap_agent_runtime_status',
+          'sap_agent_context',
+          'sap_agent_next_action',
           'sap_pricing_catalog',
+          'sap_get_agent_profile',
           'sap_payments_readiness',
+          'sap_list_agents limit<=20 view=compact',
         ],
       },
       'read-premium': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.readPremiumUsd, config),
-        pricingRule: 'Flat premium read/discovery fee per tool call. Narrow filters, small limits, and pagination are expected.',
-        examples: ['sap_discover_agents', 'sap_list_all_agents', 'jupiter_getQuote', 'pyth_getPrice', 'das_getAsset'],
+        pricingRule: 'Flat premium read/discovery fee per tool call. Broad scans, enriched directory views, analytics, market data, and large pages are paid. Narrow filters, small limits, and pagination are expected.',
+        examples: ['sap_discover_agents', 'sap_list_all_agents', 'sap_list_agents view=full', 'jupiter_getQuote', 'pyth_getPrice', 'das_getAsset'],
       },
       builder: {
         paymentRequired: true,
@@ -329,6 +353,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     },
     toolSets: {
       free: [...freeTools].sort(),
+      conditionalFree: [...CONDITIONAL_FREE_TOOLS].sort(),
       readPremium: [...READ_PREMIUM_TOOLS].sort(),
       builders: [...BUILDER_TOOLS].sort(),
       valueActions: [...VALUE_ACTION_TOOLS].sort(),
@@ -336,6 +361,9 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     },
     runtimeRules: [
       'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
+      `Exact SAP agent/profile reads are free. Use sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, and sap_get_global_state before broad paid discovery.`,
+      'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
+      `sap_list_agents is free only for compact orientation pages with limit <= ${FREE_DIRECTORY_LIMIT}; larger pages, full hydration, protocol index summaries, and sap_discover_agents/sap_list_all_agents are read-premium.`,
       'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',
       'Use sap_payments_call_external_x402 for external HTTP x402 agents discovered through SAP registry metadata.',
       'Use hosted unsigned builders plus sap_payments_finalize_transaction for hosted non-custodial transaction flows.',
@@ -406,6 +434,15 @@ export function priceToolCall(
   toolCall: McpToolCall,
   config: SapMcpMonetizationConfig,
 ): ToolPricing {
+  if (isConditionalFreeToolCall(toolCall)) {
+    return {
+      toolName: toolCall.toolName,
+      tier: 'free',
+      priceUsd: 0,
+      reason: 'free compact orientation read',
+    };
+  }
+
   const tier = classifyTool(toolCall.toolName, config);
 
   if (tier === 'free') {
@@ -462,6 +499,10 @@ export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationC
     return 'read-premium';
   }
 
+  if (CONDITIONAL_FREE_TOOLS.has(toolName)) {
+    return 'read-premium';
+  }
+
   if (BUILDER_TOOLS.has(toolName)) {
     return 'builder';
   }
@@ -484,6 +525,33 @@ export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationC
   }
 
   return 'read-premium';
+}
+
+function isConditionalFreeToolCall(toolCall: McpToolCall): boolean {
+  if (toolCall.toolName !== 'sap_list_agents') {
+    return false;
+  }
+  const args = isRecord(toolCall.arguments) ? toolCall.arguments : {};
+  const limit = readOptionalNumber(args.limit) ?? FREE_DIRECTORY_LIMIT;
+  const view = typeof args.view === 'string' ? args.view : undefined;
+  const hydrate = args.hydrate === true;
+  const includeProtocolIndexes = args.includeProtocolIndexes === true;
+
+  return limit <= FREE_DIRECTORY_LIMIT
+    && !hydrate
+    && view !== 'full'
+    && !includeProtocolIndexes;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 /**

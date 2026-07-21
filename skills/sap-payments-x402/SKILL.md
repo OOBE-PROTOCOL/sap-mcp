@@ -45,9 +45,12 @@ hosted calls still proceed through x402/pay.sh plus the user's local SAP profile
 or external signer.
 
 - Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
-  `sap_get_network_overview`, `sol_get_balance`, `spl-token_getBalance`, and
-  `spl-token_getTokenAccounts`.
-- Read premium: `sap_list_all_agents`, indexed discovery, network stats,
+  `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
+  `sap_agent_next_action`, exact SAP agent/profile reads, compact
+  `sap_list_agents` pages with `limit <= 20`, `sap_get_network_overview`, `sol_get_balance`,
+  `spl-token_getBalance`, and `spl-token_getTokenAccounts`.
+- Read premium: `sap_discover_agents`, `sap_list_all_agents`, full/enriched or
+  large `sap_list_agents` pages, indexed discovery, network stats,
   protocol/capability indexes.
 - Builder: batch SNS/domain checks, analytics, transaction builders.
 - Value action: fixed fee plus configured basis-points fee when public USD
@@ -57,6 +60,11 @@ When a remote call returns HTTP `402`, read the x402 `PAYMENT-REQUIRED`
 instructions, create a payment, retry with `PAYMENT-SIGNATURE`, and capture
 `PAYMENT-RESPONSE` after settlement. If a `payShCheckoutUrl` is present, surface
 it for browser/manual checkout flows.
+
+Before retrying `payment_required`, `hosted_local_signer_required`,
+`BlockhashNotFound`, timeout, missing `sap_payments`, or an unconfirmed
+signature, call `sap_agent_next_action`. Use its `safeToRetryNow`, `nextTool`,
+and `paymentCharged` fields as the retry guard.
 
 For fast x402 execution:
 

@@ -26,13 +26,21 @@ Agents should:
 8. Answer in the user's language unless the user asks otherwise.
 9. Avoid showing internal thinking, keypair bytes, raw request secrets, or private config.
 10. Ask for approval before signing or value-moving operations when required by policy.
-11. For paid hosted agent discovery, use targeted `sap_discover_agents` filters
+11. Use free exact/base SAP reads before paid discovery when possible:
+    `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+    `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and compact
+    `sap_list_agents` pages with `limit <= 20`, `view: "compact"`, and
+    `includeProtocolIndexes: false`.
+12. For paid hosted agent discovery, use targeted `sap_discover_agents` filters
     before broad scans: `query`, `wallet`, `agentPda`, `protocol`,
     `capability`, `capabilities`, `hasX402Endpoint`, small `limit`, then
     `pagination.nextCursor`.
-12. If a capability lookup returns zero agents, retry with `query` or `wallet`
+13. If a capability lookup returns zero agents, retry with `query` or `wallet`
     before saying the agent is absent; AgentAccount rows are canonical and
     indexes can lag.
+14. Call `sap_agent_next_action` before retrying after `payment_required`,
+    `hosted_local_signer_required`, transient RPC errors, missing local bridge
+    tools, or submitted signatures that did not confirm.
 
 The intended user command is short:
 
@@ -54,9 +62,12 @@ unless the user explicitly asks what tools are available.
 SAP MCP exposes a free startup path:
 
 1. `sap_agent_start` returns the machine-readable agent playbook.
-2. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
-3. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
-4. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
+2. `sap_agent_runtime_status` returns the hosted/accountless/local-bridge routing table.
+3. `sap_agent_context` returns free compact SAP agent context before paid discovery.
+4. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
+5. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
+6. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
+7. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
 
 These calls are free. Paid tools should only start after the agent has loaded
 skills and, when needed, verified the local `sap_payments` bridge.

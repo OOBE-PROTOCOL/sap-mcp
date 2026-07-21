@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.16 - 2026-07-21
+
+### Added
+
+- Added free `sap_agent_context`, a compact hosted orientation tool for exact
+  wallet/agent lookups and first-page agent discovery. It gives agents a
+  low-friction way to understand SAP state before running paid/broad calls.
+- Added free `sap_agent_next_action`, a routing resolver for common SAP MCP
+  errors and partial results. It tells agents whether to use hosted reads,
+  `sap_payments_*`, `sap_runtime_repair_plan`, unsigned transaction
+  finalization, or signature verification before retrying.
+
+### Improved
+
+- Made exact base SAP registry reads free by default:
+  `sap_get_agent`, `sap_get_agent_profile`, `sap_get_agent_stats`,
+  `sap_get_global_state`, and `sap_is_agent_active`.
+- Made `sap_list_agents` free for compact orientation calls while keeping
+  broad, hydrated, full, and protocol-indexed directory scans paid.
+- Added cache and singleflight protection around compact directory reads so
+  hosted discovery remains faster under repeated agent/runtime probes.
+- Updated agent bootstrap guidance, SAP skills, payment docs, and tool
+  reference files so agents start with context, resolve routing before retrying,
+  avoid temporary signing scripts, and use local `sap_payments_*` tools for
+  user-signed writes.
+- Expanded pricing tests and server metadata tests to cover the new free
+  context/resolver tools and conditional-free discovery behavior.
+
 ## 0.9.15 - 2026-07-20
 
 ### Added

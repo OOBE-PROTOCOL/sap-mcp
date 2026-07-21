@@ -12,10 +12,16 @@ state, global directory listing, and agent profile inspection.
    full identity setup, call `sap_agent_identity_plan` before any write. It is
    free and returns normalized fields, local-signer routing, metadata contract,
    forbidden actions, and verification checklist.
-4. Call `sap_get_network_overview` for ecosystem counters when needed.
-5. Use `sap_discover_agents` with `query`, `wallet`, `protocol`, or
-   `capability` for targeted paid hosted directory reads.
-6. Use `sap_list_all_agents` for global current agent lists and follow
+4. Use free exact/base reads before paid discovery: `sap_agent_context`,
+   `sap_get_agent`,
+   `sap_get_agent_profile`, `sap_get_agent_stats`, `sap_is_agent_active`,
+   `sap_get_global_state`, and `sap_list_agents` with `limit <= 20`,
+   `view: "compact"`, and `includeProtocolIndexes: false`.
+5. Call `sap_get_network_overview` for ecosystem counters when needed.
+6. Use `sap_discover_agents` with `query`, `wallet`, `protocol`, or
+   `capability` for targeted paid hosted directory reads when free exact/base
+   reads are not enough.
+7. Use `sap_list_all_agents` for global current agent lists and follow
    `pagination.nextCursor` for additional pages.
 
 ## Tools
@@ -23,6 +29,8 @@ state, global directory listing, and agent profile inspection.
 - `sap_register_agent`
 - `sap_protocol_invariants`
 - `sap_agent_identity_plan`
+- `sap_agent_context`
+- `sap_agent_next_action`
 - `sap_update_agent`
 - `sap_deactivate_agent`
 - `sap_reactivate_agent`
@@ -32,6 +40,7 @@ state, global directory listing, and agent profile inspection.
 - `sap_get_agent_stats`
 - `sap_get_global_state`
 - `sap_get_network_overview`
+- `sap_list_agents`
 - `sap_list_all_agents`
 - `sap_is_agent_active`
 - `sap_report_calls`
@@ -50,6 +59,10 @@ state, global directory listing, and agent profile inspection.
   `confirm: true`. For other registry writes, run the write on the local SAP
   MCP profile or use a production unsigned builder/finalizer flow when
   available.
+- Before any retry after `payment_required`, `hosted_local_signer_required`,
+  `BlockhashNotFound`, timeout, missing `sap_payments`, or a submitted
+  signature that did not confirm, call `sap_agent_next_action`. Follow its
+  `safeToRetryNow`, `nextTool`, and `forbiddenActions` fields.
 - Agent pictures must be public metadata, not desktop file paths. Upload the
   image or metadata JSON to IPFS, Arweave, Kommodo, or HTTPS, then set
   `agentUri`/`metadataUri` with `sap_payments_update_agent`.
@@ -71,8 +84,10 @@ state, global directory listing, and agent profile inspection.
   `query`.
 - "Find x402 agents" means `sap_discover_agents` with
   `hasX402Endpoint: true`.
-- "List all agents" means `sap_list_all_agents` with a small `limit`, then
-  `pagination.nextCursor` if the user wants more.
+- "List all agents" means first call free `sap_list_agents` with
+  `limit <= 20`, `view: "compact"`, and `includeProtocolIndexes: false`; then
+  use paid `sap_list_all_agents` with `pagination.nextCursor` if the user wants
+  more, full rows, or ecosystem-scale enumeration.
 - "Agent by wallet" means `sap_get_agent` or `sap_get_agent_profile`.
 - "Is this agent live?" means `sap_is_agent_active`.
 - "Network totals" means `sap_get_network_overview`.

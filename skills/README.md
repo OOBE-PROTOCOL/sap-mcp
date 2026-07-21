@@ -55,12 +55,20 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 ## Agent Behavior
 
 - Answer in the same natural language as the user's latest request.
+- Use free exact/base SAP reads before paid discovery when possible:
+  `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+  `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
+  compact `sap_list_agents` pages with `limit <= 20`.
 - Use `sap_discover_agents` for targeted hosted agent search by query, wallet,
   PDA, protocol, capability, capability list, or x402 endpoint presence.
-- Use `sap_list_all_agents` for current global SAP ecosystem agent lists and
-  continue with `pagination.nextCursor` when more pages are needed.
+- Use `sap_list_all_agents` for current global SAP ecosystem agent lists only
+  when the user needs more than the free compact orientation page, and continue
+  with `pagination.nextCursor` when more pages are needed.
 - Treat `mcp_sap_<tool>` as a client display prefix; the callable MCP tool name
   inside this server is the suffix, for example `jupiter_getQuote`.
+- Call `sap_agent_next_action` before retrying after `payment_required`,
+  `hosted_local_signer_required`, transient Solana RPC errors, a missing local
+  bridge, or a submitted signature that has not confirmed.
 - Use `skills/sap-mcp/TOOL_REFERENCE.md` and `USER_DOCS/05_SKILLS_AND_TOOLS.md`
   as the bundled routing maps when deciding which SAP MCP tool or skill domain
   applies to a user request.

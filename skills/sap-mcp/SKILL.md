@@ -16,16 +16,18 @@ Always inspect runtime context through MCP tools, not by reading config files:
 
 1. `sap_agent_start`
 2. `sap_agent_runtime_status` with `intent: "connection"`, `"paid-call"`, `"registry-write"`, `"transaction-finalize"`, `"escrow"`, `"identity"`, or `"general"`
-3. `sap_skills_bundle` with `includeContents: true`
-4. `sap_pricing_catalog` before estimating hosted paid call tiers
-5. `sap_skills_upgrade_plan` when local skills are missing or stale
-6. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
-7. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
-8. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
-9. `sap_profile_current`
-10. `sap_profile_list`
-11. `sap_profile_public_key`
-12. `sap_network_stats`
+3. `sap_agent_context` for free compact agent/directory orientation before paid discovery
+4. `sap_skills_bundle` with `includeContents: true`
+5. `sap_pricing_catalog` before estimating hosted paid call tiers
+6. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
+7. `sap_skills_upgrade_plan` when local skills are missing or stale
+8. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
+9. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
+10. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
+11. `sap_profile_current`
+12. `sap_profile_list`
+13. `sap_profile_public_key`
+14. `sap_network_stats`
 
 For simple "are you connected?" checks, do not dump tool counts or inspect
 local files. Use `sap_agent_runtime_status` first and answer with the hosted
@@ -45,6 +47,11 @@ and error strings unchanged.
 
 ## Discovery Rules
 
+- Use free exact/base reads first when the wallet, PDA, or a small orientation
+  page is enough: `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+  `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
+  `sap_list_agents` with `limit <= 20`, `view: "compact"`, and
+  `includeProtocolIndexes: false`.
 - Use `sap_get_network_overview` for live ecosystem counters.
 - Use `sap_discover_agents` for targeted paid hosted discovery. Prefer
   `query`, `wallet`, `agentPda`, `protocol`, `capability`, `capabilities`,
@@ -52,7 +59,9 @@ and error strings unchanged.
 - Use `sap_list_all_agents` when the user asks for all current SAP ecosystem
   agents. It performs global on-chain `AgentAccount` enumeration and returns
   `pagination.nextCursor` when more pages are available.
-- Use `sap_list_agents` as a compatibility alias for `sap_discover_agents`.
+- Use `sap_list_agents` for a free compact orientation page first. Larger
+  pages, `view: "full"`, hydration, protocol index summaries, and global scans
+  are paid read-premium.
 - Use `sap_fetch_protocol_index` when a specific protocol ID is known.
 - If a capability lookup returns zero results, retry with `query` or `wallet`
   before saying an agent is absent. AgentAccount rows are canonical; indexes can
@@ -80,7 +89,8 @@ Use the bundled routing map for local MCP tool selection:
 - `USER_DOCS/05_SKILLS_AND_TOOLS.md`
 
 SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
-`sap_agent_start`, `sap_agent_runtime_status`, `sap_pricing_catalog`,
+`sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
+`sap_agent_next_action`, `sap_pricing_catalog`,
 `sap_skills_list`, `sap_skills_bundle`, `sap_skills_upgrade_plan`,
 `sap_runtime_repair_plan`, and local `sap_skills_install` directly. Do not
 route startup, runtime status, pricing catalog, skill listing, bundling,

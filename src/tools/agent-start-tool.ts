@@ -137,6 +137,64 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
     },
     async () => createStructuredJsonResponse({ ...buildPricingCatalog(context.config.monetization) }),
   );
+
+  registerTool(
+    server,
+    'sap_agent_next_action',
+    {
+      title: 'Resolve SAP MCP Next Action',
+      description: 'Free routing resolver for SAP MCP errors and partial results. Use this before retrying after payment_required, hosted_local_signer_required, BlockhashNotFound, missing sap_payments, timeout, or a submitted signature that has not confirmed.',
+      inputSchema: {
+        intent: {
+          type: 'string',
+          enum: ['connection', 'paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity', 'general'],
+          description: 'Current user intent or workflow area.',
+        },
+        toolName: {
+          type: 'string',
+          description: 'Tool that produced the error or partial result, for example sap_register_agent, sap_update_agent, or sap_create_escrow_v2.',
+        },
+        errorCode: {
+          type: 'string',
+          description: 'Machine error code when available, for example hosted_local_signer_required, payment_required, BlockhashNotFound, or expired_or_not_landed.',
+        },
+        errorMessage: {
+          type: 'string',
+          description: 'Human or structured error message returned by the runtime, hosted server, local bridge, or wallet/RPC layer.',
+        },
+        hasSignature: {
+          type: 'boolean',
+          description: 'True when a transaction signature was already produced or submitted. This prevents unsafe duplicate retries.',
+        },
+        paymentRequired: {
+          type: 'boolean',
+          description: 'True when the previous response was an x402/pay.sh payment challenge.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the resolver produced guidance.' },
+          classification: { type: 'string', description: 'Normalized error or routing classification.' },
+          retryable: { type: 'boolean', description: 'Whether the underlying issue can generally be retried.' },
+          safeToRetryNow: { type: 'boolean', description: 'Whether the agent should retry immediately without risking duplicate writes or duplicate user charges.' },
+          paymentCharged: { type: 'string', description: 'Best-effort payment status: no, unknown, possible, or yes.' },
+          nextTool: { type: 'string', description: 'Exact preferred next SAP MCP tool, or null when user/runtime action is needed.' },
+          nextAction: { type: 'string', description: 'Concrete next action for the agent.' },
+          userMessage: { type: 'string', description: 'Short user-facing explanation.' },
+          forbiddenActions: { type: 'array', description: 'Actions the agent must not take for this case.', items: { type: 'string' } },
+        },
+        required: ['success', 'classification', 'retryable', 'safeToRetryNow', 'paymentCharged', 'nextTool', 'nextAction', 'userMessage', 'forbiddenActions'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => createStructuredJsonResponse(buildAgentNextActionPayload(parseNextActionInput(input))),
+  );
 }
 
 function parseGoal(input: unknown): string | undefined {
@@ -159,6 +217,149 @@ function parseStatusIntent(input: unknown): string {
     return intent;
   }
   return 'general';
+}
+
+interface NextActionInput {
+  intent: string;
+  toolName?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  hasSignature: boolean;
+  paymentRequired: boolean;
+}
+
+function parseNextActionInput(input: unknown): NextActionInput {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  return {
+    intent: parseStatusIntent(record),
+    toolName: readOptionalString(record.toolName),
+    errorCode: readOptionalString(record.errorCode),
+    errorMessage: readOptionalString(record.errorMessage),
+    hasSignature: record.hasSignature === true,
+    paymentRequired: record.paymentRequired === true,
+  };
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function buildAgentNextActionPayload(input: NextActionInput): Record<string, unknown> {
+  const combined = `${input.toolName ?? ''} ${input.errorCode ?? ''} ${input.errorMessage ?? ''}`.toLowerCase();
+  const toolName = input.toolName?.toLowerCase() ?? '';
+  const baseForbidden = [
+    'Do not read or print keypair JSON.',
+    'Do not create temporary signing scripts.',
+    'Do not generate client-side MCP session IDs.',
+  ];
+
+  if (input.hasSignature || containsAny(combined, ['signature', 'expired_or_not_landed', 'not confirm', 'not confirmed', 'confirmation timeout'])) {
+    return nextAction({
+      classification: 'signature_status_unknown',
+      retryable: true,
+      safeToRetryNow: false,
+      paymentCharged: input.paymentRequired ? 'possible' : 'unknown',
+      nextTool: 'sap_payments_finalize_transaction',
+      nextAction: 'Verify the submitted signature or transaction status before creating a fresh write. Retry only after confirmation that the previous transaction expired or failed.',
+      userMessage: 'A transaction may already have been submitted, so I should verify its status before retrying to avoid duplicate writes.',
+      forbiddenActions: [...baseForbidden, 'Do not retry a submitted write until the signature status is known.'],
+    });
+  }
+
+  if (input.paymentRequired || containsAny(combined, ['payment_required', 'payment required', '402'])) {
+    return nextAction({
+      classification: 'x402_challenge_required',
+      retryable: true,
+      safeToRetryNow: true,
+      paymentCharged: 'no',
+      nextTool: 'sap_payments_call_paid_tool',
+      nextAction: 'Call the same hosted tool through sap_payments_call_paid_tool with a maxPriceUsd cap, so the local bridge signs a fresh x402 payment and replays the tool call.',
+      userMessage: 'This is a normal x402 challenge, not a failure. I should route it through the local payment bridge.',
+      forbiddenActions: [...baseForbidden, 'Do not hand-roll PAYMENT-SIGNATURE headers for hosted SAP tools.'],
+    });
+  }
+
+  if (containsAny(combined, ['hosted_local_signer_required', 'local signer required', 'hosted server cannot sign', 'no signer configured'])) {
+    return nextAction({
+      classification: 'local_signer_route_required',
+      retryable: false,
+      safeToRetryNow: false,
+      paymentCharged: 'no',
+      nextTool: localSignerToolFor(toolName, input.intent),
+      nextAction: 'Switch to the local sap_payments route for this wallet-owned write. Do not retry the hosted accountless write.',
+      userMessage: 'The hosted server is non-custodial and correctly refused to sign. I should use the local signing bridge for this write.',
+      forbiddenActions: [...baseForbidden, 'Do not retry the hosted direct write after hosted_local_signer_required.'],
+    });
+  }
+
+  if (containsAny(combined, ['blockhashnotfound', 'node is behind', 'minimum context slot', 'fetch failed', 'transaction_simulation_failed', 'gateway timeout', 'econnreset', 'etimedout'])) {
+    return nextAction({
+      classification: 'transient_solana_rpc',
+      retryable: true,
+      safeToRetryNow: true,
+      paymentCharged: 'unknown',
+      nextTool: input.intent === 'transaction-finalize' ? 'sap_payments_finalize_transaction' : 'sap_payments_call_paid_tool',
+      nextAction: 'Retry with a fresh blockhash/challenge through the local bridge. Keep the same user intent and maxPriceUsd cap, and stop if a transaction signature is produced.',
+      userMessage: 'This looks like a temporary Solana RPC or blockhash issue. I can retry safely with a fresh challenge unless a signature was already submitted.',
+      forbiddenActions: [...baseForbidden, 'Do not reuse an old signed x402 payload.'],
+    });
+  }
+
+  if (containsAny(combined, ['sap_payments', 'not exposed', 'not injected', 'cannot find module', 'yaml parse', 'connection closes', 'failed during startup', 'tool registry'])) {
+    return nextAction({
+      classification: 'local_bridge_runtime_missing',
+      retryable: false,
+      safeToRetryNow: false,
+      paymentCharged: 'no',
+      nextTool: 'sap_runtime_repair_plan',
+      nextAction: 'Run the SAP runtime repair plan, repair the selected agent runtime, then restart the runtime so it reloads the sap_payments tool namespace.',
+      userMessage: 'The hosted server can be connected while the local payment bridge is not loaded. Repair the runtime config and restart the agent app.',
+      forbiddenActions: [...baseForbidden, 'Do not say paid writes are ready until sap_payments_readiness succeeds.'],
+    });
+  }
+
+  return nextAction({
+    classification: 'general_sap_mcp_routing',
+    retryable: false,
+    safeToRetryNow: false,
+    paymentCharged: 'unknown',
+    nextTool: 'sap_agent_runtime_status',
+    nextAction: 'Call sap_agent_runtime_status with the closest intent, then choose hosted reads, sap_payments paid calls, local registry writes, or unsigned builder finalization from its routing table.',
+    userMessage: 'I should inspect the SAP routing table before choosing the next tool.',
+    forbiddenActions: baseForbidden,
+  });
+}
+
+function containsAny(value: string, needles: string[]): boolean {
+  return needles.some((needle) => value.includes(needle));
+}
+
+function localSignerToolFor(toolName: string, intent: string): string {
+  if (toolName.includes('register')) {
+    return 'sap_payments_register_agent';
+  }
+  if (toolName.includes('update')) {
+    return 'sap_payments_update_agent';
+  }
+  if (toolName.includes('escrow') || intent === 'escrow') {
+    return 'sap_escrow_build_create_transaction';
+  }
+  return 'sap_payments_readiness';
+}
+
+function nextAction(payload: {
+  classification: string;
+  retryable: boolean;
+  safeToRetryNow: boolean;
+  paymentCharged: 'no' | 'unknown' | 'possible' | 'yes';
+  nextTool: string;
+  nextAction: string;
+  userMessage: string;
+  forbiddenActions: string[];
+}): Record<string, unknown> {
+  return { success: true, ...payload };
 }
 
 function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Record<string, unknown> {
@@ -204,7 +405,16 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Reco
     routing: {
       reads: {
         route: 'hosted sap',
-        rule: 'Use hosted reads directly with exact schemas and narrow filters. Use cursors/pagination where returned.',
+        rule: 'Use hosted reads directly with exact schemas. Exact SAP profile reads and compact orientation pages are free; broad discovery/enrichment is paid and should use cursors/pagination.',
+        freeOrientation: [
+          'sap_agent_context',
+          'sap_get_agent',
+          'sap_get_agent_profile',
+          'sap_get_agent_stats',
+          'sap_is_agent_active',
+          'sap_get_global_state',
+          'sap_list_agents with limit <= 20, view: compact, includeProtocolIndexes: false',
+        ],
       },
       paidHostedTools: {
         route: 'local sap_payments -> sap_payments_call_paid_tool',
@@ -311,6 +521,13 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'hosted sap',
+        tool: 'sap_agent_context',
+        arguments: { limit: 10 },
+        required: false,
+        reason: 'Get free compact SAP agent context and routing guidance before paid discovery or broad scans.',
+      },
+      {
+        namespace: 'hosted sap',
         tool: 'sap_skills_bundle',
         arguments: { includeContents: true },
         required: true,
@@ -348,6 +565,12 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'hosted sap',
+        tool: 'sap_agent_next_action',
+        required: false,
+        reason: 'Classify payment_required, hosted_local_signer_required, transient RPC failures, or missing sap_payments before retrying.',
+      },
+      {
+        namespace: 'hosted sap',
         tool: 'sap_profile_current',
         required: false,
         reason: 'Inspect hosted server state only. Do not treat hosted profile default as the user local wallet.',
@@ -369,10 +592,12 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'Use exact tool names returned by tools/list; do not rewrite hyphens to underscores.',
       'For a simple connection question, answer briefly. Do not dump the full tool catalog, categories, or every protocol unless the user asks what tools are available.',
       'For connection/readiness questions, call sap_agent_runtime_status and use its hosted/localBridge/routing fields as the source of truth.',
+      'When an error or partial result appears, call sap_agent_next_action before retrying. It classifies x402 challenges, hosted local-signer guards, transient RPC failures, missing bridge tools, and submitted signatures.',
       'Hosted SAP MCP is accountless and non-custodial. OOBE never has user keypair bytes.',
       'Do not report hosted profile default as the user local profile.',
       'For local wallet/profile questions, prefer sap_payments_profile_current when available.',
       'For hosted SAP agent discovery, prefer sap_discover_agents with query, wallet, agentPda, protocol, capability, capabilities, hasX402Endpoint, small limit, and pagination.nextCursor before broad scans.',
+      'For initial orientation, use free exact/base reads first: sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, sap_get_global_state, or sap_list_agents with limit <= 20 and view: compact. Use paid sap_discover_agents or sap_list_all_agents only when the user needs search, enrichment, analytics, or larger pages.',
       'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
       'For free reads, call hosted tools directly.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',

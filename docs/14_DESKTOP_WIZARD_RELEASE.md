@@ -66,7 +66,7 @@ url = "https://mcp.sap.oobeprotocol.ai/mcp"
 ```toml
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.15", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.16", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -279,8 +279,8 @@ npm pack --dry-run --cache ./.npm-cache
 The current local macOS arm64 build produces:
 
 ```txt
-SAP-MCP-Wizard-0.9.15-arm64.dmg
-SAP-MCP-Wizard-0.9.15-arm64.zip
+SAP-MCP-Wizard-0.9.16-arm64.dmg
+SAP-MCP-Wizard-0.9.16-arm64.zip
 ```
 
 Windows EXE and Linux artifacts are produced by the GitHub Actions matrix.

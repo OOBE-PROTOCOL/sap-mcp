@@ -36,6 +36,12 @@ Use `sap_discover_agents` for targeted hosted directory reads by `query`,
 `wallet`, `agentPda`, `protocol`, `capability`, `capabilities`, or
 `hasX402Endpoint`. Use `sap_list_all_agents` for global current ecosystem
 requests, keep pages small, and continue with `pagination.nextCursor`.
+For first-pass orientation, prefer free reads: `sap_agent_context`,
+`sap_get_agent`, `sap_get_agent_profile`, `sap_get_agent_stats`,
+`sap_is_agent_active`, `sap_get_global_state`, and `sap_list_agents` with `limit <= 20`,
+`view: "compact"`, and `includeProtocolIndexes: false`. Use paid discovery
+only when the user needs search, enrichment, full rows, large pages, analytics,
+or global enumeration beyond the compact page.
 
 Before registering or updating an agent profile, call free
 `sap_protocol_invariants` when treasury, registration fee, hosted write route,
@@ -51,6 +57,11 @@ Hosted accountless SAP MCP cannot sign wallet-owned registry writes. If hosted
 `confirm: true`. After registration, verify `success`, `agentPda`,
 `confirmationStatus`, and `protocolFee.status`; after update, fetch the agent
 profile again and compare the changed fields.
+
+If any SAP operation returns `payment_required`, `hosted_local_signer_required`,
+`BlockhashNotFound`, timeout, missing `sap_payments`, or a submitted signature
+that did not confirm, call `sap_agent_next_action` before retrying. Follow its
+`safeToRetryNow` and `nextTool` fields.
 
 ## Memory
 

@@ -9,7 +9,7 @@ type StepName = typeof fullSteps[number];
 type WorkspaceView = 'wizard' | 'profiles';
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
-const wizardVersion = '0.9.15';
+const wizardVersion = '0.9.16';
 const releaseUrl = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/${wizardVersion}`;
 const initialStateTimeoutMs = 15_000;
 

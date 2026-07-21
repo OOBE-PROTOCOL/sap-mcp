@@ -76,12 +76,84 @@ describe('SAP MCP monetization pricing', () => {
   it('keeps SAP MCP skill bootstrap tools free', () => {
     expect(classifyTool('sap_agent_start')).toBe('free');
     expect(classifyTool('sap_agent_runtime_status')).toBe('free');
+    expect(classifyTool('sap_agent_next_action')).toBe('free');
     expect(classifyTool('sap_pricing_catalog')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
     expect(classifyTool('sap_skills_install')).toBe('free');
     expect(classifyTool('sap_skills_upgrade_plan')).toBe('free');
     expect(classifyTool('sap_runtime_repair_plan')).toBe('free');
+  });
+
+  it('keeps exact SAP agent orientation reads free in default and strict mode', () => {
+    for (const toolName of [
+      'sap_get_agent',
+      'sap_agent_context',
+      'sap_get_agent_profile',
+      'sap_get_agent_stats',
+      'sap_get_global_state',
+      'sap_is_agent_active',
+    ]) {
+      expect(classifyTool(toolName)).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+    }
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_get_agent_profile',
+        arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    expect(resolvePaymentDecision(parsed, monetizationConfig).required).toBe(false);
+    expect(resolvePaymentDecision(parsed, {
+      ...monetizationConfig,
+      strictTools: true,
+    }).required).toBe(false);
+  });
+
+  it('keeps compact SAP agent orientation pages free but prices broad directory reads', () => {
+    const compactParsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_list_agents',
+        arguments: { limit: 20, view: 'compact' },
+      },
+    });
+
+    expect(resolvePaymentDecision(compactParsed, monetizationConfig).required).toBe(false);
+    expect(resolvePaymentDecision(compactParsed, {
+      ...monetizationConfig,
+      strictTools: true,
+    }).required).toBe(false);
+
+    for (const arguments_ of [
+      { limit: 21, view: 'compact' },
+      { limit: 20, view: 'full' },
+      { limit: 20, hydrate: true },
+      { limit: 20, includeProtocolIndexes: true },
+    ]) {
+      const parsed = parseJsonRpcBody({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'sap_list_agents',
+          arguments: arguments_,
+        },
+      });
+
+      const decision = resolvePaymentDecision(parsed, monetizationConfig);
+      expect(decision.required).toBe(true);
+      if (decision.required) {
+        expect(decision.tier).toBe('read-premium');
+      }
+    }
   });
 
   it('canonicalizes client-normalized tool aliases before pricing', () => {
@@ -164,6 +236,8 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_skills_upgrade_plan', { strictTools: true })).toBe('free');

@@ -10,8 +10,8 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 
 | Tier | Examples | Price |
 | --- | --- | --- |
-| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, base overview | Free |
-| Premium read | `sap_list_all_agents`, enriched network stats, indexed discovery | `$0.007` to `$0.01` |
+| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`, `sap_agent_next_action`, exact SAP agent/profile reads, compact `sap_list_agents` orientation pages with `limit <= 20` | Free |
+| Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, enriched network stats, indexed discovery, market/oracle/DAS reads | `$0.007` to `$0.01` |
 | Builder or batch | complex builders, SNS/domain batch checks, enriched analytics | `$0.01` to `$0.10` |
 | Value action | settlement-like or value-linked operations where appropriate | fixed `$0.20` plus optional `0.5%` |
 
@@ -26,6 +26,22 @@ GET https://mcp.sap.oobeprotocol.ai/pricing.json
 Agents can also call the free hosted tool `sap_pricing_catalog`. Use these
 surfaces for planning and UI copy, then treat the actual x402 challenge returned
 by the paid `tools/call` request as the final payment source of truth.
+
+The intended agent flow is to use free exact/base reads first, then pay only
+when the user needs broad discovery, enrichment, transaction builders, or
+value-moving actions. For SAP agent directory work, start with
+`sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+`sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, or
+`sap_list_agents` with `limit <= 20`,
+`view: "compact"`, and `includeProtocolIndexes: false`. Use paid
+`sap_discover_agents` or `sap_list_all_agents` for search, full rows, large
+pages, protocol index summaries, or ecosystem-scale enumeration.
+
+When a request returns `payment_required`, `hosted_local_signer_required`,
+`BlockhashNotFound`, a timeout, missing `sap_payments`, or a submitted signature
+that has not confirmed, call the free `sap_agent_next_action` resolver before
+retrying. It tells the agent whether a retry is safe, whether a payment was
+charged, and which hosted or local bridge tool should be used next.
 
 ## 06.3 x402 Role
 
