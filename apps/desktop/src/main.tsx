@@ -9,7 +9,8 @@ type StepName = typeof fullSteps[number];
 type WorkspaceView = 'wizard' | 'profiles';
 
 const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
-const releaseUrl = 'https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/0.9.2';
+const wizardVersion = '0.9.15';
+const releaseUrl = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/${wizardVersion}`;
 const initialStateTimeoutMs = 15_000;
 
 function normalizeProfileName(value: string): string {

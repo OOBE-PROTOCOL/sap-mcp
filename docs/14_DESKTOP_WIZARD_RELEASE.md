@@ -179,7 +179,7 @@ Native multi-OS artifacts are built by:
 Triggers:
 
 1. manual `workflow_dispatch`;
-2. tag push such as `0.6.0`.
+2. tag push such as `VERSION`.
 
 Artifact matrix:
 
@@ -279,8 +279,8 @@ npm pack --dry-run --cache ./.npm-cache
 The current local macOS arm64 build produces:
 
 ```txt
-SAP-MCP-Wizard-0.6.0-arm64.dmg
-SAP-MCP-Wizard-0.6.0-arm64.zip
+SAP-MCP-Wizard-0.9.15-arm64.dmg
+SAP-MCP-Wizard-0.9.15-arm64.zip
 ```
 
 Windows EXE and Linux artifacts are produced by the GitHub Actions matrix.
