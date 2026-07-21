@@ -148,7 +148,10 @@
   "packageManager": "pnpm@11.7.0",
   "overrides": {
     "bigint-buffer": "file:vendor/bigint-buffer",
+    "brace-expansion@<1.1.16": "1.1.16",
+    "brace-expansion@>=2.0.0 <2.1.2": "2.1.2",
     "esbuild": "^0.28.1",
+    "js-yaml@>=4.0.0 <4.3.0": "4.3.0",
     "langsmith": "^0.6.0",
     "uuid": "^11.1.1",
     "vite": "8.1.0",
