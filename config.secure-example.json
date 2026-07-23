@@ -56,10 +56,11 @@
     "maxTimeoutSeconds": 120,
     "payShCheckoutUrl": "https://pay.sh/checkout/YOUR_CHECKOUT_ID",
     "prices": {
-      "readPremiumUsd": 0.008,
-      "builderUsd": 0.05,
-      "valueFixedUsd": 0.2,
-      "valueBps": 50,
+      "readPremiumUsd": 0.001,
+      "builderUsd": 0.008,
+      "valueFixedUsd": 0.09,
+      "heavyValueUsd": 0.15,
+      "valueBps": 0,
       "minUsd": 0.001,
       "maxUsd": 100
     }

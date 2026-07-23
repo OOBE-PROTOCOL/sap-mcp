@@ -138,8 +138,9 @@ export const envSchema = z.object({
   SAP_MCP_MONETIZATION_STRICT_TOOLS: booleanEnvSchema.default(false),
   SAP_MCP_PRICE_READ_PREMIUM_USD: z.coerce.number().positive().default(0.001),
   SAP_MCP_PRICE_BUILDER_USD: z.coerce.number().positive().default(0.008),
-  SAP_MCP_PRICE_VALUE_FIXED_USD: z.coerce.number().nonnegative().default(0.2),
-  SAP_MCP_PRICE_VALUE_BPS: z.coerce.number().nonnegative().default(50),
+  SAP_MCP_PRICE_VALUE_FIXED_USD: z.coerce.number().nonnegative().default(0.09),
+  SAP_MCP_PRICE_HEAVY_VALUE_USD: z.coerce.number().nonnegative().default(0.15),
+  SAP_MCP_PRICE_VALUE_BPS: z.coerce.number().nonnegative().default(0),
   SAP_MCP_PRICE_MIN_USD: z.coerce.number().nonnegative().default(0.001),
   SAP_MCP_PRICE_MAX_USD: z.coerce.number().positive().default(100),
 });
@@ -236,6 +237,7 @@ export interface SapMcpMonetizationConfig {
     readPremiumUsd: number;
     builderUsd: number;
     valueFixedUsd: number;
+    heavyValueUsd: number;
     valueBps: number;
     minUsd: number;
     maxUsd: number;
@@ -572,6 +574,9 @@ function normalizeFileConfig(config: ConfigFileData): ConfigFileData {
     if (normalized.SAP_MCP_PRICE_VALUE_FIXED_USD === undefined && prices.valueFixedUsd !== undefined) {
       envNormalized.SAP_MCP_PRICE_VALUE_FIXED_USD = prices.valueFixedUsd;
     }
+    if (normalized.SAP_MCP_PRICE_HEAVY_VALUE_USD === undefined && prices.heavyValueUsd !== undefined) {
+      envNormalized.SAP_MCP_PRICE_HEAVY_VALUE_USD = prices.heavyValueUsd;
+    }
     if (normalized.SAP_MCP_PRICE_VALUE_BPS === undefined && prices.valueBps !== undefined) {
       envNormalized.SAP_MCP_PRICE_VALUE_BPS = prices.valueBps;
     }
@@ -618,8 +623,9 @@ function getDefaultEnvConfig(): Partial<SapEnvConfig> {
     SAP_MCP_X402_MAX_TIMEOUT_SECONDS: 120,
     SAP_MCP_PRICE_READ_PREMIUM_USD: 0.001,
     SAP_MCP_PRICE_BUILDER_USD: 0.008,
-    SAP_MCP_PRICE_VALUE_FIXED_USD: 0.2,
-    SAP_MCP_PRICE_VALUE_BPS: 50,
+    SAP_MCP_PRICE_VALUE_FIXED_USD: 0.09,
+    SAP_MCP_PRICE_HEAVY_VALUE_USD: 0.15,
+    SAP_MCP_PRICE_VALUE_BPS: 0,
     SAP_MCP_PRICE_MIN_USD: 0.001,
     SAP_MCP_PRICE_MAX_USD: 100,
   };
@@ -707,6 +713,7 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
         readPremiumUsd: asOptionalNumber(monetizationPrices.readPremiumUsd) ?? env.SAP_MCP_PRICE_READ_PREMIUM_USD,
         builderUsd: asOptionalNumber(monetizationPrices.builderUsd) ?? env.SAP_MCP_PRICE_BUILDER_USD,
         valueFixedUsd: asOptionalNumber(monetizationPrices.valueFixedUsd) ?? env.SAP_MCP_PRICE_VALUE_FIXED_USD,
+        heavyValueUsd: asOptionalNumber(monetizationPrices.heavyValueUsd) ?? env.SAP_MCP_PRICE_HEAVY_VALUE_USD,
         valueBps: asOptionalNumber(monetizationPrices.valueBps) ?? env.SAP_MCP_PRICE_VALUE_BPS,
         minUsd: asOptionalNumber(monetizationPrices.minUsd) ?? env.SAP_MCP_PRICE_MIN_USD,
         maxUsd: asOptionalNumber(monetizationPrices.maxUsd) ?? env.SAP_MCP_PRICE_MAX_USD,

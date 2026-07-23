@@ -604,8 +604,8 @@ function buildHostedPricingMeta(toolName: string): string {
   const prices: Record<string, string> = {
     'read-premium': '~$0.001',
     'builder': '~$0.008',
-    'value-action': '~$0.20',
-    'batch': '~$0.20+',
+    'value-action': '~$0.09 standard / ~$0.15 heavy',
+    'batch': '~$0.09+',
   };
   const price = prices[tier] ?? '~$0.001';
   return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;

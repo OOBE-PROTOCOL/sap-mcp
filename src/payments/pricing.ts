@@ -45,6 +45,7 @@ export interface PricingCatalog {
     readPremium: string[];
     builders: string[];
     valueActions: string[];
+    heavyValueActions: string[];
     valueActionPrefixes: string[];
   };
   runtimeRules: string[];
@@ -160,6 +161,12 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_skills_install',
   'sap_skills_upgrade_plan',
   'sap_runtime_repair_plan',
+  'sap_get_network_overview',
+  'sap_get_tool_category_summary',
+  'sap_find_tools_by_category',
+  'sap_fetch_capability_index',
+  'sap_fetch_protocol_index',
+  'sap_fetch_tool_category_index',
   'sap_decode_transaction',
   'sap_preview_transaction',
   'sap_x402_estimate_cost',
@@ -265,6 +272,14 @@ const VALUE_ACTION_TOOLS = new Set([
   'sap_x402_settle_batch',
 ]);
 
+const HEAVY_VALUE_ACTION_TOOLS = new Set([
+  'jupiter_executeOrder',
+  'jupiter_executeTrigger',
+  'jupiter_executeDCA',
+  'magicblock_swap',
+  'sap_x402_settle_batch',
+]);
+
 const VALUE_ACTION_PREFIXES = [
   'sap_register',
   'sap_update',
@@ -357,8 +372,8 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'value-action': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.valueFixedUsd, config),
-        pricingRule: `Fixed ${formatUsdPrice(config.prices.valueFixedUsd)} plus ${config.prices.valueBps} bps of detected USD notional, clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
-        examples: ['jupiter_swap', 'magicblock_swap', 'sap_create_escrow_v2', 'sap_submit_signed_transaction'],
+        pricingRule: `Standard value-action calls are fixed at ${formatUsdPrice(config.prices.valueFixedUsd)}. Heavy execution paths are fixed at ${formatUsdPrice(config.prices.heavyValueUsd)}. Optional notional bps is ${config.prices.valueBps}, then clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
+        examples: ['jupiter_getOrder', 'jupiter_swap', 'magicblock_swap', 'sap_create_escrow_v2', 'sap_submit_signed_transaction'],
       },
       batch: {
         paymentRequired: true,
@@ -372,6 +387,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       readPremium: [...READ_PREMIUM_TOOLS].sort(),
       builders: [...BUILDER_TOOLS].sort(),
       valueActions: [...VALUE_ACTION_TOOLS].sort(),
+      heavyValueActions: [...HEAVY_VALUE_ACTION_TOOLS].sort(),
       valueActionPrefixes: [...VALUE_ACTION_PREFIXES].sort(),
     },
     runtimeRules: [
@@ -380,7 +396,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'Core balance checks are free: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, spl-token_getMint, spl-token_getSupply, magicblock_balance, sap_x402_get_balance. Enriched holdings tools such as jupiter_getHoldings are read-premium because they perform broader market/index work.',
       'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
-      `sap_list_agents is free only for compact orientation pages with limit <= ${FREE_DIRECTORY_LIMIT}; larger pages, full hydration, protocol index summaries, and sap_discover_agents/sap_list_all_agents are read-premium.`,
+      `sap_list_agents is free only for compact orientation pages with limit <= ${FREE_DIRECTORY_LIMIT}; larger pages, full hydration, sap_discover_agents, and sap_list_all_agents are read-premium. The protocol, capability, tool-category, and network overview indexes stay free for agent orientation.`,
       'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',
       'Use sap_payments_call_external_x402 for external HTTP x402 agents discovered through SAP registry metadata.',
       'Use hosted unsigned builders plus sap_payments_finalize_transaction for hosted non-custodial transaction flows.',
@@ -490,16 +506,28 @@ export function priceToolCall(
   }
 
   const notionalUsd = extractUsdNotional(toolCall.arguments);
+  const baseValueUsd = getValueActionBasePrice(toolCall.toolName, config);
   const variableUsd = notionalUsd === undefined ? 0 : notionalUsd * (config.prices.valueBps / 10_000);
 
   return {
     toolName: toolCall.toolName,
     tier,
-    priceUsd: clampPrice(config.prices.valueFixedUsd + variableUsd, config),
-    reason: notionalUsd === undefined
-      ? 'value-changing action fixed fee'
-      : 'value-changing action fixed fee plus configured basis-points fee',
+    priceUsd: clampPrice(baseValueUsd + variableUsd, config),
+    reason: [
+      isHeavyValueActionTool(toolCall.toolName) ? 'heavy value-changing action fixed fee' : 'value-changing action fixed fee',
+      variableUsd > 0 ? 'plus configured basis-points fee' : undefined,
+    ].filter(Boolean).join(' '),
   };
+}
+
+function getValueActionBasePrice(toolName: string, config: SapMcpMonetizationConfig): number {
+  return isHeavyValueActionTool(toolName)
+    ? config.prices.heavyValueUsd
+    : config.prices.valueFixedUsd;
+}
+
+function isHeavyValueActionTool(toolName: string): boolean {
+  return HEAVY_VALUE_ACTION_TOOLS.has(toolName);
 }
 
 /**

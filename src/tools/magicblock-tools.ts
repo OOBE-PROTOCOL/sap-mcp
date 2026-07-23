@@ -477,7 +477,7 @@ function estimateMagicBlockToolPrice(toolName: string): string {
     case 'free': return '0.00';
     case 'read-premium': return '~0.001';
     case 'builder': return '~0.008';
-    case 'value-action': return '~0.20';
+    case 'value-action': return '~0.15';
     default: return '~0.001';
   }
 }

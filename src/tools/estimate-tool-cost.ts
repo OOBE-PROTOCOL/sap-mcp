@@ -11,6 +11,7 @@ import type { SapMcpContext } from '../core/types.js';
 import {
   classifyTool,
   formatUsdPrice,
+  priceToolCall,
   type PaymentTier,
 } from '../payments/pricing.js';
 import { isHostedAccountlessBlockedTool } from '../payments/hosted-tool-eligibility.js';
@@ -115,8 +116,11 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
                 reason = 'complex builder, batch, SNS, analytics, or routing tool';
                 break;
               case 'value-action':
-                priceUsd = prices.valueFixedUsd;
-                reason = 'value-changing action fixed fee (plus bps on notional if applicable)';
+                priceUsd = priceToolCall({
+                  toolName,
+                  arguments: input.arguments,
+                }, monetization).priceUsd;
+                reason = 'value-changing action fixed fee; heavy execution paths may use the configured heavy value-action fee';
                 break;
               case 'batch':
                 priceUsd = prices.valueFixedUsd;
@@ -131,7 +135,7 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
             switch (tier) {
               case 'read-premium': priceUsd = 0.001; break;
               case 'builder': priceUsd = 0.008; break;
-              case 'value-action': priceUsd = 0.20; break;
+              case 'value-action': priceUsd = 0.09; break;
               default: priceUsd = 0.001;
             }
           }

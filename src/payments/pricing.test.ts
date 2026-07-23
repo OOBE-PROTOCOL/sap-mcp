@@ -15,8 +15,9 @@ const monetizationConfig: SapMcpMonetizationConfig = {
   prices: {
     readPremiumUsd: 0.001,
     builderUsd: 0.008,
-    valueFixedUsd: 0.2,
-    valueBps: 50,
+    valueFixedUsd: 0.09,
+    heavyValueUsd: 0.15,
+    valueBps: 0,
     minUsd: 0.001,
     maxUsd: 100,
   },
@@ -113,6 +114,20 @@ describe('SAP MCP monetization pricing', () => {
       ...monetizationConfig,
       strictTools: true,
     }).required).toBe(false);
+  });
+
+  it('keeps SAP orientation indexes free in default and strict mode', () => {
+    for (const toolName of [
+      'sap_get_network_overview',
+      'sap_get_tool_category_summary',
+      'sap_find_tools_by_category',
+      'sap_fetch_capability_index',
+      'sap_fetch_protocol_index',
+      'sap_fetch_tool_category_index',
+    ]) {
+      expect(classifyTool(toolName)).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+    }
   });
 
   it('keeps compact SAP agent orientation pages free but prices broad directory reads', () => {
@@ -383,10 +398,11 @@ describe('SAP MCP monetization pricing', () => {
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
     expect(catalog.toolSets.builders).toContain('sap_escrow_build_create_transaction');
+    expect(catalog.toolSets.heavyValueActions).toContain('magicblock_swap');
     expect(catalog.runtimeRules.join(' ')).toContain('sap_payments_finalize_transaction');
   });
 
-  it('applies fixed plus basis-points fee to value-changing actions with USD notional', () => {
+  it('keeps standard value-changing actions at the low fixed fee when bps is zero', () => {
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',
       id: 1,
@@ -402,7 +418,27 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('value-action');
-      expect(decision.price).toBe('$0.25');
+      expect(decision.price).toBe('$0.09');
+    }
+  });
+
+  it('prices selected heavy value-changing actions with the heavy fixed fee', () => {
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'magicblock_swap',
+        arguments: { quoteResponse: { outAmount: '123' } },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('value-action');
+      expect(decision.price).toBe('$0.15');
     }
   });
 

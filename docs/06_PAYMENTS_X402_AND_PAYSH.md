@@ -11,9 +11,9 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 | Tier | Examples | Price |
 | --- | --- | --- |
 | Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`, `sap_agent_next_action`, exact SAP agent/profile reads, compact `sap_list_agents` orientation pages with `limit <= 20` | Free |
-| Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, enriched network stats, indexed discovery, market/oracle/DAS reads | `$0.007` to `$0.01` |
-| Builder or batch | complex builders, SNS/domain batch checks, enriched analytics | `$0.01` to `$0.10` |
-| Value action | settlement-like or value-linked operations where appropriate | fixed `$0.20` plus optional `0.5%` |
+| Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, market/oracle/DAS reads | `$0.001` default |
+| Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.008` default, batch = sum of paid calls |
+| Value action | settlement-like or value-linked operations where appropriate | `$0.09` standard, `$0.15` for selected heavy execution paths |
 
 Do not apply percentage fees blindly to swaps or financial routing. Those workflows may create compliance, custody, and routing implications.
 

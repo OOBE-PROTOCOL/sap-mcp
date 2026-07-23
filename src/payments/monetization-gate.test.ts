@@ -18,8 +18,9 @@ const baseMonetization: SapMcpMonetizationConfig = {
   prices: {
     readPremiumUsd: 0.001,
     builderUsd: 0.008,
-    valueFixedUsd: 0.2,
-    valueBps: 50,
+    valueFixedUsd: 0.09,
+    heavyValueUsd: 0.15,
+    valueBps: 0,
     minUsd: 0.001,
     maxUsd: 100,
   },

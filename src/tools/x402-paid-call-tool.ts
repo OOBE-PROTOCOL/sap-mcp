@@ -1017,7 +1017,7 @@ function registerPaymentsPrepareChallengeTool(server: Server): void {
         body: paidCallInputSchema.body,
         maxPriceUsd: {
           type: 'number',
-          description: 'Maximum accepted x402 payment amount in USD. The call aborts if the challenge exceeds this cap. Common tool costs: read-premium ~$0.001, builder ~$0.008, value-action ~$0.20. Set to at least the expected tier price — e.g. maxPriceUsd: 0.25 for swaps, 0.01 for reads. If omitted, defaults to a very low cap that may abort value-action calls silently.',
+          description: 'Maximum accepted x402 payment amount in USD. The call aborts if the challenge exceeds this cap. Common tool costs: read-premium ~$0.001, builder ~$0.008, standard value-action ~$0.09, heavy value-action ~$0.15. Set to at least the expected tier price — e.g. maxPriceUsd: 0.12 for standard swaps, 0.18 for heavy private execution, 0.01 for reads. If omitted, defaults to a very low cap that may abort value-action calls silently.',
         },
       },
       outputSchema: {

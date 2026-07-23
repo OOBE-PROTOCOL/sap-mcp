@@ -329,12 +329,17 @@
             "valueFixedUsd": {
               "type": "number",
               "minimum": 0,
-              "default": 0.2
+              "default": 0.09
+            },
+            "heavyValueUsd": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0.15
             },
             "valueBps": {
               "type": "number",
               "minimum": 0,
-              "default": 50
+              "default": 0
             },
             "minUsd": {
               "type": "number",
