@@ -235,6 +235,12 @@ Then call:
   confirms the agent account and reports a non-failing `protocolFee` audit.
 - Do not call profile/image update complete until `sap_payments_update_agent`
   confirms and a fresh `sap_get_agent_profile` read shows the intended fields.
+- If an update returns Anchor 3012, `AccountNotInitialized`, or a
+  `pricing_menu` error, do not classify it as missing `sap_payments` and do not
+  ask the user to repair/restart the runtime. The local signer route worked; the
+  SAP registry account lifecycle is missing a required on-chain PDA. Call
+  `sap_agent_next_action` and `sap_protocol_invariants`, then use the current
+  SDK/server initializer path before retrying the update.
 - Do not create temporary signing scripts.
 - Do not read keypair JSON.
 - Do not pay x402 for writes that the hosted server says require local signer.

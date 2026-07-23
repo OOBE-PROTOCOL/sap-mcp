@@ -132,6 +132,10 @@ For SAP agent registration or update:
 - Use \`confirm: true\` only after the user approves the preview.
 - Report the agent PDA, owner, transaction signature, and protocol-fee verification status.
 - Do not call the lifecycle complete if the agent account or protocol-fee audit is missing.
+- If a profile update returns Anchor 3012, \`AccountNotInitialized\`, or
+  \`pricing_menu\`, do not repair the runtime and do not retry the same write.
+  Use \`sap_agent_next_action\` and \`sap_protocol_invariants\`; the failure is
+  an SAP registry account lifecycle issue.
 
 ### 5. Unsigned builders and transaction finalization
 If a hosted tool returns \`transactionBase64\`, \`transaction\`, or an unsigned transaction object:

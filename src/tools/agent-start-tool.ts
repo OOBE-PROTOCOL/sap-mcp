@@ -281,6 +281,19 @@ function buildAgentNextActionPayload(input: NextActionInput): Record<string, unk
     });
   }
 
+  if (containsAny(combined, ['pricing_menu', 'pricing menu', 'accountnotinitialized', 'account not initialized', 'error number: 3012', 'anchor 3012', '3012'])) {
+    return nextAction({
+      classification: 'sap_registry_account_lifecycle',
+      retryable: false,
+      safeToRetryNow: false,
+      paymentCharged: 'no',
+      nextTool: 'sap_protocol_invariants',
+      nextAction: 'Do not repair the runtime and do not retry the same write. Inspect SAP protocol invariants and the agent registration/update lifecycle; the registry account set is missing a required on-chain PDA such as pricing_menu.',
+      userMessage: 'The local bridge is not the problem. The SAP registry write reached the on-chain program, but a required registry account such as pricing_menu is not initialized for this agent lifecycle.',
+      forbiddenActions: [...baseForbidden, 'Do not classify Anchor 3012/pricing_menu as missing sap_payments.', 'Do not retry paid or local writes until the account lifecycle is fixed or the SDK/server has an initializer path.'],
+    });
+  }
+
   if (containsAny(combined, ['hosted_local_signer_required', 'local signer required', 'hosted server cannot sign', 'no signer configured'])) {
     return nextAction({
       classification: 'local_signer_route_required',

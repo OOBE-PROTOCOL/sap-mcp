@@ -239,6 +239,10 @@ and protocol fee invariant were verified. If `success` is false while
 protocol registration lifecycle is not complete. After
 `sap_payments_update_agent`, fetch the agent again and confirm the changed
 fields before saying an image, metadata, pricing, or capability update is done.
+If an update returns Anchor 3012, `AccountNotInitialized`, or `pricing_menu`, do
+not call runtime repair or retry the same write. Route it through
+`sap_agent_next_action` and `sap_protocol_invariants`; it is an SAP on-chain
+registry lifecycle issue, not a missing local bridge.
 
 Before any write-like operation, use this routing order:
 

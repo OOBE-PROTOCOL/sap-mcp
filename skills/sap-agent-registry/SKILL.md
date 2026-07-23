@@ -76,6 +76,12 @@ state, global directory listing, and agent profile inspection.
 - After `sap_payments_update_agent`, fetch the agent profile again and verify
   the changed fields. For image/profile updates, `agentUri` or `metadataUri`
   must resolve to public metadata containing the image URL.
+- If `sap_payments_update_agent` returns Anchor 3012, `AccountNotInitialized`,
+  or mentions `pricing_menu`, do not run runtime repair and do not retry the
+  same write. This means the write reached the SAP on-chain program but a
+  required registry lifecycle PDA is missing or stale. Call
+  `sap_agent_next_action` and `sap_protocol_invariants`, then upgrade the
+  SDK/server or use the initializer path before retrying.
 - For full agent identity setup, follow
   `docs/16_SAP_AGENT_IDENTITY_PIPELINE.md`: SAP registration first, optional
   Metaplex/MPL Core identity, optional SNS domain and records, then a final SAP

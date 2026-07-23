@@ -887,6 +887,30 @@ describe('createSapMcpServer', () => {
     );
   });
 
+  it('classifies pricing menu Anchor 3012 as an on-chain registry lifecycle issue', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const response = await server.toolHandlers?.sap_agent_next_action({
+      intent: 'registry-write',
+      toolName: 'sap_payments_update_agent',
+      errorCode: '3012',
+      errorMessage: 'AnchorError caused by account: pricing_menu. Error Code: AccountNotInitialized. Error Number: 3012.',
+    });
+
+    const action = JSON.parse(response?.content[0]?.text ?? '{}');
+
+    expect(action).toMatchObject({
+      success: true,
+      classification: 'sap_registry_account_lifecycle',
+      retryable: false,
+      safeToRetryNow: false,
+      paymentCharged: 'no',
+      nextTool: 'sap_protocol_invariants',
+    });
+    expect(action.userMessage).toContain('required registry account');
+    expect(action.nextAction).toContain('Do not repair the runtime');
+    expect(action.forbiddenActions).toContain('Do not classify Anchor 3012/pricing_menu as missing sap_payments.');
+  });
+
   it('exposes free maintenance plans for skill upgrades and runtime repair', async () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
 

@@ -140,6 +140,13 @@ Use transactions:
 - `sap_payments_register_agent` for SAP agent registration through the local signer bridge
 - `sap_payments_update_agent` for SAP agent profile, image metadata, capabilities, protocols, pricing, and x402 endpoint updates through the local signer bridge
 
+If a local registry update returns Anchor 3012, `AccountNotInitialized`, or a
+`pricing_menu` message, the local payment/signing bridge is not the problem.
+That error is an on-chain SAP registry lifecycle issue for a required PDA. Do
+not retry paid hosted writes or run repair loops; call `sap_agent_next_action`
+and `sap_protocol_invariants`, then use the current SDK/server initializer path
+before retrying.
+
 ## 4. Agent Safety
 
 Agents must not:

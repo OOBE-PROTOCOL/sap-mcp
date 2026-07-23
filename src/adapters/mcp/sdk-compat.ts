@@ -237,16 +237,21 @@ function parseSingleJsonTextContent(content: ToolContent[]): Record<string, unkn
 
 function toToolCallResult(result: unknown, hasExplicitOutputSchema = false): ToolCallResult {
   if (isToolCallResult(result)) {
-    const inferredStructuredContent = hasExplicitOutputSchema
+    const inferredStructuredContent = hasExplicitOutputSchema && result.isError !== true
       ? parseSingleJsonTextContent(result.content)
       : undefined;
+    const structuredContent = result.structuredContent
+      ?? inferredStructuredContent
+      ?? (hasExplicitOutputSchema
+        ? undefined
+        : {
+          content: result.content,
+          isError: result.isError,
+        });
 
     return {
       ...result,
-      structuredContent: result.structuredContent ?? inferredStructuredContent ?? {
-        content: result.content,
-        isError: result.isError,
-      },
+      ...(structuredContent === undefined ? {} : { structuredContent }),
     };
   }
 
@@ -257,9 +262,13 @@ function toToolCallResult(result: unknown, hasExplicitOutputSchema = false): Too
     },
   ];
 
+  const structuredContent = hasExplicitOutputSchema
+    ? (isPlainObject(result) ? result : undefined)
+    : { content };
+
   return {
     content,
-    structuredContent: hasExplicitOutputSchema && isPlainObject(result) ? result : { content },
+    ...(structuredContent === undefined ? {} : { structuredContent }),
   };
 }
 

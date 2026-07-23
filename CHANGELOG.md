@@ -27,6 +27,13 @@ All notable changes to this project are documented in this file.
   from diverging from the verified `pnpm-lock.yaml` dependency graph.
 - Hardened MCP client config validation and resource-template matching against
   CodeQL-reported URL substring bypasses and regex-based template matching.
+- Hardened MCP tool-call normalization so explicit output schemas no longer
+  receive synthetic `structuredContent` for text/error responses, preventing
+  strict runtimes from rejecting otherwise-readable SAP tool errors.
+- Taught `sap_agent_next_action`, initialize instructions, prompts, skills, and
+  identity docs to classify Anchor 3012 / `AccountNotInitialized` /
+  `pricing_menu` as SAP on-chain registry lifecycle issues rather than missing
+  `sap_payments` runtime configuration.
 - Kept the `0.9.16` hardening set intact: intent-level tool schemas, payment
   funnel telemetry, cost estimation, local MCP session reuse, hosted submit
   relay guidance, and no-key-material safety tests.
