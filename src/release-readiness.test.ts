@@ -113,6 +113,7 @@ describe('release readiness documentation and package surface', () => {
       readText('USER_DOCS/00_START_HERE.md'),
       readText('docs/06_PAYMENTS_X402_AND_PAYSH.md'),
       readText('src/prompts/context/sap-agent-start.prompt.ts'),
+      readText('src/prompts/context/sap-agent-intent-router.prompt.ts'),
       readText('src/prompts/payments/explain-x402-settlement.prompt.ts'),
     ].join('\n');
 
@@ -142,6 +143,7 @@ describe('release readiness documentation and package surface', () => {
     expect(activeSkillText).toContain('sap_payments_register_agent');
     expect(activeSkillText).toContain('sap_payments_update_agent');
     expect(activeSkillText).toContain('sap_payments_call_external_x402');
+    expect(activeSkillText).toContain('sap-agent-intent-router');
     expect(activeSkillText).toContain('402 challenge');
     expect(activeSkillText).toContain('retry');
     expect(activeSkillText).toContain('do not create');

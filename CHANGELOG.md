@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.17 - 2026-07-23
+
+### Added
+
+- Added the `sap-agent-intent-router` prompt, a compact MCP prompt that maps
+  user goals and common SAP/x402/MCP errors to the correct hosted read,
+  paid-call, local-signing, unsigned-builder, escrow, registry-write, or repair
+  flow.
+
+### Improved
+
+- Updated MCP initialize instructions so runtimes that support prompts can use
+  `sap-agent-intent-router` before paid calls, registry writes, escrow flows,
+  identity updates, and troubleshooting.
+- Bumped public metadata, npm/package manifests, desktop wizard references, and
+  client config snippets to `0.9.17` so users, registries, and agent runtimes
+  receive a single coherent release identity.
+- Kept the `0.9.16` hardening set intact: intent-level tool schemas, payment
+  funnel telemetry, cost estimation, local MCP session reuse, hosted submit
+  relay guidance, and no-key-material safety tests.
+
 ## 0.9.16 - 2026-07-21
 
 ### Added

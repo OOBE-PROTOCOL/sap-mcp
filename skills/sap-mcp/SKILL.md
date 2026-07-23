@@ -12,6 +12,12 @@ available, then call `sap_agent_runtime_status` with the closest intent and
 `sap_skills_bundle` with `includeContents: true`. Load the returned SAP MCP
 skill contents into context before selecting advanced tools.
 
+If the MCP runtime exposes prompts, use `sap-agent-intent-router` as the compact
+decision prompt before paid calls, registry writes, escrow flows, identity
+updates, or after SAP/x402/MCP errors. It routes the user intent to hosted
+reads, `sap_payments_*`, unsigned builders, transaction finalization, or repair
+without requiring a long pasted prompt from the user.
+
 Always inspect runtime context through MCP tools, not by reading config files:
 
 1. `sap_agent_start`

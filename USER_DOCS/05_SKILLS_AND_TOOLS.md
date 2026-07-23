@@ -13,14 +13,15 @@ The agent should then:
 
 1. call `sap_agent_start`;
 2. call `sap_skills_bundle` with `includeContents: true`;
-3. call `sap_skills_upgrade_plan` if skills are missing or stale;
-4. use exact tool names from `tools/list`;
-5. call `sap_payments_readiness` if the local `sap_payments` bridge is visible;
-6. use `sap_payments_call_paid_tool` for paid hosted SAP MCP tools that return x402 payment requirements;
-7. use `sap_payments_call_external_x402` for external HTTP x402 agent endpoints discovered through SAP registry metadata;
-8. use `sap_payments_register_agent` for local non-custodial SAP agent registration when hosted `sap_register_agent` is blocked;
-9. use `sap_payments_update_agent` for local non-custodial SAP agent profile/image/metadata updates when hosted `sap_update_agent` is blocked;
-10. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
+3. use the `sap-agent-intent-router` prompt when prompts are available and the user wants a paid call, registry write, escrow flow, identity update, or error recovery;
+4. call `sap_skills_upgrade_plan` if skills are missing or stale;
+5. use exact tool names from `tools/list`;
+6. call `sap_payments_readiness` if the local `sap_payments` bridge is visible;
+7. use `sap_payments_call_paid_tool` for paid hosted SAP MCP tools that return x402 payment requirements;
+8. use `sap_payments_call_external_x402` for external HTTP x402 agent endpoints discovered through SAP registry metadata;
+9. use `sap_payments_register_agent` for local non-custodial SAP agent registration when hosted `sap_register_agent` is blocked;
+10. use `sap_payments_update_agent` for local non-custodial SAP agent profile/image/metadata updates when hosted `sap_update_agent` is blocked;
+11. if a paid hosted builder returns `transactionBase64`, call `sap_payments_finalize_transaction` for local preview/sign/submit.
 
 If `sap_payments` is missing, run the wizard repair flow and restart the agent
 runtime:

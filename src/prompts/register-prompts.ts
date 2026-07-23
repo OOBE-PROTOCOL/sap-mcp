@@ -25,6 +25,7 @@ import { verifyExecutionProofPrompt } from './execution-proof/verify-execution-p
 // Context prompts
 import { sapAgentStartPrompt } from './context/sap-agent-start.prompt.js';
 import { sapAgentContextPrompt } from './context/sap-agent-context.prompt.js';
+import { sapAgentIntentRouterPrompt } from './context/sap-agent-intent-router.prompt.js';
 
 /**
  * Register all prompts with the MCP server
@@ -51,6 +52,7 @@ export async function registerPrompts(server: Server, context: SapMcpContext): P
   // Register context prompts
   sapAgentStartPrompt(server, context);
   sapAgentContextPrompt(server, context);
+  sapAgentIntentRouterPrompt(server, context);
   
-  logger.debug('Prompts registered', { count: 10 });
+  logger.debug('Prompts registered', { count: 11 });
 }

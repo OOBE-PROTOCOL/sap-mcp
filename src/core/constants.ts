@@ -64,7 +64,7 @@ export const MCP_SERVER_DESCRIPTION = 'Solana-native MCP gateway for Synapse Age
  */
 export const MCP_SERVER_INSTRUCTIONS = [
   'SAP MCP is a Solana-native, non-custodial MCP gateway. Hosted mode is accountless: OOBE never receives user keypair bytes.',
-  'When the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", asks whether SAP MCP is connected, or asks to use SAP MCP, first call free tool sap_agent_start, then sap_agent_runtime_status with the closest intent, then sap_skills_bundle with includeContents=true before selecting advanced tools. Use sap_pricing_catalog for planning paid hosted calls. Use sap_estimate_tool_cost before any paid tool call to know the exact tier and estimated cost. Core balance checks are free (sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, magicblock_balance) — always verify USDC and SOL balances before attempting paid calls. Enriched holdings tools such as jupiter_getHoldings are paid read-premium. Use hosted tools for reads, sap_payments_* for local payment/signing, hosted unsigned builders plus sap_payments_finalize_transaction for user-signed transactions, and never create temporary signing scripts or read keypair JSON.',
+  'When the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", asks whether SAP MCP is connected, or asks to use SAP MCP, first call free tool sap_agent_start, then sap_agent_runtime_status with the closest intent, then sap_skills_bundle with includeContents=true before selecting advanced tools. If prompts are available, use sap-agent-intent-router to choose the shortest safe route for paid calls, registry writes, escrow, identity, and repair flows. Use sap_pricing_catalog for planning paid hosted calls. Use sap_estimate_tool_cost before any paid tool call to know the exact tier and estimated cost. Core balance checks are free (sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, magicblock_balance) — always verify USDC and SOL balances before attempting paid calls. Enriched holdings tools such as jupiter_getHoldings are paid read-premium. Use hosted tools for reads, sap_payments_* for local payment/signing, hosted unsigned builders plus sap_payments_finalize_transaction for user-signed transactions, and never create temporary signing scripts or read keypair JSON.',
   'Before SAP registry writes, call free tool sap_protocol_invariants when treasury, registration fee, hosted/local routing, or lifecycle-complete rules are unclear.',
   'For simple connection/status questions, answer briefly with endpoint, mode, non-custodial status, local sap_payments readiness only if checked, and one next action. Do not dump the full tool catalog unless asked.',
   'Use exact tool names from tools/list. Do not rewrite hyphenated tool names such as spl-token_getTokenAccounts.',
@@ -85,7 +85,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.16';
+export const MCP_SERVER_VERSION = '0.9.17';
 
 /**
  * SAP protocol treasury that should receive protocol-owned registration fees.

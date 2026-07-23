@@ -15,7 +15,7 @@ User-facing setup docs live in [`USER_DOCS/`](USER_DOCS/00_START_HERE.md). Opera
 
 | Area | Current behavior |
 | --- | --- |
-| Package version | `0.9.16` |
+| Package version | `0.9.17` |
 | MCP transport | stdio locally, Streamable HTTP remotely |
 | Remote access | Bearerless public mode for hosted agents; API key or JWT for private modes |
 | Config directory | `~/.config/mcp-sap` only |
@@ -134,7 +134,7 @@ For paid/write hosted tools, add the local non-custodial payment bridge as well:
 ```toml
 [mcp_servers.sap_payments]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.16", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.17", "sap-mcp-server"]
 startup_timeout_sec = 300
 tool_timeout_sec = 300
 
@@ -152,7 +152,7 @@ Codex supports Streamable HTTP MCP servers with URL-based entries in `config.tom
 ```toml
 [mcp_servers.sap]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.16", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.17", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"
