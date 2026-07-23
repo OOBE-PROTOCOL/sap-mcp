@@ -18,7 +18,10 @@ import type { PaymentDecision } from './pricing.js';
  */
 export type PaymentLedgerEventType =
   | 'payment_required'
+  | 'payment_challenge_returned'
+  | 'payment_eligibility_blocked'
   | 'payment_verified'
+  | 'payment_verification_failed'
   | 'payment_settled'
   | 'payment_failed'
   | 'payment_canceled';
@@ -42,6 +45,7 @@ export interface PaymentLedgerEvent {
   network?: string;
   amount?: string;
   payer?: string;
+  challengeTransport?: 'mcp-json-rpc' | 'http-402';
   errorReason?: string;
   errorMessage?: string;
 }
@@ -67,6 +71,11 @@ export class UsageLedger {
   private readonly ledgerPath: string;
   private readonly redis?: InstanceType<typeof Redis>;
   private readonly redisStreamKey: string;
+  private readonly buffer: PaymentLedgerEvent[] = [];
+  private flushTimer?: NodeJS.Timeout;
+  private readonly flushIntervalMs = 5_000;
+  private readonly maxBufferSize = 100;
+  private flushing = false;
 
   public constructor(
     ledgerPath = join(getDataDir(), 'payments', 'usage-ledger.jsonl'),
@@ -76,6 +85,7 @@ export class UsageLedger {
     this.ledgerPath = ledgerPath;
     this.redis = redis;
     this.redisStreamKey = redisStreamKey;
+    this.startFlushTimer();
   }
 
   /**
@@ -110,11 +120,14 @@ export class UsageLedger {
 
   /**
    * @name append
-   * @description Appends one payment audit event to the JSONL ledger.
+   * @description Buffers a payment audit event. Flushes to disk when the buffer
+   *   is full or the periodic timer fires (5s). Redis stream is written immediately
+   *   for real-time consumers.
    */
   public async append(event: PaymentLedgerEvent): Promise<void> {
-    await mkdir(dirname(this.ledgerPath), { recursive: true });
-    await appendFile(this.ledgerPath, `${JSON.stringify(event)}\n`, 'utf-8');
+    this.buffer.push(event);
+
+    // Redis stream is written immediately for real-time monitoring
     await this.redis?.xadd(
       this.redisStreamKey,
       'MAXLEN',
@@ -127,7 +140,55 @@ export class UsageLedger {
       event.requestHash,
       'payload',
       JSON.stringify(event),
-    );
+    ).catch(() => undefined); // don't block on Redis errors
+
+    if (this.buffer.length >= this.maxBufferSize) {
+      await this.flush();
+    }
+  }
+
+  /**
+   * @name flush
+   * @description Flushes buffered events to disk in a single write.
+   */
+  public async flush(): Promise<void> {
+    if (this.flushing || this.buffer.length === 0) {
+      return;
+    }
+    this.flushing = true;
+
+    const toWrite = this.buffer.splice(0, this.buffer.length);
+    try {
+      await mkdir(dirname(this.ledgerPath), { recursive: true });
+      const lines = toWrite.map(event => JSON.stringify(event)).join('\n') + '\n';
+      await appendFile(this.ledgerPath, lines, 'utf-8');
+    } catch (error) {
+      // Put events back at the front on failure — don't lose audit data
+      this.buffer.unshift(...toWrite);
+      logger.warn('Usage ledger flush failed, events buffered for retry', { error, pending: this.buffer.length });
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  /**
+   * @name close
+   * @description Stops periodic flushing and forces any buffered events to disk.
+   */
+  public async close(): Promise<void> {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+    await this.flush();
+    await this.redis?.quit().catch(() => undefined);
+  }
+
+  private startFlushTimer(): void {
+    this.flushTimer = setInterval(() => {
+      void this.flush().catch(() => undefined);
+    }, this.flushIntervalMs);
+    this.flushTimer.unref?.();
   }
 
   /**
@@ -154,6 +215,59 @@ export class UsageLedger {
   }
 
   /**
+   * @name recordChallengeReturned
+   * @description Records that SAP MCP returned a standards-compatible x402 challenge before any payment was signed.
+   */
+  public async recordChallengeReturned(
+    metadata: PaymentRequestMetadata,
+    decision: PaymentDecision,
+    challengeTransport: 'mcp-json-rpc' | 'http-402',
+  ): Promise<void> {
+    if (!decision.required) {
+      return;
+    }
+
+    await this.append({
+      event: 'payment_challenge_returned',
+      timestamp: new Date().toISOString(),
+      requestHash: metadata.requestHash,
+      method: metadata.method,
+      path: metadata.path,
+      toolNames: decision.toolNames,
+      priceUsd: decision.priceUsd,
+      paymentHeaderPresent: metadata.paymentHeaderPresent,
+      remoteAddress: metadata.remoteAddress,
+      userAgent: metadata.userAgent,
+      challengeTransport,
+    });
+  }
+
+  /**
+   * @name recordEligibilityBlocked
+   * @description Records a hosted accountless write rejected before monetization, proving that no x402 fee was charged.
+   */
+  public async recordEligibilityBlocked(
+    metadata: PaymentRequestMetadata,
+    toolNames: string[],
+    reason: string,
+    errorMessage?: string,
+  ): Promise<void> {
+    await this.append({
+      event: 'payment_eligibility_blocked',
+      timestamp: new Date().toISOString(),
+      requestHash: metadata.requestHash,
+      method: metadata.method,
+      path: metadata.path,
+      toolNames,
+      paymentHeaderPresent: metadata.paymentHeaderPresent,
+      remoteAddress: metadata.remoteAddress,
+      userAgent: metadata.userAgent,
+      errorReason: reason,
+      errorMessage,
+    });
+  }
+
+  /**
    * @name recordVerified
    * @description Records that an x402 payment was accepted before handler execution.
    */
@@ -173,6 +287,36 @@ export class UsageLedger {
       paymentHeaderPresent: metadata.paymentHeaderPresent,
       remoteAddress: metadata.remoteAddress,
       userAgent: metadata.userAgent,
+    });
+  }
+
+  /**
+   * @name recordVerificationFailed
+   * @description Records that a supplied x402 payment header failed before tool execution or settlement.
+   */
+  public async recordVerificationFailed(
+    metadata: PaymentRequestMetadata,
+    decision: PaymentDecision,
+    reason: string,
+    errorMessage?: string,
+  ): Promise<void> {
+    if (!decision.required) {
+      return;
+    }
+
+    await this.append({
+      event: 'payment_verification_failed',
+      timestamp: new Date().toISOString(),
+      requestHash: metadata.requestHash,
+      method: metadata.method,
+      path: metadata.path,
+      toolNames: decision.toolNames,
+      priceUsd: decision.priceUsd,
+      paymentHeaderPresent: metadata.paymentHeaderPresent,
+      remoteAddress: metadata.remoteAddress,
+      userAgent: metadata.userAgent,
+      errorReason: reason,
+      errorMessage,
     });
   }
 

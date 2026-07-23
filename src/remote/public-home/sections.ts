@@ -531,7 +531,7 @@ export function renderMetrics(model: LandingPageModel): string {
         <article class="metric">
           <span>x402 Challenges</span>
           <strong>${escapeHtml(formatInteger(stats.totalPaymentRequests))}</strong>
-          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} verified payments, ${escapeHtml(formatInteger(stats.totalFailedSettlements))} failed settlements.</p>
+          <p>${escapeHtml(formatInteger(stats.totalVerifiedPayments))} paid, ${escapeHtml(formatInteger(stats.totalVerificationFailures))} verification failures, ${escapeHtml(formatInteger(stats.totalEligibilityBlocks))} local-signer blocks.</p>
         </article>
       </div>
     </section>

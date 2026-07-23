@@ -18,6 +18,7 @@ import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
+import { classifyTool } from '../payments/pricing.js';
 
 type CommitmentOverride = 'processed' | 'confirmed' | 'finalized';
 
@@ -25,6 +26,22 @@ interface BalanceToolInput {
   address?: string;
   pubkey?: string;
   commitment?: CommitmentOverride;
+}
+
+/**
+ * Build a hostedPricing hint for a Client SDK tool.
+ */
+function buildClientSdkHostedPricing(toolName: string): string {
+  const tier = classifyTool(toolName);
+  if (tier === 'free') return 'free — no x402 payment required';
+  const prices: Record<string, string> = {
+    'read-premium': '~$0.001',
+    'builder': '~$0.008',
+    'value-action': '~$0.20',
+    'batch': '~$0.20+',
+  };
+  const price = prices[tier] ?? '~$0.001';
+  return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;
 }
 
 interface AgentKitTool {
@@ -397,8 +414,12 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
         async (input: unknown) => {
           try {
             const result = await tool.invoke(normalizeAgentKitToolInput(name, input));
+            const pricing = buildClientSdkHostedPricing(name);
+            const wrapped = typeof result === 'string'
+              ? { success: true, hostedPricing: pricing, result }
+              : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
             return createTextResponse(
-              typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+              typeof result === 'string' ? JSON.stringify(wrapped, null, 2) : JSON.stringify(wrapped, null, 2)
             );
           } catch (invokeError) {
             logger.error(`Client SDK tool execution failed: ${name}`, { 
@@ -434,9 +455,11 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
         async (input: unknown) => {
           try {
             const result = await tool.invoke(input);
-            return createTextResponse(
-              typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            );
+            const pricing = buildClientSdkHostedPricing(name);
+            const wrapped = typeof result === 'string'
+              ? { success: true, hostedPricing: pricing, result }
+              : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
+            return createTextResponse(JSON.stringify(wrapped, null, 2));
           } catch (invokeError) {
             logger.error(`Jupiter protocol tool execution failed: ${name}`, {
               error: invokeError,

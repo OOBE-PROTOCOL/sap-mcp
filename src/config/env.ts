@@ -24,9 +24,8 @@ import {
   getProfileConfigPath,
 } from './profiles.js';
 
-// ESM compatibility: __dirname equivalent
+// ESM compatibility: __filename equivalent
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // ============================================================================
 // Configuration Schema

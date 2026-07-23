@@ -9,7 +9,6 @@ import { existsSync, readFileSync } from 'fs';
 import * as http from 'http';
 import { dirname, join, posix } from 'path';
 import { fileURLToPath } from 'url';
-import { Connection } from '@solana/web3.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getDataDir, loadConfig, type SapMcpConfig } from '../config/env.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
@@ -21,8 +20,7 @@ import { generatePayShProviderYaml } from '../payments/pay-sh-spec.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 import { renderLandingPage } from './public-home/index.js';
-import { parseJsonBody, readRequestBody } from '../payments/http-adapter.js';
-import { decodeInputBytes, deserializeTransaction, type TransactionEncoding, type TransactionSubmitCommitment } from '../tools/transaction-tools.js';
+import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -43,10 +41,6 @@ const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
 const USDC_MAINNET_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const USDC_DEVNET_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 const MCP_REGISTRY_AUTH_PATH = '/.well-known/mcp-registry-auth';
-const TX_SUBMIT_PATH = '/tx/submit';
-const TX_SUBMIT_MAX_BODY_BYTES = 512_000;
-const TX_SUBMIT_DEFAULT_CONFIRMATION_TIMEOUT_MS = 90_000;
-const TX_SUBMIT_MAX_CONFIRMATION_TIMEOUT_MS = 180_000;
 let logoAssetCache: Buffer | undefined;
 let oobeLogoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
@@ -306,37 +300,6 @@ export interface MarketplaceConfigurationMetadata {
   };
 }
 
-interface TxSubmitRelayInput {
-  signedTransaction?: string;
-  transaction?: string;
-  encoding?: TransactionEncoding;
-  skipPreflight?: boolean;
-  maxRetries?: number;
-  confirmationTimeoutMs?: number;
-  commitment?: TransactionSubmitCommitment;
-  intentId?: string;
-}
-
-interface TxSubmitRelayResult {
-  success: boolean;
-  submitted: true;
-  signature: string;
-  confirmationStatus: string;
-  retrySafe: boolean;
-  slot?: number;
-  explorerUrl: string;
-  audit: {
-    intentId: string;
-    submittedVia: 'hosted-submit-relay';
-    signerBoundary: 'already-signed-transaction-only';
-    confirmationTimeoutMs: number;
-    desiredCommitment: TransactionSubmitCommitment;
-    retrySafe: boolean;
-    secretMaterial: 'never-received';
-    rule: string;
-  };
-}
-
 /**
  * @name StaticServerCard
  * @description Smithery-compatible static MCP server card served from /.well-known/mcp/server-card.json.
@@ -453,7 +416,10 @@ export interface PublicPaymentStats {
   totalVolumeUsd: number;
   totalSettlements: number;
   totalPaymentRequests: number;
+  totalChallengesReturned: number;
   totalVerifiedPayments: number;
+  totalVerificationFailures: number;
+  totalEligibilityBlocks: number;
   totalFailedSettlements: number;
   uniqueRemoteCallers: number;
   uniqueUserAgents: number;
@@ -763,135 +729,6 @@ function writeMcpJsonRpcError(
   });
 }
 
-async function submitSignedTransactionFromHttp(
-  req: http.IncomingMessage,
-  config: SapMcpConfig,
-): Promise<TxSubmitRelayResult> {
-  const body = parseJsonBody(await readRequestBody(req, TX_SUBMIT_MAX_BODY_BYTES));
-  const input = parseTxSubmitRelayInput(body);
-  const encodedTransaction = input.signedTransaction ?? input.transaction;
-  if (!encodedTransaction) {
-    throw new Error('signedTransaction is required.');
-  }
-
-  const encoding = input.encoding ?? 'base64';
-  const rawTransaction = decodeInputBytes(encodedTransaction, encoding);
-  deserializeTransaction(encodedTransaction, encoding);
-
-  const connection = new Connection(config.rpcUrl, config.commitment ?? 'confirmed');
-  const signature = await connection.sendRawTransaction(rawTransaction, {
-    skipPreflight: input.skipPreflight,
-    maxRetries: input.maxRetries ?? config.maxRetries,
-  });
-  const confirmationTimeoutMs = boundTxSubmitConfirmationTimeout(input.confirmationTimeoutMs);
-  const desiredCommitment = input.commitment ?? 'confirmed';
-  const confirmation = await waitForTxSubmitSignatureStatus(
-    connection,
-    signature,
-    confirmationTimeoutMs,
-    desiredCommitment,
-  );
-
-  return {
-    success: confirmation.success,
-    submitted: true,
-    signature,
-    confirmationStatus: confirmation.status,
-    retrySafe: confirmation.retrySafe,
-    ...(confirmation.slot === undefined ? {} : { slot: confirmation.slot }),
-    explorerUrl: `https://solscan.io/tx/${signature}`,
-    audit: {
-      intentId: input.intentId ?? `sap-tx-${Date.now()}`,
-      submittedVia: 'hosted-submit-relay',
-      signerBoundary: 'already-signed-transaction-only',
-      confirmationTimeoutMs,
-      desiredCommitment,
-      retrySafe: confirmation.retrySafe,
-      secretMaterial: 'never-received',
-      rule: confirmation.success
-        ? 'OOBE hosted relay submitted already-signed bytes and observed the transaction on-chain before returning success. The relay never signs and never receives keypair material.'
-        : 'OOBE hosted relay submitted already-signed bytes but did not observe the requested confirmation state before timeout. Retry only when retrySafe is true and the user confirms.',
-    },
-  };
-}
-
-function parseTxSubmitRelayInput(value: unknown): TxSubmitRelayInput {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('JSON object body is required.');
-  }
-  const record = value as TxSubmitRelayInput;
-  const commitment = record.commitment;
-  if (commitment !== undefined && !['processed', 'confirmed', 'finalized'].includes(commitment)) {
-    throw new Error('commitment must be processed, confirmed, or finalized.');
-  }
-  if (record.encoding !== undefined && !['base64', 'base58'].includes(record.encoding)) {
-    throw new Error('encoding must be base64 or base58.');
-  }
-  return record;
-}
-
-async function waitForTxSubmitSignatureStatus(
-  connection: Connection,
-  signature: string,
-  timeoutMs: number,
-  desiredCommitment: TransactionSubmitCommitment,
-): Promise<{ success: boolean; retrySafe: boolean; status: string; slot?: number }> {
-  const startedAt = Date.now();
-  let lastStatus = 'missing';
-  let lastSlot: number | undefined;
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const statuses = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
-    const status = statuses.value[0];
-    if (status?.err) {
-      return {
-        success: false,
-        retrySafe: true,
-        status: 'failed',
-        ...(status.slot === undefined ? {} : { slot: status.slot }),
-      };
-    }
-
-    if (status) {
-      lastStatus = status.confirmationStatus ?? 'processed';
-      lastSlot = status.slot;
-      if (txSubmitCommitmentReached(lastStatus, desiredCommitment)) {
-        return {
-          success: true,
-          retrySafe: false,
-          status: lastStatus,
-          ...(lastSlot === undefined ? {} : { slot: lastSlot }),
-        };
-      }
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 2_000));
-  }
-
-  return {
-    success: false,
-    retrySafe: lastStatus === 'missing',
-    status: lastStatus === 'missing' ? 'expired_or_not_landed' : lastStatus,
-    ...(lastSlot === undefined ? {} : { slot: lastSlot }),
-  };
-}
-
-function txSubmitCommitmentReached(current: string, desired: TransactionSubmitCommitment): boolean {
-  const rank: Record<string, number> = {
-    processed: 1,
-    confirmed: 2,
-    finalized: 3,
-  };
-  return (rank[current] ?? 0) >= rank[desired];
-}
-
-function boundTxSubmitConfirmationTimeout(value: number | undefined): number {
-  if (!Number.isFinite(value)) {
-    return TX_SUBMIT_DEFAULT_CONFIRMATION_TIMEOUT_MS;
-  }
-  return Math.max(15_000, Math.min(Number(value), TX_SUBMIT_MAX_CONFIRMATION_TIMEOUT_MS));
-}
-
 /**
  * @name readSingleHeader
  * @description Reads one normalized HTTP header value without accepting ambiguous arrays.
@@ -1194,7 +1031,10 @@ function readPaymentStatsFromLedger(): PublicPaymentStats {
     totalVolumeUsd: 0,
     totalSettlements: 0,
     totalPaymentRequests: 0,
+    totalChallengesReturned: 0,
     totalVerifiedPayments: 0,
+    totalVerificationFailures: 0,
+    totalEligibilityBlocks: 0,
     totalFailedSettlements: 0,
     uniqueRemoteCallers: 0,
     uniqueUserAgents: 0,
@@ -1229,8 +1069,20 @@ function readPaymentStatsFromLedger(): PublicPaymentStats {
       stats.totalPaymentRequests += 1;
     }
 
+    if (event.event === 'payment_challenge_returned') {
+      stats.totalChallengesReturned += 1;
+    }
+
     if (event.event === 'payment_verified') {
       stats.totalVerifiedPayments += 1;
+    }
+
+    if (event.event === 'payment_verification_failed') {
+      stats.totalVerificationFailures += 1;
+    }
+
+    if (event.event === 'payment_eligibility_blocked') {
+      stats.totalEligibilityBlocks += 1;
     }
 
     if (event.event === 'payment_settled') {
@@ -2315,6 +2167,7 @@ export class RemoteMCPServer {
   private readonly httpTuning: RemoteHttpTuningConfig;
   private sessionCleanupInterval?: NodeJS.Timeout;
   private httpServer?: http.Server;
+  private monetizationGate?: McpMonetizationGate;
 
   public constructor(config?: RemoteMCPConfig) {
     this.appConfig = loadConfig();
@@ -2343,7 +2196,7 @@ export class RemoteMCPServer {
     await this.rateLimiter.initialize();
     this.startSessionCleanup();
 
-    const monetizationGate = await McpMonetizationGate.create(this.appConfig);
+    this.monetizationGate = await McpMonetizationGate.create(this.appConfig);
 
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
@@ -2589,8 +2442,8 @@ export class RemoteMCPServer {
           });
           await perRequestServer.connect(perRequestTransport);
 
-          if (monetizationGate) {
-            await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+          if (this.monetizationGate) {
+            await this.monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
               // Extract tool names from parsed JSON-RPC body for logging
               loggedToolNames = extractToolNamesFromJsonRpc(parsedBody);
               loggedMethod = extractJsonRpcMethod(parsedBody);
@@ -2604,8 +2457,8 @@ export class RemoteMCPServer {
           }
         } else {
           // Stateful mode: route each request to the transport created by its initialize response.
-          if (monetizationGate) {
-            await monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
+          if (this.monetizationGate) {
+            await this.monetizationGate.handle(req, res, async (mcpReq, mcpRes, parsedBody) => {
               loggedToolNames = extractToolNamesFromJsonRpc(parsedBody);
               loggedMethod = extractJsonRpcMethod(parsedBody);
               await this.handleStatefulMcpRequest(mcpReq, mcpRes, parsedBody);
@@ -2698,6 +2551,8 @@ export class RemoteMCPServer {
         resolve();
       }, 5_000);
     });
+    await this.monetizationGate?.close();
+    this.monetizationGate = undefined;
     await this.rateLimiter.close();
   }
 

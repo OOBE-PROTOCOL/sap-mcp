@@ -46,6 +46,7 @@ import {
   SAP_PROTOCOL_TREASURY,
   SAP_REGISTRATION_FEE_LAMPORTS,
 } from '../core/constants.js';
+import { classifyTool } from '../payments/pricing.js';
 
 type JsonRecord = Record<string, unknown>;
 type SapToolHandler = (input: JsonRecord, client: SapClient) => Promise<unknown>;
@@ -525,7 +526,7 @@ interface AgentDirectoryPageOptions extends AgentDirectoryFilters {
 
 interface AgentDirectoryPage {
   source: string;
-  cache?: JsonRecord;
+  freshness: JsonRecord;
   overview: unknown;
   filters: JsonRecord;
   count: number;
@@ -550,8 +551,6 @@ interface AgentDirectoryPage {
   agentGuidance: JsonRecord;
 }
 
-const DIRECTORY_CACHE_TTL_MS = 10_000;
-const directoryPageCache = new Map<string, { expiresAt: number; page: AgentDirectoryPage }>();
 const directoryPageInflight = new Map<string, Promise<AgentDirectoryPage>>();
 
 /**
@@ -581,9 +580,35 @@ function jsonReplacer(_key: string, value: unknown): unknown {
 /**
  * @name ok
  * @description Wraps a successful tool result in the MCP text response shape.
+ *   Includes hostedPricing metadata so agents know the tier and estimated cost.
  */
-function ok(payload: unknown) {
-  return createTextResponse(JSON.stringify({ success: true, ...asObjectPayload(payload) }, jsonReplacer, 2));
+function ok(payload: unknown, toolName?: string) {
+  const pricingMeta = toolName ? buildHostedPricingMeta(toolName) : undefined;
+  return createTextResponse(
+    JSON.stringify(
+      { success: true, ...(pricingMeta ? { hostedPricing: pricingMeta } : {}), ...asObjectPayload(payload) },
+      jsonReplacer,
+      2,
+    ),
+  );
+}
+
+/**
+ * @name buildHostedPricingMeta
+ * @description Returns a human-readable pricing hint for a SAP SDK tool.
+ *   Uses the same classifyTool function as the hosted monetization gate.
+ */
+function buildHostedPricingMeta(toolName: string): string {
+  const tier = classifyTool(toolName);
+  if (tier === 'free') return 'free — no x402 payment required';
+  const prices: Record<string, string> = {
+    'read-premium': '~$0.001',
+    'builder': '~$0.008',
+    'value-action': '~$0.20',
+    'batch': '~$0.20+',
+  };
+  const price = prices[tier] ?? '~$0.001';
+  return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;
 }
 
 /**
@@ -888,6 +913,11 @@ async function buildAgentDirectoryPage(client: SapClient, options: AgentDirector
 
   return {
     source: 'program.account.agentAccount.all + program.account.protocolIndex.all',
+    freshness: {
+      status: 'fresh',
+      cache: 'disabled',
+      fetchedAt: new Date().toISOString(),
+    },
     overview,
     filters: {
       includeInactive: options.includeInactive,
@@ -924,39 +954,23 @@ async function buildAgentDirectoryPage(client: SapClient, options: AgentDirector
   };
 }
 
-async function getCachedAgentDirectoryPage(client: SapClient, options: AgentDirectoryPageOptions): Promise<AgentDirectoryPage> {
+async function getFreshAgentDirectoryPage(client: SapClient, options: AgentDirectoryPageOptions): Promise<AgentDirectoryPage> {
   const cacheKey = stableJson(options);
-  const now = Date.now();
-  const cached = directoryPageCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return {
-      ...cached.page,
-      cache: {
-        status: 'hit',
-        ttlMs: Math.max(0, cached.expiresAt - now),
-        key: cacheKey.slice(0, 24),
-      },
-    };
-  }
-
   const inflight = directoryPageInflight.get(cacheKey);
   if (inflight) {
     const page = await inflight;
     return {
       ...page,
-      cache: {
-        status: 'joined_inflight',
-        ttlMs: DIRECTORY_CACHE_TTL_MS,
+      freshness: {
+        ...page.freshness,
+        status: 'fresh_joined_inflight',
+        cache: 'disabled',
         key: cacheKey.slice(0, 24),
       },
     };
   }
 
   const load = buildAgentDirectoryPage(client, options)
-    .then((page) => {
-      directoryPageCache.set(cacheKey, { expiresAt: Date.now() + DIRECTORY_CACHE_TTL_MS, page });
-      return page;
-    })
     .finally(() => {
       directoryPageInflight.delete(cacheKey);
     });
@@ -965,9 +979,10 @@ async function getCachedAgentDirectoryPage(client: SapClient, options: AgentDire
   const page = await load;
   return {
     ...page,
-    cache: {
-      status: 'miss',
-      ttlMs: DIRECTORY_CACHE_TTL_MS,
+    freshness: {
+      ...page.freshness,
+      status: 'fresh',
+      cache: 'disabled',
       key: cacheKey.slice(0, 24),
     },
   };
@@ -1000,7 +1015,7 @@ async function buildSapAgentContext(input: JsonRecord, client: SapClient): Promi
 
   const directory = wallet
     ? null
-    : await getCachedAgentDirectoryPage(client, {
+    : await getFreshAgentDirectoryPage(client, {
         includeInactive: false,
         protocol: undefined,
         capability: undefined,
@@ -2459,7 +2474,7 @@ function registerSapTool(server: Server, client: SapClient, definition: ToolRegi
     },
     async (rawInput: unknown) => {
       try {
-        return ok(await definition.handler(asRecord(rawInput), client));
+        return ok(await definition.handler(asRecord(rawInput), client), definition.name);
       } catch (error) {
         logger.error(`SAP SDK tool failed: ${definition.name}`, { error });
         return createTextResponse(
@@ -2675,7 +2690,7 @@ const discoveryTools: ToolRegistration[] = [
       const capability = optionalString(input, 'capability');
       const capabilities = parseOptionalStringArray(input, 'capabilities');
 
-      return getCachedAgentDirectoryPage(client, {
+      return getFreshAgentDirectoryPage(client, {
         includeInactive: input.includeInactive === true,
         protocol: optionalString(input, 'protocol'),
         capability,
@@ -2701,7 +2716,7 @@ const discoveryTools: ToolRegistration[] = [
       const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 20, 500));
       const capability = optionalString(input, 'capability');
 
-      return getCachedAgentDirectoryPage(client, {
+      return getFreshAgentDirectoryPage(client, {
         includeInactive: input.includeInactive === true,
         protocol: optionalString(input, 'protocol'),
         capability,
@@ -2727,7 +2742,7 @@ const discoveryTools: ToolRegistration[] = [
       const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 100, 500));
       const capability = optionalString(input, 'capability');
 
-      return getCachedAgentDirectoryPage(client, {
+      return getFreshAgentDirectoryPage(client, {
         includeInactive: input.includeInactive === true,
         protocol: optionalString(input, 'protocol'),
         capability,

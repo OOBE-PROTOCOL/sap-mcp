@@ -14,6 +14,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
+import { getCachedSession, cacheSession, invalidateSession } from './mcp-session-cache.js';
 
 export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const MCP_PROTOCOL_VERSION = '2025-06-18';
@@ -362,6 +363,178 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
 }
 
 /**
+ * @name X402BatchPaidCallInput
+ * @description Request shape for batch paid calls with concurrency control.
+ */
+export interface X402BatchPaidCallInput {
+  endpoint?: string;
+  profileName?: string;
+  maxPriceUsd: number;
+  maxTotalUsd?: number;
+  confirm: boolean;
+  maxAttempts?: number;
+  concurrency?: number;
+  calls: ReadonlyArray<{
+    toolName: string;
+    arguments?: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * @name X402BatchPaidCallResult
+ * @description Result of a batch paid call.
+ */
+export interface X402BatchPaidCallResult {
+  success: boolean;
+  endpoint: string;
+  sessionId: string;
+  totalCalls: number;
+  succeeded: number;
+  failed: number;
+  totalAmountUsd: number;
+  results: ReadonlyArray<X402PaidCallResult | { success: false; error: string; toolName: string }>;
+  audit: {
+    profileName: string;
+    signerAddress: string;
+    totalAmountUsd: number;
+    maxTotalUsd: number;
+    callCount: number;
+    concurrency: number;
+  };
+}
+
+/**
+ * @name executeX402BatchPaidCall
+ * @description Executes multiple paid tool calls in parallel with a shared MCP session.
+ *   Uses concurrency-limited parallelism (default 3) to avoid overwhelming the hosted server.
+ *   Each call gets its own x402 challenge and payment — no shared payment across calls.
+ */
+export async function executeX402BatchPaidCall(input: X402BatchPaidCallInput): Promise<X402BatchPaidCallResult> {
+  if (!input.confirm) {
+    throw new Error('Batch x402 paid calls require confirm: true because they sign payment payloads.');
+  }
+  if (!Number.isFinite(input.maxPriceUsd) || input.maxPriceUsd <= 0) {
+    throw new Error('Batch x402 paid calls require a positive maxPriceUsd spending cap.');
+  }
+  if (!input.calls || input.calls.length === 0) {
+    throw new Error('Batch x402 paid calls require at least one call.');
+  }
+
+  const endpoint = input.endpoint ?? DEFAULT_X402_PAID_CALL_ENDPOINT;
+  const profileName = input.profileName ?? getActiveProfile();
+  const config = loadPaymentProfile(input.profileName);
+  const signer = await loadClientSigner(config);
+  const httpClient = createHttpPaymentClient(signer);
+  const sessionId = await initializeMcpSession(endpoint);
+  const maxAttempts = normalizeMaxAttempts(input.maxAttempts);
+  const maxTotalUsd = normalizeBatchMaxTotalUsd(input.maxTotalUsd, input.maxPriceUsd, input.calls.length);
+  const enforceExplicitTotalCap = input.maxTotalUsd !== undefined;
+  const concurrency = enforceExplicitTotalCap ? 1 : Math.max(1, Math.min(input.concurrency ?? 3, 8));
+  const signerAddress = String(signer.address);
+
+  // Execute calls with limited concurrency
+  const results: Array<X402PaidCallResult | { success: false; error: string; toolName: string }> = [];
+  const queue = Array.from(input.calls.entries());
+  let reservedAmountUsd = 0;
+
+  async function processOne(index: number): Promise<void> {
+    while (index < queue.length) {
+      const [, call] = queue[index]!;
+      if (reservedAmountUsd + input.maxPriceUsd > maxTotalUsd) {
+        results[index] = {
+          success: false,
+          error: `batch_max_total_exceeded: refusing ${call.toolName}; per-call cap ${formatClientUsd(input.maxPriceUsd)} would exceed batch cap ${formatClientUsd(maxTotalUsd)}.`,
+          toolName: call.toolName,
+        };
+        index += concurrency;
+        continue;
+      }
+
+      reservedAmountUsd += input.maxPriceUsd;
+      const requestBody = buildToolCallRequest(call.toolName, call.arguments);
+      const transientRetries: string[] = [];
+
+      let lastError: string | undefined;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const result = await executePaidAttempt({
+            endpoint,
+            sessionId,
+            signerAddress,
+            httpClient,
+            requestBody,
+            profileName,
+            maxPriceUsd: input.maxPriceUsd,
+            attempt,
+            transientRetries,
+          });
+          results[index] = result;
+          break;
+        } catch (error) {
+          const retry = classifyPaidCallRetry(error);
+          if (!retry.retryable || attempt >= maxAttempts) {
+            lastError = error instanceof Error ? error.message : String(error);
+            results[index] = {
+              success: false,
+              error: lastError,
+              toolName: call.toolName,
+            };
+            break;
+          }
+          transientRetries.push(retry.reason);
+          await sleep(RETRY_BASE_DELAY_MS * attempt);
+        }
+      }
+      index += concurrency;
+    }
+  }
+
+  // Launch concurrent workers
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, (_, i) => processOne(i));
+  await Promise.all(workers);
+
+  const succeeded = results.filter(r => r.success).length;
+  const totalAmountUsd = results.reduce((sum, r) => sum + ('payment' in r ? r.payment.amountUsd : 0), 0);
+
+  return {
+    success: succeeded === results.length,
+    endpoint,
+    sessionId,
+    totalCalls: input.calls.length,
+    succeeded,
+    failed: results.length - succeeded,
+    totalAmountUsd,
+    results,
+    audit: {
+      profileName,
+      signerAddress,
+      totalAmountUsd,
+      maxTotalUsd,
+      callCount: input.calls.length,
+      concurrency,
+    },
+  };
+}
+
+function normalizeBatchMaxTotalUsd(value: number | undefined, maxPriceUsd: number, callCount: number): number {
+  const defaultTotal = maxPriceUsd * callCount;
+  if (value === undefined) {
+    return defaultTotal;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error('Batch x402 paid calls require maxTotalUsd to be positive when provided.');
+  }
+  if (value < maxPriceUsd) {
+    throw new Error('Batch x402 paid calls require maxTotalUsd to be at least maxPriceUsd for one call.');
+  }
+  return value;
+}
+
+function formatClientUsd(value: number): string {
+  return `$${value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}`;
+}
+
+/**
  * @name executeExternalX402Call
  * @description Calls a generic HTTP x402 endpoint by fetching its challenge, signing locally, retrying with the payment header, and returning the receipt.
  */
@@ -599,8 +772,20 @@ async function executePaidAttempt(options: {
   maxPriceUsd: number;
   attempt: number;
   transientRetries: readonly string[];
+  sessionRefreshAttempted?: boolean;
 }): Promise<X402PaidCallResult> {
   const unpaid = await postMcp(options.endpoint, options.requestBody, options.sessionId);
+
+  // If the cached session expired server-side, invalidate and re-initialize once
+  if (unpaid.response.status === 404 || isSessionNotFound(unpaid.body)) {
+    if (options.sessionRefreshAttempted) {
+      throw new Error(`MCP session refresh failed: ${JSON.stringify(unpaid.body)}`);
+    }
+    invalidateSession(options.endpoint);
+    const freshSession = await initializeMcpSession(options.endpoint);
+    return executePaidAttempt({ ...options, sessionId: freshSession, sessionRefreshAttempted: true });
+  }
+
   const paymentRequired = getPaymentRequiredResponse(options.httpClient, unpaid.response, unpaid.body);
   const selectedRequirements = selectSingleRequirement(paymentRequired, options.maxPriceUsd);
   const amountUsd = paymentRequirementsAmountUsd(selectedRequirements);
@@ -847,6 +1032,12 @@ function createHttpPaymentClient(signer: Awaited<ReturnType<typeof createKeyPair
 }
 
 async function initializeMcpSession(endpoint: string): Promise<string> {
+  // Check cache first — reuse session if still valid (5min TTL)
+  const cached = getCachedSession(endpoint);
+  if (cached) {
+    return cached;
+  }
+
   const initBody: JsonRpcRequest = {
     jsonrpc: '2.0',
     id: 'sap-x402-paid-call-init',
@@ -871,6 +1062,9 @@ async function initializeMcpSession(endpoint: string): Promise<string> {
     throw new Error('Hosted MCP initialize response did not include mcp-session-id.');
   }
   await postMcp(endpoint, initializedBody, sessionId);
+
+  // Cache the session for reuse by subsequent paid calls
+  cacheSession(endpoint, sessionId);
   return sessionId;
 }
 
@@ -1147,9 +1341,37 @@ function safeResponseHeaders(headers: Headers): Record<string, string> {
   return out;
 }
 
-function classifyPaidCallRetry(error: unknown): { retryable: boolean; reason: string } {
+function classifyPaidCallRetry(error: unknown): { retryable: boolean; reason: string; hint?: string } {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLowerCase();
+
+  // Explicit maxPriceUsd exceeded check — not retryable, agent needs to raise the cap
+  if (normalized.includes('exceeds maxpriceusd')) {
+    return {
+      retryable: false,
+      reason: 'max_price_exceeded',
+      hint: 'The tool cost exceeds the maxPriceUsd cap. Use sap_estimate_tool_cost to get the expected cost, then retry with maxPriceUsd set to at least 1.5x the estimated price.',
+    };
+  }
+
+  // Session not found — not retryable with same session, but the caller should re-initialize
+  if (normalized.includes('mcp_session_not_found') || normalized.includes('mcp_session_required')) {
+    return {
+      retryable: false,
+      reason: 'session_expired',
+      hint: 'The MCP session expired. The session cache has been invalidated. Retry with a fresh session.',
+    };
+  }
+
+  // Hosted local signer required — not retryable via x402, use local sap_payments
+  if (normalized.includes('hosted_local_signer_required')) {
+    return {
+      retryable: false,
+      reason: 'local_signer_required',
+      hint: 'This tool requires a local Solana signature. Do NOT use sap_payments_call_paid_tool. Use the local sap_payments equivalent (e.g. sap_payments_register_agent, sap_payments_finalize_transaction).',
+    };
+  }
+
   const retryable = containsAny(normalized, [
     'blockhashnotfound',
     'blockhash not found',
@@ -1192,6 +1414,14 @@ function sleep(ms: number): Promise<void> {
 
 function isJsonRpcError(value: unknown): value is { error: unknown } {
   return value !== null && typeof value === 'object' && 'error' in value;
+}
+
+function isSessionNotFound(body: unknown): boolean {
+  if (!isJsonRpcError(body)) return false;
+  const error = (body as { error: unknown }).error;
+  if (!error || typeof error !== 'object') return false;
+  const message = (error as { message?: string }).message;
+  return message === 'mcp_session_not_found' || message === 'mcp_session_required';
 }
 
 function networkFromRpcUrl(value: string | undefined): string {

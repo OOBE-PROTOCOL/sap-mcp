@@ -201,7 +201,10 @@ Protocol routing shortcuts:
 
 | User intent | Most specific tools |
 | --- | --- |
-| SOL or SPL balance | `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts` |
+| SOL or SPL balance (free) | `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`, `magicblock_balance` |
+| Enriched holdings (paid read-premium) | `jupiter_getHoldings` |
+| Pre-call cost estimate (free) | `sap_estimate_tool_cost` |
+| Pricing catalog (free) | `sap_pricing_catalog` |
 | SOL or SPL transfer | `spl-token_transferSol`, `spl-token_transfer` |
 | Token launch/mint/burn | `spl-token_deployToken`, `spl-token_mintTo`, `spl-token_burn` |
 | Jupiter quote/swap | `jupiter_getQuote`, `jupiter_smartSwap`, `jupiter_swap`, `jupiter_swapInstructions` |

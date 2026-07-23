@@ -150,7 +150,7 @@ const paidCallInputSchema = {
   },
   maxPriceUsd: {
     type: 'number',
-    description: 'Maximum accepted x402 payment amount in USD. The call aborts if the challenge exceeds this cap.',
+    description: 'Per-call safety cap in USD for the x402 payment. The call aborts before signing if the challenge exceeds this cap. Estimate first with sap_estimate_tool_cost.',
   },
   maxAttempts: {
     type: 'number',
@@ -1017,7 +1017,7 @@ function registerPaymentsPrepareChallengeTool(server: Server): void {
         body: paidCallInputSchema.body,
         maxPriceUsd: {
           type: 'number',
-          description: 'Optional maximum acceptable USD price used only to reject oversized challenges during inspection.',
+          description: 'Maximum accepted x402 payment amount in USD. The call aborts if the challenge exceeds this cap. Common tool costs: read-premium ~$0.001, builder ~$0.008, value-action ~$0.20. Set to at least the expected tier price — e.g. maxPriceUsd: 0.25 for swaps, 0.01 for reads. If omitted, defaults to a very low cap that may abort value-action calls silently.',
         },
       },
       outputSchema: {

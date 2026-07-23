@@ -35,8 +35,17 @@ type FacilitatorOperation =
 /** Per-attempt timeout in milliseconds. If an RPC doesn't respond in this window, we move to the next. */
 const RPC_ATTEMPT_TIMEOUT_MS = 8_000;
 
+/** Health check interval — proactively probes endpoints every 30s. */
+const HEALTH_CHECK_INTERVAL_MS = 30_000;
+
 /** Round-robin counter — shared across all operations so calls distribute across endpoints. */
 let roundRobinIndex = 0;
+
+/** Endpoint health status — updated by periodic health checks and inline failures. */
+const endpointHealth = new Map<string, { healthy: boolean; lastCheckedAt: number; consecutiveFailures: number }>();
+
+/** Health check timer handle. */
+let healthCheckTimer: NodeJS.Timeout | undefined;
 
 /**
  * @name createResilientFacilitatorSigner
@@ -200,6 +209,9 @@ async function runWithRoundRobin<T>(
     throw new Error('No facilitator RPC endpoints configured');
   }
 
+  // Start health check timer if not already running
+  startHealthCheckTimer(endpoints);
+
   // Advance the round-robin counter — each call starts from the next endpoint.
   const startIndex = roundRobinIndex % endpoints.length;
   roundRobinIndex = (roundRobinIndex + 1) % endpoints.length;
@@ -211,6 +223,12 @@ async function runWithRoundRobin<T>(
     const endpoint = endpoints[index];
     if (!endpoint) continue;
 
+    // Skip unhealthy endpoints (but still try them as last resort)
+    const health = getEndpointHealth(endpoint);
+    if (!health.healthy && attempt < endpoints.length - 1) {
+      continue;
+    }
+
     try {
       // Race the execution against a timeout — if the RPC is slow, we move on immediately.
       const result = await withTimeout(
@@ -219,12 +237,21 @@ async function runWithRoundRobin<T>(
         endpoint.label,
         operation,
       );
+
+      // Mark endpoint as healthy on success
+      markEndpointHealthy(endpoint);
+
       return result;
     } catch (error) {
       lastError = error;
       const hasNext = attempt < endpoints.length - 1;
       const isTimeout = error instanceof RpcTimeoutError;
       const isTransient = isTimeout || isTransientRpcError(error);
+
+      // Mark endpoint as unhealthy on transient failure
+      if (isTransient) {
+        markEndpointUnhealthy(endpoint);
+      }
 
       if (!hasNext || !isTransient) {
         throw error;
@@ -241,6 +268,89 @@ async function runWithRoundRobin<T>(
   }
 
   throw lastError instanceof Error ? lastError : new Error(getErrorMessage(lastError));
+}
+
+/**
+ * Get or initialize health status for an endpoint.
+ */
+function getEndpointHealth(endpoint: FacilitatorRpcEndpoint): { healthy: boolean; lastCheckedAt: number; consecutiveFailures: number } {
+  const key = endpoint.label;
+  let status = endpointHealth.get(key);
+  if (!status) {
+    status = { healthy: true, lastCheckedAt: 0, consecutiveFailures: 0 };
+    endpointHealth.set(key, status);
+  }
+  return status;
+}
+
+/**
+ * Mark an endpoint as healthy after a successful operation.
+ */
+function markEndpointHealthy(endpoint: FacilitatorRpcEndpoint): void {
+  const status = getEndpointHealth(endpoint);
+  status.healthy = true;
+  status.consecutiveFailures = 0;
+  status.lastCheckedAt = Date.now();
+}
+
+/**
+ * Mark an endpoint as unhealthy after a transient failure.
+ * After 3 consecutive failures, the endpoint is marked unhealthy until the next health check.
+ */
+function markEndpointUnhealthy(endpoint: FacilitatorRpcEndpoint): void {
+  const status = getEndpointHealth(endpoint);
+  status.consecutiveFailures += 1;
+  status.lastCheckedAt = Date.now();
+  if (status.consecutiveFailures >= 3) {
+    status.healthy = false;
+    logger.warn('Facilitator RPC endpoint marked unhealthy', {
+      endpoint: endpoint.label,
+      consecutiveFailures: status.consecutiveFailures,
+    });
+  }
+}
+
+/**
+ * Start periodic health check timer. Probes each endpoint every 30s with a lightweight
+ * getLatestBlockhash call. Resets unhealthy endpoints that recover.
+ */
+function startHealthCheckTimer(endpoints: readonly FacilitatorRpcEndpoint[]): void {
+  if (healthCheckTimer) {
+    return; // Already running
+  }
+
+  healthCheckTimer = setInterval(async () => {
+    for (const endpoint of endpoints) {
+      if (!endpoint.rpcUrl) continue;
+
+      const status = getEndpointHealth(endpoint);
+      if (status.healthy) {
+        continue; // Only probe unhealthy endpoints
+      }
+
+      try {
+        // Lightweight probe — just check if the RPC responds
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3_000);
+        const response = await fetch(endpoint.rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getHealth' }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          markEndpointHealthy(endpoint);
+          logger.info('Facilitator RPC endpoint recovered', { endpoint: endpoint.label });
+        }
+      } catch {
+        // Still unhealthy — will be checked again next interval
+      }
+    }
+  }, HEALTH_CHECK_INTERVAL_MS);
+
+  healthCheckTimer.unref?.();
 }
 
 /**

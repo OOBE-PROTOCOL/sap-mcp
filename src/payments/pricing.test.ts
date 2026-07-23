@@ -210,6 +210,27 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(false);
   });
 
+  it('prices enriched Jupiter holdings as read premium in default and strict mode', () => {
+    expect(classifyTool('jupiter_getHoldings')).toBe('read-premium');
+    expect(classifyTool('jupiter_getHoldings', { strictTools: true })).toBe('read-premium');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'jupiter_getHoldings',
+        arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('read-premium');
+    }
+  });
+
   it('keeps single SNS availability checks free in default and strict mode', () => {
     expect(classifyTool('sap_sns_check_domain')).toBe('free');
     expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('free');
@@ -232,8 +253,8 @@ describe('SAP MCP monetization pricing', () => {
   });
 
   it('can price basic balance reads in strict hosted mode', () => {
-    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('read-premium');
-    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('read-premium');
+    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('free');
+    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
@@ -258,7 +279,8 @@ describe('SAP MCP monetization pricing', () => {
       strictTools: true,
     });
 
-    expect(decision.required).toBe(true);
+    // sol_get_balance is now free in strict mode — balance reads should not be paywalled
+    expect(decision.required).toBe(false);
   });
 
   it('prices enriched discovery as read premium', () => {

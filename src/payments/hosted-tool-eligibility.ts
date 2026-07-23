@@ -15,6 +15,7 @@ export interface HostedToolEligibilityFailure {
     blockedTools: string[];
     hostedMode: 'accountless-non-custodial';
     recommendedFlow: string;
+    namespaceHint?: string;
     recommendedTools: string[];
   };
 }
@@ -174,6 +175,7 @@ export function evaluateHostedToolEligibility(
       blockedTools: [...new Set(blockedTools)],
       hostedMode: 'accountless-non-custodial',
       recommendedFlow: 'Use local sap_payments for paid hosted calls. For write operations, use hosted unsigned builders only when the tool returns a transaction, then finalize locally with sap_payments_finalize_transaction. If no builder exists, run the direct write on the local SAP MCP profile.',
+      namespaceHint: 'sap_payments_* tools live on the sap_payments MCP server, not the sap server. Use mcp__sap_payments__ prefix (e.g. mcp__sap_payments__sap_payments_readiness, mcp__sap_payments__sap_payments_call_paid_tool). If the sap_payments server is not connected, run the SAP MCP wizard repair flow and restart the MCP client.',
       recommendedTools: [
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',

@@ -15,7 +15,7 @@ User-facing setup docs live in [`USER_DOCS/`](USER_DOCS/00_START_HERE.md). Opera
 
 | Area | Current behavior |
 | --- | --- |
-| Package version | `0.2.1` |
+| Package version | `0.9.16` |
 | MCP transport | stdio locally, Streamable HTTP remotely |
 | Remote access | Bearerless public mode for hosted agents; API key or JWT for private modes |
 | Config directory | `~/.config/mcp-sap` only |

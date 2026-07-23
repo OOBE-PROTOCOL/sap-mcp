@@ -47,6 +47,10 @@ and error strings unchanged.
 
 ## Discovery Rules
 
+- Treat SAP registry, balances, SNS ownership, quotes, settlement status, and
+  agent profile reads as fresh data. Do not rely on old chat memory when the
+  user asks for current state; use exact lightweight reads first, then paid
+  discovery only when enrichment or broad search is needed.
 - Use free exact/base reads first when the wallet, PDA, or a small orientation
   page is enough: `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
   `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
@@ -175,10 +179,19 @@ Use `sap_payments.sap_payments_profile_current` only as a narrower compatibility
 profile check.
 
 Basic wallet reads are free on hosted SAP MCP. Call `sol_get_balance`,
-`spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on the hosted
-server. Do not send these balance checks through `sap_payments_call_paid_tool`,
-and do not summarize a balance read as a facilitator `BlockhashNotFound`
-problem unless a paid tool actually returned that error.
+`spl-token_getBalance`, `spl-token_getTokenAccounts`, and `magicblock_balance`
+directly on the hosted server. Do not send these balance checks through
+`sap_payments_call_paid_tool`, and do not summarize a balance read as a
+facilitator `BlockhashNotFound` problem unless a paid tool actually returned
+that error. Use `jupiter_getHoldings` only when the user needs enriched paid
+portfolio context.
+
+Before any paid tool call, use `sap_estimate_tool_cost` with the tool name to
+get the exact pricing tier, estimated USD cost, and recommended `maxPriceUsd`.
+This prevents silent cap aborts and failed x402 attempts on local-signer-only
+tools. For local-signer-only tools (e.g. `sap_register_agent`), the estimate
+will say `tier: "local-signer-only"` and tell you to use the local
+`sap_payments_*` equivalent instead of `sap_payments_call_paid_tool`.
 
 If a hosted paid tool returns `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is

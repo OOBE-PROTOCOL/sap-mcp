@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerMagicBlockTools } from '../magicblock-tools.js';
+import { registerMagicBlockTools, sanitizeSwapQuoteResponse, type SwapQuoteResponse } from '../magicblock-tools.js';
 import type { SapMcpContext } from '../../core/types.js';
 
 // ─── Typed interface for the MCP server's internal tool store ─────
@@ -232,7 +232,7 @@ describe('MagicBlock tools registration', () => {
       },
     });
 
-    expect(responseText(response)).toContain('missing_required_field: destination');
+    expect(responseText(response)).toContain('magicblock_private_swap_destination_required');
   });
 
   it('fails closed for private swaps that output wSOL because shuttle delivery is unsafe', async () => {
@@ -277,5 +277,42 @@ describe('MagicBlock tools registration', () => {
     expect(reqTool?.description).toContain('Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz');
     const resTool = vrfTools.find((t) => t.name === 'magicblock_getRandomnessResult');
     expect(resTool?.description).toContain('RandomnessRequest');
+  });
+});
+
+describe('MagicBlock quote sanitization', () => {
+  function baseQuote(routePlan: readonly unknown[]): SwapQuoteResponse {
+    return {
+      inputMint: 'So11111111111111111111111111111111111111112',
+      outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      inAmount: '1000',
+      outAmount: '1',
+      otherAmountThreshold: '1',
+      swapMode: 'ExactIn',
+      slippageBps: 50,
+      priceImpactPct: '0',
+      routePlan,
+      contextSlot: 1,
+      timeTaken: 0,
+    };
+  }
+
+  it('derives null route bps from percent instead of inventing a fixed share', () => {
+    const quote = sanitizeSwapQuoteResponse(baseQuote([{ percent: 67.25, bps: null }]));
+
+    expect(quote.routePlan[0]).toMatchObject({ bps: 6725 });
+  });
+
+  it('uses full-share bps only for unambiguous single-hop routes', () => {
+    const quote = sanitizeSwapQuoteResponse(baseQuote([{ bps: null }]));
+
+    expect(quote.routePlan[0]).toMatchObject({ bps: 10_000 });
+  });
+
+  it('fails closed for ambiguous multi-hop routes with null bps', () => {
+    expect(() => sanitizeSwapQuoteResponse(baseQuote([
+      { label: 'A', bps: null },
+      { label: 'B', bps: 5000 },
+    ]))).toThrow('magicblock_swap_quote_bps_required');
   });
 });

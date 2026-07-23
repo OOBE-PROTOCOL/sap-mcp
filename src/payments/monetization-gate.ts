@@ -184,6 +184,14 @@ export class McpMonetizationGate {
   }
 
   /**
+   * @name close
+   * @description Flushes hosted payment audit state before the remote server exits.
+   */
+  public async close(): Promise<void> {
+    await this.usageLedger.close();
+  }
+
+  /**
    * @name handle
    * @description Authorizes a request via x402 when required, then forwards it to MCP and settles on success.
    */
@@ -220,6 +228,14 @@ export class McpMonetizationGate {
     const decision = resolvePaymentDecision(parsedMcp, this.monetization);
     const hostedEligibilityFailure = evaluateHostedToolEligibility(parsedMcp, this.appConfig);
     if (hostedEligibilityFailure) {
+      const requestHash = hashPaymentRequest(rawBody, parsedBody);
+      const metadata = buildRequestMetadata(request, requestHash, '/mcp/hosted-local-signer-required');
+      await this.usageLedger.recordEligibilityBlocked(
+        metadata,
+        getBlockedToolsFromEligibilityFailure(hostedEligibilityFailure.data),
+        hostedEligibilityFailure.message,
+        'Hosted accountless server rejected a local-signer write before monetization. No x402 payment was charged.',
+      );
       writeJsonRpcError(
         response,
         parsedBody,
@@ -253,6 +269,7 @@ export class McpMonetizationGate {
     const requiredDecision = decision as Extract<PaymentDecision, { required: true }>;
     const requestHash = hashPaymentRequest(rawBody, parsedBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
+    const metadata = buildRequestMetadata(request, requestHash, virtualPath);
 
     // Standard x402 scanners and non-MCP HTTP clients must see a normal HTTP
     // 402 challenge before MCP transport/session validation runs. MCP SDK
@@ -262,6 +279,8 @@ export class McpMonetizationGate {
       (request.headers['x-payment'] as string | undefined);
 
     if (!paymentHeader && !isMcpSdkClient) {
+      await this.usageLedger.recordDecision(metadata, decision);
+      await this.usageLedger.recordChallengeReturned(metadata, decision, 'http-402');
       await this.returnX402Challenge(request, response, parsedBody, virtualPath);
       return;
     }
@@ -282,7 +301,6 @@ export class McpMonetizationGate {
       return;
     }
 
-    const metadata = buildRequestMetadata(request, requestHash, virtualPath);
     await this.usageLedger.recordDecision(metadata, decision);
     logger.info('Payment required', {
       toolNames: decision.toolNames,
@@ -378,6 +396,7 @@ export class McpMonetizationGate {
       }
 
       // MCP SDK client — return HTTP 200 with JSON-RPC error (the SDK hangs on 402)
+      await this.usageLedger.recordChallengeReturned(metadata, decision, 'mcp-json-rpc');
       writeJson(response, 200, {
         jsonrpc: '2.0',
         id: jsonRpcId,
@@ -446,6 +465,12 @@ export class McpMonetizationGate {
     try {
       parsedPayment = parsePaymentHeader(options.paymentHeader);
     } catch (error) {
+      await this.usageLedger.recordVerificationFailed(
+        options.metadata,
+        options.decision,
+        'invalid_payment_signature_header',
+        error instanceof Error ? error.message : String(error),
+      );
       logger.warn('Invalid Payment-Signature header', {
         error,
         requestHash: options.metadata.requestHash.slice(0, 12),
@@ -464,6 +489,12 @@ export class McpMonetizationGate {
       options.virtualPath,
     );
     if (validationError) {
+      await this.usageLedger.recordVerificationFailed(
+        options.metadata,
+        options.decision,
+        validationError,
+        'Payment requirements did not match the current MCP method, params, price, or virtual x402 resource.',
+      );
       logger.warn('Payment requirements rejected before facilitator verify', {
         reason: validationError,
         toolNames: options.decision.toolNames,
@@ -491,6 +522,12 @@ export class McpMonetizationGate {
       });
     } catch (error) {
       const failure = classifyFacilitatorError(error);
+      await this.usageLedger.recordVerificationFailed(
+        options.metadata,
+        options.decision,
+        failure.reason ?? 'facilitator_verify_failed',
+        failure.message,
+      );
       logger.warn('Payment verification facilitator call failed', {
         reason: failure.reason,
         message: failure.message,
@@ -503,6 +540,12 @@ export class McpMonetizationGate {
 
     if (!verifyResult.isValid) {
       const failure = classifyVerifyFailure(verifyResult);
+      await this.usageLedger.recordVerificationFailed(
+        options.metadata,
+        options.decision,
+        failure.reason ?? 'payment_not_valid',
+        failure.message,
+      );
       logger.warn('Payment verification failed', {
         reason: failure.reason,
         message: failure.message,
@@ -1133,6 +1176,13 @@ function isTransientFacilitatorFailure(message: string): boolean {
 
 function containsAny(message: string, needles: readonly string[]): boolean {
   return needles.some(needle => message.includes(needle));
+}
+
+function getBlockedToolsFromEligibilityFailure(data: unknown): string[] {
+  if (!isRecord(data) || !Array.isArray(data.blockedTools)) {
+    return [];
+  }
+  return data.blockedTools.filter((toolName): toolName is string => typeof toolName === 'string');
 }
 
 function buildRequestMetadata(

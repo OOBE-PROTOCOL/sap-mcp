@@ -150,7 +150,7 @@ interface UnsignedTransactionResponse {
   readonly validator?: string;
 }
 
-interface SwapQuoteResponse {
+export interface SwapQuoteResponse {
   readonly inputMint: string;
   readonly inAmount: string;
   readonly outputMint: string;
@@ -421,6 +421,67 @@ function stripNullish<T extends object>(obj: T): Partial<T> {
   return result;
 }
 
+// ─── Hosted pricing helpers ───────────────────────────────────────
+
+const MAGICBLOCK_READ_TOOLS = new Set([
+  'magicblock_getRoutes',
+  'magicblock_getIdentity',
+  'magicblock_getDelegationStatus',
+  'magicblock_getAccountInfo',
+  'magicblock_getBlockhashForAccounts',
+  'magicblock_getSignatureStatuses',
+  'magicblock_health',
+  'magicblock_balance',
+  'magicblock_privateBalance',
+  'magicblock_isMintInitialized',
+  'magicblock_getRandomnessResult',
+]);
+
+const MAGICBLOCK_BUILDER_TOOLS = new Set([
+  'magicblock_deposit',
+  'magicblock_transfer',
+  'magicblock_withdraw',
+  'magicblock_initializeMint',
+  'magicblock_requestRandomness',
+]);
+
+const MAGICBLOCK_VALUE_ACTION_TOOLS = new Set([
+  'magicblock_swap',
+]);
+
+const MAGICBLOCK_FREE_TOOLS = new Set([
+  'magicblock_health',
+  'magicblock_getRoutes',
+  'magicblock_getIdentity',
+]);
+
+/**
+ * Classify a MagicBlock tool into the hosted pricing tier.
+ * These mappings must stay aligned with src/payments/pricing.ts.
+ */
+function classifyMagicBlockToolTier(toolName: string): 'free' | 'read-premium' | 'builder' | 'value-action' {
+  if (MAGICBLOCK_FREE_TOOLS.has(toolName)) return 'free';
+  if (MAGICBLOCK_VALUE_ACTION_TOOLS.has(toolName)) return 'value-action';
+  if (MAGICBLOCK_BUILDER_TOOLS.has(toolName)) return 'builder';
+  if (MAGICBLOCK_READ_TOOLS.has(toolName)) return 'read-premium';
+  return 'read-premium';
+}
+
+/**
+ * Estimate the hosted price for a MagicBlock tool call.
+ * These are approximate defaults — the actual x402 challenge is authoritative.
+ */
+function estimateMagicBlockToolPrice(toolName: string): string {
+  const tier = classifyMagicBlockToolTier(toolName);
+  switch (tier) {
+    case 'free': return '0.00';
+    case 'read-premium': return '~0.001';
+    case 'builder': return '~0.008';
+    case 'value-action': return '~0.20';
+    default: return '~0.001';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  JSON Schema Helpers
 // ═══════════════════════════════════════════════════════════════════
@@ -478,22 +539,83 @@ function validateMagicBlockTransferInput(input: TransferInput): void {
   if (input.visibility === 'private' && !input.authToken) {
     throw new Error('magicblock_private_transfer_auth_required: call magicblock_challenge and magicblock_login first, then pass authToken.');
   }
+
+  if (input.legacy === true && input.initVaultIfMissing === true) {
+    throw new Error(
+      'magicblock_legacy_tx_vault_init_too_large: legacy=true with initVaultIfMissing=true exceeds the 1232-byte legacy transaction limit. Set legacy=false (v0) or initVaultIfMissing=false.',
+    );
+  }
 }
 
 function validateMagicBlockSwapInput(input: SwapInput): void {
   requireValidPubkey(input.userPublicKey, 'userPublicKey');
 
-  if (input.visibility !== 'private') {
-    return;
+  if (input.visibility === 'private') {
+    if (!input.destination) {
+      throw new Error(
+        'magicblock_private_swap_destination_required: visibility="private" requires a destination wallet. Without it, the swap output routes to the default Hydra escrow instead of the intended recipient. Pass destination as the recipient wallet public key.',
+      );
+    }
+    requireValidPubkey(input.destination, 'destination');
+
+    if (isWrappedSolMint(input.quoteResponse?.outputMint)) {
+      throw new Error(
+        'magicblock_private_swap_wsol_output_blocked: private swaps that output wSOL are disabled because live mainnet testing found Hydra delivery can leave wSOL stuck in the mixer pool. Use visibility="public", swap into a non-SOL SPL token, or wait for MagicBlock shuttle delivery recovery support.',
+      );
+    }
+  }
+}
+
+/**
+ * Sanitize a swap quote response before forwarding it to the MagicBlock swap API.
+ *
+ * The Metis quote API can return `routePlan[].bps: null` for some routes, while
+ * the swap endpoint requires numeric route share basis points. Never invent a
+ * route share: derive it from `percent`, use 10000 only for an unambiguous
+ * single-hop route, and fail closed for ambiguous multi-hop quotes.
+ */
+export function sanitizeSwapQuoteResponse(quoteResponse: SwapQuoteResponse): SwapQuoteResponse {
+  if (!quoteResponse || typeof quoteResponse !== 'object') {
+    return quoteResponse;
   }
 
-  requireValidPubkey(input.destination, 'destination');
-
-  if (isWrappedSolMint(input.quoteResponse?.outputMint)) {
-    throw new Error(
-      'magicblock_private_swap_wsol_output_blocked: private swaps that output wSOL are disabled because live mainnet testing found Hydra delivery can leave wSOL stuck in the mixer pool. Use visibility="public", swap into a non-SOL SPL token, or wait for MagicBlock shuttle delivery recovery support.',
-    );
+  const routePlan = quoteResponse.routePlan;
+  if (!Array.isArray(routePlan)) {
+    return quoteResponse;
   }
+
+  const patchedRoutePlan = routePlan.map((hop) => normalizeRoutePlanBps(hop, routePlan.length));
+
+  return { ...quoteResponse, routePlan: patchedRoutePlan };
+}
+
+function normalizeRoutePlanBps(hop: unknown, routePlanLength: number): unknown {
+  if (!hop || typeof hop !== 'object' || Array.isArray(hop)) {
+    return hop;
+  }
+
+  const record = hop as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, 'bps') || record.bps != null) {
+    return hop;
+  }
+
+  const percent = typeof record.percent === 'number'
+    ? record.percent
+    : typeof record.percent === 'string'
+      ? Number(record.percent)
+      : undefined;
+
+  if (percent !== undefined && Number.isFinite(percent) && percent >= 0 && percent <= 100) {
+    return { ...record, bps: Math.round(percent * 100) };
+  }
+
+  if (routePlanLength === 1) {
+    return { ...record, bps: 10_000 };
+  }
+
+  throw new Error(
+    'magicblock_swap_quote_bps_required: routePlan[].bps was null and could not be derived from percent; request a fresh quote and pass it unchanged.',
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -531,10 +653,14 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   }
 
   function success<T>(data: T, toolName: string) {
+    const pricingTier = classifyMagicBlockToolTier(toolName);
+    const estimatedPriceUsd = estimateMagicBlockToolPrice(toolName);
     const response: ToolSuccessResponse<T> = {
       success: true,
       tool: toolName,
-      hostedPricing: 'Resolved by the SAP MCP x402/payment gate. Use sap_x402_estimate_cost or sap_payments_call_paid_tool maxPriceUsd; do not rely on MagicBlock response payload pricing.',
+      hostedPricing: pricingTier === 'free'
+        ? 'free — no x402 payment required'
+        : `${pricingTier} tier — estimated ${estimatedPriceUsd} USD per call. Use sap_x402_estimate_cost for exact pricing and sap_payments_call_paid_tool with maxPriceUsd >= ${estimatedPriceUsd} to execute.`,
       data,
     };
     return createTextResponse(JSON.stringify(response, null, 2));
@@ -725,7 +851,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
       authToken: f.string('Bearer token from login (required for private transfers)'),
       initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'),
       initAtasIfMissing: f.boolean('Initialize recipient ATA if missing (default true)'),
-      initVaultIfMissing: f.boolean('Initialize vault if missing (default false)'),
+      initVaultIfMissing: f.boolean('Initialize vault if missing (default false). WARNING: when legacy=true, setting this to true can exceed the 1232-byte legacy transaction limit and produce TRANSACTION_TOO_LARGE errors. Prefer v0 (legacy=false) when vault init is needed.'),
       memo: f.string('Optional memo appended to the transaction'),
       minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle. Default '0'"),
       maxDelayMs: f.string('Private only. Latest (ms) the queued transfer may settle (<= 600000)'),
@@ -805,8 +931,9 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
       try {
         const input = parseInput<SwapInput>(raw);
         validateMagicBlockSwapInput(input);
+        const sanitizedQuote = sanitizeSwapQuoteResponse(input.quoteResponse);
         const result = await apiPost<SwapTransactionResponse>('/v1/swap/swap', {
-          userPublicKey: input.userPublicKey, quoteResponse: input.quoteResponse,
+          userPublicKey: input.userPublicKey, quoteResponse: sanitizedQuote,
           ...stripNullish({
             visibility: input.visibility, destination: input.destination,
             minDelayMs: input.minDelayMs, maxDelayMs: input.maxDelayMs,

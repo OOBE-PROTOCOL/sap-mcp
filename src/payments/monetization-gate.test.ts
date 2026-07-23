@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { mkdtempSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { PassThrough } from 'stream';
@@ -452,6 +452,19 @@ describe('MCP monetization gate readiness', () => {
       expect(payload.error?.data?.paymentNotCharged).toBe(true);
       expect(payload.error?.data?.blockedTools).toEqual(['sap_register_agent']);
       expect(fetchCalls).toEqual(['http://127.0.0.1:8788/facilitator/supported']);
+
+      await gate.close();
+      const ledgerPath = join(process.env.XDG_DATA_HOME ?? '', 'mcp-sap', 'payments', 'usage-ledger.jsonl');
+      expect(existsSync(ledgerPath)).toBe(true);
+      const events = readFileSync(ledgerPath, 'utf-8')
+        .trim()
+        .split('\n')
+        .map(line => JSON.parse(line) as { event: string; toolNames: string[]; errorReason?: string });
+      expect(events).toContainEqual(expect.objectContaining({
+        event: 'payment_eligibility_blocked',
+        toolNames: ['sap_register_agent'],
+        errorReason: 'hosted_local_signer_required',
+      }));
     } finally {
       if (previousXdgDataHome === undefined) {
         delete process.env.XDG_DATA_HOME;

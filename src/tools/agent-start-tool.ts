@@ -541,6 +541,12 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'hosted sap',
+        tool: 'sap_estimate_tool_cost',
+        required: false,
+        reason: 'Before any paid tool call, pass the tool name to get the exact tier, estimated USD cost, and recommended maxPriceUsd. Avoids silent cap aborts.',
+      },
+      {
+        namespace: 'hosted sap',
         tool: 'sap_skills_upgrade_plan',
         required: false,
         reason: 'If local skills are missing or stale, return exact latest-release commands and target directories before retrying.',
@@ -600,8 +606,9 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'For initial orientation, use free exact/base reads first: sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, sap_get_global_state, or sap_list_agents with limit <= 20 and view: compact. Use paid sap_discover_agents or sap_list_all_agents only when the user needs search, enrichment, analytics, or larger pages.',
       'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
       'For free reads, call hosted tools directly.',
+      'Before any paid call, verify USDC and SOL balances using free core balance tools: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, or magicblock_balance. Use paid read-premium holdings tools only when the user needs enriched portfolio context. An agent without USDC cannot make paid calls.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
-      'Before paid calls, use sap_pricing_catalog or the x402 challenge itself as the price source of truth.',
+      'Before paid calls, use sap_estimate_tool_cost to know the exact tier and estimated USD cost of a specific tool, or sap_pricing_catalog for the full tier overview. The x402 challenge itself is the final price source of truth.',
       'For external HTTP x402 agent endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402 instead of hand-rolled HTTP/sign/retry scripts.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
       'If hosted sap_register_agent returns hosted_local_signer_required, do not retry the hosted direct write. No x402 payment was charged; call local sap_payments_register_agent with the same registration fields and confirm: true.',

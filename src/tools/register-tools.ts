@@ -15,6 +15,7 @@ import { registerChatTools } from './chat-tools.js';
 import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
+import { registerEstimateToolCost } from './estimate-tool-cost.js';
 
 /**
  * Register all tools with the MCP server.
@@ -63,6 +64,9 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Register the free agent bootstrap tool before skill tools so runtimes have
   // a single obvious entry point after tools/list.
   registerAgentStartTool(server, context);
+
+  // Register the free pre-call cost estimator so agents can plan USDC spending.
+  registerEstimateToolCost(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);

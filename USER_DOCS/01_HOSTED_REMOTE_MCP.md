@@ -29,7 +29,7 @@ Public `server.json` shape:
   "name": "sap-mcp-server",
   "title": "SAP MCP Server | OOBE Protocol",
   "description": "Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.",
-  "version": "0.2.1",
+  "version": "0.9.16",
   "status": "online",
   "protocol": {
     "primary": "mcp",

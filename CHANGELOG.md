@@ -13,6 +13,15 @@ All notable changes to this project are documented in this file.
   errors and partial results. It tells agents whether to use hosted reads,
   `sap_payments_*`, `sap_runtime_repair_plan`, unsigned transaction
   finalization, or signature verification before retrying.
+- Added free `sap_estimate_tool_cost`, a pre-call estimator that gives agents
+  the pricing tier, expected USD cost, and recommended `maxPriceUsd` before
+  using `sap_payments_call_paid_tool`.
+- Added hosted payment-funnel telemetry for returned challenges, verification
+  failures, and hosted-local-signer blocks so dashboard/operator metrics
+  separate demand from successful settlements.
+- Added a short-lived MCP session cache for local paid-call retries. It reuses
+  initialized MCP sessions without caching live chain data, x402 challenges, or
+  signed payment payloads.
 
 ### Improved
 
@@ -29,6 +38,16 @@ All notable changes to this project are documented in this file.
   user-signed writes.
 - Expanded pricing tests and server metadata tests to cover the new free
   context/resolver tools and conditional-free discovery behavior.
+- Enriched every registered tool description and root input schema with
+  intent-level routing, pricing, signer-boundary, and exact-field guidance so
+  agents stop guessing aliases, avoid hosted writes that require local signing,
+  and route user-signed transactions through supported `sap_payments_*` flows.
+- Hardened already-signed transaction submission through the hosted
+  `/tx/submit` relay with explicit retry-safety, confirmation-state, and
+  no-key-material audit fields.
+- Added release safety coverage for root input parameter descriptions,
+  hosted-local-signer ledger events, private-key guard behavior, unsafe-action
+  guard behavior, and updated public metadata version examples.
 
 ## 0.9.15 - 2026-07-20
 

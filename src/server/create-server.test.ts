@@ -15,6 +15,7 @@ interface ToolDefinitionForTest {
   description?: string;
   inputSchema?: {
     type?: string;
+    description?: string;
     properties?: Record<string, { description?: string; title?: string }>;
   };
   outputSchema?: unknown;
@@ -69,7 +70,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(288);
+    expect(names).toHaveLength(289);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -171,6 +172,21 @@ describe('createSapMcpServer', () => {
     expect(server._instructions).toContain('Escrow writes are V2-only');
     expect(server._instructions).not.toContain('280 tools');
     expect(server._instructions).not.toContain('248 tools');
+  });
+
+  it('keeps every root input parameter described for agent-safe schema use', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const missing: string[] = [];
+
+    for (const tool of server.tools ?? []) {
+      for (const [propertyName, propertySchema] of Object.entries(tool.inputSchema?.properties ?? {})) {
+        if (!propertySchema.description && !propertySchema.title) {
+          missing.push(`${tool.name}.${propertyName}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
   });
 
   it('exposes Escrow V2 as the active escrow write surface', async () => {
@@ -542,6 +558,33 @@ describe('createSapMcpServer', () => {
         openWorldHint: expect.any(Boolean),
       });
     }
+  });
+
+  it('adds intent-level routing guidance to tool descriptions and input schemas', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+
+    const paidRead = toolsByName.get('jupiter_getHoldings');
+    const hostedWrite = toolsByName.get('sap_register_agent');
+    const localBridge = toolsByName.get('sap_payments_call_paid_tool');
+    const builder = toolsByName.get('sap_escrow_build_create_transaction');
+
+    expect(paidRead?.description).toContain('SAP MCP execution guidance');
+    expect(paidRead?.description).toContain('paid read-premium');
+    expect(paidRead?.description).toContain('sap_payments_call_paid_tool');
+    expect(paidRead?.inputSchema?.description).toContain('Use exact field names');
+
+    expect(hostedWrite?.description).toContain('Hosted accountless routing');
+    expect(hostedWrite?.description).toContain('sap_payments_register_agent');
+    expect(hostedWrite?.description).toContain('no x402 payment should be charged');
+
+    expect(localBridge?.description).toContain('local sap_payments bridge');
+    expect(localBridge?.description).toContain('must never expose keypair bytes');
+    expect(localBridge?.inputSchema?.properties?.maxPriceUsd?.description).toContain('safety cap');
+
+    expect(builder?.description).toContain('hosted-safe builder');
+    expect(builder?.description).toContain('sap_payments_finalize_transaction');
+    expect(builder?.description).toContain('never create temporary signing scripts');
   });
 
   it('maps bridge and Metaplex AgentKit writes to transaction permissions', async () => {

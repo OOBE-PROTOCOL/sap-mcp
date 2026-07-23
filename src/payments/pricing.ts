@@ -85,6 +85,7 @@ const FREE_MCP_METHODS = new Set([
 
 const FREE_TOOLS = new Set([
   'sap_agent_start',
+  'sap_estimate_tool_cost',
   'sap_agent_runtime_status',
   'sap_agent_next_action',
   'sap_pricing_catalog',
@@ -138,6 +139,7 @@ const FREE_TOOLS = new Set([
 
 const STRICT_FREE_TOOLS = new Set([
   'sap_agent_start',
+  'sap_estimate_tool_cost',
   'sap_agent_runtime_status',
   'sap_agent_next_action',
   'sap_pricing_catalog',
@@ -172,6 +174,14 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_payments_update_agent',
   'sap_payments_finalize_transaction',
   'sap_payments_verify_receipt',
+  'sol_get_balance',
+  'spl-token_getBalance',
+  'spl-token_getTokenAccounts',
+  'spl-token_getTokenAccount',
+  'spl-token_getMint',
+  'spl-token_getSupply',
+  'sap_x402_get_balance',
+  'magicblock_balance',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -313,7 +323,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     tiers: {
       free: {
         paymentRequired: false,
-        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, low-cost public balance checks, and compact orientation lists.',
+        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, core SOL/SPL balance checks for payment readiness, and compact orientation lists.',
         examples: [
           'initialize',
           'tools/list',
@@ -322,8 +332,13 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
           'sap_agent_context',
           'sap_agent_next_action',
           'sap_pricing_catalog',
+          'sap_estimate_tool_cost',
           'sap_get_agent_profile',
           'sap_payments_readiness',
+          'sol_get_balance',
+          'spl-token_getBalance',
+          'spl-token_getTokenAccounts',
+          'magicblock_balance',
           'sap_list_agents limit<=20 view=compact',
         ],
       },
@@ -362,6 +377,8 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     runtimeRules: [
       'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
       `Exact SAP agent/profile reads are free. Use sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, and sap_get_global_state before broad paid discovery.`,
+      'Core balance checks are free: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, spl-token_getMint, spl-token_getSupply, magicblock_balance, sap_x402_get_balance. Enriched holdings tools such as jupiter_getHoldings are read-premium because they perform broader market/index work.',
+      'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
       `sap_list_agents is free only for compact orientation pages with limit <= ${FREE_DIRECTORY_LIMIT}; larger pages, full hydration, protocol index summaries, and sap_discover_agents/sap_list_all_agents are read-premium.`,
       'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',

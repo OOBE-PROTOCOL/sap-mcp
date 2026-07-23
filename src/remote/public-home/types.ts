@@ -67,7 +67,10 @@ export interface LandingPublicPaymentStats {
   totalVolumeUsd: number;
   totalSettlements: number;
   totalPaymentRequests: number;
+  totalChallengesReturned: number;
   totalVerifiedPayments: number;
+  totalVerificationFailures: number;
+  totalEligibilityBlocks: number;
   totalFailedSettlements: number;
   uniqueRemoteCallers: number;
   uniqueUserAgents: number;
