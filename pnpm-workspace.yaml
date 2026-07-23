@@ -4,6 +4,7 @@ packages:
 overrides:
   '@hono/node-server': 2.0.10
   bigint-buffer: file:vendor/bigint-buffer
+  body-parser: 1.20.6
   brace-expansion@<1.1.16: 1.1.16
   brace-expansion@>=2.0.0 <2.1.2: 2.1.2
   esbuild: ^0.28.1

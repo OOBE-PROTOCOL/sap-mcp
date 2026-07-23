@@ -22,6 +22,9 @@ All notable changes to this project are documented in this file.
 - Moved supply-chain overrides to `pnpm-workspace.yaml` for pnpm 11 and pinned
   patched `fast-uri`, `hono`, and `@hono/node-server` versions so desktop
   release jobs pass the moderate-level audit gate.
+- Removed the duplicate npm `package-lock.json` from the pnpm-managed source
+  tree and disabled package-lock generation, preventing stale npm lock alerts
+  from diverging from the verified `pnpm-lock.yaml` dependency graph.
 - Kept the `0.9.16` hardening set intact: intent-level tool schemas, payment
   funnel telemetry, cost estimation, local MCP session reuse, hosted submit
   relay guidance, and no-key-material safety tests.
