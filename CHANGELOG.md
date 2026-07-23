@@ -19,6 +19,9 @@ All notable changes to this project are documented in this file.
 - Bumped public metadata, npm/package manifests, desktop wizard references, and
   client config snippets to `0.9.17` so users, registries, and agent runtimes
   receive a single coherent release identity.
+- Moved supply-chain overrides to `pnpm-workspace.yaml` for pnpm 11 and pinned
+  patched `fast-uri`, `hono`, and `@hono/node-server` versions so desktop
+  release jobs pass the moderate-level audit gate.
 - Kept the `0.9.16` hardening set intact: intent-level tool schemas, payment
   funnel telemetry, cost estimation, local MCP session reuse, hosted submit
   relay guidance, and no-key-material safety tests.
