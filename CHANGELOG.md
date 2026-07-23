@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.18 - 2026-07-23
+
+### Improved
+
+- Strengthened MCP tool metadata so every registered tool carries fluent
+  intent-level guidance covering pricing, routing, and signer boundaries.
+- Extended JSON Schema enrichment to nested object, array, `oneOf`, `anyOf`,
+  and `allOf` branches so agents receive contextual descriptions for complex
+  parameters instead of guessing field names.
+- Added release-blocking regression coverage that fails if any tool has a thin
+  description, lacks exact-field guidance, or exposes an undescribed nested
+  input parameter.
+- Bumped package, public server metadata, desktop wizard, docs, and runtime
+  snippets to `0.9.18` for a coherent release surface across hosted MCP,
+  npm, registries, and client setup flows.
+
 ## 0.9.17 - 2026-07-23
 
 ### Added

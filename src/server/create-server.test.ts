@@ -9,15 +9,22 @@ import type { SapMcpConfig } from '../core/types.js';
 import { getPermissionMappedTools, getRequiredPermission } from '../security/tool-permissions.js';
 import { MCP_SERVER_INSTRUCTIONS, MCP_SERVER_VERSION } from '../core/constants.js';
 
+interface JsonSchemaForTest {
+  type?: string;
+  title?: string;
+  description?: string;
+  properties?: Record<string, JsonSchemaForTest>;
+  items?: JsonSchemaForTest;
+  oneOf?: JsonSchemaForTest[];
+  anyOf?: JsonSchemaForTest[];
+  allOf?: JsonSchemaForTest[];
+}
+
 interface ToolDefinitionForTest {
   name: string;
   title?: string;
   description?: string;
-  inputSchema?: {
-    type?: string;
-    description?: string;
-    properties?: Record<string, { description?: string; title?: string }>;
-  };
+  inputSchema?: JsonSchemaForTest;
   outputSchema?: unknown;
   annotations?: {
     title?: string;
@@ -63,6 +70,37 @@ function baseConfig(overrides: Partial<SapMcpConfig> = {}): SapMcpConfig {
 
 function registeredServer(server: Server): RegisteredServerForTest {
   return server as RegisteredServerForTest;
+}
+
+function collectUndescribedSchemaProperties(
+  schema: JsonSchemaForTest | undefined,
+  path: string,
+): string[] {
+  if (!schema) {
+    return [];
+  }
+
+  const missing: string[] = [];
+
+  for (const [propertyName, propertySchema] of Object.entries(schema.properties ?? {})) {
+    const propertyPath = `${path}.${propertyName}`;
+    if (!propertySchema.description && !propertySchema.title) {
+      missing.push(propertyPath);
+    }
+    missing.push(...collectUndescribedSchemaProperties(propertySchema, propertyPath));
+  }
+
+  if (schema.items) {
+    missing.push(...collectUndescribedSchemaProperties(schema.items, `${path}[]`));
+  }
+
+  for (const compositionKey of ['oneOf', 'anyOf', 'allOf'] as const) {
+    for (const [index, branch] of (schema[compositionKey] ?? []).entries()) {
+      missing.push(...collectUndescribedSchemaProperties(branch, `${path}.${compositionKey}[${index}]`));
+    }
+  }
+
+  return missing;
 }
 
 describe('createSapMcpServer', () => {
@@ -187,6 +225,33 @@ describe('createSapMcpServer', () => {
     }
 
     expect(missing).toEqual([]);
+  });
+
+  it('keeps every tool and nested input parameter richly described for agent runtimes', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const thinDescriptions: string[] = [];
+    const missingNestedDescriptions: string[] = [];
+
+    for (const tool of server.tools ?? []) {
+      const description = tool.description ?? '';
+      if (
+        description.length < 160
+        || !description.includes('SAP MCP execution guidance:')
+        || !description.includes('Pricing:')
+        || !description.includes('Routing:')
+        || !description.includes('Signer boundary:')
+      ) {
+        thinDescriptions.push(tool.name);
+      }
+
+      if (!tool.inputSchema?.description?.includes('Use exact field names')) {
+        missingNestedDescriptions.push(`${tool.name}.inputSchema`);
+      }
+      missingNestedDescriptions.push(...collectUndescribedSchemaProperties(tool.inputSchema, tool.name));
+    }
+
+    expect(thinDescriptions).toEqual([]);
+    expect(missingNestedDescriptions).toEqual([]);
   });
 
   it('exposes Escrow V2 as the active escrow write surface', async () => {
@@ -574,7 +639,7 @@ describe('createSapMcpServer', () => {
     expect(paidRead?.description).toContain('sap_payments_call_paid_tool');
     expect(paidRead?.inputSchema?.description).toContain('Use exact field names');
 
-    expect(hostedWrite?.description).toContain('Hosted accountless routing');
+    expect(hostedWrite?.description).toContain('Routing: hosted accountless write is blocked');
     expect(hostedWrite?.description).toContain('sap_payments_register_agent');
     expect(hostedWrite?.description).toContain('no x402 payment should be charged');
 

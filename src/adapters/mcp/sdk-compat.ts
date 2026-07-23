@@ -509,6 +509,14 @@ function enrichSchemaDescriptions(schema: Tool['inputSchema'], toolTitle: string
       enriched.items = enrichProperty(propertyName, enriched.items);
     }
 
+    for (const compositionKey of ['oneOf', 'anyOf', 'allOf'] as const) {
+      if (Array.isArray(enriched[compositionKey])) {
+        enriched[compositionKey] = (enriched[compositionKey] as unknown[]).map((candidate) => (
+          isPlainObject(candidate) ? enrichProperty(propertyName, candidate) : candidate
+        ));
+      }
+    }
+
     return enriched;
   };
 
@@ -589,7 +597,7 @@ function buildToolIntentGuidance(toolName: string, title: string): {
   const hostedBlocked = isHostedAccountlessBlockedTool(toolName);
 
   const routing = hostedBlocked
-    ? `Hosted accountless routing: do not call this as a paid hosted write; no x402 payment should be charged. Use ${localEquivalent ?? 'the local sap_payments bridge or a hosted unsigned builder'} when user signing is required.`
+    ? `Routing: hosted accountless write is blocked; do not call this as a paid hosted write and no x402 payment should be charged. Use ${localEquivalent ?? 'the local sap_payments bridge or a hosted unsigned builder'} when user signing is required.`
     : toolName.startsWith('sap_payments_')
       ? 'Routing: local sap_payments bridge. It may sign x402 payment payloads or user-approved transactions locally, and must never expose keypair bytes.'
       : localEquivalent && toolName.includes('_build_')
