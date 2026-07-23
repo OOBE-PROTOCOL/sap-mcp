@@ -74,6 +74,9 @@ type ToolCallResult = {
   isError?: boolean;
   structuredContent?: Record<string, unknown>;
 };
+type ResourceTemplateMatch = {
+  args: Record<string, string>;
+};
 
 interface RegisteredMcpServer extends Server {
   tools?: Tool[];
@@ -95,6 +98,66 @@ interface RegisteredMcpServer extends Server {
  */
 function withRegistrationStore(server: Server): RegisteredMcpServer {
   return server as RegisteredMcpServer;
+}
+
+/**
+ * @name matchResourceTemplateUri
+ * @description Matches MCP resource URI templates without converting attacker-controlled text into a regular expression.
+ */
+export function matchResourceTemplateUri(uriTemplate: string, resourceUri: string): ResourceTemplateMatch | undefined {
+  const args: Record<string, string> = {};
+  let templateIndex = 0;
+  let resourceIndex = 0;
+
+  while (templateIndex < uriTemplate.length) {
+    const openBrace = uriTemplate.indexOf('{', templateIndex);
+    if (openBrace === -1) {
+      const literal = uriTemplate.slice(templateIndex);
+      return resourceUri.slice(resourceIndex) === literal ? { args } : undefined;
+    }
+
+    const literal = uriTemplate.slice(templateIndex, openBrace);
+    if (!resourceUri.startsWith(literal, resourceIndex)) {
+      return undefined;
+    }
+    resourceIndex += literal.length;
+
+    const closeBrace = uriTemplate.indexOf('}', openBrace + 1);
+    if (closeBrace === -1) {
+      return undefined;
+    }
+
+    const argName = uriTemplate.slice(openBrace + 1, closeBrace);
+    if (!argName) {
+      return undefined;
+    }
+
+    const nextLiteralStart = closeBrace + 1;
+    const nextOpenBrace = uriTemplate.indexOf('{', nextLiteralStart);
+    const nextLiteral = uriTemplate.slice(
+      nextLiteralStart,
+      nextOpenBrace === -1 ? uriTemplate.length : nextOpenBrace,
+    );
+    const nextSlash = resourceUri.indexOf('/', resourceIndex);
+    const segmentEnd = nextLiteral
+      ? resourceUri.indexOf(nextLiteral, resourceIndex)
+      : (nextSlash === -1 ? resourceUri.length : nextSlash);
+
+    if (segmentEnd === -1 || segmentEnd === resourceIndex) {
+      return undefined;
+    }
+
+    const argValue = resourceUri.slice(resourceIndex, segmentEnd);
+    if (argValue.includes('/')) {
+      return undefined;
+    }
+
+    args[argName] = argValue;
+    resourceIndex = segmentEnd;
+    templateIndex = closeBrace + 1;
+  }
+
+  return resourceIndex === resourceUri.length ? { args } : undefined;
 }
 
 /**
@@ -1099,23 +1162,11 @@ export function registerResourceTemplate(
         const handler = templateHandlers[tmpl.uriTemplate];
         if (!handler) continue;
         
-        // Simple template matching: sap://memory/{agent} matches sap://memory/abc123
-        const pattern = tmpl.uriTemplate.replace(/\{[^}]+\}/g, '([^/]+)');
-        const regex = new RegExp(`^${pattern}$`);
-        const match = resourceUri.match(regex);
+        const match = matchResourceTemplateUri(tmpl.uriTemplate, resourceUri);
         
         if (match) {
-          // Extract template arguments from URI
-          const argNames = tmpl.uriTemplate.match(/\{([^}]+)\}/g)?.map((s: string) => s.slice(1, -1)) || [];
-          const args: Record<string, string> = {};
-          match.slice(1).forEach((value, i) => {
-            if (argNames[i]) {
-              args[argNames[i]] = value;
-            }
-          });
-          
           try {
-            const result = await handler(resourceUri, args);
+            const result = await handler(resourceUri, match.args);
             return toResourceReadResult(result, resourceUri, tmpl.mimeType || 'application/json');
           } catch (error) {
             logger.error('Template resource read failed', { uri: resourceUri, template: tmpl.uriTemplate, error });

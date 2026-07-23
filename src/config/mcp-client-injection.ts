@@ -179,6 +179,112 @@ function yamlScalar(value: string): string {
 }
 
 /**
+ * @name parseQuotedConfigValue
+ * @description Reads a JSON/TOML/YAML quoted scalar or a bare scalar from a single config value.
+ */
+function parseQuotedConfigValue(value: string): string {
+  const trimmed = value.trim();
+  const quote = trimmed[0];
+  if (quote === '"' || quote === "'") {
+    let escaped = false;
+    for (let index = 1; index < trimmed.length; index += 1) {
+      const character = trimmed[index];
+      if (character === '\\' && quote === '"' && !escaped) {
+        escaped = true;
+        continue;
+      }
+      if (character === quote && !escaped) {
+        const quotedValue = trimmed.slice(0, index + 1);
+        if (quote === "'") {
+          return quotedValue.slice(1, -1);
+        }
+
+        try {
+          return JSON.parse(quotedValue);
+        } catch {
+          return quotedValue.slice(1, -1);
+        }
+      }
+      escaped = false;
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return trimmed.slice(1, -1);
+    }
+  }
+
+  return trimmed.split(/\s+#/u)[0]?.trim() ?? '';
+}
+
+/**
+ * @name jsonSapEndpointMatchesHostedUrl
+ * @description Checks JSON MCP config shapes for an exact hosted SAP endpoint match.
+ */
+function jsonSapEndpointMatchesHostedUrl(content: string): boolean {
+  try {
+    const parsed = JSON.parse(content);
+    if (!isRecord(parsed)) {
+      return false;
+    }
+
+    const candidates = [
+      isRecord(parsed.mcpServers) && isRecord(parsed.mcpServers[SAP_SERVER_NAME])
+        ? parsed.mcpServers[SAP_SERVER_NAME]?.url
+        : undefined,
+      isRecord(parsed[SAP_SERVER_NAME]) ? parsed[SAP_SERVER_NAME]?.url : undefined,
+      isRecord(parsed.mcp)
+        && isRecord(parsed.mcp.servers)
+        && isRecord(parsed.mcp.servers[SAP_SERVER_NAME])
+        ? parsed.mcp.servers[SAP_SERVER_NAME]?.url
+        : undefined,
+    ];
+
+    return candidates.some((candidate) => candidate === HOSTED_SAP_MCP_URL);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @name textSapEndpointMatchesHostedUrl
+ * @description Checks TOML/YAML config text for an exact hosted SAP endpoint assignment.
+ */
+function textSapEndpointMatchesHostedUrl(content: string): boolean {
+  for (const rawLine of content.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (line.startsWith('#') || !line.includes('url')) {
+      continue;
+    }
+
+    const tomlMatch = /^url\s*=\s*(.+)$/u.exec(line);
+    if (tomlMatch && parseQuotedConfigValue(tomlMatch[1] ?? '') === HOSTED_SAP_MCP_URL) {
+      return true;
+    }
+
+    const yamlMatch = /^url\s*:\s*(.+)$/u.exec(line);
+    if (yamlMatch && parseQuotedConfigValue(yamlMatch[1] ?? '') === HOSTED_SAP_MCP_URL) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * @name hasExactHostedSapEndpoint
+ * @description Avoids substring URL checks so adjacent URL text cannot satisfy validation.
+ */
+function hasExactHostedSapEndpoint(target: McpClientTarget, content: string): boolean {
+  if (target.format === 'json') {
+    return jsonSapEndpointMatchesHostedUrl(content);
+  }
+
+  return textSapEndpointMatchesHostedUrl(content);
+}
+
+/**
  * @name readTargetContent
  * @description Reads an existing target file or returns a format-appropriate empty config.
  */
@@ -1175,7 +1281,7 @@ export function validateHostedPaymentBridgeContent(
   if (!content.includes(SAP_PAYMENT_BRIDGE_SERVER_NAME)) {
     issues.push('Missing local sap_payments MCP bridge.');
   }
-  if (!content.includes(HOSTED_SAP_MCP_URL)) {
+  if (!hasExactHostedSapEndpoint(target, content)) {
     issues.push(`Missing hosted SAP MCP URL ${HOSTED_SAP_MCP_URL}.`);
   }
   if (!content.includes('SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE')) {

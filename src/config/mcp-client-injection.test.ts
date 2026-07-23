@@ -266,6 +266,41 @@ describe('MCP client injection', () => {
       .toContain('Missing local sap_payments MCP bridge.');
   });
 
+  it('does not accept hosted endpoint lookalikes during bridge validation', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'codex',
+      label: 'Codex',
+      path: '/tmp/config.toml',
+      format: 'toml',
+      exists: true,
+    };
+    const built = buildCodexHostedPaymentBridgeContent('', undefined, 'win32');
+    const lookalike = built.nextContent.replace(
+      'url = "https://mcp.sap.oobeprotocol.ai/mcp"',
+      'url = "https://mcp.sap.oobeprotocol.ai/mcp.evil.example"',
+    );
+
+    expect(validateHostedPaymentBridgeContent(targetConfig, lookalike, 'win32'))
+      .toContain('Missing hosted SAP MCP URL https://mcp.sap.oobeprotocol.ai/mcp.');
+  });
+
+  it('accepts exact hosted endpoint assignments with trailing config comments', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'codex',
+      label: 'Codex',
+      path: '/tmp/config.toml',
+      format: 'toml',
+      exists: true,
+    };
+    const built = buildCodexHostedPaymentBridgeContent('', undefined, 'win32');
+    const commented = built.nextContent.replace(
+      'url = "https://mcp.sap.oobeprotocol.ai/mcp"',
+      'url = "https://mcp.sap.oobeprotocol.ai/mcp" # OOBE hosted SAP MCP',
+    );
+
+    expect(validateHostedPaymentBridgeContent(targetConfig, commented, 'win32')).toEqual([]);
+  });
+
   it('auto-resolves legacy Codex mcp-remote config into native hosted plus sap_payments', () => {
     const targetConfig: McpClientTarget = {
       id: 'codex',
