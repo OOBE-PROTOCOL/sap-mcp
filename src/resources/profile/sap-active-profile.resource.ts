@@ -1,4 +1,10 @@
 /**
+ * @name resources/profile/sap-active-profile
+ * @description MCP resource exposing active profile and available profiles for context switching
+ * @module resources/profile/sap-active-profile
+ */
+
+/**
  * SAP MCP Active Profile Resource
  * 
  * Exposes the current active profile and available profiles via MCP resources.

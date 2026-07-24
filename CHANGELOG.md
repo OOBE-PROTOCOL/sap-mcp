@@ -2,6 +2,89 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.19 - 2026-07-25
+
+### Added
+
+- Added 5 new premium plugin definitions with 15 additional capabilities:
+  - `sap-premium-trading-streams` — 4 WebSocket stream capabilities (arbitrage,
+    volatility, whale, route optimization) powered by Jupiter, Pyth, and Helius.
+  - `sap-premium-trading-signals` — 3 webhook signal capabilities (breakout,
+    liquidation cascade, funding rate) via the signal provider rail.
+  - `sap-premium-meme-radar` — 4 capabilities (new listing alert, social
+    sentiment, rugpull detector, volume spike) using Birdeye + DexScreener.
+  - `sap-premium-lowcap-discovery` — 3 capabilities (gem scan, early entry,
+    holder analysis) using Birdeye API for low-cap token discovery.
+  - `sap-premium-tech-fundamentals` — 3 capabilities (GitHub activity, TVL
+    change, tokenomics analysis) using GitHub + DeFiLlama APIs.
+- Added real provider implementations for all 3 core premium plugins
+  (market-data, agent-events, x402-ledger) with WebSocket connections,
+  exponential backoff reconnection, queue-based async generators, and graceful
+  disconnect. Replaced all stub/skeletal placeholders.
+- Added 17 provider adapter files in the private subrepo
+  (`sap-mcp-premium-private/providers/`) covering trading streams, trading
+  signals, meme radar, lowcap discovery, and tech fundamentals with real
+  WebSocket and HTTP polling implementations against free API endpoints.
+- Added OHLC candlestick and on-chain Solana data providers using
+  `@solana/web3.js` Connection and Birdeye OHLC endpoint.
+- Added 5 pure-function technical indicators (Bollinger Bands, ATR, RSI,
+  Volume Profile, Holder Concentration) and 5 stateless strategy engines
+  (Scalping, Arbitrage, Momentum, Mean-Reversion, Meme-Sniper).
+- Added 5 manifest JSON files for the new premium plugins in the private
+  subrepo, bringing the total to 8 manifests with 24 capabilities.
+- Added `src/remote/premium-routes.ts` and `src/remote/premium-memory.ts` for
+  HTTP premium delivery rails.
+- Added full TSDoc documentation (`@name`, `@description`, `@flow`, `@env`,
+  `@module`) across all premium source files and private subrepo providers.
+
+### Improved
+
+- Updated `builtin-plugins.ts` to merge `TRADING_PREMIUM_PLUGINS`,
+  `MEME_RADAR_PREMIUM_PLUGINS`, `LOWCAP_DISCOVERY_PREMIUM_PLUGINS`, and
+  `TECH_FUNDAMENTALS_PREMIUM_PLUGINS` into `listPremiumPlugins()`.
+- Updated premium env templates (production, staging, trading) with 6 new
+  provider env vars for Birdeye, DexScreener, GitHub, DeFiLlama, mempool, and
+  signal provider endpoints.
+- Rewrote private subrepo README with complete structure documentation and
+  zero references to stubs or placeholders.
+- Bumped package, server metadata, and runtime version to `0.9.19`.
+
+## Unreleased
+
+### Added
+
+- Added a typed SAP MCP premium plugin runtime foundation with free discovery
+  and planning tools for stream, webhook, and premium plugin contracts.
+- Added `sap_premium_plugin_catalog`, `sap_stream_catalog`,
+  `sap_webhook_catalog`, `sap_premium_validate_plugin_manifest`,
+  `sap_premium_plugin_template`, `sap_premium_session_start`, and
+  `sap_premium_session_status`.
+- Added premium manifest validation for ids, semver, descriptions, JSON
+  Schemas, pricing policies, and delivery contracts.
+- Added built-in contract manifests for premium market data, SAP agent events,
+  and x402 ledger telemetry without returning fake live data when providers are
+  not configured.
+- Added public machine-readable premium discovery endpoints at
+  `/premium/catalog.json`, `/premium/streams.json`, and
+  `/premium/webhooks.json`.
+- Added a manifest-only private plugin loader for controlled deployments using
+  `SAP_MCP_ENABLE_PREMIUM_PLUGINS`, `SAP_MCP_PLUGIN_DIR`, and
+  `SAP_MCP_PREMIUM_EXPOSE_PRIVATE_DISCOVERY`.
+
+### Improved
+
+- Kept premium discovery/session planning free in both default and strict
+  monetization modes so agents can validate provider readiness before paid
+  stream/webhook activation.
+- Documented the private enterprise plugin loader contract and the rule that
+  live premium data must only be promised when provider readiness is true.
+- Added capability-level `providerReady` signals to premium catalog responses,
+  strict root schema validation for premium plugin manifests, and bounded
+  in-memory premium session pruning.
+- Hardened premium manifests against unknown fields and unsafe provider env
+  values so private provider secrets or executable code cannot leak through
+  public discovery.
+
 ## 0.9.18 - 2026-07-23
 
 ### Improved

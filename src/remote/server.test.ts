@@ -9,6 +9,7 @@ import {
   buildMarketplaceConfigurationMetadata,
   buildPublicPayShProviderYaml,
   buildPublicServerInfo,
+  buildPremiumDiscoveryDocument,
   buildStaticServerCard,
   buildWizardInstallDescriptor,
   buildWizardInstallScript,
@@ -375,6 +376,9 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.txSubmit).toBe('https://mcp.sap.oobeprotocol.ai/tx/submit');
     expect(info.endpoints.pricing).toBe('https://mcp.sap.oobeprotocol.ai/pricing.json');
     expect(info.endpoints.openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
+    expect(info.endpoints.premiumCatalog).toBe('https://mcp.sap.oobeprotocol.ai/premium/catalog.json');
+    expect(info.endpoints.premiumStreams).toBe('https://mcp.sap.oobeprotocol.ai/premium/streams.json');
+    expect(info.endpoints.premiumWebhooks).toBe('https://mcp.sap.oobeprotocol.ai/premium/webhooks.json');
     expect(info.endpoints.x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(info.endpoints.smitheryConfigSchema).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');
     expect(info.endpoints.smitheryServerCard).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/mcp/server-card.json');
@@ -464,7 +468,7 @@ describe('remote MCP server config', () => {
       type: 'streamable-http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(card.tools).toHaveLength(278);
+    expect(card.tools).toHaveLength(291);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_start')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_runtime_status')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_context')).toBe(true);
@@ -473,6 +477,9 @@ describe('remote MCP server config', () => {
     expect(card.tools.some((tool) => tool.name === 'sap_protocol_invariants')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_identity_plan')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_skills_upgrade_plan')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_premium_plugin_catalog')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_stream_catalog')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_webhook_catalog')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_runtime_repair_plan')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_create_escrow')).toBe(false);
     expect(card.tools.some((tool) => tool.name === 'sap_create_escrow_v2')).toBe(true);
@@ -486,6 +493,44 @@ describe('remote MCP server config', () => {
       idempotentHint: expect.any(Boolean),
       openWorldHint: expect.any(Boolean),
     });
+  });
+
+  it('publishes secret-free premium discovery documents', () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const catalog = buildPremiumDiscoveryDocument(req, publicRemoteConfig) as {
+      links: Record<string, string>;
+      capabilities: Array<{ id: string; type: string; status: string; providerReady: boolean }>;
+      plugins: Array<{ id: string }>;
+      providerStatus: Record<string, boolean>;
+      privatePluginSupport: { enabled: boolean };
+      monetization: { planning: string; localBridgeTool: string };
+    };
+    const streams = buildPremiumDiscoveryDocument(req, publicRemoteConfig, 'stream') as {
+      kind: string;
+      capabilities: Array<{ id: string; type: string }>;
+    };
+    const webhooks = buildPremiumDiscoveryDocument(req, publicRemoteConfig, 'webhook') as {
+      kind: string;
+      capabilities: Array<{ id: string; type: string }>;
+    };
+
+    expect(catalog.links.catalog).toBe('https://mcp.sap.oobeprotocol.ai/premium/catalog.json');
+    expect(catalog.links.streams).toBe('https://mcp.sap.oobeprotocol.ai/premium/streams.json');
+    expect(catalog.links.webhooks).toBe('https://mcp.sap.oobeprotocol.ai/premium/webhooks.json');
+    expect(catalog.monetization.planning).toBe('free');
+    expect(catalog.monetization.localBridgeTool).toBe('sap_payments_call_paid_tool');
+    expect(catalog.plugins.map(plugin => plugin.id)).toContain('sap-premium-market-data');
+    expect(catalog.capabilities.map(capability => capability.id)).toContain('jupiter.quote.delta');
+    expect(catalog.capabilities.some(capability => capability.status === 'requires-provider')).toBe(true);
+    expect(catalog.capabilities.some(capability => capability.providerReady)).toBe(false);
+    expect(catalog.privatePluginSupport.enabled).toBe(false);
+    expect(Object.keys(catalog.providerStatus)).toContain('SAP_MCP_PREMIUM_JUPITER_STREAM_URL');
+    expect(streams.kind).toBe('premium-stream-catalog');
+    expect(streams.capabilities.every(capability => capability.type === 'stream')).toBe(true);
+    expect(webhooks.kind).toBe('premium-webhook-catalog');
+    expect(webhooks.capabilities.every(capability => capability.type === 'webhook')).toBe(true);
+    expect(JSON.stringify(catalog)).not.toContain('api_key=');
+    expect(JSON.stringify(catalog)).not.toContain('/Users/keepeeto');
   });
 
   it('builds marketplace configuration metadata for Smithery x402 setup UX', () => {
@@ -515,6 +560,10 @@ describe('remote MCP server config', () => {
       'x-discovery': {
         resources: string[];
         openApi: string;
+        pricing: string;
+        premiumCatalog: string;
+        premiumStreams: string;
+        premiumWebhooks: string;
         x402Discovery: string;
         payShProvider: string;
         payments: typeof paymentDiscovery;
@@ -562,6 +611,9 @@ describe('remote MCP server config', () => {
     expect(openApi['x-discovery'].resources).toEqual(['https://mcp.sap.oobeprotocol.ai/mcp']);
     expect(openApi['x-discovery'].openApi).toBe('https://mcp.sap.oobeprotocol.ai/openapi.json');
     expect(openApi['x-discovery'].pricing).toBe('https://mcp.sap.oobeprotocol.ai/pricing.json');
+    expect(openApi['x-discovery'].premiumCatalog).toBe('https://mcp.sap.oobeprotocol.ai/premium/catalog.json');
+    expect(openApi['x-discovery'].premiumStreams).toBe('https://mcp.sap.oobeprotocol.ai/premium/streams.json');
+    expect(openApi['x-discovery'].premiumWebhooks).toBe('https://mcp.sap.oobeprotocol.ai/premium/webhooks.json');
     expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(openApi['x-discovery'].payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-pay-sh'].providerYaml).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
@@ -635,6 +687,9 @@ describe('remote MCP server config', () => {
     expect(root).toContain('href="https://mcp.sap.oobeprotocol.ai/openapi.json"');
     expect(root).toContain('href="https://mcp.sap.oobeprotocol.ai/pay/provider.yml"');
     expect(root).toContain('https://mcp.sap.oobeprotocol.ai/server.json');
+    expect(root).toContain('https://mcp.sap.oobeprotocol.ai/premium/catalog.json');
+    expect(root).toContain('https://mcp.sap.oobeprotocol.ai/premium/streams.json');
+    expect(root).toContain('https://mcp.sap.oobeprotocol.ai/premium/webhooks.json');
     expect(root).toContain('Facilitator Volume');
     expect(root).toContain('Total Settlements');
     expect(root).toContain('SAP MCP compatible agent runtimes');

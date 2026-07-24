@@ -1,4 +1,10 @@
 /**
+ * @name resources/registry/index
+ * @description Barrel export for registry resources (global registry, agent)
+ * @module resources/registry/index
+ */
+
+/**
  * Registry resources barrel export.
  */
 

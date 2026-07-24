@@ -1,4 +1,10 @@
 /**
+ * @name core/types
+ * @description Core type definitions for shared context, configuration, and data structures
+ * @module core/types
+ */
+
+/**
  * Core Type Definitions for SAP MCP Server
  * 
  * These types define the shared context, configuration, and data structures

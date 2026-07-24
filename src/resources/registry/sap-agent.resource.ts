@@ -1,4 +1,10 @@
 /**
+ * @name resources/registry/sap-agent
+ * @description MCP resource for agent registration data and capabilities from on-chain PDA
+ * @module resources/registry/sap-agent
+ */
+
+/**
  * SAP Agent Resource
  * 
  * Agent registration data and capabilities.

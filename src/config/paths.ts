@@ -1,3 +1,9 @@
+/**
+ * @name config/paths
+ * @description Platform-specific path resolution for configuration files and directories
+ * @module config/paths
+ */
+
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';

@@ -1,5 +1,11 @@
 /**
- * Core module barrel export
+ * @name core/index
+ * @description Barrel export for the SAP MCP core module.
+ *
+ * Re-exports the logger, shared types, error classes, result utilities,
+ * constants, and type guards.
+ *
+ * @module core/index
  */
 
 export { logger, setLogLevel } from './logger.js';

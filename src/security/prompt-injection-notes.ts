@@ -1,15 +1,24 @@
 /**
- * Prompt injection prevention notes
- * 
+ * @name security/prompt-injection-notes
+ * @description Prompt injection prevention guidelines for SAP MCP tool descriptions and responses.
+ *
  * IMPORTANT: Tool descriptions and responses must NOT contain:
  * - Hidden instructions for AI agents
  * - Untrusted external text without marking
  * - Instructions to ignore previous prompts
  * - Requests to reveal system prompts
- * 
+ *
  * Always validate and sanitize external input before including in responses.
+ *
+ * @module security/prompt-injection-notes
  */
 
+/**
+ * @name promptInjectionNotes
+ * @description Multiline string of prompt injection prevention guidelines embedded in tool metadata.
+ *
+ * @usedBy Tool registration in the SAP MCP runtime to inject safety guidelines into agent context.
+ */
 export const promptInjectionNotes = `
 Prompt Injection Prevention Guidelines:
 

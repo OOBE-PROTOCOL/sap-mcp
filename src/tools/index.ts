@@ -1,4 +1,10 @@
 /**
+ * @name tools/index
+ * @description Barrel export for tool registration modules (SAP SDK, SNS, Client SDK)
+ * @module tools/index
+ */
+
+/**
  * Tools module barrel export
  */
 
@@ -27,6 +33,9 @@ export { registerProfileTools } from './profile-tools.js';
 
 // REAL AGENT START TOOL — concise hosted SAP MCP bootstrap for agent runtimes
 export { registerAgentStartTool } from './agent-start-tool.js';
+
+// REAL PREMIUM RUNTIME TOOLS — typed plugin catalogs, stream/webhook contracts, and session planning
+export { registerPremiumTools } from './premium-tools.js';
 
 // REAL SKILL TOOLS — list, bundle, and install SAP MCP agent skills
 export { registerSkillsTools } from './skills-tools.js';

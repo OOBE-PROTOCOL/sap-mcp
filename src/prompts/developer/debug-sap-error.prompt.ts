@@ -1,4 +1,10 @@
 /**
+ * @name prompts/developer/debug-sap-error
+ * @description Prompt for structured debugging workflow of SAP-related errors
+ * @module prompts/developer/debug-sap-error
+ */
+
+/**
  * Debug SAP Error Prompt
  * 
  * Provides structured debugging workflow for SAP-related errors.

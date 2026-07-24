@@ -1,4 +1,10 @@
 /**
+ * @name prompts/developer/generate-sap-integration
+ * @description Prompt providing guidance for integrating SAP SDK into projects
+ * @module prompts/developer/generate-sap-integration
+ */
+
+/**
  * Generate SAP Integration Prompt
  * 
  * Provides structured guidance for integrating SAP SDK into projects.

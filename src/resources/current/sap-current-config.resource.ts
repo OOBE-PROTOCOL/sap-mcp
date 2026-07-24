@@ -1,4 +1,10 @@
 /**
+ * @name resources/current/sap-current-config
+ * @description MCP resource exposing current active configuration to agents
+ * @module resources/current/sap-current-config
+ */
+
+/**
  * SAP MCP Current Config Resource
  * 
  * Exposes the current active configuration via MCP resources.

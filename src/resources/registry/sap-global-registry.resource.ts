@@ -1,8 +1,16 @@
 /**
- * SAP Global Registry Resource
- * 
- * Global registry of all SAP agents.
- * REAL IMPLEMENTATION — Fetches from on-chain PDA
+ * @name resources/registry/sap-global-registry-resource
+ * @description MCP resource template for the SAP global on-chain agent registry.
+ *
+ * REAL IMPLEMENTATION — Fetches registry data from the on-chain PDA derived
+ * from the `sap_global_registry` seed.
+ *
+ * @flow
+ *   1. Registers a resource template at `sap://registry/global` on the MCP server.
+ *   2. When a client reads the resource, derives the global registry PDA from the program ID.
+ *   3. Fetches the on-chain account data and returns it as a JSON resource content.
+ *
+ * @module resources/registry/sap-global-registry-resource
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -12,7 +20,13 @@ import type { SapMcpContext } from '../../core/types.js';
 import { PublicKey } from '@solana/web3.js';
 
 /**
- * Executes the sap global registry resource operation.
+ * @name sapGlobalRegistryResource
+ * @description Registers the SAP global registry resource template on the MCP server.
+ *
+ * @param server  — The MCP `Server` instance to register the resource on.
+ * @param context — SAP MCP runtime context with connection and config.
+ *
+ * @usedBy `resources/register-resources.ts`.
  */
 export function sapGlobalRegistryResource(server: Server, context: SapMcpContext) {
   registerResourceTemplate(

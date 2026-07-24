@@ -1,4 +1,10 @@
 /**
+ * @name prompts/registry/analyze-sap-agent
+ * @description Prompt for analyzing SAP agent registration, capabilities, and reputation
+ * @module prompts/registry/analyze-sap-agent
+ */
+
+/**
  * Analyze SAP Agent Prompt
  * 
  * Analyzes SAP agent registration, capabilities, and reputation.

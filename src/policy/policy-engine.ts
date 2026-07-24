@@ -1,5 +1,12 @@
 /**
- * Policy engine for enforcing permissions and limits
+ * @name policy/policy-engine
+ * @description High-level policy engine for enforcing permissions and spend limits.
+ *
+ * Wraps the local and hybrid policy engines, loads default policies, and
+ * provides a unified API for permission validation, spend-limit checks,
+ * and runtime diagnostics.
+ *
+ * @module policy/policy-engine
  */
 
 import { logger } from '../core/logger.js';
@@ -20,7 +27,20 @@ interface PermissionContext {
 }
 
 /**
- * Policy engine class
+ * @name PolicyEngine
+ * @description High-level policy engine combining default policies, config-based limits, and hybrid enforcement.
+ *
+ * Loads default policies at construction time, creates a `HybridPolicyEngine`
+ * when configured, and exposes permission validation, spend-limit checks,
+ * policy CRUD, and runtime status diagnostics.
+ *
+ * @method validatePermissions  — Validate a list of permission strings against the allowed-tools config.
+ * @method checkPermission       — Check whether a single permission and optional context is allowed.
+ * @method getRuntimeStatus      — Return current hybrid/Bento policy status for diagnostics.
+ * @method getPolicy             — Retrieve a registered policy by id.
+ * @method addPolicy             — Register a custom policy.
+ *
+ * @usedBy `server.ts`, `core/context.ts`
  */
 export class PolicyEngine {
   private config: SapMcpConfig;

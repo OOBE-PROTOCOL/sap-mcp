@@ -1,12 +1,43 @@
+/**
+ * @name tui/wizard-save
+ * @description TUI wizard configuration persistence — saves profiles, generates keypairs, and writes config files.
+ *
+ * @flow
+ *   1. `saveTuiWizardConfig` takes wizard input, normalizes the profile name, and optionally
+ *      generates a new Solana keypair (saved to disk with restrictive permissions).
+ *   2. Writes the full SAP MCP config JSON to the profile config path.
+ *   3. Sets the active profile marker file.
+ *   4. Returns the config path, wallet path, and agent public key.
+ *
+ * @module tui/wizard-save
+ */
+
 import { existsSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { Keypair } from '@solana/web3.js';
 
+/** @description Regex pattern validating normalized profile names (lowercase alphanumeric with hyphens). */
 const PROFILE_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * Contract describing tui wizard config data used by the SAP MCP runtime.
+ * @name TuiWizardConfig
+ * @description Configuration data collected by the TUI wizard for a new profile.
+ *
+ * @property profileName     — Desired profile name (will be normalized).
+ * @property mode            — SAP MCP operational mode string.
+ * @property rpcUrl          — Solana RPC URL for on-chain interaction.
+ * @property walletPath      — Optional path to an existing keypair file.
+ * @property createNewWallet — Whether to generate a new keypair for this profile.
+ * @property maxTxValueSol   — Maximum transaction value in SOL.
+ * @property dailyLimitSol   — Daily spending limit in SOL.
+ * @property enableBento     — Whether to enable Bento integration.
+ * @property bentoApiKey     — Optional Bento API key.
+ * @property bentoAgentId    — Optional Bento agent ID.
+ * @property logLevel        — Logging level string.
+ * @property enableMetrics   — Whether to enable metrics collection.
+ *
+ * @usedBy `saveTuiWizardConfig`
  */
 export interface TuiWizardConfig {
   profileName: string;
@@ -24,7 +55,15 @@ export interface TuiWizardConfig {
 }
 
 /**
- * Contract describing tui wizard save result data used by the SAP MCP runtime.
+ * @name TuiWizardSaveResult
+ * @description Result of saving a TUI wizard configuration.
+ *
+ * @property configPath    — Filesystem path to the written config JSON.
+ * @property walletPath    — Optional path to the keypair file used or created.
+ * @property walletCreated — Whether a new keypair was generated.
+ * @property agentPubkey   — Optional base58 public key of the agent's wallet.
+ *
+ * @usedBy TUI wizard save flow.
  */
 export interface TuiWizardSaveResult {
   configPath: string;
@@ -34,7 +73,14 @@ export interface TuiWizardSaveResult {
 }
 
 /**
- * Executes the preferred config dir operation.
+ * @name preferredConfigDir
+ * @description Returns the preferred configuration directory for SAP MCP profiles.
+ *
+ * Respects `XDG_CONFIG_HOME` on Linux, `%APPDATA%` on Windows, and `~/.config` on macOS.
+ *
+ * @returns Absolute path to the config directory.
+ *
+ * @usedBy `saveTuiWizardConfig`, `defaultWalletPath`, `profileConfigPath`.
  */
 export function preferredConfigDir(): string {
   if (process.env.XDG_CONFIG_HOME) {
@@ -49,14 +95,26 @@ export function preferredConfigDir(): string {
 }
 
 /**
- * Executes the default wallet path operation.
+ * @name defaultWalletPath
+ * @description Returns the default keypair file path for a given profile name.
+ *
+ * @param profileName — Normalized profile name.
+ * @returns Absolute path to the keypair JSON file.
+ *
+ * @usedBy `saveTuiWizardConfig`.
  */
 export function defaultWalletPath(profileName: string): string {
   return join(preferredConfigDir(), 'keypairs', `${normalizeProfileName(profileName)}-keypair.json`);
 }
 
 /**
- * Resolves the config file path for a profile name.
+ * @name profileConfigPath
+ * @description Resolves the config file path for a normalized profile name.
+ *
+ * @param profileName — Profile name to resolve (will be normalized).
+ * @returns Absolute path to the profile config JSON file.
+ *
+ * @usedBy `saveTuiWizardConfig`.
  */
 export function profileConfigPath(profileName: string): string {
   const normalized = normalizeProfileName(profileName);
@@ -64,7 +122,16 @@ export function profileConfigPath(profileName: string): string {
 }
 
 /**
- * Normalizes profile names accepted by the TUI wizard.
+ * @name normalizeProfileName
+ * @description Normalizes a profile name to lowercase alphanumeric with single hyphens.
+ *
+ * Trims, lowercases, replaces non-alphanumeric sequences with hyphens, and strips
+ * leading/trailing hyphens.
+ *
+ * @param value — Raw profile name string from user input.
+ * @returns Normalized profile name string.
+ *
+ * @usedBy `defaultWalletPath`, `profileConfigPath`, `saveTuiWizardConfig`.
  */
 export function normalizeProfileName(value: string): string {
   return value
@@ -75,14 +142,28 @@ export function normalizeProfileName(value: string): string {
 }
 
 /**
- * Returns true when a normalized profile name is safe for config and wallet paths.
+ * @name isValidProfileName
+ * @description Returns `true` when a normalized profile name is safe for config and wallet paths.
+ *
+ * Rejects empty names, names that don't match the profile pattern, and the reserved name `default`.
+ *
+ * @param value — Normalized profile name to validate.
+ * @returns `true` if the name is valid, `false` otherwise.
+ *
+ * @usedBy `saveTuiWizardConfig`.
  */
 export function isValidProfileName(value: string): boolean {
   return PROFILE_NAME_PATTERN.test(value) && value !== 'default';
 }
 
 /**
- * Expands home-relative paths entered in the TUI wizard.
+ * @name normalizeTuiPath
+ * @description Expands home-relative paths (`~` and `~/`) entered in the TUI wizard.
+ *
+ * @param value — Raw path string from user input.
+ * @returns Expanded absolute path, or `undefined` if input was empty.
+ *
+ * @internal
  */
 function normalizeTuiPath(value: string | undefined): string | undefined {
   if (!value) {
@@ -101,7 +182,13 @@ function normalizeTuiPath(value: string | undefined): string | undefined {
 }
 
 /**
- * Reads the public key from a local Solana keypair file.
+ * @name readAgentPubkey
+ * @description Reads the public key from a local Solana keypair file.
+ *
+ * @param walletPath — Optional path to the keypair JSON file.
+ * @returns Base58-encoded public key string, or `undefined` if the file doesn't exist or is invalid.
+ *
+ * @internal
  */
 function readAgentPubkey(walletPath: string | undefined): string | undefined {
   if (!walletPath || !existsSync(walletPath)) {
@@ -117,7 +204,14 @@ function readAgentPubkey(walletPath: string | undefined): string | undefined {
 }
 
 /**
- * Executes the save tui wizard config operation.
+ * @name saveTuiWizardConfig
+ * @description Saves a TUI wizard configuration to disk, optionally generating a new keypair.
+ *
+ * @param config — TUI wizard configuration data from user input.
+ * @returns Result containing the config path, wallet path, whether a wallet was created, and agent public key.
+ * @throws If the profile name is invalid or if file I/O fails.
+ *
+ * @usedBy TUI wizard save flow.
  */
 export function saveTuiWizardConfig(config: TuiWizardConfig): TuiWizardSaveResult {
   const configDir = preferredConfigDir();

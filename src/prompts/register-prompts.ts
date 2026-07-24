@@ -1,5 +1,11 @@
 /**
- * Register all MCP prompts
+ * @name prompts/register-prompts
+ * @description Central registration of all MCP prompts on the SAP MCP server.
+ *
+ * Imports every prompt registration function and invokes them against the
+ * MCP server instance. Called during server initialization.
+ *
+ * @module prompts/register-prompts
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -28,7 +34,17 @@ import { sapAgentContextPrompt } from './context/sap-agent-context.prompt.js';
 import { sapAgentIntentRouterPrompt } from './context/sap-agent-intent-router.prompt.js';
 
 /**
- * Register all prompts with the MCP server
+ * @name registerPrompts
+ * @description Register all SAP MCP prompts with the MCP server.
+ *
+ * Invokes each prompt registration function in sequence: registry, developer,
+ * payments, execution-proof, and context prompts. Total of 11 prompts.
+ *
+ * @param server - The MCP server instance.
+ * @param context - The SAP MCP execution context.
+ * @returns A promise that resolves when all prompts are registered.
+ *
+ * @usedBy `server.ts`
  */
 export async function registerPrompts(server: Server, context: SapMcpContext): Promise<void> {
   logger.debug('Registering prompts');

@@ -1,11 +1,27 @@
 /**
- * Permission checks
+ * @name policy/permission-checks
+ * @description Permission validation utilities for SAP MCP tool calls.
+ *
+ * Provides functions to check whether a given permission or tool name
+ * is allowed by the server configuration's `allowedTools` list.
+ *
+ * @module policy/permission-checks
  */
 
 import type { SapPermission, SapMcpConfig } from '../core/types.js';
 
 /**
- * Check if permission is allowed
+ * @name checkPermission
+ * @description Check if a specific permission is allowed by the configuration.
+ *
+ * When `allowedTools` is `'all'`, every permission is allowed. Otherwise the
+ * permission must appear in the `allowedTools` array.
+ *
+ * @param config - The SAP MCP server configuration.
+ * @param permission - The permission string to check.
+ * @returns An object with `allowed` flag and optional `reason` string.
+ *
+ * @usedBy `checkToolAllowed`
  */
 export function checkPermission(
   config: SapMcpConfig,
@@ -28,7 +44,17 @@ export function checkPermission(
 }
 
 /**
- * Check if tool is allowed
+ * @name checkToolAllowed
+ * @description Check if a tool is allowed by mapping its name to a permission.
+ *
+ * Extracts the action and category from the tool name, maps them to a
+ * `SapPermission` string, then delegates to `checkPermission`.
+ *
+ * @param config - The SAP MCP server configuration.
+ * @param toolName - The tool name to check (e.g., `sap_get_agent`).
+ * @returns An object with `allowed` flag and optional `reason` string.
+ *
+ * @usedBy `policy-engine.ts:PolicyEngine`
  */
 export function checkToolAllowed(
   config: SapMcpConfig,

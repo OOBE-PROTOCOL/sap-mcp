@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 
 /**
+ * @name config-cli
+ * @description CLI tool for managing secure JSON configuration with approval workflow
+ * @module config-cli
+ */
+
+/**
  * SAP MCP Server - Config CLI
  * 
  * Manage secure JSON configuration with approval workflow.

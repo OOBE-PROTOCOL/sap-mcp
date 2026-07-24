@@ -1,5 +1,11 @@
 /**
- * Signer module barrel export
+ * @name signer/index
+ * @description Barrel export for the SAP MCP signer module.
+ *
+ * Re-exports signer type definitions, keypair loading functions, local and external
+ * signer factories, and the signer resolver.
+ *
+ * @module signer/index
  */
 
 export type {

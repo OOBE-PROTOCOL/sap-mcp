@@ -1,4 +1,10 @@
 /**
+ * @name prompts/registry/register-sap-agent
+ * @description Prompt guiding users through SAP agent registration process
+ * @module prompts/registry/register-sap-agent
+ */
+
+/**
  * Register SAP Agent Prompt
  * 
  * Guides users through SAP agent registration process.

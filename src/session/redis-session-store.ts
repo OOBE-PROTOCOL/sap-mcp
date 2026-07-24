@@ -1,18 +1,23 @@
 /**
- * Redis-backed session store for production deployments
- * 
+ * @name session/redis-session-store
+ * @description Redis-backed persistent session store for production SAP MCP deployments.
+ *
  * Features:
  * - Persistent sessions across server restarts
  * - Multi-instance support (distributed deployments)
  * - Automatic TTL-based expiration
  * - Memory-safe (no local storage)
- * 
- * Usage:
- * ```typescript
- * const store = new RedisSessionStore('redis://localhost:6379');
- * await store.set('session-123', session);
- * const session = await store.get('session-123');
- * ```
+ *
+ * @flow
+ *   1. `createSessionStore` checks `SAP_MCP_USE_REDIS` env var and creates a `RedisSessionStore`
+ *      or returns `null` for in-memory development mode.
+ *   2. `RedisSessionStore` manages session CRUD with automatic TTL based on session expiry.
+ *   3. A background cleanup interval removes expired sessions periodically.
+ *
+ * @env `SAP_MCP_USE_REDIS` — Set to `true` to enable Redis session storage.
+ * @env `SAP_MCP_REDIS_URL` — Redis connection URL (default `redis://localhost:6379`).
+ *
+ * @module session/redis-session-store
  */
 
 import { Redis } from 'ioredis';
@@ -20,7 +25,14 @@ import { logger } from '../core/logger.js';
 import type { SapAgentSession } from '../core/types.js';
 
 /**
- * Contract describing redis session store config data used by the SAP MCP runtime.
+ * @name RedisSessionStoreConfig
+ * @description Configuration for the Redis-backed session store.
+ *
+ * @property redisUrl          — Redis connection URL.
+ * @property keyPrefix         — Optional prefix for session keys in Redis (default `sap-mcp:session:`).
+ * @property cleanupIntervalMs — Optional cleanup interval in milliseconds (default 3600000 / 1 hour).
+ *
+ * @usedBy `RedisSessionStore`, `createSessionStore`
  */
 export interface RedisSessionStoreConfig {
   redisUrl: string;
@@ -28,6 +40,7 @@ export interface RedisSessionStoreConfig {
   cleanupIntervalMs?: number;
 }
 
+/** @description Default configuration values merged with user-provided config. */
 const DEFAULT_CONFIG: RedisSessionStoreConfig = {
   redisUrl: 'redis://localhost:6379',
   keyPrefix: 'sap-mcp:session:',
@@ -35,7 +48,21 @@ const DEFAULT_CONFIG: RedisSessionStoreConfig = {
 };
 
 /**
- * Runtime service that implements redis session store behavior.
+ * @name RedisSessionStore
+ * @description Persistent session store backed by Redis with TTL-based expiration and periodic cleanup.
+ *
+ * @method connect   — Establish the Redis connection.
+ * @method set        — Store a session with TTL derived from its expiry.
+ * @method get        — Retrieve a session by id.
+ * @method delete     — Remove a session by id.
+ * @method getAll     — Retrieve all active sessions (for debugging/admin).
+ * @method getCount   — Get the total number of stored sessions.
+ * @method cleanup    — Manually remove expired sessions.
+ * @method getStats   — Get session statistics (total, active, expired).
+ * @method shutdown   — Gracefully close the Redis connection and cleanup interval.
+ * @method getClient  — Get the raw Redis client for advanced operations.
+ *
+ * @usedBy `createSessionStore`, distributed SAP MCP deployments.
  */
 export class RedisSessionStore {
   private redis: InstanceType<typeof Redis>;
@@ -43,6 +70,12 @@ export class RedisSessionStore {
   private cleanupInterval?: NodeJS.Timeout;
   private isShuttingDown = false;
 
+  /**
+   * @name RedisSessionStore.constructor
+   * @description Creates a new Redis session store with merged config and starts the cleanup interval.
+   *
+   * @param config — Optional configuration overriding defaults.
+   */
   constructor(config: RedisSessionStoreConfig = DEFAULT_CONFIG) {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
     
@@ -73,7 +106,10 @@ export class RedisSessionStore {
   }
 
   /**
-   * Connect to Redis
+   * @name RedisSessionStore.connect
+   * @description Connects to the Redis server.
+   *
+   * @usedBy `createSessionStore`.
    */
   async connect(): Promise<void> {
     await this.redis.connect();
@@ -81,7 +117,11 @@ export class RedisSessionStore {
   }
 
   /**
-   * Store a session with TTL
+   * @name RedisSessionStore.set
+   * @description Stores a session in Redis with a TTL derived from its expiry timestamp.
+   *
+   * @param sessionId — Unique session identifier.
+   * @param session   — The agent session to store.
    */
   async set(sessionId: string, session: SapAgentSession): Promise<void> {
     const key = this.getKey(sessionId);
@@ -92,7 +132,11 @@ export class RedisSessionStore {
   }
 
   /**
-   * Get a session
+   * @name RedisSessionStore.get
+   * @description Retrieves a session by id from Redis.
+   *
+   * @param sessionId — Unique session identifier.
+   * @returns The session if found and parseable, `null` otherwise.
    */
   async get(sessionId: string): Promise<SapAgentSession | null> {
     const key = this.getKey(sessionId);
@@ -112,7 +156,11 @@ export class RedisSessionStore {
   }
 
   /**
-   * Delete a session
+   * @name RedisSessionStore.delete
+   * @description Deletes a session from Redis by id.
+   *
+   * @param sessionId — Unique session identifier.
+   * @returns `true` if the session was deleted, `false` if it did not exist.
    */
   async delete(sessionId: string): Promise<boolean> {
     const key = this.getKey(sessionId);
@@ -122,7 +170,10 @@ export class RedisSessionStore {
   }
 
   /**
-   * Get all active sessions (for debugging/admin)
+   * @name RedisSessionStore.getAll
+   * @description Retrieves all active sessions from Redis (for debugging/admin).
+   *
+   * @returns Array of all stored agent sessions.
    */
   async getAll(): Promise<SapAgentSession[]> {
     const keys = await this.redis.keys(`${this.keyPrefix}*`);
@@ -143,7 +194,10 @@ export class RedisSessionStore {
   }
 
   /**
-   * Get session count
+   * @name RedisSessionStore.getCount
+   * @description Returns the total number of stored sessions.
+   *
+   * @returns Count of session keys in Redis.
    */
   async getCount(): Promise<number> {
     const keys = await this.redis.keys(`${this.keyPrefix}*`);
@@ -151,7 +205,8 @@ export class RedisSessionStore {
   }
 
   /**
-   * Clean up expired sessions (manual trigger)
+   * @name RedisSessionStore.cleanup
+   * @description Manually removes expired sessions from Redis.
    */
   async cleanup(): Promise<void> {
     const keys = await this.redis.keys(`${this.keyPrefix}*`);
@@ -169,7 +224,10 @@ export class RedisSessionStore {
   }
 
   /**
-   * Get session statistics
+   * @name RedisSessionStore.getStats
+   * @description Returns session statistics (total, active, expired).
+   *
+   * @returns Object with `totalSessions`, `activeSessions`, and `expiredSessions` counts.
    */
   async getStats(): Promise<{
     totalSessions: number;
@@ -205,7 +263,8 @@ export class RedisSessionStore {
   }
 
   /**
-   * Graceful shutdown
+   * @name RedisSessionStore.shutdown
+   * @description Gracefully shuts down the Redis connection and clears the cleanup interval.
    */
   async shutdown(): Promise<void> {
     this.isShuttingDown = true;
@@ -219,16 +278,21 @@ export class RedisSessionStore {
   }
 
   /**
-   * Get Redis client (for advanced operations)
+   * @name RedisSessionStore.getClient
+   * @description Returns the raw Redis client instance for advanced operations.
+   *
+   * @returns The underlying `ioredis` Redis instance.
    */
   getClient(): InstanceType<typeof Redis> {
     return this.redis;
   }
 
+  /** @description Builds the full Redis key from the prefix and session id. */
   private getKey(sessionId: string): string {
     return `${this.keyPrefix}${sessionId}`;
   }
 
+  /** @description Starts the periodic cleanup interval for expired sessions. */
   private startCleanup(intervalMs: number): void {
     this.cleanupInterval = setInterval(async () => {
       if (this.isShuttingDown) return;
@@ -243,9 +307,19 @@ export class RedisSessionStore {
 }
 
 /**
- * Create session store with environment-based configuration
- * 
- * Uses Redis in production, in-memory in development
+ * @name createSessionStore
+ * @description Creates a session store based on environment configuration.
+ *
+ * Uses Redis in production (when `SAP_MCP_USE_REDIS=true`) and in-memory
+ * storage in development (returns `null`).
+ *
+ * @returns A connected `RedisSessionStore` if Redis is enabled, `null` otherwise.
+ * @throws If Redis connection fails after retries.
+ *
+ * @env `SAP_MCP_USE_REDIS` — Set to `true` to enable Redis.
+ * @env `SAP_MCP_REDIS_URL` — Redis connection URL (default `redis://localhost:6379`).
+ *
+ * @usedBy Server initialization in the SAP MCP runtime.
  */
 export async function createSessionStore(): Promise<RedisSessionStore | null> {
   const useRedis = process.env.SAP_MCP_USE_REDIS === 'true';

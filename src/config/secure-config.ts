@@ -1,4 +1,10 @@
 /**
+ * @name config/secure-config
+ * @description Secure JSON configuration system with approval workflow and audit trail
+ * @module config/secure-config
+ */
+
+/**
  * Secure JSON Configuration System
  * 
  * Features:

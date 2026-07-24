@@ -1,5 +1,15 @@
 /**
- * Delegated session management
+ * @name session/delegated-session
+ * @description Delegated session management — creates and validates sessions that delegate
+ * agent capabilities to an MCP client with policy-enforced permissions.
+ *
+ * @flow
+ *   1. `createDelegatedSession` validates requested permissions against the policy engine,
+ *      then creates a new agent session via `createAgentSession`.
+ *   2. `validateDelegatedSession` checks expiry, permission, and spending limits for an
+ *      existing session before allowing a delegated action.
+ *
+ * @module session/delegated-session
  */
 
 import { logger } from '../core/logger.js';
@@ -8,7 +18,17 @@ import type { SapAgentSession, SapMcpContext, SapPermission } from '../core/type
 import { createAgentSession } from './agent-session.js';
 
 /**
- * Create a delegated session
+ * @name createDelegatedSession
+ * @description Creates a delegated agent session with policy-validated permissions and spending limits.
+ *
+ * @param context        — SAP MCP runtime context with policy engine.
+ * @param agentId        — Unique identifier for the delegating agent.
+ * @param permissions    — Array of permission strings to validate and grant.
+ * @param spendingLimits — Spending limits for per-transaction, per-day, and per-session SOL amounts.
+ * @returns A `SapAgentSession` with validated permissions and configured spending limits.
+ * @throws `PolicyError` if the requested permissions fail policy validation.
+ *
+ * @usedBy Delegated session MCP tools in the SAP MCP runtime.
  */
 export async function createDelegatedSession(
   context: SapMcpContext,
@@ -44,7 +64,15 @@ export async function createDelegatedSession(
 }
 
 /**
- * Validate delegated session
+ * @name validateDelegatedSession
+ * @description Validates an existing delegated session for a given permission and optional SOL amount.
+ *
+ * @param session    — The agent session to validate.
+ * @param permission — The permission required for the action.
+ * @param amountSol  — Optional SOL amount to check against remaining session balance.
+ * @returns `{ valid: true }` if all checks pass; `{ valid: false, error }` with a reason otherwise.
+ *
+ * @usedBy Delegated session MCP tools in the SAP MCP runtime.
  */
 export function validateDelegatedSession(
   session: SapAgentSession,

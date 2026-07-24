@@ -1,4 +1,10 @@
 /**
+ * @name prompts/execution-proof/verify-execution-proof
+ * @description Prompt for verifying execution proofs and audit trails
+ * @module prompts/execution-proof/verify-execution-proof
+ */
+
+/**
  * Verify Execution Proof Prompt
  * 
  * Provides workflow for verifying execution proofs and audit trails.

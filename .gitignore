@@ -15,6 +15,9 @@ release/
 .env.local
 .env.*.local
 
+# Private premium plugin subrepo (separate org repo: OOBE-PROTOCOL/sap-mcp-premium-plugin)
+sap-mcp-premium-private
+
 # Secrets and key material
 *.pem
 *.key
@@ -57,3 +60,6 @@ tmp_sdk_docs/
 # Private operator runbooks and VPS notes
 PRIVATE_VPS_DOCS/
 *.private.md
+
+# Private premium plugin subrepo (separate org repo: OOBE-PROTOCOL/sap-mcp-premium-plugin)
+sap-mcp-premium-private/

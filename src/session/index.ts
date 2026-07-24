@@ -1,5 +1,11 @@
 /**
- * Session module barrel export
+ * @name session/index
+ * @description Barrel export for the SAP MCP session module.
+ *
+ * Re-exports agent session lifecycle, delegated session, session store, permissions,
+ * spending limits, and session type definitions.
+ *
+ * @module session/index
  */
 
 export { createAgentSession, isSessionActive, hasPermission } from './agent-session.js';

@@ -1,3 +1,9 @@
+/**
+ * @name config/setup
+ * @description Interactive setup wizard for initial configuration and keypair generation
+ * @module config/setup
+ */
+
 import { existsSync, writeFileSync, chmodSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';

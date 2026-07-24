@@ -1,7 +1,14 @@
 /**
- * Load keypair from file
- * 
- * WARNING: Only use in local-dev-keypair mode. NEVER in production.
+ * @name signer/load-keypair
+ * @description Loads Solana keypairs from filesystem or environment variables.
+ *
+ * WARNING: Only use in `local-dev-keypair` mode. NEVER in production.
+ *
+ * @flow
+ *   1. `loadKeypairFromFile` reads a JSON keypair array from disk and constructs a `Keypair`.
+ *   2. `loadKeypairFromEnv` reads a base58-encoded secret key from an environment variable.
+ *
+ * @module signer/load-keypair
  */
 
 import { Keypair } from '@solana/web3.js';
@@ -10,7 +17,14 @@ import { logger } from '../core/logger.js';
 import { SignerError } from '../core/errors.js';
 
 /**
- * Load keypair from JSON file
+ * @name loadKeypairFromFile
+ * @description Loads a Solana keypair from a JSON file on disk.
+ *
+ * @param walletPath — Filesystem path to the keypair JSON file (array of 64 bytes).
+ * @returns A Solana `Keypair` constructed from the secret key.
+ * @throws `SignerError` if the file cannot be read or parsed.
+ *
+ * @usedBy `local-keypair-signer.ts:createLocalKeypairSigner`, `sap-client-manager.ts:SapClientManager.initialize`
  */
 export function loadKeypairFromFile(walletPath: string): Keypair {
   logger.debug('Loading keypair from file', { walletPath: '[REDACTED]' });
@@ -26,7 +40,14 @@ export function loadKeypairFromFile(walletPath: string): Keypair {
 }
 
 /**
- * Load keypair from environment variable (base58 encoded)
+ * @name loadKeypairFromEnv
+ * @description Loads a Solana keypair from a base58-encoded environment variable.
+ *
+ * @param envVar — Name of the environment variable containing the base58-encoded secret key.
+ * @returns A Solana `Keypair` constructed from the decoded secret key.
+ * @throws `SignerError` if the environment variable is not set.
+ *
+ * @usedBy Signer initialization in environments where file-based keypairs are not available.
  */
 export async function loadKeypairFromEnv(envVar: string): Promise<Keypair> {
   const secretKeyBase58 = process.env[envVar];

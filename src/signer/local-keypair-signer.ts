@@ -1,9 +1,17 @@
 /**
- * Local keypair signer.
- * 
+ * @name signer/local-keypair-signer
+ * @description Local hot-key signer for development and local-dev-keypair mode.
+ *
  * WARNING: This is a local hot-key signer. The hosted SAP MCP server never
  * receives keypair bytes, but production custody should prefer an external
  * signer, hardware wallet, delegated session, or a tightly capped profile.
+ *
+ * @flow
+ *   1. `createLocalKeypairSigner` loads a keypair from file via `loadKeypairFromFile`.
+ *   2. Returns a `Signer` object with `publicKey`, `signTransaction`, and `signAllTransactions`
+ *      that sign transactions locally using the loaded keypair.
+ *
+ * @module signer/local-keypair-signer
  */
 
 import { Transaction, VersionedTransaction } from '@solana/web3.js';
@@ -12,7 +20,13 @@ import { loadKeypairFromFile } from './load-keypair.js';
 import type { Signer } from './signer-types.js';
 
 /**
- * Create local keypair signer
+ * @name createLocalKeypairSigner
+ * @description Creates a local `Signer` backed by a keypair loaded from disk.
+ *
+ * @param walletPath — Filesystem path to the keypair JSON file.
+ * @returns A `Signer` implementation that signs `Transaction` and `VersionedTransaction` objects locally.
+ *
+ * @usedBy `signer-resolver.ts:resolveSigner` when mode is `local-keypair`.
  */
 export function createLocalKeypairSigner(walletPath: string): Signer {
   logger.info('Creating local keypair signer', { walletPath: '[REDACTED]' });
