@@ -1,4 +1,10 @@
 /**
+ * @name resources/memory/sap-memory
+ * @description MCP resource for agent memory vault and session ledger data from on-chain PDA
+ * @module resources/memory/sap-memory
+ */
+
+/**
  * SAP Memory Resource
  * 
  * Access agent memory vault and session ledger data.

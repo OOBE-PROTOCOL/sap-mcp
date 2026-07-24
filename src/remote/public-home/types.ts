@@ -24,6 +24,9 @@ export interface LandingPublicServerInfo {
     serverInfo: string;
     pricing: string;
     openApi: string;
+    premiumCatalog: string;
+    premiumStreams: string;
+    premiumWebhooks: string;
     x402Discovery: string;
     smitheryServerCard: string;
     payShProvider: string;

@@ -1,4 +1,10 @@
 /**
+ * @name prompts/context/sap-agent-context
+ * @description Prompt providing complete SAP MCP agent context, configuration, and capabilities
+ * @module prompts/context/sap-agent-context
+ */
+
+/**
  * SAP MCP Agent Context Prompt
  * 
  * Provides complete context about the current SAP MCP configuration,

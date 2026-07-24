@@ -1,3 +1,13 @@
+/**
+ * @name server/server-metadata
+ * @description Static server metadata and capability counts for the SAP MCP server.
+ *
+ * Provides the package-level metadata (name, version, author, license, repository)
+ * and a summary of registered capability counts by category.
+ *
+ * @module server/server-metadata
+ */
+
 import {
   MCP_SERVER_DESCRIPTION,
   MCP_SERVER_ICON_URL,
@@ -7,6 +17,23 @@ import {
   MCP_SERVER_WEBSITE_URL,
 } from '../core/constants.js';
 
+/**
+ * @name SERVER_METADATA
+ * @description Static metadata describing the SAP MCP server package.
+ *
+ * @property name        — Server identifier name.
+ * @property title       — Human-readable server title.
+ * @property version     — Semver version string.
+ * @property description — Server description for MCP clients.
+ * @property author      — Author or organization name.
+ * @property license     — SPDX license identifier.
+ * @property homepage    — Homepage URL.
+ * @property repository  — Source code repository URL.
+ * @property bugs        — Issue tracker URL.
+ * @property icon        — Icon URL for MCP client display.
+ *
+ * @usedBy `server/index.ts`, health and info endpoints.
+ */
 export const SERVER_METADATA = {
   name: MCP_SERVER_NAME,
   title: MCP_SERVER_TITLE,
@@ -21,11 +48,17 @@ export const SERVER_METADATA = {
 };
 
 /**
- * Shared capabilities definition used by the SAP MCP runtime.
+ * @name CAPABILITIES
+ * @description Summary of registered MCP capabilities and their category counts.
+ *
+ * @property tools.count       — Total number of registered tools.
+ * @property tools.categories  — Tool counts by category (sap, sns, agentKit, etc.).
+ *
+ * @usedBy `server/index.ts`, monitoring and health endpoints.
  */
 export const CAPABILITIES = {
   tools: {
-    count: 248,
+    count: 302,
     categories: {
       sap: 75,
       sns: 13,
@@ -36,6 +69,7 @@ export const CAPABILITIES = {
       profiles: 4,
       skills: 3,
       chat: 8,
+      premium: 13,
     },
   },
 };

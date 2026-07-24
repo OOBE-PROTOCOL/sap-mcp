@@ -1,17 +1,34 @@
 /**
- * Local Policy Engine
- * 
- * Deterministic security policies for SAP MCP Server
- * Runs entirely locally - no external dependencies
- * 
- * Features:
- * - Spend limits per tool/operation
- * - Program whitelist/blacklist
- * - Address whitelist/blacklist
- * - Rate limiting per user
- * - Time-based restrictions
+ * @name policy/local-policy-engine
+ * @description Deterministic security policy engine for SAP MCP Server.
+ *
+ * Runs entirely locally with no external dependencies. Enforces spend limits,
+ * program and address whitelists/blacklists, rate limiting per user, human
+ * escalation for sensitive tools, and time-based operation windows.
+ *
+ * @flow
+ *   1. `PolicyConfig` is constructed directly or via `createPolicyConfigFromEnv`.
+ *   2. `LocalPolicyEngine` is instantiated with the config.
+ *   3. `validateToolCall` runs all checks in priority order and returns a `PolicyDecision`.
+ *
+ * @module policy/local-policy-engine
  */
 
+/**
+ * @name PolicyConfig
+ * @description Configuration for the local deterministic policy engine.
+ *
+ * @property spendLimits       — Maximum amount (in lamports) per tool call, keyed by tool name (`*` for global).
+ * @property programWhitelist  — Allowed program IDs (empty = allow all).
+ * @property programBlacklist  — Blocked program IDs.
+ * @property addressWhitelist  — Allowed destination addresses (empty = allow all).
+ * @property addressBlacklist  — Blocked destination addresses.
+ * @property rateLimits        — Max calls per minute per user, keyed by tool name (`*` for global).
+ * @property escalationTools   — Tools that require human approval before execution.
+ * @property allowedHours      — Optional UTC hour window when operations are permitted.
+ *
+ * @usedBy `LocalPolicyEngine`, `createPolicyConfigFromEnv`
+ */
 export interface PolicyConfig {
   /** Maximum amount (in lamports) per tool call */
   spendLimits: Record<string, number>;
@@ -32,7 +49,17 @@ export interface PolicyConfig {
 }
 
 /**
- * Contract describing policy decision data used by the SAP MCP runtime.
+ * @name PolicyDecision
+ * @description Outcome of validating a tool call against all policy rules.
+ *
+ * @property allowed    — Whether the operation is permitted.
+ * @property blocked    — Whether the operation is explicitly blocked.
+ * @property escalated  — Whether the operation requires human escalation.
+ * @property reason     — Human-readable explanation of the decision.
+ * @property rule       — Policy rule that was triggered.
+ * @property metadata   — Additional metadata for logging and auditing.
+ *
+ * @usedBy `LocalPolicyEngine.validateToolCall`, `policy-engine.ts`
  */
 export interface PolicyDecision {
   /** Whether the operation is allowed */
@@ -50,7 +77,18 @@ export interface PolicyDecision {
 }
 
 /**
- * Contract describing policy context data used by the SAP MCP runtime.
+ * @name PolicyContext
+ * @description Context for a single tool call being evaluated by the policy engine.
+ *
+ * @property toolName    — Tool or function being called.
+ * @property args        — Tool arguments passed by the caller.
+ * @property user        — User or wallet identifier.
+ * @property amount      — Amount involved in lamports, if applicable.
+ * @property programId   — Program ID being interacted with, if applicable.
+ * @property destination — Destination address, if applicable.
+ * @property timestamp   — Current timestamp (defaults to `Date.now()`).
+ *
+ * @usedBy `LocalPolicyEngine.validateToolCall`
  */
 export interface PolicyContext {
   /** Tool/function being called */
@@ -70,7 +108,18 @@ export interface PolicyContext {
 }
 
 /**
- * Runtime service that implements local policy engine behavior.
+ * @name LocalPolicyEngine
+ * @description Runtime service that enforces deterministic local policy checks.
+ *
+ * Maintains in-memory call history for rate limiting and evaluates each
+ * tool call against blacklist, whitelist, spend, rate, escalation, and
+ * time-window rules in priority order.
+ *
+ * @method validateToolCall — Validate a tool call against all configured policy rules.
+ * @method getConfig        — Return a shallow copy of the current policy configuration.
+ * @method clearHistory     — Clear the in-memory call history (useful for testing).
+ *
+ * @usedBy `hybrid-policy-engine.ts`, `policy-engine.ts`
  */
 export class LocalPolicyEngine {
   private config: PolicyConfig;
@@ -354,7 +403,16 @@ export class LocalPolicyEngine {
 }
 
 /**
- * Create policy config from environment variables
+ * @name createPolicyConfigFromEnv
+ * @description Create a `PolicyConfig` from environment variables.
+ *
+ * Reads `SAP_MCP_SPEND_LIMITS`, `SAP_MCP_RATE_LIMITS`, whitelist/blacklist
+ * env vars, escalation tools, and `SAP_MCP_ALLOWED_HOURS` to produce a
+ * fully populated configuration object. Invalid JSON falls back to empty defaults.
+ *
+ * @returns A `PolicyConfig` populated from environment variables.
+ *
+ * @usedBy `hybrid-policy-engine.ts`, `policy-engine.ts`
  */
 export function createPolicyConfigFromEnv(): PolicyConfig {
   const spendLimitsRaw = process.env.SAP_MCP_SPEND_LIMITS || '{}';

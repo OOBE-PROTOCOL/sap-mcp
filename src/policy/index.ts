@@ -1,8 +1,11 @@
 /**
- * Policy Engine Module
- * 
- * Hybrid policy engine for SAP MCP Server
- * Combines local deterministic policies with optional Bento Guard integration
+ * @name policy/index
+ * @description Barrel export for the SAP MCP policy engine subsystem.
+ *
+ * Re-exports the local policy engine, Bento Guard integration, and hybrid
+ * policy engine from their respective modules for external consumers.
+ *
+ * @module policy/index
  */
 
 export {

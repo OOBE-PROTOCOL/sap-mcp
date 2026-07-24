@@ -1,4 +1,10 @@
 /**
+ * @name prompts/payments/create-paid-api
+ * @description Prompt guiding creation of paid API endpoints with x402 payment protection
+ * @module prompts/payments/create-paid-api
+ */
+
+/**
  * Create Paid API Prompt
  * 
  * Guides creation of paid API endpoints with x402 payment protection.

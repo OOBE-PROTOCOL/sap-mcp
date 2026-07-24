@@ -1,4 +1,10 @@
 /**
+ * @name core/guards
+ * @description Type guards for runtime validation of SAP MCP types
+ * @module core/guards
+ */
+
+/**
  * Type guards for SAP MCP types
  */
 

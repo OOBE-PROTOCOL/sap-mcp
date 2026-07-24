@@ -1,4 +1,10 @@
 /**
+ * @name resources/execution-proof/sap-execution-record
+ * @description MCP resource for proof-of-execution records and audit trails from on-chain PDA
+ * @module resources/execution-proof/sap-execution-record
+ */
+
+/**
  * SAP Execution Record Resource
  * 
  * Proof of execution records and audit trails.

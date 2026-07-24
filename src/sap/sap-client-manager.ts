@@ -1,8 +1,15 @@
 /**
- * SAP Client Manager 
- * 
- * Creates and manages SapClient from @oobe-protocol-labs/synapse-sap-sdk
- * with proper connection, wallet, and program ID configuration.
+ * @name sap/sap-client-manager
+ * @description Creates and manages the SAP SDK client (`SapClient`) as a singleton with
+ * connection, wallet, and program ID configuration.
+ *
+ * @flow
+ *   1. `SapClientManager.getInstance()` returns the singleton manager.
+ *   2. `initialize(config)` creates a `SapClient` from the SDK, loading a wallet when needed.
+ *   3. If config hasn't changed, the existing client is reused.
+ *   4. `createSapClient`, `getSapClient`, and `isSapClientInitialized` are convenience wrappers.
+ *
+ * @module sap/sap-client-manager
  */
 
 import { createSapClient as createSdkClient } from '@oobe-protocol-labs/synapse-sap-sdk';
@@ -13,7 +20,16 @@ import type { SapMcpConfig } from '../core/types.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 
 /**
- * SAP Client Manager
+ * @name SapClientManager
+ * @description Singleton manager for the SAP SDK client with config-aware reinitialization.
+ *
+ * @method getInstance     — Returns the singleton `SapClientManager` instance.
+ * @method initialize      — Creates or reuses the `SapClient` based on config changes.
+ * @method getClient       — Returns the initialized client (throws if not initialized).
+ * @method getClientOrNull — Returns the initialized client or `null`.
+ * @method reset           — Resets the client and config (for testing).
+ *
+ * @usedBy `createSapClient`, `getSapClient`, `isSapClientInitialized`, `create-server.ts`
  */
 export class SapClientManager {
   private static instance: SapClientManager | null = null;
@@ -23,7 +39,14 @@ export class SapClientManager {
   private constructor() {}
 
   /**
-   * Compares the connection and wallet fields that affect SapClient construction.
+   * @name SapClientManager.isSameClientConfig
+   * @description Compares connection and wallet fields that affect SapClient construction.
+   *
+   * @param current — Current stored config.
+   * @param next    — New config to compare against.
+   * @returns `true` if the relevant config fields match, `false` otherwise.
+   *
+   * @internal
    */
   private isSameClientConfig(current: SapMcpConfig, next: SapMcpConfig): boolean {
     return current.rpcUrl === next.rpcUrl
@@ -34,7 +57,12 @@ export class SapClientManager {
   }
 
   /**
-   * Get singleton instance
+   * @name SapClientManager.getInstance
+   * @description Returns the singleton `SapClientManager` instance, creating it if necessary.
+   *
+   * @returns The singleton `SapClientManager`.
+   *
+   * @usedBy `createSapClient`, `getSapClient`, `isSapClientInitialized`.
    */
   static getInstance(): SapClientManager {
     if (!SapClientManager.instance) {
@@ -44,7 +72,14 @@ export class SapClientManager {
   }
 
   /**
-   * Initialize SAP client from config
+   * @name SapClientManager.initialize
+   * @description Initializes the SAP client from config, reusing the existing client if config hasn't changed.
+   *
+   * @param config — SAP MCP configuration with RPC URL, program ID, mode, and wallet path.
+   * @returns The initialized `SapClient` instance.
+   * @throws `SapClientError` if client creation fails.
+   *
+   * @usedBy `createSapClient`, `create-server.ts:createSapMcpServer`.
    */
   async initialize(config: SapMcpConfig): Promise<SapClient> {
     if (this.client && this.config && this.isSameClientConfig(this.config, config)) {
@@ -100,7 +135,13 @@ export class SapClientManager {
   }
 
   /**
-   * Get SAP client instance
+   * @name SapClientManager.getClient
+   * @description Returns the initialized SAP client.
+   *
+   * @returns The `SapClient` instance.
+   * @throws `SapClientError` if the client has not been initialized.
+   *
+   * @usedBy `getSapClient`.
    */
   getClient(): SapClient {
     if (!this.client) {
@@ -110,14 +151,22 @@ export class SapClientManager {
   }
 
   /**
-   * Get client or null if not initialized
+   * @name SapClientManager.getClientOrNull
+   * @description Returns the initialized SAP client or `null` if not yet initialized.
+   *
+   * @returns The `SapClient` instance or `null`.
+   *
+   * @usedBy `isSapClientInitialized`.
    */
   getClientOrNull(): SapClient | null {
     return this.client;
   }
 
   /**
-   * Reset client (for testing)
+   * @name SapClientManager.reset
+   * @description Resets the client and config to `null` (for testing purposes).
+   *
+   * @usedBy Test setup and teardown.
    */
   reset(): void {
     this.client = null;
@@ -127,7 +176,14 @@ export class SapClientManager {
 }
 
 /**
- * Create SAP client from config
+ * @name createSapClient
+ * @description Creates or reuses the SAP client from the given configuration.
+ *
+ * @param config — SAP MCP configuration.
+ * @returns The initialized `SapClient` instance.
+ * @throws `SapClientError` if initialization fails.
+ *
+ * @usedBy `create-server.ts:createSapMcpServer`.
  */
 export async function createSapClient(config: SapMcpConfig): Promise<SapClient> {
   const manager = SapClientManager.getInstance();
@@ -135,7 +191,13 @@ export async function createSapClient(config: SapMcpConfig): Promise<SapClient> 
 }
 
 /**
- * Get existing SAP client
+ * @name getSapClient
+ * @description Returns the currently initialized SAP client.
+ *
+ * @returns The `SapClient` instance.
+ * @throws `SapClientError` if the client has not been initialized.
+ *
+ * @usedBy Tool handlers across the SAP MCP runtime.
  */
 export function getSapClient(): SapClient {
   const manager = SapClientManager.getInstance();
@@ -143,7 +205,12 @@ export function getSapClient(): SapClient {
 }
 
 /**
- * Check if SAP client is initialized
+ * @name isSapClientInitialized
+ * @description Checks whether the SAP client has been initialized.
+ *
+ * @returns `true` if the client is initialized, `false` otherwise.
+ *
+ * @usedBy Health checks and startup validation.
  */
 export function isSapClientInitialized(): boolean {
   const manager = SapClientManager.getInstance();

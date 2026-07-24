@@ -1,4 +1,10 @@
 /**
+ * @name prompts/execution-proof/explain-proof-of-execution
+ * @description Prompt explaining proof-of-execution cryptography and audit trail verification
+ * @module prompts/execution-proof/explain-proof-of-execution
+ */
+
+/**
  * Explain Proof of Execution Prompt
  * 
  * Explains proof-of-execution cryptography, hash chains, and audit trail verification.

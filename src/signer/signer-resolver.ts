@@ -1,5 +1,15 @@
 /**
- * Resolve signer based on MCP mode
+ * @name signer/signer-resolver
+ * @description Resolves the appropriate signer implementation based on SAP MCP configuration mode.
+ *
+ * @flow
+ *   1. `resolveSigner` reads the config mode and determines the signer mode via `getSignerModeFromConfig`.
+ *   2. For `local-keypair` mode, creates a local keypair signer from `walletPath`.
+ *   3. For `external` mode, creates an external signer from `externalSignerUrl`.
+ *   4. For `none` mode (readonly), returns a result with no signer.
+ *   5. For `delegated` mode, throws — delegated signers are session-bound and resolved at runtime.
+ *
+ * @module signer/signer-resolver
  */
 
 import { logger } from '../core/logger.js';
@@ -10,7 +20,14 @@ import { createLocalKeypairSigner } from './local-keypair-signer.js';
 import { createExternalSigner } from './external-signer.js';
 
 /**
- * Resolve signer based on configuration
+ * @name resolveSigner
+ * @description Resolves and creates a signer instance based on the SAP MCP configuration.
+ *
+ * @param config — SAP MCP configuration with mode, wallet path, and external signer URL.
+ * @returns A `SignerResult` containing the signer, mode, and optional public key.
+ * @throws `SignerError` if required config is missing for the resolved mode, or if the mode is `delegated`.
+ *
+ * @usedBy `create-server.ts:createSapMcpServer`.
  */
 export async function resolveSigner(config: SapMcpConfig): Promise<SignerResult> {
   const mode = getSignerModeFromConfig(config);
@@ -54,7 +71,13 @@ export async function resolveSigner(config: SapMcpConfig): Promise<SignerResult>
 }
 
 /**
- * Map resolved MCP config to signer mode.
+ * @name getSignerModeFromConfig
+ * @description Maps the SAP MCP config mode to a `SapSignerMode` value.
+ *
+ * @param config — SAP MCP configuration.
+ * @returns The resolved signer mode: `none`, `local-keypair`, `external`, or `delegated`.
+ *
+ * @internal
  */
 function getSignerModeFromConfig(config: SapMcpConfig): SapSignerMode {
   switch (config.mode) {

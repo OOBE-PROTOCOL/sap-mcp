@@ -108,7 +108,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(289);
+    expect(names).toHaveLength(302);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -123,6 +123,13 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_agent_runtime_status');
     expect(names).toContain('sap_agent_context');
     expect(names).toContain('sap_agent_next_action');
+    expect(names).toContain('sap_premium_plugin_catalog');
+    expect(names).toContain('sap_stream_catalog');
+    expect(names).toContain('sap_webhook_catalog');
+    expect(names).toContain('sap_premium_validate_plugin_manifest');
+    expect(names).toContain('sap_premium_plugin_template');
+    expect(names).toContain('sap_premium_session_start');
+    expect(names).toContain('sap_premium_session_status');
     expect(names).toContain('sap_pricing_catalog');
     expect(names).toContain('bridging_bridgeWormhole');
     expect(names).toContain('bridging_bridgeWormholeStatus');
@@ -252,6 +259,66 @@ describe('createSapMcpServer', () => {
 
     expect(thinDescriptions).toEqual([]);
     expect(missingNestedDescriptions).toEqual([]);
+  });
+
+  it('exposes premium plugin catalogs and safe unpaid session planning', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const catalogResponse = await server.toolHandlers?.sap_premium_plugin_catalog?.({ includeSchemas: true });
+    const templateResponse = await server.toolHandlers?.sap_premium_plugin_template?.({
+      pluginId: 'sap-premium-custom-alpha',
+      capabilityId: 'custom.signal.stream',
+      capabilityType: 'stream',
+      title: 'Custom Signal Stream',
+      description: 'Custom private stream contract for paid signal delivery with x402 metering, provider readiness, and strict audit binding.',
+      publisher: 'OOBE Labs',
+      providerEnv: ['SAP_MCP_PREMIUM_CUSTOM_STREAM_URL'],
+    });
+    const sessionResponse = await server.toolHandlers?.sap_premium_session_start?.({
+      pluginId: 'sap-premium-market-data',
+      capabilityId: 'jupiter.quote.delta',
+      capabilityType: 'stream',
+      requestedUnits: 3,
+      ttlSeconds: 120,
+      maxPriceUsd: 1,
+      consumer: 'vitest',
+    });
+
+    expect(catalogResponse?.structuredContent?.plugins).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sap-premium-market-data',
+          capabilities: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'jupiter.quote.delta',
+              providerReady: false,
+            }),
+          ]),
+        }),
+      ]),
+    );
+    expect(templateResponse?.structuredContent?.validation).toEqual(
+      expect.objectContaining({
+        valid: true,
+      }),
+    );
+    expect(templateResponse?.structuredContent?.manifest).toEqual(
+      expect.objectContaining({
+        id: 'sap-premium-custom-alpha',
+        visibility: 'private',
+      }),
+    );
+    expect(sessionResponse?.structuredContent?.monetization).toEqual(
+      expect.objectContaining({
+        paymentRequired: false,
+      }),
+    );
+    expect(sessionResponse?.structuredContent?.session).toEqual(
+      expect.objectContaining({
+        pluginId: 'sap-premium-market-data',
+        capabilityId: 'jupiter.quote.delta',
+        status: 'blocked_requires_provider',
+      }),
+    );
   });
 
   it('exposes Escrow V2 as the active escrow write surface', async () => {

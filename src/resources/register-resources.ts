@@ -1,4 +1,10 @@
 /**
+ * @name resources/register-resources
+ * @description Registers all MCP resources (registry, memory, execution-proof, reputation, config)
+ * @module resources/register-resources
+ */
+
+/**
  * Register all MCP resources
  */
 

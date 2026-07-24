@@ -1,4 +1,10 @@
 /**
+ * @name config/profiles
+ * @description Multi-agent profile management for switching between agent contexts
+ * @module config/profiles
+ */
+
+/**
  * SAP MCP Server - Multi-Agent Profile Management
  * 
  * Allows AI agents (Hermes, Claude, OpenClaw, Codex) to switch between

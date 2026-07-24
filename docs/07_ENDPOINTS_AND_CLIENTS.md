@@ -10,6 +10,9 @@
 | `GET` | `/server.json` | Machine-readable public server metadata. | Public. |
 | `GET` | `/pricing.json` | Machine-readable x402/pay.sh pricing catalog generated from the hosted pricing registry. | Public. |
 | `GET` | `/openapi.json` | OpenAPI 3.1 discovery document for the hosted MCP endpoint, x402 metadata, and pay.sh catalog link. | Public. |
+| `GET` | `/premium/catalog.json` | Secret-free premium plugin contracts, schemas, pricing models, and provider readiness. | Public. |
+| `GET` | `/premium/streams.json` | Secret-free premium stream contracts for future x402/pay.sh real-time delivery rails. | Public. |
+| `GET` | `/premium/webhooks.json` | Secret-free premium webhook contracts with signed delivery expectations. | Public. |
 | `GET` | `/.well-known/x402` | x402 discovery document for paid hosted MCP resources. | Public. |
 | `GET` | `/pay/provider.yml` | Secret-free pay.sh provider YAML for the hosted SAP MCP catalog/proxy workflow. | Public. |
 | `GET` | `/favicon.png` | SAP MCP favicon/social preview asset. | Public. |

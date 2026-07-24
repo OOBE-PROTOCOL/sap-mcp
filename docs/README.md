@@ -65,6 +65,7 @@ For paid/write hosted tools, also configure the local `sap_payments` bridge. The
 - [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
 - [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
 - [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
+- [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
 
 ## What The Hosted Server Provides
 
@@ -118,6 +119,7 @@ Read these first:
 6. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
 7. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
 8. [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
+9. [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
 
 ## Public Endpoints
 
@@ -127,6 +129,16 @@ Read these first:
 | `GET /docs` | This documentation site. |
 | `POST /mcp` | Streamable HTTP MCP endpoint for agents. |
 | `GET /server.json` | Public, secret-free machine-readable server metadata. |
+| `GET /premium/catalog.json` | Public premium plugin contracts, pricing models, schemas, and provider readiness. |
+| `GET /premium/streams.json` | Public premium stream contracts for future x402/pay.sh real-time delivery rails. |
+| `GET /premium/webhooks.json` | Public premium webhook contracts with signed delivery expectations. |
+
+Premium plugin authors can use `sap_premium_plugin_template` and
+`sap_premium_validate_plugin_manifest` to build strict data-only contracts,
+then deploy reviewed manifests from a private plugin directory. The public
+server never executes plugin code supplied through MCP input and does not expose
+private/enterprise manifests unless the operator explicitly enables private
+discovery.
 | `GET /smithery.config.schema.json` | Optional Smithery setup schema for free discovery, native x402 clients, and local `sap_payments` bridge users. |
 | `GET /.well-known/agent-card.json` | A2A-style agent card. |
 | `GET /.well-known/sap-mcp-wizard.json` | Wizard install descriptor for agents that cannot see local config. |

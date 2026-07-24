@@ -1,4 +1,10 @@
 /**
+ * @name core/errors
+ * @description Custom error classes with error codes, context metadata, and stack traces
+ * @module core/errors
+ */
+
+/**
  * Custom error classes for SAP MCP Server
  * 
  * Provides structured error handling with:

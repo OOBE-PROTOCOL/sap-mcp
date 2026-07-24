@@ -1,4 +1,10 @@
 /**
+ * @name index
+ * @description Main entry point exposing programmatic API for embedding SAP MCP server
+ * @module index
+ */
+
+/**
  * SAP MCP Server - Main Entry Point
  * 
  * Programmatic API for embedding SAP MCP server in other applications.

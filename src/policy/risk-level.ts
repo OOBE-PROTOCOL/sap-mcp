@@ -1,11 +1,31 @@
 /**
- * Risk level calculation
+ * @name policy/risk-level
+ * @description Risk level calculation utilities for SAP MCP transactions.
+ *
+ * Provides functions to compute a `SapRiskLevel` from transaction parameters
+ * and determine whether a given risk level requires human approval.
+ *
+ * @module policy/risk-level
  */
 
 import type { SapRiskLevel } from '../core/types.js';
 
 /**
- * Calculate risk level for a transaction
+ * @name calculateRiskLevel
+ * @description Calculate risk level for a transaction based on amount and operation type.
+ *
+ * Evaluates the transaction amount, whether it is a write operation, and whether
+ * it targets a known program to produce a graduated risk level from `safe` to `critical`.
+ * Write operations elevate risk by one tier; known operations reduce risk by one tier.
+ *
+ * @param params - Transaction parameters including amount, write flag, known flag, and tool name.
+ * @param params.amountSol - Transaction amount in SOL.
+ * @param params.isWriteOperation - Whether the operation mutates on-chain state.
+ * @param params.isKnownOperation - Whether the target program is in the known set.
+ * @param params.toolName - Name of the tool invoking the transaction.
+ * @returns A `SapRiskLevel` string: `safe`, `low`, `medium`, `high`, or `critical`.
+ *
+ * @usedBy `policy-engine.ts:PolicyEngine.checkPermission`
  */
 export function calculateRiskLevel(params: {
   amountSol: number;
@@ -47,7 +67,16 @@ export function calculateRiskLevel(params: {
 }
 
 /**
- * Check if risk level requires approval
+ * @name requiresApproval
+ * @description Check if a risk level requires human approval before execution.
+ *
+ * Returns `true` when the risk level is `high` or `critical`, indicating
+ * that the operation should be escalated for manual review.
+ *
+ * @param riskLevel - The risk level to evaluate.
+ * @returns `true` if the risk level is `high` or `critical`; otherwise `false`.
+ *
+ * @usedBy `policy-engine.ts:PolicyEngine.checkPermission`
  */
 export function requiresApproval(riskLevel: SapRiskLevel): boolean {
   return riskLevel === 'high' || riskLevel === 'critical';

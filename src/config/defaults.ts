@@ -1,4 +1,10 @@
 /**
+ * @name config/defaults
+ * @description Default configuration values for SAP MCP Server
+ * @module config/defaults
+ */
+
+/**
  * Default configuration values
  */
 

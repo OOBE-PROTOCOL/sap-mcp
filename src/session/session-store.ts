@@ -68,7 +68,23 @@ class SessionStore {
 // Singleton instance
 const store = new SessionStore();
 
-// Cleanup every hour
-setInterval(() => store.cleanup(), 60 * 60 * 1000);
+/**
+ * @description Hourly cleanup interval for the singleton session store.
+ * Uses `.unref()` so the timer does not keep the process alive during
+ * graceful shutdown.
+ */
+const sessionCleanupTimer = setInterval(() => store.cleanup(), 60 * 60 * 1000);
+sessionCleanupTimer.unref();
 
-export { store as sessionStore };
+/**
+ * @name clearSessionCleanupTimer
+ * @description Stop the hourly cleanup interval. Called during graceful
+ *   shutdown and in test teardown to prevent timer leaks.
+ *
+ * @internal
+ */
+function clearSessionCleanupTimer(): void {
+  clearInterval(sessionCleanupTimer);
+}
+
+export { store as sessionStore, clearSessionCleanupTimer };

@@ -86,6 +86,21 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_runtime_repair_plan')).toBe('free');
   });
 
+  it('keeps premium plugin discovery and session planning free before paid delivery activation', () => {
+    for (const toolName of [
+      'sap_premium_plugin_catalog',
+      'sap_stream_catalog',
+      'sap_webhook_catalog',
+      'sap_premium_validate_plugin_manifest',
+      'sap_premium_plugin_template',
+      'sap_premium_session_start',
+      'sap_premium_session_status',
+    ]) {
+      expect(classifyTool(toolName)).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+    }
+  });
+
   it('keeps exact SAP agent orientation reads free in default and strict mode', () => {
     for (const toolName of [
       'sap_get_agent',

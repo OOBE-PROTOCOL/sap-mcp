@@ -17,10 +17,19 @@ import { createSapMcpServer } from '../server/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
 import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '../payments/index.js';
 import { generatePayShProviderYaml } from '../payments/pay-sh-spec.js';
+import {
+  listPremiumPlugins,
+  premiumPrivatePluginSupport,
+  publicPremiumProviderStatus,
+  getPremiumMetrics,
+  type PremiumCapabilityType,
+} from '../premium/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../payments/usage-ledger.js';
 import { renderLandingPage } from './public-home/index.js';
 import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
+import { tryPremiumRoute } from './premium-routes.js';
+import { PremiumMemoryManager } from './premium-memory.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -236,6 +245,13 @@ export interface PublicServerInfo {
     serverInfo: string;
     pricing: string;
     openApi: string;
+    premiumCatalog: string;
+    premiumStreams: string;
+    premiumWebhooks: string;
+    premiumHealth: string;
+    premiumActivate: string;
+    premiumStreamBase: string;
+    premiumWebhookRegister: string;
     x402Discovery: string;
     smitheryConfigSchema: string;
     smitheryServerCard: string;
@@ -1214,6 +1230,13 @@ export function buildPublicServerInfo(
       serverInfo: `${baseUrl}/server.json`,
       pricing: `${baseUrl}/pricing.json`,
       openApi: `${baseUrl}/openapi.json`,
+      premiumCatalog: `${baseUrl}/premium/catalog.json`,
+      premiumStreams: `${baseUrl}/premium/streams.json`,
+      premiumWebhooks: `${baseUrl}/premium/webhooks.json`,
+      premiumHealth: `${baseUrl}/premium/health.json`,
+      premiumActivate: `${baseUrl}/premium/activate`,
+      premiumStreamBase: `${baseUrl}/premium/stream`,
+      premiumWebhookRegister: `${baseUrl}/premium/webhook/register`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
       smitheryConfigSchema: `${baseUrl}/smithery.config.schema.json`,
       smitheryServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
@@ -1279,6 +1302,58 @@ export function buildMarketplaceConfigurationMetadata(req: http.IncomingMessage,
       readinessTool: 'sap_payments_readiness',
       paidCallTool: 'sap_payments_call_paid_tool',
     },
+  };
+}
+
+/**
+ * @name buildPremiumDiscoveryDocument
+ * @description Builds public premium stream/webhook/plugin contracts for agent runtimes and marketplaces.
+ */
+export function buildPremiumDiscoveryDocument(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+  type?: Extract<PremiumCapabilityType, 'stream' | 'webhook'>,
+): Record<string, unknown> {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  const plugins = listPremiumPlugins();
+  const capabilities = plugins.flatMap(plugin =>
+    plugin.capabilities
+      .filter(capability => !type || capability.type === type)
+      .map(capability => ({
+        ...capability,
+        pluginId: plugin.id,
+        providerReady: capability.providerEnv.every(envName => Boolean(process.env[envName])),
+      })),
+  );
+
+  return {
+    version: '1.0.0',
+    service: 'sap-mcp-server',
+    serverVersion: MCP_SERVER_VERSION,
+    kind: type ? `premium-${type}-catalog` : 'premium-plugin-catalog',
+    title: type ? `SAP MCP Premium ${type === 'stream' ? 'Stream' : 'Webhook'} Catalog` : 'SAP MCP Premium Plugin Catalog',
+    description:
+      'Public, secret-free premium capability contracts for SAP MCP. Discovery and planning are free; live delivery requires x402/pay.sh settlement and configured providers.',
+    links: {
+      catalog: `${baseUrl}/premium/catalog.json`,
+      streams: `${baseUrl}/premium/streams.json`,
+      webhooks: `${baseUrl}/premium/webhooks.json`,
+      docs: `${baseUrl}/docs/18_PREMIUM_PLUGIN_RUNTIME.md`,
+      mcp: `${baseUrl}/mcp`,
+      pricing: `${baseUrl}/pricing.json`,
+      x402Discovery: `${baseUrl}/.well-known/x402`,
+      payShProvider: `${baseUrl}/pay/provider.yml`,
+    },
+    monetization: {
+      planning: 'free',
+      liveDelivery: 'x402/pay.sh required when the selected provider is live and the session is activated.',
+      sourceOfTruth: `${baseUrl}/pricing.json`,
+      localBridgeTool: 'sap_payments_call_paid_tool',
+    },
+    providerStatus: publicPremiumProviderStatus(),
+    privatePluginSupport: premiumPrivatePluginSupport(),
+    capabilities,
+    ...(type ? {} : { plugins }),
   };
 }
 
@@ -1435,6 +1510,13 @@ export function buildOpenApiSpec(
       resources: [`${baseUrl}/mcp`],
       openApi: `${baseUrl}/openapi.json`,
       pricing: `${baseUrl}/pricing.json`,
+      premiumCatalog: `${baseUrl}/premium/catalog.json`,
+      premiumStreams: `${baseUrl}/premium/streams.json`,
+      premiumWebhooks: `${baseUrl}/premium/webhooks.json`,
+      premiumHealth: `${baseUrl}/premium/health.json`,
+      premiumActivate: `${baseUrl}/premium/activate`,
+      premiumStreamBase: `${baseUrl}/premium/stream`,
+      premiumWebhookRegister: `${baseUrl}/premium/webhook/register`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
       payShProvider: `${baseUrl}/pay/provider.yml`,
       ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
@@ -1609,6 +1691,171 @@ export function buildOpenApiSpec(
                 },
               },
             },
+          },
+        },
+      },
+      '/premium/catalog.json': {
+        get: {
+          operationId: 'fetchPremiumCatalog',
+          summary: 'Fetch premium plugin catalog',
+          tags: ['Premium'],
+          responses: {
+            '200': {
+              description: 'Secret-free premium plugin, stream, webhook, schema, pricing, and provider readiness metadata.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      version: { type: 'string' },
+                      service: { type: 'string' },
+                      kind: { type: 'string' },
+                      capabilities: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                      providerStatus: { type: 'object', additionalProperties: { type: 'boolean' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/premium/streams.json': {
+        get: {
+          operationId: 'fetchPremiumStreams',
+          summary: 'Fetch premium stream catalog',
+          tags: ['Premium'],
+          responses: {
+            '200': {
+              description: 'Secret-free premium stream contracts with schemas, x402/pay.sh pricing, and provider readiness.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
+        },
+      },
+      '/premium/webhooks.json': {
+        get: {
+          operationId: 'fetchPremiumWebhooks',
+          summary: 'Fetch premium webhook catalog',
+          tags: ['Premium'],
+          responses: {
+            '200': {
+              description: 'Secret-free premium webhook contracts with signed delivery expectations, pricing, and provider readiness.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
+        },
+      },
+      '/premium/health.json': {
+        get: {
+          operationId: 'fetchPremiumHealth',
+          summary: 'Fetch premium subsystem health and metrics',
+          tags: ['Premium'],
+          responses: {
+            '200': {
+              description: 'Premium subsystem metrics: active/pending/blocked sessions, events delivered, revenue, active streams/webhooks, and provider health.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
+        },
+      },
+      '/premium/activate': {
+        post: {
+          operationId: 'activatePremiumSession',
+          summary: 'Activate a premium session with a verified x402/pay.sh receipt',
+          tags: ['Premium'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['sessionId', 'paymentReceipt'],
+                  properties: {
+                    sessionId: { type: 'string' },
+                    paymentReceipt: { type: 'string' },
+                    payerAddress: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Session activated successfully.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+            '400': { description: 'Missing required fields.' },
+            '402': { description: 'Session not in pending_payment status.' },
+          },
+        },
+      },
+      '/premium/stream/{sessionId}': {
+        get: {
+          operationId: 'openPremiumStream',
+          summary: 'Open an SSE stream for an active premium session',
+          tags: ['Premium'],
+          parameters: [
+            { name: 'sessionId', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'subscriptionKey', in: 'query', schema: { type: 'string' } },
+            { name: 'since', in: 'query', schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': {
+              description: 'SSE event stream. Each event is `event: <type>\\ndata: <json>\\n\\n`.',
+              content: { 'text/event-stream': { schema: { type: 'string' } } },
+            },
+            '403': { description: 'Session not active.' },
+            '406': { description: 'Accept: text/event-stream required.' },
+          },
+        },
+      },
+      '/premium/webhook/register': {
+        post: {
+          operationId: 'registerPremiumWebhook',
+          summary: 'Register an HTTPS webhook target for signed premium event delivery',
+          tags: ['Premium'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['sessionId', 'targetUrl', 'events'],
+                  properties: {
+                    sessionId: { type: 'string' },
+                    targetUrl: { type: 'string', format: 'uri' },
+                    events: { type: 'array', items: { type: 'string' }, minItems: 1 },
+                    signingPublicKey: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Webhook subscription created. Delivery worker started in background.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+            '400': { description: 'Missing required fields.' },
+            '402': { description: 'Session not active or URL invalid.' },
+          },
+        },
+      },
+      '/premium/webhook/{subscriptionId}/status': {
+        get: {
+          operationId: 'getPremiumWebhookStatus',
+          summary: 'Check webhook subscription status and recent delivery records',
+          tags: ['Premium'],
+          parameters: [
+            { name: 'subscriptionId', in: 'path', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            '200': {
+              description: 'Subscription status with recent delivery attempts.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+            '404': { description: 'Subscription not found.' },
           },
         },
       },
@@ -2168,6 +2415,7 @@ export class RemoteMCPServer {
   private sessionCleanupInterval?: NodeJS.Timeout;
   private httpServer?: http.Server;
   private monetizationGate?: McpMonetizationGate;
+  private premiumMemoryManager?: PremiumMemoryManager;
 
   public constructor(config?: RemoteMCPConfig) {
     this.appConfig = loadConfig();
@@ -2198,6 +2446,10 @@ export class RemoteMCPServer {
 
     this.monetizationGate = await McpMonetizationGate.create(this.appConfig);
 
+    // Start premium memory background GC.
+    this.premiumMemoryManager = new PremiumMemoryManager();
+    this.premiumMemoryManager.start();
+
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
         return;
@@ -2226,6 +2478,55 @@ export class RemoteMCPServer {
         writeJson(res, 200, buildPricingCatalog(this.appConfig.monetization), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/premium/catalog.json') {
+        writeJson(res, 200, buildPremiumDiscoveryDocument(req, this.config), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/premium/streams.json') {
+        writeJson(res, 200, buildPremiumDiscoveryDocument(req, this.config, 'stream'), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/premium/webhooks.json') {
+        writeJson(res, 200, buildPremiumDiscoveryDocument(req, this.config, 'webhook'), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && url.pathname === '/premium/health.json') {
+        try {
+          const metrics = await getPremiumMetrics();
+          writeJson(res, 200, {
+            version: '1.0.0',
+            service: 'sap-mcp-server',
+            serverVersion: MCP_SERVER_VERSION,
+            timestamp: new Date().toISOString(),
+            ...metrics,
+          }, {
+            'Cache-Control': 'public, max-age=15',
+          }, isHeadMethod(req.method));
+        } catch (error) {
+          writeJson(res, 500, {
+            error: 'premium_health_error',
+            message: error instanceof Error ? error.message : 'Unknown error.',
+          });
+        }
+        return;
+      }
+
+      // Premium delivery rail routes (activation, SSE stream, webhook register/status).
+      // These are not public read-only — they handle POST and GET with side effects.
+      const handledByPremiumRoute = await tryPremiumRoute(req, res);
+      if (handledByPremiumRoute) {
         return;
       }
 
@@ -2554,6 +2855,10 @@ export class RemoteMCPServer {
     await this.monetizationGate?.close();
     this.monetizationGate = undefined;
     await this.rateLimiter.close();
+
+    // Premium subsystem graceful shutdown: stop streams, webhooks, providers, clear stores.
+    await this.premiumMemoryManager?.shutdown();
+    this.premiumMemoryManager = undefined;
   }
 
   /**

@@ -1,4 +1,10 @@
 /**
+ * @name config/index
+ * @description Barrel export for configuration module (env, secure-config, defaults)
+ * @module config/index
+ */
+
+/**
  * Configuration Module Barrel Export
  */
 

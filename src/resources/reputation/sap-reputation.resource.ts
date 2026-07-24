@@ -1,8 +1,16 @@
 /**
- * SAP Reputation Resource
- * 
- * Agent reputation and attestation data.
- * REAL IMPLEMENTATION — Fetches from on-chain PDA
+ * @name resources/reputation/sap-reputation-resource
+ * @description MCP resource template for SAP agent reputation and attestation data.
+ *
+ * REAL IMPLEMENTATION — Fetches reputation data from the on-chain PDA derived
+ * from the `sap_reputation` seed and the agent's public key.
+ *
+ * @flow
+ *   1. Registers a resource template at `sap://reputation/{pubkey}` on the MCP server.
+ *   2. When a client reads the resource, derives the reputation PDA from the program ID and pubkey.
+ *   3. Fetches the on-chain account data and returns it as a JSON resource content.
+ *
+ * @module resources/reputation/sap-reputation-resource
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -12,7 +20,13 @@ import type { SapMcpContext } from '../../core/types.js';
 import { PublicKey } from '@solana/web3.js';
 
 /**
- * Executes the sap reputation resource operation.
+ * @name sapReputationResource
+ * @description Registers the SAP reputation resource template on the MCP server.
+ *
+ * @param server  — The MCP `Server` instance to register the resource on.
+ * @param context — SAP MCP runtime context with connection and config.
+ *
+ * @usedBy `resources/register-resources.ts`.
  */
 export function sapReputationResource(server: Server, context: SapMcpContext) {
   registerResourceTemplate(

@@ -1,14 +1,27 @@
 /**
- * Constants for SAP MCP Server
+ * @name core/constants
+ * @description Compile-time and runtime constants for the SAP MCP Server.
+ *
+ * Includes default program IDs, RPC URLs, commitment levels, HTTP ports,
+ * transaction limits, MCP server metadata, protocol treasury, registration
+ * fees, tool categories, risk thresholds, and supported clusters.
+ *
+ * @module core/constants
  */
 
 /**
- * Default SAP Program ID
+ * @name DEFAULT_SAP_PROGRAM_ID
+ * @description Default SAP on-chain program ID used when none is specified in config.
+ *
+ * @usedBy `config/defaults.ts`, config pipeline
  */
 export const DEFAULT_SAP_PROGRAM_ID = 'SAPpUhsWLJG1FfkGRcXagEDMrMsWGjbky7AyhGpFETZ';
 
 /**
- * Default RPC URLs
+ * @name DEFAULT_RPC_URLS
+ * @description Default Solana RPC endpoints for each supported cluster.
+ *
+ * @usedBy config pipeline, `adapters/solana/connection.ts`
  */
 export const DEFAULT_RPC_URLS = {
   mainnet: 'https://api.mainnet-beta.solana.com',
@@ -18,12 +31,18 @@ export const DEFAULT_RPC_URLS = {
 };
 
 /**
- * Default commitment level
+ * @name DEFAULT_COMMITMENT
+ * @description Default Solana commitment level used when none is configured.
+ *
+ * @usedBy config pipeline
  */
 export const DEFAULT_COMMITMENT = 'confirmed' as const;
 
 /**
- * Default HTTP port for API mode
+ * @name DEFAULT_HTTP_PORT
+ * @description Default HTTP port for the SAP MCP server in API mode.
+ *
+ * @usedBy config pipeline
  */
 export const DEFAULT_HTTP_PORT = 8787;
 
@@ -85,7 +104,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.18';
+export const MCP_SERVER_VERSION = '0.9.19';
 
 /**
  * SAP protocol treasury that should receive protocol-owned registration fees.

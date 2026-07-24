@@ -1,4 +1,10 @@
 /**
+ * @name config/schema
+ * @description Backwards-compatible config schema barrel re-exporting env schema
+ * @module config/schema
+ */
+
+/**
  * Backwards-compatible config schema barrel.
  *
  * The authoritative runtime environment schema lives in `env.ts`; this module

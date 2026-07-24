@@ -1,11 +1,28 @@
 /**
- * Spending limits enforcement
+ * @name policy/spending-limits
+ * @description Spending limit enforcement utilities for SAP MCP transactions.
+ *
+ * Provides functions to validate transaction amounts against configured maximums
+ * and approval thresholds, and to derive a risk level from the transaction amount.
+ *
+ * @module policy/spending-limits
  */
 
 import type { SapMcpConfig } from '../core/types.js';
 
 /**
- * Check if amount is within spending limits
+ * @name checkSpendingLimit
+ * @description Check if a transaction amount is within configured spending limits.
+ *
+ * Compares the amount against `maxTxValueSol` (hard ceiling) and
+ * `requireApprovalAboveSol` (approval threshold). Returns a result object
+ * indicating whether the transaction is allowed, requires approval, or is blocked.
+ *
+ * @param config - The SAP MCP server configuration containing spending limits.
+ * @param amountSol - The transaction amount in SOL to validate.
+ * @returns An object with `allowed` flag, optional `reason` string, and optional `requiresApproval` flag.
+ *
+ * @usedBy `policy-engine.ts:PolicyEngine.checkPermission`
  */
 export function checkSpendingLimit(
   config: SapMcpConfig,
@@ -33,7 +50,16 @@ export function checkSpendingLimit(
 }
 
 /**
- * Calculate risk level based on amount
+ * @name calculateRiskLevel
+ * @description Calculate risk level based solely on transaction amount in SOL.
+ *
+ * Maps amount thresholds to risk tiers: 0 SOL is `safe`, <0.1 is `low`,
+ * <1.0 is `medium`, <10.0 is `high`, and 10.0+ is `critical`.
+ *
+ * @param amountSol - The transaction amount in SOL.
+ * @returns A risk level string: `safe`, `low`, `medium`, `high`, or `critical`.
+ *
+ * @usedBy `spending-limits.ts:checkSpendingLimit`
  */
 export function calculateRiskLevel(amountSol: number): 'safe' | 'low' | 'medium' | 'high' | 'critical' {
   if (amountSol === 0) return 'safe';

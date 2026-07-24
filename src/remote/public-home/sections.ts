@@ -756,6 +756,9 @@ export function renderPayments(model: LandingPageModel): string {
             <li>Pricing catalog: <a href="${escapeHtml(model.info.endpoints.pricing)}">/pricing.json</a></li>
             <li>pay.sh provider YAML: <a href="${escapeHtml(model.info.endpoints.payShProvider)}">/pay/provider.yml</a></li>
             <li>OpenAPI catalog spec: <a href="${escapeHtml(model.info.endpoints.openApi)}">/openapi.json</a></li>
+            <li>Premium plugin contracts: <a href="${escapeHtml(model.info.endpoints.premiumCatalog)}">/premium/catalog.json</a></li>
+            <li>Premium stream contracts: <a href="${escapeHtml(model.info.endpoints.premiumStreams)}">/premium/streams.json</a></li>
+            <li>Premium webhook contracts: <a href="${escapeHtml(model.info.endpoints.premiumWebhooks)}">/premium/webhooks.json</a></li>
             <li>Signed transaction relay: <a href="${escapeHtml(model.info.endpoints.txSubmit)}">/tx/submit</a> (submit-only, never signs)</li>
             <li>Addon path: <code>${escapeHtml(model.paidCallAddonPath)}</code></li>
           </ul>
@@ -778,6 +781,9 @@ export function renderEndpointMap(model: LandingPageModel): string {
     ['GET', model.info.endpoints.serverInfo],
     ['GET', model.info.endpoints.pricing],
     ['GET', model.info.endpoints.openApi],
+    ['GET', model.info.endpoints.premiumCatalog],
+    ['GET', model.info.endpoints.premiumStreams],
+    ['GET', model.info.endpoints.premiumWebhooks],
     ['GET', model.info.endpoints.x402Discovery],
     ['GET', model.info.endpoints.payShProvider],
     ['GET', model.info.endpoints.smitheryServerCard],

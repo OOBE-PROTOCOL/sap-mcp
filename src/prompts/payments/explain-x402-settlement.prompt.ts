@@ -1,4 +1,10 @@
 /**
+ * @name prompts/payments/explain-x402-settlement
+ * @description Prompt explaining x402 payment protocol and settlement flows
+ * @module prompts/payments/explain-x402-settlement
+ */
+
+/**
  * Explain x402 Settlement Prompt
  * 
  * Explains x402 payment protocol and settlement flows.

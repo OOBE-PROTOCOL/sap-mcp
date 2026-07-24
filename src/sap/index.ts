@@ -1,5 +1,11 @@
 /**
- * SAP module barrel export
+ * @name sap/index
+ * @description Barrel export for the SAP MCP SAP client module.
+ *
+ * Re-exports the `SapClientManager` singleton, client factory functions, error
+ * mapping utilities, and SAP on-chain type definitions.
+ *
+ * @module sap/index
  */
 
 export { SapClientManager, getSapClient, isSapClientInitialized } from './sap-client-manager.js';

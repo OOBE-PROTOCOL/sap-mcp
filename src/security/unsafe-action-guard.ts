@@ -1,19 +1,27 @@
 /**
- * Unsafe action guard
- * 
- * Detects potentially dangerous operations before execution:
- * - Large value transfers
- * - Unknown program interactions
- * - Privilege escalation attempts
- * - Reentrancy risks
- * - Sandwich attack patterns
+ * @name security/unsafe-action-guard
+ * @description Detects potentially dangerous Solana operations before execution.
+ *
+ * Validates actions against a program whitelist, unsafe pattern blacklist,
+ * value thresholds, privilege escalation attempts, and reentrancy risks.
+ * Returns a structured safety verdict with risk level classification.
+ *
+ * @flow
+ *   1. Tool handlers call `unsafeActionGuard` before executing on-chain actions.
+ *   2. If the guard returns `safe: false`, the tool blocks execution.
+ *   3. `getRiskScore` provides a numeric risk score (0–100) for logging/metrics.
+ *
+ * @module security/unsafe-action-guard
  */
 
 import { logger } from '../core/logger.js';
 import type { SapMcpContext } from '../core/types.js';
 
 /**
- * Known safe programs (whitelist)
+ * @name SAFE_PROGRAMS
+ * @description Whitelist of known-safe Solana program IDs (System, Token, SAP, DEXs, lending, NFT).
+ *
+ * @usedBy `unsafeActionGuard`, `isPrivilegeEscalationAttempt`
  */
 const SAFE_PROGRAMS = new Set([
   // Solana core
@@ -41,7 +49,10 @@ const SAFE_PROGRAMS = new Set([
 ]);
 
 /**
- * Unsafe patterns (blacklist)
+ * @name UNSAFE_PATTERNS
+ * @description Blacklist of action name substrings that indicate potentially dangerous operations.
+ *
+ * @usedBy `hasUnsafePattern`
  */
 const UNSAFE_PATTERNS = [
   'close_account',
@@ -54,7 +65,18 @@ const UNSAFE_PATTERNS = [
 ];
 
 /**
- * Check if action is unsafe
+ * @name unsafeActionGuard
+ * @description Evaluates whether an action is safe to execute on-chain.
+ *
+ * Checks (in order): unsafe pattern matching, program whitelist, value thresholds,
+ * privilege escalation attempts, and reentrancy risks.
+ *
+ * @param context  — SAP MCP runtime context with config thresholds.
+ * @param action   — Action name string to evaluate.
+ * @param metadata — Optional metadata including `programId`, `valueSol`, and `accounts`.
+ * @returns Safety verdict with `safe` boolean, optional `reason`, and `riskLevel` (`low`, `medium`, `high`, `critical`).
+ *
+ * @usedBy Tool handlers across the SAP MCP runtime.
  */
 export function unsafeActionGuard(
   context: SapMcpContext,
@@ -131,7 +153,13 @@ export function unsafeActionGuard(
 }
 
 /**
- * Check for unsafe patterns in action name
+ * @name hasUnsafePattern
+ * @description Checks whether an action name contains any blacklisted unsafe pattern.
+ *
+ * @param action — Action name string to check.
+ * @returns `true` if the action name matches any unsafe pattern, `false` otherwise.
+ *
+ * @internal
  */
 function hasUnsafePattern(action: string): boolean {
   const actionLower = action.toLowerCase();
@@ -139,7 +167,15 @@ function hasUnsafePattern(action: string): boolean {
 }
 
 /**
- * Check for privilege escalation attempts
+ * @name isPrivilegeEscalationAttempt
+ * @description Detects privilege escalation attempts by checking for authority-change patterns
+ * combined with unknown program accounts.
+ *
+ * @param action   — Action name string to check.
+ * @param metadata — Optional metadata containing account addresses.
+ * @returns `true` if a privilege escalation attempt is detected, `false` otherwise.
+ *
+ * @internal
  */
 function isPrivilegeEscalationAttempt(
   action: string,
@@ -177,7 +213,13 @@ function isPrivilegeEscalationAttempt(
 }
 
 /**
- * Check for reentrancy risks
+ * @name isReentrancyRisk
+ * @description Checks whether an action name indicates a cross-program invocation reentrancy risk.
+ *
+ * @param action — Action name string to check.
+ * @returns `true` if the action name contains reentrancy-related patterns, `false` otherwise.
+ *
+ * @internal
  */
 function isReentrancyRisk(action: string): boolean {
   const reentrancyPatterns = [
@@ -191,7 +233,17 @@ function isReentrancyRisk(action: string): boolean {
 }
 
 /**
- * Get risk score for action (0-100)
+ * @name getRiskScore
+ * @description Computes a numeric risk score (0–100) for an action based on the guard verdict
+ * and action characteristics.
+ *
+ * @param context  — SAP MCP runtime context with config thresholds.
+ * @param action   — Action name string to evaluate.
+ * @param metadata — Optional metadata including `programId`, `valueSol`, and `accounts`.
+ * @returns Risk score from 0 (safe) to 100 (critical). Blocked actions return 25–100 based on
+ *          risk level; safe actions return 10–60 based on write operations and value.
+ *
+ * @usedBy Tool handlers and metrics collection in the SAP MCP runtime.
  */
 export function getRiskScore(
   context: SapMcpContext,

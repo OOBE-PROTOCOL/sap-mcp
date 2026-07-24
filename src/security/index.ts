@@ -1,5 +1,11 @@
 /**
- * Security module barrel export
+ * @name security/index
+ * @description Barrel export for the SAP MCP security module.
+ *
+ * Re-exports tool permission checks, approval threshold logic, unsafe action
+ * guards, private key guards, and prompt injection prevention notes.
+ *
+ * @module security/index
  */
 
 export { checkToolPermissions } from './tool-permissions.js';

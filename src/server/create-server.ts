@@ -1,7 +1,15 @@
 /**
- * MCP Server creation
- * 
- * Creates and configures the MCP server with all SAP Protocol capabilities.
+ * @name server/create-server
+ * @description Creates and configures the MCP server instance with all SAP Protocol capabilities.
+ *
+ * @flow
+ *   1. Constructs an MCP `Server` with tools, resources, and prompts capabilities declared upfront.
+ *   2. Creates a SAP client via `createSapClient` for on-chain interaction.
+ *   3. Resolves the transaction signer via `resolveSigner` based on configured mode.
+ *   4. Initializes the `PolicyEngine` for permission and spending enforcement.
+ *   5. Assembles the shared `SapMcpContext` and registers all capabilities via `registerCapabilities`.
+ *
+ * @module server/create-server
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -23,7 +31,14 @@ import { registerCapabilities } from './register-capabilities.js';
 import { setToolExecutionContext } from '../adapters/mcp/sdk-compat.js';
 
 /**
- * Create and configure the MCP server instance
+ * @name createSapMcpServer
+ * @description Creates and configures the SAP MCP server with all capabilities registered.
+ *
+ * @param config — SAP MCP configuration object with RPC URL, program ID, mode, and signer settings.
+ * @returns A configured MCP `Server` instance ready to connect to a transport.
+ * @throws If SAP client creation or signer resolution fails.
+ *
+ * @usedBy `server/index.ts`, transport entry points (`stdio.ts`, `http.ts`).
  */
 export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> {
   logger.debug('Creating SAP MCP Server', { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION });
@@ -59,7 +74,7 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
   // Create SAP client
   const sapClient = await createSapClient(config);
   logger.debug('SAP client created', { programId: config.programId });
-
+  
   // Resolve signer based on mode
   const signer = await resolveSigner(config);
   logger.debug('Signer resolved', { mode: signer?.mode ?? 'none' });

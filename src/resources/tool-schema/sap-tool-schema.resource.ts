@@ -1,8 +1,16 @@
 /**
- * SAP Tool Schema Resource
- * 
- * Tool schema definitions and metadata.
- * REAL IMPLEMENTATION — Fetches from on-chain PDA
+ * @name resources/tool-schema/sap-tool-schema-resource
+ * @description MCP resource template for SAP tool schema definitions and metadata.
+ *
+ * REAL IMPLEMENTATION — Fetches tool schema data from the on-chain PDA derived
+ * from the `sap_tool_schema` seed and the tool name.
+ *
+ * @flow
+ *   1. Registers a resource template at `sap://tool-schema/{toolName}` on the MCP server.
+ *   2. When a client reads the resource, derives the tool schema PDA from the program ID and tool name.
+ *   3. Fetches the on-chain account data and returns it as a JSON resource content.
+ *
+ * @module resources/tool-schema/sap-tool-schema-resource
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -12,7 +20,13 @@ import type { SapMcpContext } from '../../core/types.js';
 import { PublicKey } from '@solana/web3.js';
 
 /**
- * Executes the sap tool schema resource operation.
+ * @name sapToolSchemaResource
+ * @description Registers the SAP tool schema resource template on the MCP server.
+ *
+ * @param server  — The MCP `Server` instance to register the resource on.
+ * @param context — SAP MCP runtime context with connection and config.
+ *
+ * @usedBy `resources/register-resources.ts`.
  */
 export function sapToolSchemaResource(server: Server, context: SapMcpContext) {
   registerResourceTemplate(
