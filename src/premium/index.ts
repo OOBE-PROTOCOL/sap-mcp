@@ -39,7 +39,6 @@
 export * from './builtin-plugins.js';
 export * from './trading-capabilities.js';
 export * from './meme-radar-capabilities.js';
-export * from './lowcap-discovery-capabilities.js';
 export * from './tech-fundamentals-capabilities.js';
 export * from './manifest-builder.js';
 export * from './private-manifest-loader.js';

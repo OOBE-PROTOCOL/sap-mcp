@@ -2,6 +2,51 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.20 - 2026-07-25
+
+### Added
+
+- Added 10 new MCP tools for perpetual futures trading and chart analysis:
+  - `sap_perp_markets` — List Adrena perp markets with mark price, funding, OI.
+  - `sap_perp_position_info` — Read on-chain Adrena perp positions for a wallet.
+  - `sap_perp_funding_history` — Historical funding rates from Adrena API.
+  - `sap_chart_ohlc` — OHLC candlestick data for any Solana token (DexScreener).
+  - `sap_chart_long_term` — Long-term price history + protocol TVL (DexScreener + DeFiLlama).
+  - `sap_chart_volume_profile` — Volume profile analysis with POC, VAH, VAL.
+  - `sap_perp_liquidation_zones` — Compute liquidation zones for open positions.
+  - `sap_perp_build_open` — Build unsigned tx to open leveraged perp position (Adrena).
+  - `sap_perp_build_close` — Build unsigned tx to close a perp position.
+  - `sap_perp_build_modify` — Build unsigned tx to add/remove collateral.
+- All 10 tools use only free APIs (DexScreener, DeFiLlama, Adrena REST, Solana RPC).
+- Inscribed tools (`sap_perp_build_*`) return unsigned transactions for local agent signing.
+
+### Removed
+
+- Removed `sap-premium-agent-events` plugin (depended on REGISTRY_STREAM_URL — internal).
+- Removed `sap-premium-x402-ledger` plugin (depended on X402_STREAM_URL — internal).
+- Removed `sap-premium-trading-signals` plugin (depended on SIGNAL_PROVIDER_URL — not built).
+- Removed `sap-premium-lowcap-discovery` plugin (depended on BIRDEYE_API_URL — paid).
+- Removed `meme.social.sentiment` capability (depended on BIRDEYE_API_URL — paid).
+- Removed `tech.github.activity` and `tech.tokenomics.analysis` capabilities (GITHUB_API_URL — rate limited).
+- Removed `mempool.whale.alert` capability and provider.
+- Removed all env vars for paid/internal services: REGISTRY_STREAM_URL, X402_STREAM_URL,
+  SIGNAL_PROVIDER_URL, BIRDEYE_API_URL, GITHUB_API_URL, MEMPOOL_STREAM_URL.
+- Deleted 4 manifest JSON files, 11 provider TS files, 2 provider directories.
+
+### Improved
+
+- Hardened `webhook-engine.ts`: `signDelivery()` now throws if
+  `SAP_MCP_PREMIUM_WEBHOOK_SIGNER` is not set (was using 'fallback-dev-key').
+- Zero signing keys exposed in premium provider code — all providers are read-only
+  data streams + webhook delivery. No sendTransaction, Keypair.from, or secretKey.
+- Premium capabilities reduced from 23 to 10 — all now use only free APIs.
+- Updated `server-metadata.ts` tool count from 302 to 312.
+- Updated `builtin-plugins.test.ts` plugin count from 8 to 4.
+- Updated `trading-capabilities.ts` from 6 to 3 capabilities.
+- Updated pnpm overrides for Dependabot vulnerability fixes (postcss, langsmith,
+  @hono/node-server, uuid).
+- Bumped package, server metadata, and runtime version to `0.9.20`.
+
 ## 0.9.19 - 2026-07-25
 
 ### Added

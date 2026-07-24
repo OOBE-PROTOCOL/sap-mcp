@@ -2,17 +2,12 @@
  * @name premium/trading-capabilities
  * @description Built-in premium trading capabilities for Solana real-time trading agents.
  *
- * Defines 6 premium trading capabilities across 2 plugins:
+ * Defines 3 premium trading capabilities across 1 plugin:
  *
  *   1. `sap-premium-trading-streams` — Real-time SSE streams for trading signals:
  *      - `jupiter.arbitrage.scan`   — Cross-DEX arbitrage opportunity scanner (stream)
  *      - `pyth.volatility.watch`    — Price volatility breakout detector (stream)
  *      - `jupiter.route.optimized`  — Optimized swap route with MEV protection (stream)
- *
- *   2. `sap-premium-trading-signals` — Webhook-based trading signal delivery:
- *      - `signal.breakout`          — Technical breakout signals with entry/exit/SL/TP
- *      - `signal.liquidationcascade`— Liquidation cascade risk alerts
- *      - `signal.funding.rate`      — Perp funding rate arbitrage opportunities
  *
  * These capabilities are contracts only — they become live when the corresponding
  * provider env vars are configured and a provider adapter is loaded from the
@@ -20,11 +15,10 @@
  *
  * @flow
  *   1. Agent discovers trading capabilities via `sap_premium_plugin_catalog`.
- *   2. Agent creates a session plan for a trading stream or webhook.
+ *   2. Agent creates a session plan for a trading stream.
  *   3. Agent activates the session with x402/pay.sh receipt.
  *   4. Agent connects to `GET /premium/stream/:sessionId` for SSE streams.
- *   5. Agent registers webhooks for signal delivery via `POST /premium/webhook/register`.
- *   6. Provider adapter in the private subrepo feeds real market data.
+ *   5. Provider adapter in the private subrepo feeds real market data.
  *
  * @module premium/trading-capabilities
  */
@@ -93,9 +87,6 @@ const tradingStreamOutputSchema = {
         'arbitrage.opportunity',
         'volatility.breakout',
         'route.optimized',
-        'breakout.confirmed',
-        'liquidation.cascade',
-        'funding.arbitrage',
       ],
       description: 'Trading signal type determining the payload structure.',
     },
@@ -137,74 +128,6 @@ const tradingStreamOutputSchema = {
         expiresAt: { type: 'string', format: 'date-time', description: 'Signal expiry timestamp.' },
       },
       additionalProperties: true,
-    },
-  },
-  additionalProperties: false,
-};
-
-/**
- * @description Input schema for trading webhook capabilities. The buyer
- * provides an HTTPS endpoint and selects which signal types to receive.
- */
-const tradingWebhookInputSchema = {
-  type: 'object',
-  required: ['targetUrl', 'events', 'strategy'],
-  properties: {
-    targetUrl: {
-      type: 'string',
-      format: 'uri',
-      description: 'HTTPS webhook endpoint owned by the trading agent.',
-    },
-    events: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'string',
-        enum: [
-          'signal.breakout',
-          'signal.liquidationcascade',
-          'signal.funding.rate',
-        ],
-      },
-      description: 'Signal types to deliver to this webhook.',
-    },
-    strategy: {
-      type: 'string',
-      enum: ['scalping', 'swing', 'arbitrage', 'mean_reversion', 'momentum', 'hedging'],
-      description: 'Trading strategy profile — filters signals to match the agent approach.',
-    },
-    riskProfile: {
-      type: 'object',
-      properties: {
-        maxPositionSizeUsd: { type: 'number', minimum: 0, description: 'Maximum position size.' },
-        maxDailyLossUsd: { type: 'number', minimum: 0, description: 'Daily loss limit.' },
-        minConfidence: { type: 'number', minimum: 0, maximum: 1, description: 'Minimum signal confidence to deliver.' },
-      },
-      additionalProperties: false,
-    },
-    signingPublicKey: {
-      type: 'string',
-      description: 'Optional public key for webhook signature verification.',
-    },
-  },
-  additionalProperties: false,
-};
-
-/**
- * @description Output schema for trading webhook deliveries.
- */
-const tradingWebhookOutputSchema = {
-  type: 'object',
-  required: ['deliveryId', 'signalType', 'deliveredAt', 'signature', 'payload'],
-  properties: {
-    deliveryId: { type: 'string', description: 'Idempotent delivery id.' },
-    signalType: { type: 'string', description: 'Trading signal type.' },
-    deliveredAt: { type: 'string', format: 'date-time', description: 'ISO delivery timestamp.' },
-    signature: { type: 'string', description: 'HMAC-SHA256 signature.' },
-    payload: {
-      type: 'object',
-      additionalProperties: true,
-      description: 'Trading signal payload with entry/exit/SL/TP and execution metadata.',
     },
   },
   additionalProperties: false,
@@ -264,56 +187,6 @@ function tradingStreamCapability(
   };
 }
 
-/**
- * @name tradingWebhookCapability
- * @description Factory for building a trading webhook capability definition.
- *
- * @param id           - Capability id (e.g. `signal.breakout`).
- * @param title        - Human-readable title.
- * @param description  - Agent-facing description.
- * @param events       - Event types this webhook delivers.
- * @param unitPriceUsd - Price per delivered signal in USD.
- * @param providerEnv  - Required provider env vars.
- * @returns A `PremiumCapabilityDefinition` with type `webhook`.
- *
- * @internal
- */
-function tradingWebhookCapability(
-  id: string,
-  title: string,
-  description: string,
-  events: string[],
-  unitPriceUsd: number,
-  providerEnv: string[],
-): PremiumCapabilityDefinition {
-  return {
-    id,
-    type: 'webhook',
-    title,
-    description,
-    status: providerEnv.length > 0 ? 'requires-provider' : 'planned',
-    requiresProvider: providerEnv.length > 0,
-    providerEnv,
-    inputSchema: tradingWebhookInputSchema,
-    outputSchema: tradingWebhookOutputSchema,
-    pricing: {
-      tier: 'premium-webhook',
-      model: 'x402-per-event',
-      unit: 'event',
-      unitPriceUsd,
-      minUnits: 5,
-      maxUnits: 50_000,
-      settlement: 'x402',
-    },
-    delivery: {
-      transport: 'webhook-http',
-      events,
-      latencyTargetMs: 500, // fast delivery for signals
-      replayWindowSeconds: 300,
-    },
-  };
-}
-
 /* -------------------------------------------------------------------------- */
 /* Plugin manifests                                                           */
 /* -------------------------------------------------------------------------- */
@@ -322,11 +195,10 @@ function tradingWebhookCapability(
  * @name TRADING_PREMIUM_PLUGINS
  * @description Built-in premium trading plugin manifests.
  *
- * Two plugins covering 7 trading capabilities:
- *   - `sap-premium-trading-streams` — 4 SSE stream capabilities
- *   - `sap-premium-trading-signals` — 3 webhook signal capabilities
+ * One plugin covering 3 trading stream capabilities:
+ *   - `sap-premium-trading-streams` — 3 SSE stream capabilities
  *
- * @usedBy `listPremiumPlugins()` — merged with the existing 3 built-in plugins.
+ * @usedBy `listPremiumPlugins()` — merged with the other built-in plugins.
  */
 export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
   {
@@ -361,41 +233,6 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         ['route.optimized'],
         0.025, // $0.025/minute
         ['SAP_MCP_PREMIUM_JUPITER_STREAM_URL'],
-      ),
-    ],
-  },
-  {
-    id: 'sap-premium-trading-signals',
-    version: '0.1.0',
-    title: 'SAP Premium Trading Signals',
-    description:
-      'Paid webhook-based trading signal delivery for Solana agents: technical breakouts, liquidation cascade risk alerts, and funding rate arbitrage opportunities. Signals include entry, exit, stop-loss, take-profit, confidence, and strategy-specific filtering. Delivered via signed HTTPS callbacks with x402 per-signal metering.',
-    publisher: 'OOBE Protocol',
-    visibility: 'public',
-    capabilities: [
-      tradingWebhookCapability(
-        'signal.breakout',
-        'Technical breakout signals',
-        'Delivers signed webhook callbacks when technical breakouts are confirmed on configured token pairs. Signals include breakout direction (long/short), entry price, stop-loss, take-profit targets, confidence score, and suggested position size. Strategy filtering ensures signals match the agent trading approach (scalping, swing, momentum).',
-        ['signal.breakout'],
-        0.002, // $0.002 per signal
-        ['SAP_MCP_PREMIUM_SIGNAL_PROVIDER_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
-      ),
-      tradingWebhookCapability(
-        'signal.liquidationcascade',
-        'Liquidation cascade risk alerts',
-        'Delivers signed webhook callbacks when liquidation cascade risk is detected on Solana lending protocols (Marginfi, Kamino, Solend). Signals include at-risk positions, cascade trigger price, estimated cascade size in USD, and recommended hedging action. Critical for agents managing leveraged positions or seeking cascade arbitrage.',
-        ['signal.liquidationcascade'],
-        0.005, // $0.005 per alert — higher value
-        ['SAP_MCP_PREMIUM_SIGNAL_PROVIDER_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
-      ),
-      tradingWebhookCapability(
-        'signal.funding.rate',
-        'Funding rate arbitrage signals',
-        'Delivers signed webhook callbacks when perp funding rate arbitrage opportunities arise on Drift, Zeta, or other Solana perp DEXes. Signals include funding rate spread, spot+perp leg details, expected APR, capital requirement, and confidence. Agents can execute cash-and-carry or reverse arbitrage strategies.',
-        ['signal.funding.rate'],
-        0.003, // $0.003 per signal
-        ['SAP_MCP_PREMIUM_SIGNAL_PROVIDER_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
     ],
   },

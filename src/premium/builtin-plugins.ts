@@ -2,15 +2,12 @@
  * @name premium/builtin-plugins
  * @description Built-in premium plugin definitions and discovery helpers.
  *
- * Defines the three core built-in public premium plugins shipped with SAP MCP:
+ * Defines the core built-in public premium plugin shipped with SAP MCP:
  *   1. `sap-premium-market-data`  — Jupiter quotes, Pyth price ticks, threshold webhooks.
- *   2. `sap-premium-agent-events` — SAP registry streams and escrow lifecycle webhooks.
- *   3. `sap-premium-x402-ledger`  — x402 payment rail streams and receipt webhooks.
  *
  * Additional built-in plugin arrays are imported and merged by `listPremiumPlugins()`:
- *   - `TRADING_PREMIUM_PLUGINS`             — Trading streams and signal webhooks.
+ *   - `TRADING_PREMIUM_PLUGINS`             — Trading streams.
  *   - `MEME_RADAR_PREMIUM_PLUGINS`          — Meme token listing, sentiment, rugpull, volume.
- *   - `LOWCAP_DISCOVERY_PREMIUM_PLUGINS`    — Low-cap gem scanning, early entry, holder analysis.
  *   - `TECH_FUNDAMENTALS_PREMIUM_PLUGINS`   — GitHub activity, TVL changes, tokenomics analysis.
  *
  * Also provides discovery helpers (`listPremiumPlugins`, `listPremiumCapabilities`,
@@ -39,7 +36,6 @@ import {
 } from './private-manifest-loader.js';
 import { TRADING_PREMIUM_PLUGINS } from './trading-capabilities.js';
 import { MEME_RADAR_PREMIUM_PLUGINS } from './meme-radar-capabilities.js';
-import { LOWCAP_DISCOVERY_PREMIUM_PLUGINS } from './lowcap-discovery-capabilities.js';
 import { TECH_FUNDAMENTALS_PREMIUM_PLUGINS } from './tech-fundamentals-capabilities.js';
 
 /* -------------------------------------------------------------------------- */
@@ -278,8 +274,8 @@ function webhookCapability(
  * These are always available (no env vars needed for discovery) and serve as
  * the reference implementations for the premium plugin manifest format.
  * Additional plugin arrays (`TRADING_PREMIUM_PLUGINS`,
- * `MEME_RADAR_PREMIUM_PLUGINS`, `LOWCAP_DISCOVERY_PREMIUM_PLUGINS`,
- * `TECH_FUNDAMENTALS_PREMIUM_PLUGINS`) are merged in `listPremiumPlugins()`.
+ * `MEME_RADAR_PREMIUM_PLUGINS`, `TECH_FUNDAMENTALS_PREMIUM_PLUGINS`) are merged
+ * in `listPremiumPlugins()`.
  *
  * @type {PremiumPluginManifest[]}
  *
@@ -315,58 +311,6 @@ export const BUILTIN_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Price threshold webhook',
         'Delivers signed HTTPS callbacks when configured mint/feed thresholds cross.',
         ['price.threshold.crossed'],
-        0.001,
-        ['SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
-      ),
-    ],
-  },
-  {
-    id: 'sap-premium-agent-events',
-    version: '0.1.0',
-    title: 'SAP Premium Agent Events',
-    description: 'Paid event contracts for SAP registry, agent updates, escrow lifecycle, and reputation movement.',
-    publisher: 'OOBE Protocol',
-    visibility: 'public',
-    capabilities: [
-      streamCapability(
-        'sap.agent.registry',
-        'SAP agent registry stream',
-        'Streams agent registrations and metadata updates from the SAP coordination layer.',
-        ['agent.registered', 'agent.updated', 'agent.deactivated', 'agent.reactivated'],
-        0.01,
-        ['SAP_MCP_PREMIUM_REGISTRY_STREAM_URL'],
-      ),
-      webhookCapability(
-        'sap.escrow.lifecycle',
-        'SAP escrow lifecycle webhook',
-        'Delivers signed callbacks for escrow creation, funding, settlement, disputes, and closure.',
-        ['escrow.created', 'escrow.funded', 'escrow.settled', 'escrow.disputed', 'escrow.closed'],
-        0.0015,
-        ['SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
-      ),
-    ],
-  },
-  {
-    id: 'sap-premium-x402-ledger',
-    version: '0.1.0',
-    title: 'SAP Premium x402 Ledger',
-    description: 'Paid observability contracts for x402 challenge, receipt, facilitator, and settlement telemetry.',
-    publisher: 'OOBE Protocol',
-    visibility: 'public',
-    capabilities: [
-      streamCapability(
-        'x402.payment.rail',
-        'x402 payment rail stream',
-        'Streams challenge, verification, settlement, retry, and facilitator health events for paid agent commerce.',
-        ['x402.challenge.created', 'x402.payment.verified', 'x402.settlement.submitted', 'x402.settlement.failed'],
-        0.025,
-        ['SAP_MCP_PREMIUM_X402_STREAM_URL'],
-      ),
-      webhookCapability(
-        'x402.receipt.created',
-        'x402 receipt webhook',
-        'Delivers signed receipt callbacks for buyers, sellers, and observability systems.',
-        ['x402.receipt.created', 'x402.facilitator.unhealthy'],
         0.001,
         ['SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
@@ -428,7 +372,6 @@ export function listPremiumPlugins(options: PremiumPluginListOptions = {}): Prem
     ...BUILTIN_PREMIUM_PLUGINS,
     ...TRADING_PREMIUM_PLUGINS,
     ...MEME_RADAR_PREMIUM_PLUGINS,
-    ...LOWCAP_DISCOVERY_PREMIUM_PLUGINS,
     ...TECH_FUNDAMENTALS_PREMIUM_PLUGINS,
     ...loadPrivatePremiumPluginManifests(),
   ];

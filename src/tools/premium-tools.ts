@@ -258,7 +258,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         properties: {
           pluginId: {
             type: 'string',
-            description: 'Optional premium plugin id used to narrow webhook discovery, for example sap-premium-agent-events.',
+            description: 'Optional premium plugin id used to narrow webhook discovery, for example sap-premium-market-data.',
           },
         },
         additionalProperties: false,

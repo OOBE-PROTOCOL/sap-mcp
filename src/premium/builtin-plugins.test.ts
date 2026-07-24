@@ -2,7 +2,7 @@
  * @file builtin-plugins.test.ts
  * @description Vitest suite for the premium builtin-plugins module.
  *
- * Verifies that `BUILTIN_PREMIUM_PLUGINS` contains three valid manifests,
+ * Verifies that `BUILTIN_PREMIUM_PLUGINS` contains one valid manifest,
  * that `listPremiumPlugins` returns clones and filters private plugins,
  * that `listPremiumCapabilities` filters by type, that `findPremiumCapability`
  * resolves valid and invalid ids, and that `publicPremiumProviderStatus`
@@ -30,9 +30,11 @@ const PREMIUM_ENV_VARS = [
 const PROVIDER_ENV_VARS = [
   'SAP_MCP_PREMIUM_JUPITER_STREAM_URL',
   'SAP_MCP_PREMIUM_PYTH_STREAM_URL',
-  'SAP_MCP_PREMIUM_REGISTRY_STREAM_URL',
-  'SAP_MCP_PREMIUM_X402_STREAM_URL',
   'SAP_MCP_PREMIUM_WEBHOOK_SIGNER',
+  'SAP_MCP_PREMIUM_BIRDEYE_API_URL',
+  'SAP_MCP_PREMIUM_DEXSCREENER_API_URL',
+  'SAP_MCP_PREMIUM_GITHUB_API_URL',
+  'SAP_MCP_PREMIUM_DEFILAMA_API_URL',
 ];
 
 describe('premium builtin-plugins', () => {
@@ -55,8 +57,8 @@ describe('premium builtin-plugins', () => {
     }
   });
 
-  it('BUILTIN_PREMIUM_PLUGINS has exactly 3 core plugins', () => {
-    expect(BUILTIN_PREMIUM_PLUGINS).toHaveLength(3);
+  it('BUILTIN_PREMIUM_PLUGINS has exactly 1 core plugin', () => {
+    expect(BUILTIN_PREMIUM_PLUGINS).toHaveLength(1);
   });
 
   it('every built-in manifest passes validatePremiumPluginManifest', () => {
@@ -87,24 +89,20 @@ describe('premium builtin-plugins', () => {
       expect(plugin.visibility).toBe('public');
     }
 
-    // All 8 built-in plugins are public (3 core + 2 trading + 3 new), so all should be present.
-    expect(publicPlugins).toHaveLength(8);
+    // All 4 built-in plugins are public (1 core + 1 trading + 1 meme-radar + 1 tech-fundamentals).
+    expect(publicPlugins).toHaveLength(4);
   });
 
   it('listPremiumPlugins includes private plugins when includePrivate=true', () => {
     const allPlugins = listPremiumPlugins({ includePrivate: true });
 
-    expect(allPlugins).toHaveLength(8);
+    expect(allPlugins).toHaveLength(4);
     expect(allPlugins.map(p => p.id).sort()).toEqual(
       [
-        'sap-premium-agent-events',
-        'sap-premium-lowcap-discovery',
         'sap-premium-market-data',
         'sap-premium-meme-radar',
         'sap-premium-tech-fundamentals',
-        'sap-premium-trading-signals',
         'sap-premium-trading-streams',
-        'sap-premium-x402-ledger',
       ].sort(),
     );
   });
@@ -120,9 +118,9 @@ describe('premium builtin-plugins', () => {
       expect(cap.type).toBe('webhook');
     }
 
-    // Built-in plugins have 4 stream capabilities and 3 webhook capabilities.
-    expect(streams.length).toBeGreaterThanOrEqual(4);
-    expect(webhooks.length).toBeGreaterThanOrEqual(3);
+    // Built-in plugins have 9 stream capabilities and 4 webhook capabilities.
+    expect(streams.length).toBeGreaterThanOrEqual(9);
+    expect(webhooks.length).toBeGreaterThanOrEqual(4);
   });
 
   it('findPremiumCapability returns {plugin, capability} for valid ids', () => {

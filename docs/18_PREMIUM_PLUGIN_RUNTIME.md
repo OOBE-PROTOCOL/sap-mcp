@@ -55,8 +55,9 @@ The open catalog currently defines contract-level manifests for:
 | Plugin | Capability Examples |
 | --- | --- |
 | `sap-premium-market-data` | Jupiter quote deltas, Pyth price ticks, price threshold webhooks. |
-| `sap-premium-agent-events` | SAP agent registry streams and escrow lifecycle webhooks. |
-| `sap-premium-x402-ledger` | x402 challenge, receipt, settlement, retry, and facilitator health events. |
+| `sap-premium-trading-streams` | Cross-DEX arbitrage scanning, volatility breakout detection, MEV-protected route optimization. |
+| `sap-premium-meme-radar` | New listing alerts, social sentiment, rugpull risk, DEX volume anomalies. |
+| `sap-premium-tech-fundamentals` | GitHub activity spikes, TVL changes, tokenomics analysis. |
 
 These are not mock feeds. They are typed contracts that become live only when the corresponding provider env is configured.
 

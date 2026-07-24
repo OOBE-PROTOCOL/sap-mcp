@@ -17,6 +17,7 @@ import { registerMagicBlockTools } from './magicblock-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerEstimateToolCost } from './estimate-tool-cost.js';
 import { registerPremiumTools } from './premium-tools.js';
+import { registerPerpTools } from './perp-tools.js';
 
 /**
  * Register all tools with the MCP server.
@@ -71,6 +72,9 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register premium plugin/runtime discovery and session-planning tools.
   registerPremiumTools(server, context);
+
+  // Register perp trading and chart analysis tools (Adrena + DexScreener + DeFiLlama).
+  registerPerpTools(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);
