@@ -128,7 +128,10 @@ function validateWebhookUrl(targetUrl: string): boolean {
  * @internal
  */
 function signDelivery(deliveryId: string, deliveredAt: string, payload: Record<string, unknown>): string {
-  const key = process.env.SAP_MCP_PREMIUM_WEBHOOK_SIGNER ?? 'fallback-dev-key';
+  const key = process.env.SAP_MCP_PREMIUM_WEBHOOK_SIGNER;
+  if (!key) {
+    throw new Error('SAP_MCP_PREMIUM_WEBHOOK_SIGNER is not set — webhook delivery requires a configured signing key');
+  }
   const message = `${deliveryId}.${deliveredAt}.${JSON.stringify(payload)}`;
   return createHmac('sha256', key).update(message).digest('hex');
 }

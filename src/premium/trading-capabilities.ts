@@ -2,12 +2,11 @@
  * @name premium/trading-capabilities
  * @description Built-in premium trading capabilities for Solana real-time trading agents.
  *
- * Defines 7 premium trading capabilities across 2 plugins:
+ * Defines 6 premium trading capabilities across 2 plugins:
  *
  *   1. `sap-premium-trading-streams` — Real-time SSE streams for trading signals:
  *      - `jupiter.arbitrage.scan`   — Cross-DEX arbitrage opportunity scanner (stream)
  *      - `pyth.volatility.watch`    — Price volatility breakout detector (stream)
- *      - `mempool.whale.alert`      — Large transaction memool monitor (stream)
  *      - `jupiter.route.optimized`  — Optimized swap route with MEV protection (stream)
  *
  *   2. `sap-premium-trading-signals` — Webhook-based trading signal delivery:
@@ -93,7 +92,6 @@ const tradingStreamOutputSchema = {
       enum: [
         'arbitrage.opportunity',
         'volatility.breakout',
-        'whale.movement',
         'route.optimized',
         'breakout.confirmed',
         'liquidation.cascade',
@@ -355,14 +353,6 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         ['volatility.breakout'],
         0.03, // $0.03/minute
         ['SAP_MCP_PREMIUM_PYTH_STREAM_URL'],
-      ),
-      tradingStreamCapability(
-        'mempool.whale.alert',
-        'Large transaction mempool monitor',
-        'Monitors Solana mempool for large transactions (whale movements) above a configurable USD threshold. Emits events with transaction details, involved mints, USD value, and expected market impact. Agents can front-run, follow, or hedge against whale activity.',
-        ['whale.movement'],
-        0.04, // $0.04/minute
-        ['SAP_MCP_PREMIUM_MEMPOOL_STREAM_URL', 'SAP_MCP_PREMIUM_DEXSCREENER_API_URL'],
       ),
       tradingStreamCapability(
         'jupiter.route.optimized',
