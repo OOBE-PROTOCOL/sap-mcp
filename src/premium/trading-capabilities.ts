@@ -362,7 +362,7 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Monitors Solana mempool for large transactions (whale movements) above a configurable USD threshold. Emits events with transaction details, involved mints, USD value, and expected market impact. Agents can front-run, follow, or hedge against whale activity.',
         ['whale.movement'],
         0.04, // $0.04/minute
-        ['SAP_MCP_PREMIUM_MEMPOOL_STREAM_URL'],
+        ['SAP_MCP_PREMIUM_MEMPOOL_STREAM_URL', 'SAP_MCP_PREMIUM_DEXSCREENER_API_URL'],
       ),
       tradingStreamCapability(
         'jupiter.route.optimized',
