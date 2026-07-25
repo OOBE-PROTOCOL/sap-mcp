@@ -142,6 +142,26 @@ export function listBundledSkillNames(): string[] {
 }
 
 /**
+ * @name getBundledSkillContents
+ * @description Returns the SKILL.md contents for all bundled skills (or a subset).
+ * @param selected - Optional list of skill names. When omitted, returns all skills.
+ * @returns Array of { name, content } objects with SKILL.md contents.
+ */
+export function getBundledSkillContents(selected?: string[]): Array<{ name: string; content: string }> {
+  const skillsRoot = getSkillsRoot();
+  if (!existsSync(skillsRoot)) {
+    return [];
+  }
+  const names = selected && selected.length > 0
+    ? resolveSelectedSkills(selected)
+    : listBundledSkillNames();
+  return names.map((name) => ({
+    name,
+    content: readFileSync(join(skillsRoot, name, 'SKILL.md'), 'utf-8'),
+  }));
+}
+
+/**
  * @name listFilesRecursive
  * @description Lists all regular files below a directory.
  */

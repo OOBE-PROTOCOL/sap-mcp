@@ -11,7 +11,7 @@ import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 import { listPremiumPlugins, publicPremiumProviderStatus } from '../premium/index.js';
-import { listBundledSkillNames } from './skills-tools.js';
+import { listBundledSkillNames, getBundledSkillContents } from './skills-tools.js';
 import { CAPABILITIES } from '../server/server-metadata.js';
 
 /**
@@ -22,6 +22,7 @@ interface QuickContextInput {
   include: string[];
   compact: boolean;
   maxChars: number;
+  agentKnownVersion?: string;
 }
 
 /**
@@ -44,6 +45,8 @@ interface QuickContextPayload {
   premiumCapabilities: number;
   premiumProvidersReady: number;
   skills: string[];
+  skillsUpdateRequired: boolean;
+  skillsContents?: Array<{ name: string; content: string }>;
   summary: string;
   nextAction: string;
   truncated: boolean;
@@ -73,7 +76,7 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
     {
       title: 'SAP MCP Quick Context',
       description:
-        'Free single-call bootstrap aggregator. Returns a compact markdown-like summary with server version, total tools count, tools by category, pricing tiers summary, premium plugins/capabilities count, bundled skills list, and nextAction guidance. Use this instead of calling sap_agent_start, sap_pricing_catalog, sap_premium_plugin_catalog, sap_skills_list, and sap_get_tool_category_summary separately to reduce bootstrap from 5+ tool calls to 1.',
+        'Free single-call bootstrap aggregator. Returns a compact markdown-like summary with server version, total tools count, tools by category, pricing tiers summary, premium plugins/capabilities count, bundled skills list, and nextAction guidance. Pass agentKnownVersion with the version you currently know to get skillsUpdateRequired + skillsContents (full SKILL.md inline) when the server version differs — this lets you auto-update your local skills in 1 call without a separate sap_skills_bundle. Use this instead of calling sap_agent_start, sap_pricing_catalog, sap_premium_plugin_catalog, sap_skills_list, and sap_get_tool_category_summary separately to reduce bootstrap from 5+ tool calls to 1.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -90,6 +93,10 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
             type: 'number',
             description: 'Maximum character length for the summary string. Defaults to 4000. The summary is truncated if it exceeds this length.',
           },
+          agentKnownVersion: {
+            type: 'string',
+            description: 'The SAP MCP version the agent currently knows about. When this differs from the server version, skillsUpdateRequired is set to true and skillsContents is populated with full SKILL.md contents. Omit to always force a skills update (first bootstrap).',
+          },
         },
       },
       outputSchema: {
@@ -104,11 +111,13 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
           premiumCapabilities: { type: 'number', description: 'Number of premium capabilities across all plugins.' },
           premiumProvidersReady: { type: 'number', description: 'Number of premium providers with configured environment variables.' },
           skills: { type: 'array', description: 'Bundled skill names available via sap_skills_bundle.', items: { type: 'string' } },
+          skillsUpdateRequired: { type: 'boolean', description: 'True when the server version differs from agentKnownVersion (or agentKnownVersion was omitted). When true, skillsContents contains the full SKILL.md contents of all bundled skills.' },
+          skillsContents: { type: 'array', description: 'Full SKILL.md contents of all bundled skills, included only when skillsUpdateRequired is true. Each entry has {name, content}.', items: { type: 'object' } },
           summary: { type: 'string', description: 'Compact markdown-like summary string suitable for agent context loading.' },
           nextAction: { type: 'string', description: 'Concrete next action for the agent after loading this context.' },
           truncated: { type: 'boolean', description: 'Whether the summary was truncated to fit within maxChars.' },
         },
-        required: ['success', 'version', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'summary', 'nextAction', 'truncated'],
+        required: ['success', 'version', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'summary', 'nextAction', 'truncated'],
       },
       annotations: {
         readOnlyHint: true,
@@ -145,8 +154,11 @@ function parseQuickContextInput(input: unknown): QuickContextInput {
   const maxChars = typeof record.maxChars === 'number' && record.maxChars > 0
     ? Math.floor(record.maxChars)
     : DEFAULT_MAX_CHARS;
+  const agentKnownVersion = typeof record.agentKnownVersion === 'string' && record.agentKnownVersion.length > 0
+    ? record.agentKnownVersion
+    : undefined;
 
-  return { include, compact, maxChars };
+  return { include, compact, maxChars, agentKnownVersion };
 }
 
 /**
@@ -190,6 +202,13 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
   const premiumProvidersReady = Object.values(providerStatus).filter(Boolean).length;
   const skills = listBundledSkillNames();
 
+  // Skills auto-update: when the agent passes agentKnownVersion and it differs
+  // from the server version (or agentKnownVersion is omitted — first bootstrap),
+  // include the full SKILL.md contents inline so the agent can update its local
+  // skills without a separate sap_skills_bundle call.
+  const skillsUpdateRequired = !input.agentKnownVersion || input.agentKnownVersion !== MCP_SERVER_VERSION;
+  const skillsContents = skillsUpdateRequired ? getBundledSkillContents() : undefined;
+
   const toolsByCategory = CAPABILITIES.tools.categories as Record<string, number>;
   const totalTools = CAPABILITIES.tools.count;
 
@@ -227,6 +246,8 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     premiumCapabilities: premiumCapabilitiesCount,
     premiumProvidersReady,
     skills,
+    skillsUpdateRequired,
+    ...(skillsUpdateRequired ? { skillsContents } : {}),
     summary: summary.text,
     nextAction: buildNextAction(sections),
     truncated: summary.truncated,
@@ -314,7 +335,7 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
 
   return [
     'Call sap_agent_start for the full startup playbook.',
-    'Then sap_skills_bundle with includeContents:true to load bundled skills.',
+    'On future sessions, pass agentKnownVersion to sap_quick_context to auto-update local skills when the server version changes.',
     'Use sap_estimate_tool_cost before any paid tool call — set maxPriceUsd to estimate × 1.25.',
     'Use sap_payments_readiness before any write or paid workflow.',
     'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
