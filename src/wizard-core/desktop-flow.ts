@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { defaults } from '../config/defaults.js';
-import { defaultGeneratedWalletPath, getPreferredConfigDirForPlatform } from '../config/paths.js';
+import { defaultGeneratedWalletPath, getPreferredConfigDirForPlatform, ensureConfigDirectories } from '../config/paths.js';
 import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '../config/setup.js';
 import {
   discoverMcpClientTargets,
@@ -387,6 +387,9 @@ export async function saveDesktopWizardDraft(
   if (errors.length > 0) {
     throw new Error(errors.join('\n'));
   }
+
+  // Ensure memory + strategies directories exist for both full and payments-only modes.
+  ensureConfigDirectories();
 
   const profileName = normalizeDesktopProfileName(draft.profileName);
   const setup = draft.setupMode === 'full'

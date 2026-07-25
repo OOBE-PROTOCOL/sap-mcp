@@ -16,7 +16,7 @@ import { join } from 'path';
 import readline from 'readline';
 import { Keypair } from '@solana/web3.js';
 import { defaults } from './defaults.js';
-import { defaultGeneratedWalletPath } from './paths.js';
+import { defaultGeneratedWalletPath, ensureConfigDirectories } from './paths.js';
 import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from './setup.js';
 import type { SapMcpMode } from './env.js';
 import {
@@ -1218,6 +1218,9 @@ export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void 
   if (options.clear !== false) {
     clearConsole();
   }
+
+  // Ensure memory + strategies directories exist (created with private permissions).
+  ensureConfigDirectories();
 
   printSapLogo();
   printHeader('Payment Bridge Repair', 'Hosted sap + local sap_payments');
