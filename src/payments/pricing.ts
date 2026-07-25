@@ -143,6 +143,10 @@ const FREE_TOOLS = new Set([
   'sap_premium_plugin_template',
   'sap_premium_session_start',
   'sap_premium_session_status',
+  'sap_premium_stream_poll',
+  'sap_premium_stream_flush',
+  'sap_premium_webhook_relay_status',
+  'sap_premium_metrics',
   'sap_quick_context',
 ]);
 
@@ -196,6 +200,10 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_premium_plugin_template',
   'sap_premium_session_start',
   'sap_premium_session_status',
+  'sap_premium_stream_poll',
+  'sap_premium_stream_flush',
+  'sap_premium_webhook_relay_status',
+  'sap_premium_metrics',
   'sap_quick_context',
   'sol_get_balance',
   'spl-token_getBalance',
