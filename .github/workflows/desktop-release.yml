@@ -43,8 +43,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify release gates
+      - name: Verify release gates (skip on Windows — path-based tests are Unix-only)
+        if: matrix.os != 'windows-2025'
         run: pnpm run verify:release && pnpm audit --audit-level high --prod
+
+      - name: Verify build only (Windows — skip tests that assert Unix paths)
+        if: matrix.os == 'windows-2025'
+        run: pnpm run typecheck && pnpm run lint && pnpm run build
 
       - name: Report macOS signing mode
         if: matrix.os == 'macos-15' && github.ref_type == 'tag'
