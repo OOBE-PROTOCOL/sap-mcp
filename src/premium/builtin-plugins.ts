@@ -29,6 +29,8 @@
  */
 
 import type { PremiumCapabilityDefinition, PremiumCapabilityType, PremiumPluginManifest } from './types.js';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   loadPrivatePremiumPluginManifests,
   loadPrivatePremiumPluginReport,
@@ -438,6 +440,39 @@ export function findPremiumCapability(
 export function publicPremiumProviderStatus(): Record<string, boolean> {
   const envNames = new Set(listPremiumCapabilities().flatMap(capability => capability.providerEnv));
   return Object.fromEntries([...envNames].sort().map(name => [name, Boolean(process.env[name])]));
+}
+
+/**
+ * @name premiumProviderLoaderStatus
+ * @description Return diagnostic info about the private plugin loader configuration.
+ *
+ * Reports whether private plugins are enabled, whether the plugin directory is
+ * configured and exists, and how many manifests were loaded/rejected. This
+ * complements `publicPremiumProviderStatus()` (which only checks env var
+ * readiness) by exposing the loader state that determines whether provider
+ * adapters can actually be loaded.
+ *
+ * @returns Object with `enabled`, `pluginDirConfigured`, `pluginDirExists`,
+ *   `loadedManifestCount`, and `rejectedManifestCount` fields.
+ *
+ * @usedBy `remote/server.ts` → provider status endpoint, `premium-tools.ts`.
+ */
+export function premiumProviderLoaderStatus(): {
+  enabled: boolean;
+  pluginDirConfigured: boolean;
+  pluginDirExists: boolean;
+  loadedManifestCount: number;
+  rejectedManifestCount: number;
+} {
+  const report = loadPrivatePremiumPluginReport();
+  const pluginDir = process.env.SAP_MCP_PLUGIN_DIR;
+  return {
+    enabled: report.enabled,
+    pluginDirConfigured: report.pluginDirConfigured,
+    pluginDirExists: pluginDir !== undefined && pluginDir.trim() !== '' && existsSync(resolve(pluginDir)),
+    loadedManifestCount: report.loadedManifests.length,
+    rejectedManifestCount: report.rejectedManifests.length,
+  };
 }
 
 /**
