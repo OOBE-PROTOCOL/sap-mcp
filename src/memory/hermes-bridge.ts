@@ -14,7 +14,10 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { createRequire } from 'module';
 import { logger } from '../core/logger.js';
+
+const require = createRequire(import.meta.url);
 
 /**
  * @name HermesBridge

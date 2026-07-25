@@ -58,6 +58,28 @@ export function getStrategiesRoot(): string {
 }
 
 /**
+ * @name sanitizePathSegment
+ * @description Sanitizes a user-provided path segment to prevent directory traversal.
+ * Rejects segments containing "..", "/", "\", or null bytes. Only allows
+ * alphanumeric, dash, underscore, and dot.
+ * @internal
+ */
+function sanitizePathSegment(segment: string): string {
+  if (!segment || segment.length > 128) {
+    throw new Error('Invalid path segment: must be 1-128 characters.');
+  }
+  // Reject any path traversal characters.
+  if (segment.includes('..') || segment.includes('/') || segment.includes('\\') || segment.includes('\0')) {
+    throw new Error(`Invalid path segment: ${segment} contains forbidden characters.`);
+  }
+  // Only allow safe characters: a-z, A-Z, 0-9, dash, underscore, dot.
+  if (!/^[a-zA-Z0-9._-]+$/.test(segment)) {
+    throw new Error(`Invalid path segment: ${segment} contains invalid characters. Only alphanumeric, dash, underscore, and dot are allowed.`);
+  }
+  return segment;
+}
+
+/**
  * @name saveStrategy
  * @description Saves or updates a strategy JSON file.
  */
@@ -67,10 +89,12 @@ export function saveStrategy(input: {
   config: string;
   active?: boolean;
 }): { success: boolean; path: string; version: number; created: boolean } {
-  const dir = join(STRATEGIES_ROOT, input.category);
+  const safeCategory = sanitizePathSegment(input.category);
+  const safeName = sanitizePathSegment(input.name);
+  const dir = join(STRATEGIES_ROOT, safeCategory);
   mkdirSync(dir, { recursive: true });
 
-  const filePath = join(dir, `${input.name}.json`);
+  const filePath = join(dir, `${safeName}.json`);
   const exists = existsSync(filePath);
 
   // Load existing version if updating.
@@ -107,7 +131,9 @@ export function saveStrategy(input: {
  * @description Loads a strategy by category and name.
  */
 export function loadStrategy(category: string, name: string): StrategyRecord | null {
-  const filePath = join(STRATEGIES_ROOT, category, `${name}.json`);
+  const safeCategory = sanitizePathSegment(category);
+  const safeName = sanitizePathSegment(name);
+  const filePath = join(STRATEGIES_ROOT, safeCategory, `${safeName}.json`);
   if (!existsSync(filePath)) return null;
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8')) as StrategyRecord;
@@ -123,8 +149,9 @@ export function loadStrategy(category: string, name: string): StrategyRecord | n
 export function listStrategies(category?: string, activeOnly = false): StrategyRecord[] {
   const strategies: StrategyRecord[] = [];
 
-  const categories = category
-    ? [category]
+  const safeCategory = category ? sanitizePathSegment(category) : undefined;
+  const categories = safeCategory
+    ? [safeCategory]
     : existsSync(STRATEGIES_ROOT)
       ? readdirSync(STRATEGIES_ROOT, { withFileTypes: true })
           .filter(e => e.isDirectory())
@@ -158,7 +185,9 @@ export function listStrategies(category?: string, activeOnly = false): StrategyR
  * @description Activates or deactivates a strategy.
  */
 export function activateStrategy(category: string, name: string, active: boolean): { success: boolean; active: boolean } {
-  const filePath = join(STRATEGIES_ROOT, category, `${name}.json`);
+  const safeCategory = sanitizePathSegment(category);
+  const safeName = sanitizePathSegment(name);
+  const filePath = join(STRATEGIES_ROOT, safeCategory, `${safeName}.json`);
   if (!existsSync(filePath)) {
     return { success: false, active: false };
   }

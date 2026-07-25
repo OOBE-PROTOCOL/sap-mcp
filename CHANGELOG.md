@@ -2,6 +2,85 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.30 - 2026-07-25
+
+### Added — Local Agent Memory Subsystem (SQLite FTS5)
+
+A complete serverless local-memory subsystem built on SQLite FTS5, using
+inverted full-text indexes and relevance-ranked retrieval to recover historical
+agent interactions. All data is stored locally at
+`~/.config/sap-mcp/memory/agent-memory.db` — no data leaves the user's machine.
+
+**10 module files:**
+- `src/memory/types.ts` — 11 TypeScript interfaces with strict typing
+- `src/memory/database.ts` — Singleton SQLite connection (WAL mode, FTS5, schema versioning, prepared statements, graceful degradation)
+- `src/memory/tool-call-store.ts` — Records + FTS5 search with BM25 ranking
+- `src/memory/memory-store.ts` — Agent memories with relevance decay + recall
+- `src/memory/stream-buffer-store.ts` — FIFO event buffering with dedup + replay
+- `src/memory/async-processor.ts` — Non-blocking background maintenance (decay, evict, archive, prune, WAL checkpoint)
+- `src/memory/auto-record.ts` — Automatic tool call recording hook
+- `src/memory/hermes-bridge.ts` — Cross-session Hermes Agent integration (read-only)
+- `src/memory/utils.ts` — truncate, decayRelevance, isExpired
+- `src/strategies/strategy-store.ts` — File-based JSON strategy store with versioning + path traversal protection
+
+**17 new FREE MCP tools (319 → 336 total, all local, no x402):**
+
+| Category | Tool | Function |
+|---|---|---|
+| Memory | `sap_memory_record` | Record a tool call in the DB |
+| | `sap_memory_search` | FTS5 search across tool call history |
+| | `sap_memory_summarize` | Create an LLM-compressed memory (lesson/pattern/failure/success) |
+| | `sap_memory_recall` | Top N memories for a category (prompt injection) |
+| | `sap_memory_prune` | Remove expired + low-relevance memories |
+| Strategy | `sap_strategy_save` | Save/update a strategy JSON |
+| | `sap_strategy_load` | Load a strategy by category+name |
+| | `sap_strategy_list` | List strategies (filterable) |
+| | `sap_strategy_activate` | Activate/deactivate a strategy |
+| Stream | `sap_stream_buffer` | Buffer a stream event (dedup by eventId) |
+| | `sap_stream_consume` | Consume events FIFO (mark consumed) |
+| | `sap_stream_replay` | Replay all events for backtest |
+| Audit | `sap_audit_query` | Query audit trail via FTS5 |
+| | `sap_audit_record` | Record a manual audit entry |
+| | `sap_audit_stats` | Aggregate stats (counts, breakdowns, DB size) |
+| Hermes | `sap_hermes_search` | Search Hermes session history |
+| | `sap_hermes_recent` | Recent Hermes sessions for context injection |
+
+**Key engineering features:**
+- SQLite FTS5 with BM25 relevance ranking
+- WAL mode for concurrent read access (crash-safe)
+- Thread-safe singleton with cached prepared statements
+- Graceful degradation (if DB can't open, tools return empty results)
+- Async processor: decay (1h), evict (5m), archive (1h), prune (6h), WAL checkpoint (10m)
+- Relevance decay: 1%/day, auto-prune below 0.05
+- Stream dedup: (streamType, eventId) unique index
+- Strategy versioning: auto-increment on update
+- Path traversal protection: sanitized path segments (alphanumeric + dash/underscore/dot only)
+- Hermes bridge: auto-detected, read-only, FTS5 with LIKE fallback
+- Server lifecycle: init+start on boot, stop+close on shutdown
+
+### Added — Quick Context Auto-Update
+
+`sap_quick_context` now accepts `agentKnownVersion`:
+- When omitted (first bootstrap): `skillsUpdateRequired=true`, `skillsContents` populated with full SKILL.md inline
+- When ≠ server version: `skillsUpdateRequired=true`, skills contents included
+- When == server version: `skillsUpdateRequired=false` (token savings)
+
+Also returns `serverCommit` (git short hash), `environment` (network, mode, authType, rateLimitPerMinute), and `recommendedFlow` (mode-specific workflow guidance).
+
+### Added — Wizard Directory Creation
+
+`ensureConfigDirectories()` now creates `~/.config/sap-map/memory/` and `~/.config/sap-mcp/strategies/` with private permissions (mode 0o700) alongside the existing config, keypair, data, log, and cache directories.
+
+### Security
+
+- Path traversal protection on all strategy store operations (`sanitizePathSegment`)
+- All SQL queries use parameterized prepared statements (no string interpolation)
+- Hermes bridge opens read-only connections only
+- Memory database is local-only — no network access
+- No secrets, private keys, or keypair bytes stored in the memory DB
+- 0 dependency vulnerabilities (`pnpm audit`)
+- `createRequire` used instead of `require()` to satisfy ESLint
+
 ## 0.9.22 - 2026-07-25
 
 ### Added

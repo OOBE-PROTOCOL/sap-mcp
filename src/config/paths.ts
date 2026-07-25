@@ -110,12 +110,28 @@ export function getKeypairsDir(): string {
 }
 
 /**
- * Creates the config, keypair, data, log, and cache directories with private permissions.
+ * Returns the SAP MCP agent memory database directory.
+ */
+export function getMemoryDir(): string {
+  return join(getPreferredConfigDir(), 'memory');
+}
+
+/**
+ * Returns the SAP MCP strategy store directory.
+ */
+export function getStrategiesDir(): string {
+  return join(getPreferredConfigDir(), 'strategies');
+}
+
+/**
+ * Creates the config, keypair, memory, strategies, data, log, and cache directories with private permissions.
  */
 export function ensureConfigDirectories(): void {
   const dirs = [
     getPreferredConfigDir(),
     getKeypairsDir(),
+    getMemoryDir(),
+    getStrategiesDir(),
     getDataDir(),
     join(getDataDir(), 'logs'),
     join(getDataDir(), 'cache'),
