@@ -17,6 +17,9 @@ export { MemoryDatabase, memoryDatabase, DEFAULT_CONFIG } from './database.js';
 export { ToolCallStore, toolCallStore } from './tool-call-store.js';
 export { MemoryStore, memoryStore } from './memory-store.js';
 export { StreamBufferStore, streamBufferStore } from './stream-buffer-store.js';
+export { AsyncMemoryProcessor, asyncMemoryProcessor } from './async-processor.js';
+export { recordToolCall } from './auto-record.js';
+export { HermesBridge, hermesBridge } from './hermes-bridge.js';
 export type {
   ToolCallRecord,
   ToolCallOutcome,

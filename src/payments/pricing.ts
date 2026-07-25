@@ -164,6 +164,8 @@ const FREE_TOOLS = new Set([
   'sap_audit_query',
   'sap_audit_record',
   'sap_audit_stats',
+  'sap_hermes_search',
+  'sap_hermes_recent',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -237,6 +239,8 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_audit_query',
   'sap_audit_record',
   'sap_audit_stats',
+  'sap_hermes_search',
+  'sap_hermes_recent',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',

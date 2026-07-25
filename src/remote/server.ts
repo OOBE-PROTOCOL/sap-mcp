@@ -31,6 +31,7 @@ import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
 import { preloadPremiumProviders, disconnectAllProviders } from '../premium/provider-bridge.js';
+import { asyncMemoryProcessor, memoryDatabase } from '../memory/index.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -2457,6 +2458,13 @@ export class RemoteMCPServer {
     // the first agent session arrives. Failures are logged but non-fatal.
     await preloadPremiumProviders();
 
+    // Initialize the local agent memory subsystem (SQLite FTS5).
+    // The database is created at ~/.config/sap-mcp/memory/agent-memory.db.
+    // If the DB cannot be opened, the subsystem enters degraded mode and
+    // all memory tools return empty results instead of crashing.
+    memoryDatabase.init();
+    asyncMemoryProcessor.start();
+
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
         return;
@@ -2865,6 +2873,8 @@ export class RemoteMCPServer {
 
     // Premium subsystem graceful shutdown: stop streams, webhooks, providers, clear stores.
     await disconnectAllProviders();
+    asyncMemoryProcessor.stop();
+    memoryDatabase.close();
     await this.premiumMemoryManager?.shutdown();
     this.premiumMemoryManager = undefined;
   }

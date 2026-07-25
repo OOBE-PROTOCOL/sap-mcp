@@ -20,7 +20,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
-import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase } from '../memory/index.js';
+import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '../memory/index.js';
 import type { ToolCallOutcome, MemoryType } from '../memory/types.js';
 
 /**
@@ -44,6 +44,8 @@ export function registerMemoryTools(server: Server, _context: SapMcpContext): vo
   registerAuditQueryTool(server);
   registerAuditRecordTool(server);
   registerAuditStatsTool(server);
+  registerHermesSearchTool(server);
+  registerHermesRecentTool(server);
 }
 
 // ── Memory Recording & Search ──────────────────────────────────────────────
@@ -495,8 +497,62 @@ function registerAuditStatsTool(server: Server): void {
         lastToolCallAt: toolCallStore.lastToolCallAt(),
         lastMemoryAt: memoryStore.lastMemoryAt(),
         degraded: memoryDatabase.isDegraded(),
+        hermesAvailable: hermesBridge.isAvailable(),
       };
       return createTextResponse(JSON.stringify(stats, null, 2));
+    } catch (error) {
+      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+    }
+  });
+}
+
+// ── Hermes Cross-Session Integration ─────────────────────────────────────────
+
+function registerHermesSearchTool(server: Server): void {
+  registerTool(server, 'sap_hermes_search', {
+    title: 'Search Hermes Sessions',
+    description: 'Free local tool. Searches Hermes Agent session history for relevant past conversations. Enables cross-session context recall. If Hermes is not installed, returns empty results. No x402 charge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Natural language search query.' },
+        limit: { type: 'number', description: 'Max results. Default 5.' },
+      },
+      required: ['query'],
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (input: unknown) => {
+    try {
+      const raw = input as Record<string, unknown>;
+      const results = hermesBridge.searchSessions(
+        String(raw['query'] ?? ''),
+        typeof raw['limit'] === 'number' ? raw['limit'] : 5,
+      );
+      return createTextResponse(JSON.stringify({ results, count: results.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
+    } catch (error) {
+      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+    }
+  });
+}
+
+function registerHermesRecentTool(server: Server): void {
+  registerTool(server, 'sap_hermes_recent', {
+    title: 'Recent Hermes Sessions',
+    description: 'Free local tool. Returns recent Hermes Agent sessions for context injection. Use this at session start to recall what the agent worked on recently. If Hermes is not installed, returns empty results. No x402 charge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max sessions. Default 3.' },
+      },
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (input: unknown) => {
+    try {
+      const raw = input as Record<string, unknown>;
+      const sessions = hermesBridge.getRecentSessions(
+        typeof raw['limit'] === 'number' ? raw['limit'] : 3,
+      );
+      return createTextResponse(JSON.stringify({ sessions, count: sessions.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
     } catch (error) {
       return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
