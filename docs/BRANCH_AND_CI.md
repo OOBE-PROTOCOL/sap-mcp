@@ -22,7 +22,7 @@ hotfix/*      ← urgent fixes → PR to main + cherry-pick to develop
 | Workflow | File | Triggers | Purpose |
 |---|---|---|---|
 | **CI** | `ci.yml` | push to main/develop, PR to main/develop | typecheck, lint, test, build, audit |
-| **CodeQL** | `codeql.yml` | push to main/develop, PR, weekly cron | security analysis (JS/TS + Actions) |
+| **CodeQL** | GitHub default setup | push, PR, weekly cron | security analysis (JS/TS + Actions) — configured in repo Settings → Security → Code security |
 | **Desktop Release** | `desktop-release.yml` | tag push, workflow_dispatch | build desktop binaries, publish to GitHub Release |
 
 ### CI (`ci.yml`)
