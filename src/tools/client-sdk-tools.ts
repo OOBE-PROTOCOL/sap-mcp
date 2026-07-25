@@ -37,7 +37,7 @@ function buildClientSdkHostedPricing(toolName: string): string {
   const prices: Record<string, string> = {
     'read-premium': '~$0.001',
     'builder': '~$0.008',
-    'value-action': '~$0.09 standard / ~$0.15 heavy',
+    'value-action': '~$0.09 standard / ~$0.05 heavy',
     'batch': '~$0.09+',
   };
   const price = prices[tier] ?? '~$0.001';

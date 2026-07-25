@@ -142,7 +142,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     expect(session.sessionId).toMatch(/^sap-premium-/);
     expect(session.status).toBe('pending_payment');
     expect(session.providerReady).toBe(true);
-    expect(session.estimatedPriceUsd).toBe(0.1); // 5 units × $0.02/unit
+    expect(session.estimatedPriceUsd).toBe(0.05); // 5 units × $0.01/unit
     expect(session.requestedUnits).toBe(5);
   });
 

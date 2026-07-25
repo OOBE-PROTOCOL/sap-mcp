@@ -297,7 +297,7 @@ export const BUILTIN_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Jupiter quote delta stream',
         'Streams quote deltas for exact mints and amounts so agents can react without repeated broad polling.',
         ['quote.delta', 'route.changed', 'price.impact.changed'],
-        0.02,
+        0.01,
         ['SAP_MCP_PREMIUM_JUPITER_STREAM_URL'],
       ),
       streamCapability(
@@ -305,7 +305,7 @@ export const BUILTIN_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Pyth price tick stream',
         'Streams price ticks for explicit Pyth feed ids with bounded replay and x402 metering.',
         ['price.tick', 'confidence.changed', 'feed.stale'],
-        0.015,
+        0.0075,
         ['SAP_MCP_PREMIUM_PYTH_STREAM_URL'],
       ),
       webhookCapability(
@@ -313,7 +313,7 @@ export const BUILTIN_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Price threshold webhook',
         'Delivers signed HTTPS callbacks when configured mint/feed thresholds cross.',
         ['price.threshold.crossed'],
-        0.001,
+        0.0005,
         ['SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
     ],

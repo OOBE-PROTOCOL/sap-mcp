@@ -324,7 +324,7 @@ export const MEME_RADAR_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'New token listing alerts',
         'Delivers signed webhook callbacks when new tokens are listed on Raydium, Orca, or Meteora. Each alert includes liquidity check results, honeypot scan status, and dev wallet holding analysis. Agents receive mint address, pool details, risk flags, and recommended action for instant decision-making on new meme token opportunities.',
         ['meme.newlisting.alert'],
-        0.003, // $0.003/event
+        0.0015, // $0.0015/event
         ['SAP_MCP_PREMIUM_BIRDEYE_API_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
       memeStreamCapability(
@@ -332,7 +332,7 @@ export const MEME_RADAR_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Social sentiment stream',
         'Streams real-time social sentiment scores for specified meme tokens. Continuously aggregates social signals from Twitter, Telegram, and Discord to produce bull/bear scores. Agents receive mint, bull score, bear score, confidence, and sentiment trend direction for social-driven trading decisions.',
         ['social.sentiment'],
-        0.02, // $0.02/min
+        0.01, // $0.01/min
         ['SAP_MCP_PREMIUM_BIRDEYE_API_URL'],
       ),
       memeStreamCapability(
@@ -340,7 +340,7 @@ export const MEME_RADAR_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Rugpull risk detector',
         'Continuously monitors pool liquidity changes, dev wallet movements, mint authority status, and freeze authority status for specified meme tokens. Emits risk alerts when rugpull indicators are detected — liquidity drain, dev wallet dump, mint authority activation, or freeze authority usage. Agents receive risk level, affected mint, and recommended action (avoid/exit).',
         ['rugpull.risk'],
-        0.04, // $0.04/min
+        0.02, // $0.02/min
         ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL', 'SAP_MCP_PREMIUM_BIRDEYE_API_URL'],
       ),
       memeStreamCapability(
@@ -348,7 +348,7 @@ export const MEME_RADAR_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'DEX volume anomaly detector',
         'Monitors DEX trading volume for specified meme tokens and detects anomalous volume spikes that may indicate pump/dump activity. Uses statistical baselines to flag unusual volume patterns. Agents receive mint, volume change percentage, current vs baseline volume, and confidence score for volume-driven trading signals.',
         ['volume.spike'],
-        0.025, // $0.025/min
+        0.0125, // $0.0125/min
         ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL'],
       ),
     ],

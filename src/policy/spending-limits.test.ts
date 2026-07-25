@@ -38,7 +38,7 @@ function baseConfig(overrides: Partial<SapMcpConfig> = {}): SapMcpConfig {
         readPremiumUsd: 0.001,
         builderUsd: 0.008,
         valueFixedUsd: 0.09,
-        heavyValueUsd: 0.15,
+        heavyValueUsd: 0.05,
         valueBps: 0,
         minUsd: 0.001,
         maxUsd: 100,

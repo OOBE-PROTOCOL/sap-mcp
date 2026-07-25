@@ -92,7 +92,7 @@ describe('premium plugin manifest validator', () => {
       expect(blocked.nextAction).toContain('Configure provider env vars first');
       expect(ready.status).toBe('pending_payment');
       expect(ready.providerReady).toBe(true);
-      expect(ready.estimatedPriceUsd).toBe(0.04);
+      expect(ready.estimatedPriceUsd).toBe(0.02);
     } finally {
       if (original === undefined) {
         delete process.env.SAP_MCP_PREMIUM_JUPITER_STREAM_URL;

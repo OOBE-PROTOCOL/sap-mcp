@@ -215,7 +215,7 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Jupiter cross-DEX arbitrage scanner',
         'Continuously scans Jupiter routes across connected DEXes for arbitrage opportunities. Emits events when profitable cross-DEX paths are found with expected PnL above the minimum threshold. Agents receive entry mints, output mints, route, expected PnL, and price impact for instant execution.',
         ['arbitrage.opportunity'],
-        0.05, // $0.05/minute — premium for real-time arb scanning
+        0.025, // $0.025/minute — premium for real-time arb scanning
         ['SAP_MCP_PREMIUM_JUPITER_STREAM_URL'],
       ),
       tradingStreamCapability(
@@ -223,7 +223,7 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Pyth volatility breakout detector',
         'Monitors Pyth price feeds for volatility breakouts using Bollinger Band width expansion and ATR spikes. Emits events when a token breaks out of its volatility envelope with confidence scoring. Agents receive entry price, stop-loss, take-profit, and confidence level for breakout trading.',
         ['volatility.breakout'],
-        0.03, // $0.03/minute
+        0.015, // $0.015/minute
         ['SAP_MCP_PREMIUM_PYTH_STREAM_URL'],
       ),
       tradingStreamCapability(
@@ -231,7 +231,7 @@ export const TRADING_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'MEV-protected optimized route stream',
         'Continuously computes optimal Jupiter swap routes with MEV protection for specified mint pairs. Emits route updates when a better path is found (lower price impact, fewer hops, or better overall rate). Agents receive the full route, expected output, price impact in bps, and MEV protection status.',
         ['route.optimized'],
-        0.025, // $0.025/minute
+        0.0125, // $0.0125/minute
         ['SAP_MCP_PREMIUM_JUPITER_STREAM_URL'],
       ),
     ],

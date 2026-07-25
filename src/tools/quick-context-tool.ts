@@ -198,7 +198,7 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     'read-premium=$0.001',
     'builder=$0.008',
     'value-action=$0.04',
-    'heavy-value=$0.15',
+    'heavy-value=$0.05',
     'batch=clamped sum',
   ];
 

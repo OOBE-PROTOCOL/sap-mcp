@@ -303,7 +303,7 @@ export const TECH_FUNDAMENTALS_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'GitHub activity spike alerts',
         'Delivers signed webhook callbacks when GitHub activity spikes are detected for Solana projects. Monitors commit frequency, PR count, issue activity, and contributor changes. Agents receive project name, repo URL, activity spike type (commits, PRs, issues), spike magnitude, and historical comparison for development-driven investment signals.',
         ['tech.github.activity'],
-        0.002, // $0.002/event
+        0.001, // $0.001/event
         ['SAP_MCP_PREMIUM_GITHUB_API_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
       techStreamCapability(
@@ -311,7 +311,7 @@ export const TECH_FUNDAMENTALS_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'Real-time TVL change stream',
         'Streams real-time TVL changes for Solana DeFi protocols. Monitors total value locked across lending, DEX, staking, and yield protocols. Emits events when TVL changes by a configurable threshold. Agents receive protocol name, current TVL, change percentage, change in USD, and protocol rank for TVL-driven investment decisions.',
         ['tvl.change'],
-        0.02, // $0.02/min
+        0.01, // $0.01/min
         ['SAP_MCP_PREMIUM_DEFILAMA_API_URL'],
       ),
       techWebhookCapability(
@@ -319,7 +319,7 @@ export const TECH_FUNDAMENTALS_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
         'On-demand tokenomics analysis',
         'Delivers signed webhook callbacks with on-demand tokenomics analysis for Solana projects. Analyzes supply distribution, vesting schedules, token unlock calendars, and team/advisor allocations. Agents receive mint, circulating supply, total supply, unlock dates, vesting breakdown, concentration risk, and recommended action for tokenomics-aware investment decisions.',
         ['tech.tokenomics.analysis'],
-        0.004, // $0.004/event
+        0.002, // $0.002/event
         ['SAP_MCP_PREMIUM_GITHUB_API_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
     ],

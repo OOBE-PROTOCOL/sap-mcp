@@ -16,7 +16,7 @@ const monetizationConfig: SapMcpMonetizationConfig = {
     readPremiumUsd: 0.001,
     builderUsd: 0.008,
     valueFixedUsd: 0.09,
-    heavyValueUsd: 0.15,
+    heavyValueUsd: 0.05,
     valueBps: 0,
     minUsd: 0.001,
     maxUsd: 100,
@@ -453,7 +453,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('value-action');
-      expect(decision.price).toBe('$0.15');
+      expect(decision.price).toBe('$0.05');
     }
   });
 

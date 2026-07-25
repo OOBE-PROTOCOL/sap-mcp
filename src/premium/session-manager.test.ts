@@ -52,7 +52,7 @@ describe('premium session-manager', () => {
 
     expect(record.sessionId).toMatch(/^sap-premium-/);
     expect(record.status).toBe('blocked_requires_provider');
-    expect(record.estimatedPriceUsd).toBe(0.04);
+    expect(record.estimatedPriceUsd).toBe(0.02);
     expect(record.providerReady).toBe(false);
     expect(record.createdAt).toBeTruthy();
     expect(record.expiresAt).toBeTruthy();
@@ -105,7 +105,7 @@ describe('premium session-manager', () => {
 
     expect(record.providerReady).toBe(true);
     expect(record.status).toBe('pending_payment');
-    expect(record.estimatedPriceUsd).toBe(0.04);
+    expect(record.estimatedPriceUsd).toBe(0.02);
   });
 
   it('returns null from getPremiumSession for an unknown session id', () => {
