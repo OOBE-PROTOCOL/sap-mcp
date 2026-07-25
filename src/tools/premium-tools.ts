@@ -924,6 +924,11 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       return createStructuredJsonResponse({
         subscription,
+        subscribedEvents: events,
+        appliedFilters: {
+          events,
+          note: 'The delivery loop subscribes to the provider with no additional filters. Event type filtering is applied by the webhook engine: only events whose eventType matches the subscription events list are buffered. Provider-level filters (mints, priceFeedIds, minLiquidityUsd, etc.) can be passed via sap_premium_session_start filters field when creating the session plan.',
+        },
         consumption: {
           mode: 'buffer',
           pollTool: 'sap_premium_stream_poll',

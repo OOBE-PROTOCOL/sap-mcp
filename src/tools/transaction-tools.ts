@@ -745,4 +745,102 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
       }
     }
   );
+
+  // ── Native SOL Transfer Builder ───────────────────────────────────────────
+  //
+  // There is no hosted builder for native SOL transfers — `spl-token_transferSol`
+  // is local-signer-only and cannot run on the hosted accountless server. This
+  // builder creates an unsigned SystemProgram.transfer transaction that the
+  // agent signs locally via sap_payments_finalize_transaction or
+  // sap_sign_transaction → sap_submit_signed_transaction.
+  //
+  registerTool(
+    server,
+    'sap_build_sol_transfer',
+    {
+      title: 'Build Native SOL Transfer Transaction',
+      description:
+        'Build an unsigned native SOL transfer transaction using SystemProgram.transfer. Returns serialized base64 transaction for the agent to sign locally with sap_payments_finalize_transaction or sap_sign_transaction → sap_submit_signed_transaction. This is the hosted-safe equivalent of spl-token_transferSol (which is local-signer-only and cannot run on the hosted accountless server). Builder fee applies.',
+      inputSchema: {
+        fromPubkey: {
+          type: 'string',
+          description: 'Sender public key in base58. This is the fee payer and must sign the transaction locally.',
+        },
+        toPubkey: {
+          type: 'string',
+          description: 'Recipient public key in base58.',
+        },
+        lamports: {
+          type: 'number',
+          description: 'Amount in lamports (1 SOL = 1,000,000,000 lamports). Use sap_estimate_tool_cost to check the builder fee before calling.',
+        },
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const raw = input as Record<string, unknown>;
+        const fromPubkey = typeof raw['fromPubkey'] === 'string' ? raw['fromPubkey'] : undefined;
+        const toPubkey = typeof raw['toPubkey'] === 'string' ? raw['toPubkey'] : undefined;
+        const lamports = typeof raw['lamports'] === 'number' ? raw['lamports'] : undefined;
+
+        if (!fromPubkey || !toPubkey || lamports === undefined) {
+          throw new Error('fromPubkey, toPubkey, and lamports are required.');
+        }
+
+        // Validate public keys.
+        const fromKey = new PublicKey(fromPubkey);
+        const toKey = new PublicKey(toPubkey);
+
+        if (lamports <= 0) {
+          throw new Error('lamports must be a positive number.');
+        }
+
+        // Build the SystemProgram.transfer instruction.
+        const instruction = SystemProgram.transfer({
+          fromPubkey: fromKey,
+          toPubkey: toKey,
+          lamports,
+        });
+
+        // Create a legacy transaction with the transfer instruction.
+        // The latest blockhash is fetched from the configured RPC.
+        const connection = context.connection;
+        const blockhash = await connection.getLatestBlockhash();
+
+        const transaction = new Transaction({
+          recentBlockhash: blockhash.blockhash,
+          feePayer: fromKey,
+        });
+        transaction.add(instruction);
+
+        // Serialize as base64 for the agent to sign locally.
+        const serialized = transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+        const transactionBase64 = serialized.toString('base64');
+
+        return createTextResponse(JSON.stringify({
+          success: true,
+          transactionBase64,
+          encoding: 'base64',
+          instructions: [
+            {
+              program: 'SystemProgram',
+              type: 'Transfer',
+              from: fromPubkey,
+              to: toPubkey,
+              lamports,
+              solAmount: (lamports / LAMPORTS_PER_SOL).toFixed(9),
+            },
+          ],
+          feePayer: fromPubkey,
+          unsigned: true,
+          nextSteps: 'Sign locally with sap_payments_finalize_transaction (hosted mode) or sap_sign_transaction → sap_submit_signed_transaction (local mode). Do not create temporary signing scripts or read keypair JSON.',
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      }
+    }
+  );
 }

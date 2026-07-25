@@ -137,6 +137,7 @@ const HOSTED_SAFE_PREFIXES = [
 
 const HOSTED_SAFE_EXACT_TOOLS = new Set([
   'sap_submit_signed_transaction',
+  'sap_build_sol_transfer',
   'sap_sns_check_domain',
   'sap_sns_batch_check_domains',
   'sap_sns_validate_records',

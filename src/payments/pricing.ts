@@ -270,6 +270,7 @@ const BUILDER_TOOLS = new Set([
   'sap_escrow_build_close_transaction',
   'sap_x402_build_payment_headers',
   'sap_x402_build_headers_from_escrow',
+  'sap_build_sol_transfer',
   'jupiter_swapInstructions',
   'magicblock_deposit',
   'magicblock_transfer',

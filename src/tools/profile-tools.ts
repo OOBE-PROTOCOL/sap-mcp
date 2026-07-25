@@ -549,8 +549,23 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           throw new Error('profileName is required.');
         }
         assertProfileName(parsed.profileName);
+
+        // When the server is hosted-accountless, it cannot see or switch
+        // local profiles. Provide explicit guidance instead of a bare error.
+        if (isHostedAccountlessRuntime(context)) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            accountModel: 'hosted-remote-accountless',
+            reason: 'The hosted SAP MCP gateway is non-custodial and cannot see, list, or switch local profiles on the caller machine.',
+            requestedProfile: parsed.profileName,
+            instruction: 'Profile switching is a local operation. Options: (1) Use the local sap_payments bridge if it exposes a profile switch tool. (2) Edit ~/.config/mcp-sap/.active-profile manually and set it to the profile name. (3) Run: sap-mcp-config switch-profile <profileName> on the machine where the local bridge runs.',
+            localProfileTool: 'sap_payments.sap_payments_profile_current',
+            warning: 'After switching .active-profile, restart the local sap_payments bridge to avoid stale signer cache. The bridge caches the active profile signer at startup and does not re-read .active-profile on every call.',
+          }, null, 2));
+        }
+
         if (!profileExists(parsed.profileName)) {
-          throw new Error(`Profile "${parsed.profileName}" does not exist.`);
+          throw new Error(`Profile "${parsed.profileName}" does not exist. Available profiles: ${listProfiles().map(p => p.name).join(', ') || '(none)'}.`);
         }
 
         const previousProfile = getLoadedProfileName();
