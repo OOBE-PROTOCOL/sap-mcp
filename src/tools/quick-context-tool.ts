@@ -6,6 +6,7 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { execSync } from 'child_process';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
@@ -13,6 +14,45 @@ import type { SapMcpContext } from '../core/types.js';
 import { listPremiumPlugins, publicPremiumProviderStatus } from '../premium/index.js';
 import { listBundledSkillNames, getBundledSkillContents } from './skills-tools.js';
 import { CAPABILITIES } from '../server/server-metadata.js';
+
+/**
+ * @name getServerCommit
+ * @description Returns the short git commit hash of the current build.
+ * Falls back to 'unknown' when git is not available or the repo has no commits.
+ */
+function getServerCommit(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf-8', timeout: 2000 }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * @name resolveNetwork
+ * @description Derives the Solana network name from an RPC URL.
+ */
+function resolveNetwork(rpcUrl: string | undefined): string {
+  if (!rpcUrl) return 'unknown';
+  if (rpcUrl.includes('mainnet')) return 'mainnet-beta';
+  if (rpcUrl.includes('testnet')) return 'testnet';
+  if (rpcUrl.includes('devnet')) return 'devnet';
+  return 'custom';
+}
+
+/**
+ * @name buildRecommendedFlow
+ * @description Returns the recommended agent workflow based on server mode.
+ */
+function buildRecommendedFlow(mode: string): string {
+  if (mode === 'hosted-api') {
+    return 'Hosted mode: use sap_payments_finalize_transaction (with signerProfile) for signing. Build unsigned with sap_build_sol_transfer / sap_build_spl_transfer / jupiter_getOrder, then sign locally. Never create signing scripts or read keypair JSON.';
+  }
+  if (mode === 'local-dev-keypair') {
+    return 'Local mode: use sap_preview_transaction → sap_sign_transaction → sap_submit_signed_transaction for signing. The active profile keypair is available for direct signing.';
+  }
+  return 'Read-only mode: no signing available. Use read-only tools (sol_get_balance, jupiter_getQuote, sap_list_all_agents, etc.).';
+}
 
 /**
  * @name QuickContextInput
@@ -38,6 +78,7 @@ type QuickContextSection = 'version' | 'tools' | 'pricing' | 'premium' | 'skills
 interface QuickContextPayload {
   success: boolean;
   version: string;
+  serverCommit: string;
   totalTools: number;
   toolsByCategory: Record<string, number>;
   pricingTiers: string[];
@@ -47,6 +88,8 @@ interface QuickContextPayload {
   skills: string[];
   skillsUpdateRequired: boolean;
   skillsContents?: Array<{ name: string; content: string }>;
+  environment: { network: string; mode: string; authType: string; rateLimitPerMinute: number };
+  recommendedFlow: string;
   summary: string;
   nextAction: string;
   truncated: boolean;
@@ -104,6 +147,7 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
         properties: {
           success: { type: 'boolean', description: 'Whether the quick context summary was generated.' },
           version: { type: 'string', description: 'SAP MCP server version.' },
+          serverCommit: { type: 'string', description: 'Git commit hash of the running server build. Changes on every deploy even without version bump.' },
           totalTools: { type: 'number', description: 'Total number of registered MCP tools.' },
           toolsByCategory: { type: 'object', description: 'Tool counts by category (sap, sns, agentKit, premium, etc.).' },
           pricingTiers: { type: 'array', description: 'Pricing tier names available on the hosted server.', items: { type: 'string' } },
@@ -113,11 +157,13 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
           skills: { type: 'array', description: 'Bundled skill names available via sap_skills_bundle.', items: { type: 'string' } },
           skillsUpdateRequired: { type: 'boolean', description: 'True when the server version differs from agentKnownVersion (or agentKnownVersion was omitted). When true, skillsContents contains the full SKILL.md contents of all bundled skills.' },
           skillsContents: { type: 'array', description: 'Full SKILL.md contents of all bundled skills, included only when skillsUpdateRequired is true. Each entry has {name, content}.', items: { type: 'object' } },
+          environment: { type: 'object', description: 'Server environment summary: network (mainnet/devnet), mode (hosted-api/local-dev-keypair/readonly), authType (none/bearer), rateLimitPerMinute.', properties: { network: { type: 'string' }, mode: { type: 'string' }, authType: { type: 'string' }, rateLimitPerMinute: { type: 'number' } } },
+          recommendedFlow: { type: 'string', description: 'Recommended agent workflow based on server mode. Hosted: build unsigned → sign locally. Local: preview → sign → submit.' },
           summary: { type: 'string', description: 'Compact markdown-like summary string suitable for agent context loading.' },
           nextAction: { type: 'string', description: 'Concrete next action for the agent after loading this context.' },
           truncated: { type: 'boolean', description: 'Whether the summary was truncated to fit within maxChars.' },
         },
-        required: ['success', 'version', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'summary', 'nextAction', 'truncated'],
+        required: ['success', 'version', 'serverCommit', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'environment', 'recommendedFlow', 'summary', 'nextAction', 'truncated'],
       },
       annotations: {
         readOnlyHint: true,
@@ -239,6 +285,7 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
   return {
     success: true,
     version: MCP_SERVER_VERSION,
+    serverCommit: getServerCommit(),
     totalTools,
     toolsByCategory,
     pricingTiers,
@@ -248,6 +295,13 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     skills,
     skillsUpdateRequired,
     ...(skillsUpdateRequired ? { skillsContents } : {}),
+    environment: {
+      network: resolveNetwork(context.config.rpcUrl),
+      mode: context.config.mode,
+      authType: process.env.SAP_HTTP_API_KEY ? 'bearer' : 'none',
+      rateLimitPerMinute: context.config.rateLimitPerMinute,
+    },
+    recommendedFlow: buildRecommendedFlow(context.config.mode),
     summary: summary.text,
     nextAction: buildNextAction(sections),
     truncated: summary.truncated,
@@ -336,6 +390,8 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
   return [
     'Call sap_agent_start for the full startup playbook.',
     'On future sessions, pass agentKnownVersion to sap_quick_context to auto-update local skills when the server version changes.',
+    'Then sap_skills_bundle with includeContents:true to load bundled skills.',
+    'If the server version is newer than your local SAP MCP repo, update it: git pull origin main && pnpm run build && pm2 restart sap-mcp-remote (or npx @oobe-protocol-labs/sap-mcp-server@latest for client installs).',
     'Use sap_estimate_tool_cost before any paid tool call — set maxPriceUsd to estimate × 1.25.',
     'Use sap_payments_readiness before any write or paid workflow.',
     'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
