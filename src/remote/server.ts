@@ -30,6 +30,7 @@ import { renderLandingPage } from './public-home/index.js';
 import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
+import { preloadPremiumProviders, disconnectAllProviders } from '../premium/provider-bridge.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -2450,6 +2451,12 @@ export class RemoteMCPServer {
     this.premiumMemoryManager = new PremiumMemoryManager();
     this.premiumMemoryManager.start();
 
+    // Eagerly load and connect all configured premium provider adapters.
+    // This starts the polling loops (Pyth HTTP, DexScreener, DefiLlama, etc.)
+    // before the server accepts requests, so events are already flowing when
+    // the first agent session arrives. Failures are logged but non-fatal.
+    await preloadPremiumProviders();
+
     this.httpServer = http.createServer(async (req, res) => {
       if (this.applyCors(req, res)) {
         return;
@@ -2857,6 +2864,7 @@ export class RemoteMCPServer {
     await this.rateLimiter.close();
 
     // Premium subsystem graceful shutdown: stop streams, webhooks, providers, clear stores.
+    await disconnectAllProviders();
     await this.premiumMemoryManager?.shutdown();
     this.premiumMemoryManager = undefined;
   }

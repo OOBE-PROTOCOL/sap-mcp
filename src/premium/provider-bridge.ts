@@ -334,3 +334,57 @@ export async function disconnectAllProviders(): Promise<void> {
     adapterRegistry.delete(key);
   }
 }
+
+/**
+ * @name preloadPremiumProviders
+ * @description Eagerly load and connect all configured provider adapters at startup.
+ *
+ * Called by the remote server during `start()` — before the HTTP listener
+ * accepts requests. This ensures providers are running when the first agent
+ * session arrives, eliminates cold-start latency, and surfaces configuration
+ * errors immediately in the startup logs.
+ *
+ * Iterates every capability that requires a provider, checks env readiness,
+ * and attempts to load + connect each adapter. Failures are logged but do not
+ * block server startup — the server starts regardless, and `providerHealth`
+ * will report the failure reason when queried.
+ *
+ * @usedBy `remote/server.ts:start()` — after premium memory manager init.
+ */
+export async function preloadPremiumProviders(): Promise<void> {
+  const { listPremiumPlugins } = await import('./builtin-plugins.js');
+  const plugins = listPremiumPlugins();
+
+  let loaded = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const plugin of plugins) {
+    for (const cap of plugin.capabilities) {
+      if (!cap.requiresProvider) continue;
+
+      // Skip if env vars are not configured.
+      const missingEnv = cap.providerEnv.filter(envName => !process.env[envName]);
+      if (missingEnv.length > 0) {
+        skipped++;
+        continue;
+      }
+
+      const key = adapterKey(plugin.id, cap.id);
+      const adapter = await loadProviderAdapter(plugin.id, cap.id);
+
+      if (adapter) {
+        loaded++;
+        console.log(`[provider-bridge] Preloaded ${key} — healthy`);
+      } else {
+        failed++;
+        const reason = loadFailureRegistry.get(key) ?? 'unknown reason';
+        console.error(`[provider-bridge] Failed to preload ${key} — ${reason}`);
+      }
+    }
+  }
+
+  console.log(
+    `[provider-bridge] Preload complete: ${loaded} loaded, ${failed} failed, ${skipped} skipped (env not configured).`,
+  );
+}
