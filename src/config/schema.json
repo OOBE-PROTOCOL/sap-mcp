@@ -329,7 +329,7 @@
             "heavyValueUsd": {
               "type": "number",
               "minimum": 0,
-              "default": 0.15
+              "default": 0.05
             },
             "valueBps": {
               "type": "number",

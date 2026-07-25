@@ -89,7 +89,7 @@ export function explainX402SettlementPrompt(server: Server, _context: SapMcpCont
         '  "arguments": {',
         '    "toolName": "sap_list_all_agents",',
         '    "arguments": { "limit": 5 },',
-        '    "maxPriceUsd": 0.02,',
+        '    "maxPriceUsd": 0.05,',
         '    "confirm": true',
         '  }',
         '}',
