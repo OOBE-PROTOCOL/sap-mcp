@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  desktop:
-    name: Build desktop wizard (${{ matrix.os }})
+  build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -37,19 +37,23 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Disable minimumReleaseAge policy (CI lockfile check)
+      - name: Disable minimumReleaseAge policy
         run: pnpm config set minimumReleaseAge 0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify release gates (skip on Windows — path-based tests are Unix-only)
+      - name: Verify (typecheck + lint + build — skip tests on Windows)
         if: matrix.os != 'windows-2025'
-        run: pnpm run verify:release && pnpm audit --audit-level high --prod
+        run: pnpm run typecheck && pnpm run lint && pnpm run test:run && pnpm run build
 
-      - name: Verify build only (Windows — skip tests that assert Unix paths)
+      - name: Verify (typecheck + lint + build only — Windows)
         if: matrix.os == 'windows-2025'
         run: pnpm run typecheck && pnpm run lint && pnpm run build
+
+      - name: Audit production dependencies
+        if: matrix.os == 'ubuntu-24.04'
+        run: pnpm audit --audit-level high --prod
 
       - name: Report macOS signing mode
         if: matrix.os == 'macos-15' && github.ref_type == 'tag'
@@ -62,7 +66,7 @@ jobs:
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
             echo "macOS release mode: Developer ID signed and notarized."
           else
-            echo "::warning::macOS release mode: unsigned internal/public artifact. Browser downloads may be blocked by Gatekeeper until the user removes quarantine or opens through documented manual steps."
+            echo "::warning::macOS release mode: unsigned internal/public artifact."
           fi
 
       - name: Report Windows signing mode
@@ -75,7 +79,7 @@ jobs:
           if ($env:WINDOWS_CSC_LINK -and $env:WINDOWS_CSC_KEY_PASSWORD) {
             "Windows release mode: Authenticode signed installer."
           } else {
-            "::warning::Windows release mode: unsigned installer. SmartScreen may warn users until a code signing certificate and reputation are available."
+            "::warning::Windows release mode: unsigned installer."
           }
 
       - name: Select desktop signing credentials
@@ -123,9 +127,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish desktop wizard release
+    name: Publish release
     if: github.ref_type == 'tag'
-    needs: desktop
+    needs: build
     runs-on: ubuntu-24.04
 
     steps:
@@ -139,7 +143,7 @@ jobs:
           path: release/desktop
           merge-multiple: true
 
-      - name: Generate combined desktop artifact checksums
+      - name: Generate checksums
         run: node scripts/generate-desktop-checksums.mjs
 
       - name: Attach artifacts to GitHub release
