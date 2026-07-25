@@ -18,6 +18,7 @@ import {
   getWebhookSubscription,
   getWebhookDeliveries,
   getPremiumMetrics,
+  getEvents,
   type PremiumCapabilityType,
   type PremiumManifestTemplateRequest,
   type PremiumSessionRequest,
@@ -859,6 +860,249 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     async () => {
       const metrics = await getPremiumMetrics();
       return createStructuredJsonResponse({ metrics });
+    },
+  );
+
+  // --- Stream consumer tools (Layer 6: MCP-compatible event consumption) ---
+  // These tools solve the core gap: MCP is request/response, so agents cannot
+  // hold open SSE connections. sap_premium_stream_poll and sap_premium_stream_flush
+  // let agents consume buffered events via standard tool calls.
+
+  registerTool(
+    server,
+    'sap_premium_stream_poll',
+    {
+      title: 'Poll Premium Stream Events',
+      description:
+        'Long-poll buffered premium stream events for an active session. Returns events that have been delivered to the server-side event buffer since the last poll. This is the MCP-compatible alternative to holding open an SSE connection — call this tool periodically to drain the event buffer. Events are returned oldest-first. Use the sinceEventId cursor from the last poll to fetch only new events. If no events are available, returns an empty array (does not block).',
+      inputSchema: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'Active premium session id whose stream events should be polled.',
+          },
+          sinceEventId: {
+            type: 'string',
+            description: 'Optional event id cursor. Only events delivered after this event id are returned. Use the last event id from the previous poll to paginate.',
+          },
+          maxEvents: {
+            type: 'number',
+            description: 'Maximum number of events to return in a single poll. Default: 10, max: 100.',
+          },
+          eventType: {
+            type: 'string',
+            description: 'Optional event type filter. Only events matching this type are returned.',
+          },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        required: ['events', 'hasMore', 'sessionStatus'],
+        properties: {
+          events: {
+            type: 'array',
+            description: 'Buffered premium events matching the poll query, ordered oldest-first.',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Premium event record with eventId, eventType, observedAt, payload, and deliveredAt.',
+            },
+          },
+          hasMore: {
+            type: 'boolean',
+            description: 'True if more events are available in the buffer beyond this batch. Call again to drain remaining events.',
+          },
+          sessionStatus: {
+            type: 'string',
+            description: 'Current session status (active, closed, not_found).',
+          },
+          unitsRemaining: {
+            type: 'number',
+            description: 'Remaining billable units in the session quota, if the session is active.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    async (input: unknown) => {
+      const raw = input as Record<string, unknown>;
+      const sessionId = readString(raw.sessionId);
+      if (!sessionId) {
+        return createStructuredJsonResponse({
+          events: [],
+          hasMore: false,
+          sessionStatus: 'invalid_request',
+        }, { isError: true });
+      }
+
+      const session = getPremiumSession(sessionId);
+      if (!session) {
+        return createStructuredJsonResponse({
+          events: [],
+          hasMore: false,
+          sessionStatus: 'not_found',
+        });
+      }
+
+      const maxEvents = Math.min(Math.max(readNumber(raw.maxEvents, 10), 1), 100);
+      const sinceEventId = readString(raw.sinceEventId);
+      const eventTypeFilter = readString(raw.eventType);
+
+      // If a cursor is provided, find its deliveredAt timestamp and use it as the since filter.
+      let sinceIso: string | undefined;
+      if (sinceEventId) {
+        const cursorEvents = getEvents({ sessionId, limit: 1000 });
+        const cursorRecord = cursorEvents.find((r) => r.eventId === sinceEventId);
+        if (cursorRecord) {
+          sinceIso = cursorRecord.deliveredAt;
+        }
+      }
+
+      // Fetch one extra to determine hasMore.
+      const queryLimit = maxEvents + 1;
+      const allEvents = getEvents({
+        sessionId,
+        eventType: eventTypeFilter,
+        since: sinceIso,
+        limit: queryLimit,
+      });
+
+      const hasMore = allEvents.length > maxEvents;
+      const batch = hasMore ? allEvents.slice(0, maxEvents) : allEvents;
+
+      return createStructuredJsonResponse({
+        events: batch.map((record) => ({
+          eventId: record.eventId,
+          eventType: record.eventType,
+          observedAt: record.observedAt,
+          payload: record.payload,
+          deliveredAt: record.deliveredAt,
+        })),
+        hasMore,
+        sessionStatus: session.status,
+        unitsRemaining: session.requestedUnits,
+      });
+    },
+  );
+
+  registerTool(
+    server,
+    'sap_premium_stream_flush',
+    {
+      title: 'Flush Premium Stream Events',
+      description:
+        'Flush all buffered premium stream events for a session with cursor-based pagination. Unlike sap_premium_stream_poll (which returns a small batch for periodic polling), flush returns all events up to the cursor limit in a single call. Use this when an agent reconnects after a disconnection and needs to catch up on missed events. The nextCursor can be used as sinceEventId in subsequent calls to fetch only newer events.',
+      inputSchema: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'Active or recently active premium session id whose buffered events should be flushed.',
+          },
+          sinceEventId: {
+            type: 'string',
+            description: 'Optional event id cursor. Only events delivered after this event id are returned. Use nextCursor from the previous flush call.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of events to return. Default: 50, max: 500.',
+          },
+          eventType: {
+            type: 'string',
+            description: 'Optional event type filter.',
+          },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        required: ['events', 'nextCursor', 'sessionStatus'],
+        properties: {
+          events: {
+            type: 'array',
+            description: 'All buffered premium events matching the flush query, ordered oldest-first.',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Premium event record with eventId, eventType, observedAt, payload, and deliveredAt.',
+            },
+          },
+          nextCursor: {
+            type: 'string',
+            description: 'Event id of the last event in this batch. Pass as sinceEventId in the next flush call to paginate. Null if no events were returned.',
+          },
+          sessionStatus: {
+            type: 'string',
+            description: 'Current session status (active, closed, not_found).',
+          },
+          totalReturned: {
+            type: 'number',
+            description: 'Total number of events returned in this batch.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    async (input: unknown) => {
+      const raw = input as Record<string, unknown>;
+      const sessionId = readString(raw.sessionId);
+      if (!sessionId) {
+        return createStructuredJsonResponse({
+          events: [],
+          nextCursor: null,
+          sessionStatus: 'invalid_request',
+          totalReturned: 0,
+        }, { isError: true });
+      }
+
+      const session = getPremiumSession(sessionId);
+      if (!session) {
+        return createStructuredJsonResponse({
+          events: [],
+          nextCursor: null,
+          sessionStatus: 'not_found',
+          totalReturned: 0,
+        });
+      }
+
+      const limit = Math.min(Math.max(readNumber(raw.limit, 50), 1), 500);
+      const sinceEventId = readString(raw.sinceEventId);
+      const eventTypeFilter = readString(raw.eventType);
+
+      let sinceIso: string | undefined;
+      if (sinceEventId) {
+        const cursorEvents = getEvents({ sessionId, limit: 1000 });
+        const cursorRecord = cursorEvents.find((r) => r.eventId === sinceEventId);
+        if (cursorRecord) {
+          sinceIso = cursorRecord.deliveredAt;
+        }
+      }
+
+      const records = getEvents({
+        sessionId,
+        eventType: eventTypeFilter,
+        since: sinceIso,
+        limit,
+      });
+
+      const nextCursor = records.length > 0 ? records[records.length - 1].eventId : null;
+
+      return createStructuredJsonResponse({
+        events: records.map((record) => ({
+          eventId: record.eventId,
+          eventType: record.eventType,
+          observedAt: record.observedAt,
+          payload: record.payload,
+          deliveredAt: record.deliveredAt,
+        })),
+        nextCursor,
+        sessionStatus: session.status,
+        totalReturned: records.length,
+      });
     },
   );
 }

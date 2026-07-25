@@ -108,7 +108,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(312);
+    expect(names).toHaveLength(314);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
@@ -130,6 +130,8 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_premium_plugin_template');
     expect(names).toContain('sap_premium_session_start');
     expect(names).toContain('sap_premium_session_status');
+    expect(names).toContain('sap_premium_stream_poll');
+    expect(names).toContain('sap_premium_stream_flush');
     expect(names).toContain('sap_pricing_catalog');
     expect(names).toContain('bridging_bridgeWormhole');
     expect(names).toContain('bridging_bridgeWormholeStatus');

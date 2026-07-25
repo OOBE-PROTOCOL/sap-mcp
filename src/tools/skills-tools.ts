@@ -384,10 +384,11 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
     'sap_skills_bundle',
     {
       title: 'Bundle SAP MCP Skills',
-      description: 'Return bundled SAP MCP skills as JSON so an agent can load or write them itself.',
+      description:
+        'Return bundled SAP MCP skills as JSON so an agent can load or write them itself. Pass skills: ["name1","name2"] to bundle only specific skills (filterNames pattern). Pass includeContents: false to get only file paths without content (metadata-only mode for cheap discovery). Combine both for efficient loading: skills:["sap-defi"], includeContents:true returns only the sap-defi skill files with full content, avoiding context bloat from unused skills.',
       inputSchema: {
-        skills: { type: 'array', items: { type: 'string' } },
-        includeContents: { type: 'boolean' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'Optional subset of bundled skill names to bundle. When omitted, all bundled skills are returned. Use this to load only the skills you need and avoid context bloat.' },
+        includeContents: { type: 'boolean', description: 'When false, only file paths are returned without file content (metadata-only). When true (default), full file contents are included. Set to false for cheap discovery, then call again with skills:["name"] and includeContents:true for only the skills you need.' },
       },
     },
     async (input: unknown) => {
