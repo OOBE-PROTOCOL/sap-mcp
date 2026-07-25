@@ -45,3 +45,6 @@ export { registerSkillsTools } from './skills-tools.js';
 
 // REAL MAGICBLOCK TOOLS — 20 tools for ER Router, Private Payments, and VRF
 export { registerMagicBlockTools } from './magicblock-tools.js';
+
+// REAL MEMORY TOOLS — 15 free local tools for agent memory, strategies, streams, and audit
+export { registerMemoryTools } from './memory-tools.js';

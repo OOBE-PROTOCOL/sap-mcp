@@ -14,6 +14,7 @@ import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
+import { registerMemoryTools } from './memory-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerEstimateToolCost } from './estimate-tool-cost.js';
 import { registerQuickContextTool } from './quick-context-tool.js';
@@ -87,6 +88,9 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register MagicBlock tools (20 tools: ER Router, Private Payments, VRF).
   registerMagicBlockTools(server, context);
+
+  // Register local memory tools (15 free tools: memory, strategies, streams, audit).
+  registerMemoryTools(server, context);
   
   logger.debug('Tools registered', { count: getRegisteredTools(server).length });
 }
