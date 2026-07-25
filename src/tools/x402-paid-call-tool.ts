@@ -908,26 +908,56 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
         openWorldHint: false,
       },
     },
-    async () => createTextResponse(JSON.stringify({
-      serverRole: 'local-sap-payments-bridge',
-      activeProfile: getActiveProfile(),
-      configPath: getProfileConfigPath(getActiveProfile()),
-      mode: context.config.mode,
-      network: networkFromRpcUrl(context.config.rpcUrl),
-      rpcUrl: redactUrl(context.config.rpcUrl),
-      programId: context.config.programId,
-      agentPubkey: context.config.agentPubkey,
-      walletPath: context.config.walletPath,
-      walletPathConfigured: Boolean(context.config.walletPath),
-      signerConfigured: Boolean(context.signer),
-      signerPublicKey: context.signer?.publicKey.toBase58(),
-      localProfileVisibility: 'visible-to-local-sap-payments-bridge',
-      hostedRemoteVisibility: 'not-visible-to-hosted-accountless-server',
-      secretMaterial: 'keypair-bytes-never-returned',
-      recommendedPaidTool: 'sap_payments_call_paid_tool',
-      recommendedReadinessTool: 'sap_payments_readiness',
-      agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. For paid/write workflows call sap_payments_readiness first. The hosted SAP MCP server is intentionally accountless.',
-    }, null, 2)),
+    async () => {
+      // Re-read the active profile on every call to avoid stale cache.
+      // The context.signer was resolved at startup from the then-active profile;
+      // if the user switched .active-profile manually, the cached signer is stale.
+      // We re-read .active-profile and resolve the current signer on demand.
+      const currentProfile = getActiveProfile();
+      const currentConfigPath = getProfileConfigPath(currentProfile);
+      let currentSignerPubkey: string | undefined = context.signer?.publicKey.toBase58();
+      let currentWalletPath: string | undefined = context.config.walletPath;
+
+      // Always try to re-resolve the signer from the active profile to avoid
+      // stale cache. If .active-profile was switched manually after startup,
+      // the context.signer reflects the OLD profile. We re-read and re-resolve.
+      try {
+        const { loadProfileConfig } = await import('../config/profiles.js');
+        const { resolveSigner } = await import('../signer/signer-resolver.js');
+        const profileConfig = loadProfileConfig(currentProfile);
+        if (profileConfig) {
+          const signerResult = await resolveSigner({ ...context.config, ...profileConfig });
+          if (signerResult.signer) {
+            currentSignerPubkey = signerResult.signer.publicKey.toBase58();
+          }
+          currentWalletPath = profileConfig.walletPath;
+        }
+      } catch {
+        // If we can't resolve the signer for the current profile, fall back
+        // to the cached signer — better than crashing.
+      }
+
+      return createTextResponse(JSON.stringify({
+        serverRole: 'local-sap-payments-bridge',
+        activeProfile: currentProfile,
+        configPath: currentConfigPath,
+        mode: context.config.mode,
+        network: networkFromRpcUrl(context.config.rpcUrl),
+        rpcUrl: redactUrl(context.config.rpcUrl),
+        programId: context.config.programId,
+        agentPubkey: context.config.agentPubkey,
+        walletPath: currentWalletPath,
+        walletPathConfigured: Boolean(currentWalletPath),
+        signerConfigured: Boolean(currentSignerPubkey),
+        signerPublicKey: currentSignerPubkey,
+        localProfileVisibility: 'visible-to-local-sap-payments-bridge',
+        hostedRemoteVisibility: 'not-visible-to-hosted-accountless-server',
+        secretMaterial: 'keypair-bytes-never-returned',
+        recommendedPaidTool: 'sap_payments_call_paid_tool',
+        recommendedReadinessTool: 'sap_payments_readiness',
+        agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. For paid/write workflows call sap_payments_readiness first. The hosted SAP MCP server is intentionally accountless. If you need to sign with a specific profile, use signerProfile param on sap_payments_finalize_transaction instead of switching .active-profile.',
+      }, null, 2));
+    },
   );
 }
 

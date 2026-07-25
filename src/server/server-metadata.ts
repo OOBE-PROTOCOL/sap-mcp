@@ -58,7 +58,7 @@ export const SERVER_METADATA = {
  */
 export const CAPABILITIES = {
   tools: {
-    count: 318,
+    count: 319,
     categories: {
       sap: 75,
       sns: 13,

@@ -123,6 +123,24 @@ export class McpMonetizationGate {
   private readonly httpResourceServer: x402HTTPResourceServer;
   private readonly usageLedger: UsageLedger;
 
+  /**
+   * @description x402 idempotency cache — prevents double-charge on retry.
+   *
+   * Keyed by `requestHash`. When a settlement succeeds, the receipt is cached
+   * for 5 minutes. If the same requestHash is retried (e.g. network failure
+   * after the tool executed but before the response reached the client), the
+   * cached settlement is returned without re-charging the payer's USDC.
+   *
+   * The cache is bounded to 10,000 entries (evicts oldest on overflow). Each
+   * entry has a TTL of 5 minutes — long enough for client retry logic, short
+   * enough to avoid stale receipts blocking legitimate re-requests.
+   *
+   * @internal
+   */
+  private readonly idempotencyCache = new Map<string, { settlement: SettleResponse; expiresAt: number }>();
+  private static readonly IDEMPOTENCY_TTL_MS = 5 * 60 * 1000;
+  private static readonly IDEMPOTENCY_MAX_ENTRIES = 10_000;
+
   private constructor(
     appConfig: SapMcpConfig,
     httpResourceServer: x402HTTPResourceServer,
@@ -188,7 +206,29 @@ export class McpMonetizationGate {
    * @description Flushes hosted payment audit state before the remote server exits.
    */
   public async close(): Promise<void> {
+    this.idempotencyCache.clear();
     await this.usageLedger.close();
+  }
+
+  /**
+   * @name pruneExpiredIdempotencyEntries
+   * @description Opportunistically remove expired entries from the idempotency cache.
+   *
+   * Called after each successful settlement to keep the cache bounded without
+   * a separate timer. Scans at most 100 entries per call to avoid O(n) overhead
+   * on every settle.
+   *
+   * @internal
+   */
+  private pruneExpiredIdempotencyEntries(): void {
+    const now = Date.now();
+    let scanned = 0;
+    for (const [key, entry] of this.idempotencyCache) {
+      if (entry.expiresAt <= now) {
+        this.idempotencyCache.delete(key);
+      }
+      if (++scanned >= 100) break;
+    }
   }
 
   /**
@@ -587,23 +627,39 @@ export class McpMonetizationGate {
     }
 
     let settlement: SettleResponse;
-    try {
-      settlement = await this.callFacilitator<SettleResponse>('settle', {
-        x402Version: parsedPayment.x402Version,
-        paymentPayload: parsedPayment.paymentPayload,
-        paymentRequirements: parsedPayment.paymentRequirements,
+
+    // Idempotency check: if this requestHash was already settled successfully
+    // within the TTL window, return the cached settlement without re-charging.
+    // This prevents double-charge when a client retries after a network failure
+    // that occurred after the tool executed but before the response arrived.
+    const cached = this.idempotencyCache.get(options.metadata.requestHash);
+    if (cached && cached.expiresAt > Date.now()) {
+      logger.info('Settlement idempotency cache hit', {
+        toolNames: options.decision.toolNames,
+        price: options.decision.price,
+        requestHash: options.metadata.requestHash.slice(0, 12),
+        cachedTx: cached.settlement.transaction,
       });
-    } catch (error) {
-      const failure = classifyFacilitatorError(error);
-      await this.usageLedger.recordCanceled(
-        options.metadata,
-        options.decision,
-        'handler_failed',
-        failure.message ?? failure.reason ?? 'facilitator_settle_failed',
-      );
-      buffered.restore();
-      writeJsonRpcError(options.response, options.parsedBody, -32003, 'payment_settlement_failed', failure);
-      return;
+      settlement = cached.settlement;
+    } else {
+      try {
+        settlement = await this.callFacilitator<SettleResponse>('settle', {
+          x402Version: parsedPayment.x402Version,
+          paymentPayload: parsedPayment.paymentPayload,
+          paymentRequirements: parsedPayment.paymentRequirements,
+        });
+      } catch (error) {
+        const failure = classifyFacilitatorError(error);
+        await this.usageLedger.recordCanceled(
+          options.metadata,
+          options.decision,
+          'handler_failed',
+          failure.message ?? failure.reason ?? 'facilitator_settle_failed',
+        );
+        buffered.restore();
+        writeJsonRpcError(options.response, options.parsedBody, -32003, 'payment_settlement_failed', failure);
+        return;
+      }
     }
     await this.usageLedger.recordSettlement(options.metadata, options.decision, settlement);
 
@@ -621,6 +677,19 @@ export class McpMonetizationGate {
       });
       return;
     }
+
+    // Cache successful settlement for idempotency on retry.
+    this.idempotencyCache.set(options.metadata.requestHash, {
+      settlement,
+      expiresAt: Date.now() + McpMonetizationGate.IDEMPOTENCY_TTL_MS,
+    });
+    // Evict oldest entries when cache exceeds the max size.
+    if (this.idempotencyCache.size > McpMonetizationGate.IDEMPOTENCY_MAX_ENTRIES) {
+      const oldestKey = this.idempotencyCache.keys().next().value as string | undefined;
+      if (oldestKey) this.idempotencyCache.delete(oldestKey);
+    }
+    // Prune expired entries opportunistically.
+    this.pruneExpiredIdempotencyEntries();
 
     logger.info('Settlement success', {
       toolNames: options.decision.toolNames,
@@ -1065,6 +1134,22 @@ function validatePaymentRequirementsForDecision(
   }
   if (payload.resource?.url && !payload.resource.url.includes(virtualPath)) {
     return 'resource_mismatch';
+  }
+
+  // x402 nonce + TTL strict validation (point 5b).
+  // The x402 protocol uses maxTimeoutSeconds as the challenge TTL. If the
+  // payment is submitted after the TTL expires, the facilitator should reject
+  // it. We validate this client-side too to fail fast before settling.
+  const challengeAgeSeconds = requirements.maxTimeoutSeconds;
+  if (!Number.isFinite(challengeAgeSeconds) || challengeAgeSeconds <= 0) {
+    return 'invalid_max_timeout_seconds';
+  }
+  // Enforce a maximum TTL of 120 seconds to prevent stale challenges from
+  // being replayed after a long delay. The default is already 120s, but we
+  // cap it here so a malicious or misconfigured client cannot extend it.
+  const MAX_CHALLENGE_TTL_SECONDS = 120;
+  if (challengeAgeSeconds > MAX_CHALLENGE_TTL_SECONDS) {
+    return 'max_timeout_seconds_exceeds_limit';
   }
 
   return undefined;

@@ -315,7 +315,11 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
   return [
     'Call sap_agent_start for the full startup playbook.',
     'Then sap_skills_bundle with includeContents:true to load bundled skills.',
-    'Use sap_estimate_tool_cost before any paid tool call.',
+    'Use sap_estimate_tool_cost before any paid tool call — set maxPriceUsd to estimate × 1.25.',
     'Use sap_payments_readiness before any write or paid workflow.',
+    'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
+    'For signing: use sap_payments_finalize_transaction with signerProfile to sign with a specific profile — no need to switch .active-profile.',
+    'For SOL/SPL transfers: use sap_build_sol_transfer or sap_build_spl_transfer (hosted builders), then sign locally with sap_payments_finalize_transaction.',
+    'For local-signer-only tools (jupiter_swap, spl-token_transfer, etc.): build unsigned on hosted, sign locally — do not create signing scripts.',
   ].join(' ');
 }

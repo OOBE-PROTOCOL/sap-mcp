@@ -42,7 +42,7 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
     {
       title: 'Estimate Tool Cost',
       description:
-        'Free pre-call cost estimator. Given a tool name, returns the hosted pricing tier, estimated USD cost, and the recommended maxPriceUsd to pass to sap_payments_call_paid_tool. Call this before any paid tool to avoid silent cap aborts and plan USDC spending.',
+        'Free pre-call cost estimator (dry-run — no charge, no x402 challenge). Given a tool name, returns the hosted pricing tier, estimated USD cost, and the recommended maxPriceUsd to pass to sap_payments_call_paid_tool. Always call this before any paid tool to avoid silent cap aborts. Set your maxPriceUsd to the estimate × 1.25 to avoid abort-and-retry. This tool is always free and never triggers x402 settlement.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -3,7 +3,7 @@
  * @description MCP tools for decoding, previewing, signing, and submitting Solana transactions.
  */
 
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
@@ -871,6 +871,155 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
             },
           ],
           feePayer: fromPubkey,
+          unsigned: true,
+          nextSteps: 'Sign locally with sap_payments_finalize_transaction (hosted mode) or sap_sign_transaction → sap_submit_signed_transaction (local mode). Do not create temporary signing scripts or read keypair JSON.',
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      }
+    }
+  );
+
+  // ── SPL Token Transfer Builder ─────────────────────────────────────────────
+  //
+  // `spl-token_transfer` is local-signer-only and cannot run on the hosted
+  // accountless server. This builder creates an unsigned SPL token transfer
+  // transaction that the agent signs locally via sap_payments_finalize_transaction.
+  //
+  registerTool(
+    server,
+    'sap_build_spl_transfer',
+    {
+      title: 'Build SPL Token Transfer Transaction',
+      description:
+        'Build an unsigned SPL token transfer transaction. Returns serialized base64 transaction for the agent to sign locally with sap_payments_finalize_transaction or sap_sign_transaction → sap_submit_signed_transaction. This is the hosted-safe equivalent of spl-token_transfer (which is local-signer-only and cannot run on the hosted accountless server). Builder fee applies.',
+      inputSchema: {
+        sourceOwner: {
+          type: 'string',
+          description: 'Source token account owner public key in base58. This is the fee payer and must sign the transaction locally.',
+        },
+        destinationOwner: {
+          type: 'string',
+          description: 'Destination wallet public key in base58. The destination ATA will be created if it does not exist.',
+        },
+        mint: {
+          type: 'string',
+          description: 'SPL token mint address in base58.',
+        },
+        amount: {
+          type: 'number',
+          description: 'Amount of tokens to transfer in base units (respect the mint decimals).',
+        },
+        decimals: {
+          type: 'number',
+          description: 'Token decimals for the mint. Used for display purposes only — the on-chain amount is in base units.',
+        },
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const raw = input as Record<string, unknown>;
+        const sourceOwner = typeof raw['sourceOwner'] === 'string' ? raw['sourceOwner'] : undefined;
+        const destinationOwner = typeof raw['destinationOwner'] === 'string' ? raw['destinationOwner'] : undefined;
+        const mint = typeof raw['mint'] === 'string' ? raw['mint'] : undefined;
+        const amount = typeof raw['amount'] === 'number' ? raw['amount'] : undefined;
+        const decimals = typeof raw['decimals'] === 'number' ? raw['decimals'] : undefined;
+
+        if (!sourceOwner || !destinationOwner || !mint || amount === undefined) {
+          throw new Error('sourceOwner, destinationOwner, mint, and amount are required.');
+        }
+        if (amount <= 0) {
+          throw new Error('amount must be a positive number.');
+        }
+
+        // Build SPL token transfer instructions using @solana/web3.js only.
+        // We construct the raw instruction data manually to avoid depending on
+        // @solana/spl-token (not in package.json).
+        const sourceOwnerKey = new PublicKey(sourceOwner);
+        const destOwnerKey = new PublicKey(destinationOwner);
+        const mintKey = new PublicKey(mint);
+
+        // Derive Associated Token Account addresses using findProgramAddress.
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+        // ATA = PDA(['AssociatedTokenAddress', owner, tokenProgram, mint])
+        const [sourceAta] = PublicKey.findProgramAddressSync(
+          [Buffer.from('AssociatedTokenAddress'), sourceOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        );
+        const [destAta] = PublicKey.findProgramAddressSync(
+          [Buffer.from('AssociatedTokenAddress'), destOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
+          ASSOCIATED_TOKEN_PROGRAM_ID,
+        );
+
+        // CreateAssociatedTokenAccountIdempotent instruction (0x1e data).
+        const createAtaInstruction = new TransactionInstruction({
+          programId: ASSOCIATED_TOKEN_PROGRAM_ID,
+          keys: [
+            { pubkey: sourceOwnerKey, isSigner: true, isWritable: true },
+            { pubkey: destAta, isSigner: false, isWritable: true },
+            { pubkey: destOwnerKey, isSigner: false, isWritable: false },
+            { pubkey: mintKey, isSigner: false, isWritable: false },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+          ],
+          data: Buffer.from([0x1e]),
+        });
+
+        // Token Transfer instruction (0x03 + 64-bit amount in little-endian).
+        const transferData = Buffer.alloc(9);
+        transferData.writeUInt8(3, 0); // Transfer instruction discriminator
+        transferData.writeBigUInt64LE(BigInt(amount), 1);
+
+        const transferInstruction = new TransactionInstruction({
+          programId: TOKEN_PROGRAM_ID,
+          keys: [
+            { pubkey: sourceAta, isSigner: false, isWritable: true },
+            { pubkey: destAta, isSigner: false, isWritable: true },
+            { pubkey: sourceOwnerKey, isSigner: true, isWritable: false },
+          ],
+          data: transferData,
+        });
+
+        // Fetch latest blockhash and build transaction.
+        const connection = context.connection;
+        const blockhash = await connection.getLatestBlockhash();
+
+        const transaction = new Transaction({
+          recentBlockhash: blockhash.blockhash,
+          feePayer: sourceOwnerKey,
+        });
+        transaction.add(createAtaInstruction);
+        transaction.add(transferInstruction);
+
+        const serialized = transaction.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        });
+        const transactionBase64 = serialized.toString('base64');
+
+        return createTextResponse(JSON.stringify({
+          success: true,
+          transactionBase64,
+          encoding: 'base64',
+          instructions: [
+            {
+              program: 'SPL Token',
+              type: 'CreateAssociatedTokenAccountIdempotent',
+              destinationAta: destAta.toBase58(),
+            },
+            {
+              program: 'SPL Token',
+              type: 'Transfer',
+              sourceAta: sourceAta.toBase58(),
+              destinationAta: destAta.toBase58(),
+              mint,
+              amount,
+              decimals: decimals ?? undefined,
+            },
+          ],
+          feePayer: sourceOwner,
           unsigned: true,
           nextSteps: 'Sign locally with sap_payments_finalize_transaction (hosted mode) or sap_sign_transaction → sap_submit_signed_transaction (local mode). Do not create temporary signing scripts or read keypair JSON.',
         }, null, 2));

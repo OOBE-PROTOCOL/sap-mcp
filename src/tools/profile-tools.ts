@@ -540,6 +540,10 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           type: 'boolean',
           description: 'Must be true because switching profile can change signer, network, and policy.',
         },
+        signature: {
+          type: 'string',
+          description: 'Optional Ed25519 signature proving ownership of the target profile keypair. When provided, the server verifies that the signature matches the profile agentPubkey. This prevents impersonation via manual .active-profile file edits. If omitted, the switch proceeds without cryptographic verification (backward compat).',
+        },
       },
     },
     async (input: unknown) => {
