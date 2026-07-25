@@ -414,7 +414,19 @@ export async function startWebhookDelivery(subscription: PremiumWebhookSubscript
     subscription.capabilityId,
     {},
   );
-  if (!iterable) return;
+  if (!iterable) {
+    console.error(
+      `[webhook-engine] Failed to start delivery loop for ${subscription.subscriptionId}: ` +
+      `provider adapter not available for ${subscription.pluginId}:${subscription.capabilityId}. ` +
+      `Check SAP_MCP_ENABLE_PREMIUM_PLUGINS, SAP_MCP_PLUGIN_DIR, and that providers are compiled (.js).`,
+    );
+    return;
+  }
+
+  console.log(
+    `[webhook-engine] Delivery loop started for ${subscription.subscriptionId} ` +
+    `(${subscription.pluginId}:${subscription.capabilityId}, events: ${subscription.events.join(', ')}).`,
+  );
 
   for await (const event of iterable) {
     if (!subscription.active) break;

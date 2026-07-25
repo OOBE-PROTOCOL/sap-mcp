@@ -316,8 +316,9 @@ export async function handlePremiumWebhookRegister(
   // Start the delivery worker in the background — fire-and-forget.
   // Errors are tracked in delivery records and don't crash the HTTP response.
   setImmediate(() => {
-    void startWebhookDelivery(subscription).catch(() => {
-      // Delivery errors are recorded per-event in the delivery records.
+    void startWebhookDelivery(subscription).catch(error => {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[premium-routes] Webhook delivery error for ${subscription.subscriptionId}: ${msg}`);
     });
   });
 

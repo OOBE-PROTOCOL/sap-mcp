@@ -304,7 +304,14 @@ export async function subscribeToProvider(
   filters: Record<string, unknown>,
 ): Promise<AsyncIterable<ProviderEvent> | null> {
   const adapter = await getProviderAdapter(pluginId, capabilityId);
-  if (!adapter) return null;
+  if (!adapter) {
+    const key = adapterKey(pluginId, capabilityId);
+    const failureReason = loadFailureRegistry.get(key) ?? 'unknown reason';
+    console.error(
+      `[provider-bridge] subscribeToProvider: adapter not available for ${key}: ${failureReason}`,
+    );
+    return null;
+  }
 
   return adapter.subscribe(filters);
 }

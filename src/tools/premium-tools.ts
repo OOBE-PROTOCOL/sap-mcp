@@ -917,8 +917,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       // Start the buffer-only delivery loop in the background. For relay
       // subscriptions the loop appends events to the store without making any
       // outbound HTTP call.
-      void startWebhookDelivery(subscription).catch(() => {
-        // Delivery errors are recorded per-event in the delivery records.
+      void startWebhookDelivery(subscription).catch(error => {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[premium-tools] Webhook relay delivery error for ${subscription.subscriptionId}: ${msg}`);
       });
 
       return createStructuredJsonResponse({
