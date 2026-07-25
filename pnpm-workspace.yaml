@@ -26,7 +26,7 @@ onlyBuiltDependencies:
 
 allowBuilds:
   '@bentoguard/sdk': true
-  better-sqlite3: set this to true or false
+  better-sqlite3: true
   bigint-buffer: true
   bigint-buffer@file:vendor/bigint-buffer: true
   bufferutil: true
