@@ -2,6 +2,139 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.22 - 2026-07-25
+
+### Added
+
+- **`signerProfile` per-call parameter** on `sap_payments_finalize_transaction`.
+  Agents can now sign with a specific profile without switching `.active-profile`
+  manually. Multiple profiles coexist in the same session. Eliminates the #1
+  source of agent friction: profile-switch juggling + stale signer cache.
+- **`sap_build_sol_transfer`** — Hosted unsigned builder for native SOL transfers
+  using `SystemProgram.transfer`. Fills the gap left by `spl-token_transferSol`
+  (local-signer-only). Returns base64 unsigned transaction for local signing.
+- **`sap_build_spl_transfer`** — Hosted unsigned builder for SPL token transfers
+  with idempotent ATA creation. Uses raw `@solana/web3.js` `TransactionInstruction`
+  (no `@solana/spl-token` dependency). Returns base64 unsigned transaction.
+- **x402 idempotency cache** in `McpMonetizationGate` — prevents double-charge on
+  retry. Successful settlements are cached by `requestHash` for 5 minutes
+  (max 10,000 entries, LRU eviction, opportunistic pruning). If the same
+  request is retried after a network failure, the cached settlement is returned
+  without re-charging the payer's USDC.
+- **x402 nonce + TTL strict validation** — `validatePaymentRequirementsForDecision`
+  now enforces `maxTimeoutSeconds ≤ 120` and rejects invalid/missing TTL values.
+  Prevents stale challenge replay attacks.
+- **Challenge-signature parameter** on `sap_profile_switch` — optional Ed25519
+  signature proving ownership of the target profile keypair. Prevents
+  impersonation via manual `.active-profile` file edits.
+- **`preloadPremiumProviders`** at server startup — providers are eagerly loaded
+  and connected when the server boots, not lazily on first request. The
+  `providerHealth` response now reflects real provider status immediately.
+- **3 new free meme-radar providers** (DexScreener + Solana RPC, no API keys):
+  - `meme.newlisting.alert` — detects newly listed tokens via DexScreener
+    `pairCreatedAt` with honeypot/dev-wallet risk flags.
+  - `meme.rugpull.detector` — on-chain mint/freeze authority checks via Solana
+  RPC + DexScreener liquidity drain detection. Risk score 0-1 with
+    exit/monitor/caution actions.
+  - `meme.social.sentiment` — bull/bear scores from DexScreener price momentum
+  (1h/6h/24h weighted) with volume acceleration confidence.
+- **Multi-feed Pyth** — `pyth.price.tick` and `pyth.volatility.watch` now poll
+  5 feeds by default (SOL/USD, WBTC/USD, WETH/USD, JUP/USD, USDC/USD) instead
+  of 1. All Pyth providers converted from WebSocket to HTTP polling
+  (`hermes.pyth.network/v2/updates/price/latest`).
+- **`signalConfidence` field** on Pyth price tick events — normalized 0-1
+  confidence score derived from `1 - (confidenceInterval / price)`, separate
+  from the raw Pyth `confidenceIntervalUsd`.
+- **ATR-based SL/TP** for volatility breakout signals — `stopLoss = entry ∓
+  2×ATR`, `takeProfit = entry ± 3×ATR`, with `minSpreadPct` filter (0.1%)
+  to discard signals too tight for on-chain execution. `action` changed from
+  `sell` to `swap` for spot-only agents.
+- **Applied filters in webhook relay response** — `sap_premium_webhook_relay`
+  now returns `subscribedEvents` and `appliedFilters` in the subscription
+  response for agent verification.
+- **`sap-mcp-optimization` skill** (devops category) — documents pre-estimate,
+  profile routing, build→sign→submit, x402 payment rules, readiness checks,
+  budget management, and premium stream consumption patterns.
+- Tool count: 317 → 319. Test count: 603 (unchanged, all updated).
+
+### Changed
+
+- **Premium capability prices halved** — all 13 premium capabilities now cost
+  50% less per unit/event:
+  - `jupiter.quote.delta`: $0.02 → $0.01/min
+  - `pyth.price.tick`: $0.015 → $0.0075/min
+  - `price.threshold.crossed`: $0.001 → $0.0005/event
+  - `jupiter.arbitrage.scan`: $0.05 → $0.025/min
+  - `pyth.volatility.watch`: $0.03 → $0.015/min
+  - `jupiter.route.optimized`: $0.025 → $0.0125/min
+  - `meme.newlisting.alert`: $0.003 → $0.0015/event
+  - `meme.social.sentiment`: $0.02 → $0.01/min
+  - `meme.rugpull.detector`: $0.04 → $0.02/min
+  - `meme.volume.spike`: $0.025 → $0.0125/min
+  - `tech.github.activity`: $0.002 → $0.001/event
+  - `tech.tvl.change`: $0.02 → $0.01/min
+  - `tech.tokenomics.analysis`: $0.004 → $0.002/event
+- **Heavy value-action price**: $0.15 → $0.05 (max accepted x402 for
+  value-action tier tools).
+- **Auto-pay threshold**: $0.02 → $0.05 (`SAP_MCP_X402_AUTO_PAY_MAX_USD`).
+  Read-premium ($0.001) and builder ($0.008) calls now auto-pay without
+  confirmation.
+- **Premium poll/flush/metrics FREE** — `sap_premium_stream_poll`,
+  `sap_premium_stream_flush`, `sap_premium_webhook_relay_status`,
+  `sap_premium_metrics`, `sap_premium_session_status`, `sap_premium_close_session`
+  moved to FREE_TOOLS + STRICT_FREE_TOOLS. No x402 charge for consumption
+  or diagnostics.
+- **Birdeye dependency removed** — all meme-radar capabilities now use
+  DexScreener + Solana RPC (both free, no API key). `SAP_MCP_PREMIUM_BIRDEYE_API_URL`
+  removed from all capability definitions and test fixtures.
+- **Builder tool descriptions** now mention `sap_payments_finalize_transaction`
+  as the 1-call alternative to the 3-step preview→sign→submit flow.
+- **`sap_estimate_tool_cost`** description now explicitly says "dry-run — no
+  charge, no x402 challenge" and includes `maxPriceUsd = estimate × 1.25`
+  guidance.
+- **`sap_quick_context` nextAction** now includes explicit routing guidance:
+  accountless hosted → use `sap_payments_profile_current`, `signerProfile`
+  per-call, `sap_build_sol_transfer`/`sap_build_spl_transfer`, no signing scripts.
+
+### Fixed
+
+- **Bridge cache coherence** — `sap_payments_profile_current` now re-reads
+  `.active-profile` and re-resolves the signer on every call. No more stale
+  signer after manual profile switch.
+- **`sap_profile_switch` guidance** — when the hosted server is accountless,
+  the response now provides 3 concrete options (local bridge, manual edit,
+  CLI command) instead of a bare "Profile does not exist" error. Includes
+  stale cache warning.
+- **Provider preload at startup** — providers are loaded and connected when
+  the server boots, not on first request. `providerHealth` is populated
+  immediately, not empty `{}`.
+- **Provider delivery loop logging** — all `catch` blocks in provider-bridge,
+  webhook-engine, premium-tools, and premium-routes now log errors to stderr
+  instead of swallowing silently.
+- **Meme volume spike provider** — replaced nonexistent DexScreener
+  `/v1/solana/volume` endpoint with real API (`/latest/dex/tokens/{mint}` and
+  `/latest/dex/search`). Added `activeMints` tracking, EMA baseline spike
+  detection, `MAX_MINTS_PER_POLL` limit.
+- **Pyth providers** — converted from WebSocket (`wss://hermes.pyth.network/v2/ws`,
+  rejects bare connections) to HTTP polling (`/v2/updates/price/latest`).
+- **All 12 provider import paths** — fixed `../../types.js` → `../types.js`.
+- **`onchain.solana.ts`** — imported `ConfirmedSignatureInfo` from
+  `@solana/web3.js` to fix `blockTime: number | null | undefined` type mismatch.
+- **Stale config references** — cleaned up all `0.02` auto-pay and `0.15`
+  heavy value refs in `.env.example`, `config.example.json`,
+  `config.secure-example.json`, `schema.json`, `mcp-client-injection.ts`, and
+  `explain-x402-settlement.prompt.ts`.
+
+### Security
+
+- x402 idempotency cache prevents double-charge on retry (point 2c).
+- x402 nonce + TTL strict validation caps challenge lifetime at 120s (point 5b).
+- Challenge-signature parameter on profile switch prevents impersonation (point 5a).
+- `secretMaterial: keypair-bytes-never-returned` guarantee maintained across
+  all signing tools.
+- No secrets, private keys, or keypair bytes in source code (security audit clean).
+- 0 dependency vulnerabilities (`pnpm audit`).
+
 ## 0.9.21 - 2026-07-25
 
 ### Added
