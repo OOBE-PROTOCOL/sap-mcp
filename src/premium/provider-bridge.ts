@@ -38,6 +38,13 @@ import { privatePremiumPluginsEnabled } from './private-manifest-loader.js';
 const adapterRegistry = new Map<string, PremiumProviderAdapter>();
 
 /**
+ * @description Registry of load failures keyed by `pluginId:capabilityId`.
+ * Records the error message for each adapter that was attempted but failed to load.
+ * Used by `getAllProviderHealth()` to surface load failures in metrics.
+ */
+const loadFailureRegistry = new Map<string, string>();
+
+/**
  * @name adapterKey
  * @description Build the registry key for a plugin/capability pair.
  *
@@ -92,20 +99,33 @@ export async function loadProviderAdapter(
   pluginId: string,
   capabilityId: string,
 ): Promise<PremiumProviderAdapter | null> {
-  if (!privatePremiumPluginsEnabled()) return null;
+  const key = adapterKey(pluginId, capabilityId);
+
+  if (!privatePremiumPluginsEnabled()) {
+    loadFailureRegistry.set(key, 'SAP_MCP_ENABLE_PREMIUM_PLUGINS is not set to true or 1.');
+    return null;
+  }
 
   const pluginDir = configuredPluginDir();
-  if (!pluginDir) return null;
+  if (!pluginDir) {
+    loadFailureRegistry.set(key, 'SAP_MCP_PLUGIN_DIR is not configured.');
+    return null;
+  }
 
   // Resolve the capability to check it exists and get provider env requirements.
   const resolved = findPremiumCapability(pluginId, capabilityId);
-  if (!resolved) return null;
+  if (!resolved) {
+    loadFailureRegistry.set(key, `Capability ${pluginId}:${capabilityId} not found in plugin catalog.`);
+    return null;
+  }
 
   // Check that all required provider env vars are set.
-  const providerReady = resolved.capability.providerEnv.every(envName => Boolean(process.env[envName]));
-  if (!providerReady) return null;
+  const missingEnv = resolved.capability.providerEnv.filter(envName => !process.env[envName]);
+  if (missingEnv.length > 0) {
+    loadFailureRegistry.set(key, `Missing required env vars: ${missingEnv.join(', ')}`);
+    return null;
+  }
 
-  const key = adapterKey(pluginId, capabilityId);
   const existing = adapterRegistry.get(key);
   if (existing) return existing;
 
@@ -119,21 +139,37 @@ export async function loadProviderAdapter(
   } else if (existsSync(tsPath)) {
     modulePath = tsPath;
   } else {
+    loadFailureRegistry.set(key, `Provider file not found at ${jsPath} (or .ts). Run 'npx tsc' in the subrepo to compile providers.`);
     return null;
   }
 
   try {
     const moduleUrl = pathToFileURL(modulePath).href;
     const imported = await import(moduleUrl) as { default?: () => PremiumProviderAdapter };
-    if (typeof imported.default !== 'function') return null;
+    if (typeof imported.default !== 'function') {
+      const msg = `Adapter module ${modulePath} has no default export function.`;
+      loadFailureRegistry.set(key, msg);
+      console.warn(`[provider-bridge] ${msg}`);
+      return null;
+    }
 
     const adapter = imported.default();
-    if (!adapter || typeof adapter.connect !== 'function') return null;
+    if (!adapter || typeof adapter.connect !== 'function') {
+      const msg = `Adapter factory for ${modulePath} returned invalid adapter (missing connect).`;
+      loadFailureRegistry.set(key, msg);
+      console.warn(`[provider-bridge] ${msg}`);
+      return null;
+    }
 
     await adapter.connect();
     adapterRegistry.set(key, adapter);
+    loadFailureRegistry.delete(key);
     return adapter;
-  } catch {
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const fullMsg = `Failed to load provider adapter from ${modulePath}: ${msg}`;
+    loadFailureRegistry.set(key, fullMsg);
+    console.error(`[provider-bridge] ${fullMsg}`);
     return null;
   }
 }
@@ -193,7 +229,14 @@ export async function getProviderHealth(
 
 /**
  * @name getAllProviderHealth
- * @description Get health status for all loaded provider adapters.
+ * @description Get health status for all configured provider adapters.
+ *
+ * Proactively attempts to load every capability whose `providerEnv` vars are
+ * all set, then reports health for each. Capabilities that fail to load get
+ * an unhealthy entry with the failure reason in `lastError`.
+ *
+ * This ensures `providerHealth` is never `{}` when providers are configured —
+ * the agent can always see WHY a provider is not loading.
  *
  * @returns Record keyed by `pluginId:capabilityId` → `ProviderHealth`.
  *
@@ -201,16 +244,44 @@ export async function getProviderHealth(
  */
 export async function getAllProviderHealth(): Promise<Record<string, ProviderHealth>> {
   const results: Record<string, ProviderHealth> = {};
-  for (const [key, adapter] of adapterRegistry.entries()) {
-    try {
-      results[key] = await adapter.health();
-    } catch (error) {
-      results[key] = {
-        healthy: false,
-        lastError: error instanceof Error ? error.message : 'Unknown provider health error.',
-      };
+
+  // Import here to avoid circular dependency at module load time.
+  const { listPremiumPlugins } = await import('./builtin-plugins.js');
+  const plugins = listPremiumPlugins();
+
+  for (const plugin of plugins) {
+    for (const cap of plugin.capabilities) {
+      if (!cap.requiresProvider) continue;
+
+      const key = adapterKey(plugin.id, cap.id);
+
+      // Skip if env vars are not configured — not a failure, just not ready.
+      const missingEnv = cap.providerEnv.filter(envName => !process.env[envName]);
+      if (missingEnv.length > 0) continue;
+
+      // Env is configured — attempt to load (no-op if already loaded).
+      const adapter = await loadProviderAdapter(plugin.id, cap.id);
+
+      if (adapter) {
+        try {
+          results[key] = await adapter.health();
+        } catch (error) {
+          results[key] = {
+            healthy: false,
+            lastError: error instanceof Error ? error.message : 'Unknown provider health error.',
+          };
+        }
+      } else {
+        // Load failed — surface the failure reason from the registry.
+        const failureReason = loadFailureRegistry.get(key) ?? 'Adapter failed to load for unknown reason.';
+        results[key] = {
+          healthy: false,
+          lastError: failureReason,
+        };
+      }
     }
   }
+
   return results;
 }
 
