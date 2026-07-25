@@ -2,6 +2,45 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.21 - 2026-07-25
+
+### Added
+
+- Added 5 new MCP tools addressing agent feedback on premium stream usability:
+  - `sap_premium_stream_poll` — Long-poll buffered premium stream events with
+    `sinceEventId` cursor. MCP-compatible alternative to SSE connections.
+  - `sap_premium_stream_flush` — Bulk flush buffered events with cursor pagination
+    for catch-up after disconnection.
+  - `sap_quick_context` — Single-call bootstrap aggregator (version, tools, pricing,
+    premium, skills, nextAction) reducing agent bootstrap from 5+ calls to 1.
+  - `sap_premium_webhook_relay` — Buffer-only webhook subscription for local agents
+    without a public HTTPS endpoint. Events stored server-side, consumed via poll/flush.
+  - `sap_premium_webhook_relay_status` — Relay config and buffered event count lookup.
+- All 5 tools are free (no x402 charge) and transport-agnostic (work with SSE,
+  WebSocket, and any MCP transport).
+- Pricing tiers in `sap_quick_context` now include actual USD amounts inline.
+
+### Improved
+
+- `sap_skills_bundle` description now documents the existing `skills[]` filter +
+  `includeContents:false` metadata-only pattern for efficient selective loading.
+- `sap_premium_stream_poll` description clarifies it is transport-agnostic.
+- Tool count: 312 → 317. Premium category: 13 → 17. New category: quickContext: 1.
+- Test count: 601 → 603 (2 new webhook relay tests).
+
+### Fixed
+
+- GitHub Actions CI: added `pnpm config set minimumReleaseAge 0` step to
+  `desktop-release.yml` to fix `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`.
+- Removed `package-lock=false` from `.npmrc` (prevented pnpm from reading
+  `pnpm-lock.yaml` on local dev).
+- Regenerated `pnpm-lock.yaml` with pnpm 11.7.0 to fix
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on CI overrides.
+- Changed `postcss` override from `8.5.18` to `^8.5.18` (range, not exact).
+- Renamed tag `v0.9.20` → `0.9.20` (consistent with all prior tags).
+- Updated all `0.9.18` references to `0.9.20` across docs, server.json, README,
+  USER_DOCS, and desktop wizard renderer.
+
 ## 0.9.20 - 2026-07-25
 
 ### Added
