@@ -16,6 +16,7 @@ import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerEstimateToolCost } from './estimate-tool-cost.js';
+import { registerQuickContextTool } from './quick-context-tool.js';
 import { registerPremiumTools } from './premium-tools.js';
 import { registerPerpTools } from './perp-tools.js';
 
@@ -69,6 +70,11 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register the free pre-call cost estimator so agents can plan USDC spending.
   registerEstimateToolCost(server, context);
+
+  // Register the free single-call bootstrap context aggregator so agents can
+  // load version, tool counts, pricing tiers, premium capabilities, and skills
+  // in one tool call instead of 5+ separate discovery calls.
+  registerQuickContextTool(server, context);
 
   // Register premium plugin/runtime discovery and session-planning tools.
   registerPremiumTools(server, context);

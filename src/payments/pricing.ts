@@ -143,6 +143,7 @@ const FREE_TOOLS = new Set([
   'sap_premium_plugin_template',
   'sap_premium_session_start',
   'sap_premium_session_status',
+  'sap_quick_context',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -195,6 +196,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_premium_plugin_template',
   'sap_premium_session_start',
   'sap_premium_session_status',
+  'sap_quick_context',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',

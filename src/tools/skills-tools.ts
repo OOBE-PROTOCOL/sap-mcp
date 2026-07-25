@@ -126,8 +126,9 @@ function assertSafeSkillName(skillName: string): void {
 /**
  * @name listBundledSkillNames
  * @description Lists bundled skill directories.
+ * @returns Sorted array of bundled skill directory names that contain a SKILL.md entrypoint.
  */
-function listBundledSkillNames(): string[] {
+export function listBundledSkillNames(): string[] {
   const skillsRoot = getSkillsRoot();
   if (!existsSync(skillsRoot)) {
     return [];

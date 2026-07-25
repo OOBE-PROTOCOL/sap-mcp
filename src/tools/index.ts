@@ -37,6 +37,9 @@ export { registerAgentStartTool } from './agent-start-tool.js';
 // REAL PREMIUM RUNTIME TOOLS — typed plugin catalogs, stream/webhook contracts, and session planning
 export { registerPremiumTools } from './premium-tools.js';
 
+// REAL QUICK CONTEXT TOOL — single-call bootstrap aggregator (version, tools, pricing, premium, skills)
+export { registerQuickContextTool } from './quick-context-tool.js';
+
 // REAL SKILL TOOLS — list, bundle, and install SAP MCP agent skills
 export { registerSkillsTools } from './skills-tools.js';
 

@@ -108,8 +108,9 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(314);
+    expect(names).toHaveLength(315);
     expect(new Set(names).size).toBe(names.length);
+    expect(names).toContain('sap_quick_context');
     expect(names).toContain('sol_get_balance');
     expect(names).toContain('coingecko_getTokenPrice');
     expect(names).toContain('jupiter_getQuote');
