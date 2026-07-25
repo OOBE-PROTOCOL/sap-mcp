@@ -437,7 +437,7 @@ export async function saveDesktopWizardDraft(
     });
   }
 
-  if (draft.installAddonBundle) {
+  if (draft.installAddonBundle || draft.setupMode === 'payments-only') {
     const addonDir = join(getPreferredConfigDirForPlatform(homeDir, platform), 'addons', 'x402-paid-call');
     const addon = installX402PaidCallAddon(addonDir);
     runtimeActions.push({

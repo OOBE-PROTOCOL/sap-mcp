@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.9.30 - 2026-07-25
+## 0.9.3 - 2026-07-25
 
 ### Added — Local Agent Memory Subsystem (SQLite FTS5)
 
