@@ -193,7 +193,14 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
   const toolsByCategory = CAPABILITIES.tools.categories as Record<string, number>;
   const totalTools = CAPABILITIES.tools.count;
 
-  const pricingTiers = ['free', 'read-premium', 'builder', 'value-action', 'batch'];
+  const pricingTiers = [
+    'free=$0',
+    'read-premium=$0.001',
+    'builder=$0.008',
+    'value-action=$0.04',
+    'heavy-value=$0.15',
+    'batch=clamped sum',
+  ];
 
   const summary = buildSummaryString({
     sections,
