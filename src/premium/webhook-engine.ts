@@ -68,8 +68,39 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500;
 
 /**
+ * @name RELAY_TARGET_URL
+ * @description Sentinel target URL for buffer-only (relay) webhook subscriptions.
+ *
+ * When a subscription's `targetUrl` equals this value, the webhook engine skips
+ * HTTP POST delivery entirely. Events are still appended to the event store via
+ * `appendEvent()`, and the agent consumes them through
+ * `sap_premium_stream_poll` / `sap_premium_stream_flush`. This eliminates the
+ * need for a public HTTPS endpoint — agents running locally can receive webhook
+ * events by polling the server-side buffer.
+ *
+ * @internal
+ */
+const RELAY_TARGET_URL = 'relay://buffer';
+
+/**
+ * @name isRelayTarget
+ * @description Returns true when a target URL is the buffer-only relay sentinel.
+ *
+ * @param targetUrl - The target URL to check.
+ * @returns True if the URL is the relay buffer sentinel.
+ *
+ * @internal
+ */
+function isRelayTarget(targetUrl: string): boolean {
+  return targetUrl === RELAY_TARGET_URL;
+}
+
+/**
  * @name validateWebhookUrl
  * @description Validate that a webhook target URL is safe for delivery.
+ *
+ * Accepts the relay sentinel `relay://buffer` as a buffer-only delivery mode
+ * that never makes an outbound HTTP call.
  *
  * Rejects:
  *   - Non-HTTPS URLs in production (allow HTTP for localhost testing).
@@ -81,6 +112,9 @@ const RETRY_BASE_DELAY_MS = 500;
  * @internal
  */
 function validateWebhookUrl(targetUrl: string): boolean {
+  // The relay sentinel is always valid — it never makes an outbound HTTP call.
+  if (isRelayTarget(targetUrl)) return true;
+
   let parsed: URL;
   try {
     parsed = new URL(targetUrl);
@@ -289,6 +323,79 @@ export async function registerWebhook(
 }
 
 /**
+ * @name RELAY_TARGET_URL_EXPORT
+ * @description Exported relay sentinel so premium-tools and tests can reference it
+ *   without duplicating the literal.
+ */
+export const PREMIUM_WEBHOOK_RELAY_TARGET_URL = RELAY_TARGET_URL;
+
+/**
+ * @name registerWebhookRelay
+ * @description Register a buffer-only (relay) webhook subscription for an active
+ *   premium session.
+ *
+ * Unlike `registerWebhook`, this does not require a public HTTPS endpoint.
+ * Events matching the subscription are appended to the event store by the
+ * delivery loop and the agent consumes them via `sap_premium_stream_poll` or
+ * `sap_premium_stream_flush`. This solves the core problem for agents running
+ * locally without a publicly reachable HTTPS callback URL.
+ *
+ * @param sessionId - The activated premium session id.
+ * @param events    - Exact event ids to buffer.
+ * @returns The `PremiumWebhookSubscription`, or `null` if the session is not
+ *   active or no events were provided.
+ *
+ * @usedBy `premium-tools.ts` → MCP tool `sap_premium_webhook_relay`
+ */
+export async function registerWebhookRelay(
+  sessionId: string,
+  events: string[],
+): Promise<PremiumWebhookSubscription | null> {
+  const session = getPremiumSession(sessionId);
+  if (!session || session.status !== 'active') return null;
+  if (events.length === 0) return null;
+
+  const subscription: PremiumWebhookSubscription = {
+    subscriptionId: `wh-relay-${randomUUID()}`,
+    sessionId,
+    pluginId: session.pluginId,
+    capabilityId: session.capabilityId,
+    targetUrl: RELAY_TARGET_URL,
+    events,
+    signingPublicKey: undefined,
+    createdAt: new Date().toISOString(),
+    deliveriesAttempted: 0,
+    deliveriesSucceeded: 0,
+    lastDeliveryAt: null,
+    lastDeliveryStatus: null,
+    active: true,
+  };
+
+  webhookSubscriptions.set(subscription.subscriptionId, subscription);
+  return subscription;
+}
+
+/**
+ * @name getRelaySubscriptionsForSession
+ * @description Return all active relay (buffer-only) webhook subscriptions for a
+ *   session id. Used by the relay status tool to report buffered event counts.
+ *
+ * @param sessionId - The premium session id.
+ * @returns Array of relay subscriptions for the session.
+ *
+ * @usedBy `premium-tools.ts` → MCP tool `sap_premium_webhook_relay_status`
+ */
+export function getRelaySubscriptionsForSession(sessionId: string): PremiumWebhookSubscription[] {
+  const results: PremiumWebhookSubscription[] = [];
+  for (const sub of webhookSubscriptions.values()) {
+    if (sub.sessionId === sessionId && isRelayTarget(sub.targetUrl)) {
+      results.push({ ...sub });
+    }
+  }
+  return results;
+}
+
+/**
  * @name startWebhookDelivery
  * @description Start the webhook delivery loop for a subscription.
  *
@@ -327,8 +434,36 @@ export async function startWebhookDelivery(subscription: PremiumWebhookSubscript
       deliveredAt: new Date().toISOString(),
     });
 
-    // Deliver via HTTP POST with retries.
-    await deliverWebhook(subscription, event);
+    // Relay (buffer-only) mode: skip HTTP POST delivery entirely.
+    // The event is already in the event store; the agent consumes it via
+    // sap_premium_stream_poll / sap_premium_stream_flush.
+    if (isRelayTarget(subscription.targetUrl)) {
+      subscription.deliveriesAttempted++;
+      subscription.deliveriesSucceeded++;
+      subscription.lastDeliveryAt = new Date().toISOString();
+      subscription.lastDeliveryStatus = 200;
+
+      const relayDelivery: PremiumWebhookDelivery = {
+        deliveryId: `wh-relay-${randomUUID()}`,
+        subscriptionId: subscription.subscriptionId,
+        eventId: event.eventId,
+        eventType: event.eventType,
+        deliveredAt: new Date().toISOString(),
+        signature: 'relay-buffer',
+        httpStatus: 200,
+        success: true,
+        responseBody: 'Buffered for agent poll consumption.',
+        retryCount: 0,
+      };
+      deliveryRecords.set(relayDelivery.deliveryId, relayDelivery);
+      if (deliveryRecords.size > MAX_DELIVERY_RECORDS) {
+        const oldestKey = deliveryRecords.keys().next().value as string | undefined;
+        if (oldestKey) deliveryRecords.delete(oldestKey);
+      }
+    } else {
+      // Deliver via HTTP POST with retries.
+      await deliverWebhook(subscription, event);
+    }
 
     // Decrement quota and auto-close at zero.
     const remaining = decrementSessionQuota(subscription.sessionId);

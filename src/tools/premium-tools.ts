@@ -14,6 +14,9 @@ import {
   activatePremiumSession,
   closeSession,
   registerWebhook,
+  registerWebhookRelay,
+  getRelaySubscriptionsForSession,
+  startWebhookDelivery,
   unregisterWebhook,
   getWebhookSubscription,
   getWebhookDeliveries,
@@ -830,6 +833,174 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
+  // --- Webhook relay (buffer-only delivery for local agents) ---
+  // Agents running locally without a public HTTPS endpoint cannot receive
+  // traditional webhook deliveries. The relay mode buffers events server-side
+  // in the event store; the agent then consumes them via
+  // sap_premium_stream_poll / sap_premium_stream_flush — standard MCP tool
+  // calls that work over any transport.
+
+  registerTool(
+    server,
+    'sap_premium_webhook_relay',
+    {
+      title: 'Register Premium Webhook Relay (Buffer-Only)',
+      description:
+        'Registers a buffer-only webhook subscription for an active premium session. Unlike sap_premium_webhook_register, this does not require a public HTTPS endpoint — events matching the subscription are buffered server-side in the event store and the agent consumes them via sap_premium_stream_poll or sap_premium_stream_flush. Use this when the agent runs locally or behind NAT and cannot expose a publicly reachable HTTPS callback URL. The session must be active (activated via sap_premium_activate_session). Events are filtered to the exact event ids listed in the request.',
+      inputSchema: {
+        type: 'object',
+        required: ['sessionId', 'events'],
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'Active premium session id to buffer webhook events for.',
+          },
+          events: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string', description: 'Event id to buffer, from the capability delivery contract.' },
+            description: 'Exact event ids to buffer and deliver via poll/flush. At least one event id is required.',
+          },
+          filters: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Optional narrow filters applied to the provider subscription, forwarded to the delivery loop.',
+          },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        required: ['subscription', 'consumption'],
+        properties: {
+          subscription: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Relay webhook subscription record with subscriptionId, targetUrl (relay://buffer), events, and delivery stats. Null if registration failed.',
+          },
+          consumption: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Consumption guidance listing the poll and flush tool names the agent should use to drain the buffer.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    async (input: unknown) => {
+      const raw = input as Record<string, unknown>;
+      const sessionId = readString(raw.sessionId);
+      const events = Array.isArray(raw.events) ? raw.events.filter((e): e is string => typeof e === 'string' && e.trim().length > 0) : [];
+      if (!sessionId || events.length === 0) {
+        return createStructuredJsonResponse({
+          subscription: null,
+          consumption: {
+            reason: 'sessionId and at least one event id are required.',
+            pollTool: 'sap_premium_stream_poll',
+            flushTool: 'sap_premium_stream_flush',
+          },
+        }, { isError: true });
+      }
+
+      const subscription = await registerWebhookRelay(sessionId, events);
+      if (!subscription) {
+        return createStructuredJsonResponse({
+          subscription: null,
+          consumption: {
+            reason: 'Session is not active or no matching events. Activate the session with sap_premium_activate_session first.',
+            pollTool: 'sap_premium_stream_poll',
+            flushTool: 'sap_premium_stream_flush',
+          },
+        }, { isError: true });
+      }
+
+      // Start the buffer-only delivery loop in the background. For relay
+      // subscriptions the loop appends events to the store without making any
+      // outbound HTTP call.
+      void startWebhookDelivery(subscription).catch(() => {
+        // Delivery errors are recorded per-event in the delivery records.
+      });
+
+      return createStructuredJsonResponse({
+        subscription,
+        consumption: {
+          mode: 'buffer',
+          pollTool: 'sap_premium_stream_poll',
+          flushTool: 'sap_premium_stream_flush',
+          instruction: 'Poll the buffer with sap_premium_stream_poll using this sessionId, or drain in bulk with sap_premium_stream_flush. No HTTPS endpoint is required.',
+        },
+      });
+    },
+  );
+
+  registerTool(
+    server,
+    'sap_premium_webhook_relay_status',
+    {
+      title: 'Premium Webhook Relay Status',
+      description:
+        'Returns the status of buffer-only (relay) webhook subscriptions for a session, including the relay configuration, buffered event count, and per-subscription delivery stats. Use this to check how many events are waiting in the server-side buffer before calling sap_premium_stream_poll or sap_premium_stream_flush to consume them.',
+      inputSchema: {
+        type: 'object',
+        required: ['sessionId'],
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'Premium session id to inspect relay subscriptions and buffered event counts for.',
+          },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        required: ['sessionId', 'relaySubscriptions', 'bufferedEventCount', 'sessionStatus'],
+        properties: {
+          sessionId: {
+            type: 'string',
+            description: 'The session id that was queried.',
+          },
+          relaySubscriptions: {
+            type: 'array',
+            description: 'Active relay (buffer-only) webhook subscriptions for the session.',
+            items: { type: 'object', additionalProperties: true, description: 'Relay webhook subscription record.' },
+          },
+          bufferedEventCount: {
+            type: 'number',
+            description: 'Total number of events currently buffered in the event store for this session (across all relay subscriptions).',
+          },
+          sessionStatus: {
+            type: 'string',
+            description: 'Current session status (active, closed, pending_payment, not_found).',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    async (input: unknown) => {
+      const raw = input as Record<string, unknown>;
+      const sessionId = readString(raw.sessionId);
+      if (!sessionId) {
+        return createStructuredJsonResponse({
+          sessionId: null,
+          relaySubscriptions: [],
+          bufferedEventCount: 0,
+          sessionStatus: 'invalid_request',
+        }, { isError: true });
+      }
+
+      const session = getPremiumSession(sessionId);
+      const relaySubscriptions = getRelaySubscriptionsForSession(sessionId);
+      const bufferedEvents = getEvents({ sessionId, limit: 100_000 });
+
+      return createStructuredJsonResponse({
+        sessionId,
+        relaySubscriptions,
+        bufferedEventCount: bufferedEvents.length,
+        sessionStatus: session?.status ?? 'not_found',
+      });
+    },
+  );
+
   // --- Metrics (Layer 5: Monitoring) ---
 
   registerTool(
@@ -874,7 +1045,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     {
       title: 'Poll Premium Stream Events',
       description:
-        'Long-poll buffered premium stream events for an active session. Returns events that have been delivered to the server-side event buffer since the last poll. This is the MCP-compatible alternative to holding open an SSE connection — call this tool periodically to drain the event buffer. Events are returned oldest-first. Use the sinceEventId cursor from the last poll to fetch only new events. If no events are available, returns an empty array (does not block).',
+        'Long-poll buffered premium stream events for an active session. Returns events that have been delivered to the server-side event buffer since the last poll. This is the MCP-compatible alternative to holding open an SSE connection — call this tool periodically to drain the event buffer. This tool is transport-agnostic: because it is a standard MCP tool call (request/response), it works over any MCP transport including stdio, streamable-http, and WebSocket-based MCP transports. There is no need for a separate WebSocket endpoint — this poll tool IS the WebSocket-compatible consumption path. Events are returned oldest-first. Use the sinceEventId cursor from the last poll to fetch only new events. If no events are available, returns an empty array (does not block).',
       inputSchema: {
         type: 'object',
         required: ['sessionId'],

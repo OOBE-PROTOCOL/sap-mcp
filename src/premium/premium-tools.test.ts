@@ -68,10 +68,12 @@ const PREMIUM_TOOL_NAMES = [
   'sap_premium_plugin_template',
   'sap_premium_session_start',
   'sap_premium_session_status',
+  'sap_premium_webhook_relay',
+  'sap_premium_webhook_relay_status',
 ] as const;
 
 describe('premium MCP tools', () => {
-  it('registers all 7 premium tool names', async () => {
+  it('registers all expected premium tool names', async () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map(tool => tool.name);
 
@@ -199,5 +201,34 @@ describe('premium MCP tools', () => {
     expect(sessions.length).toBeGreaterThanOrEqual(1);
     expect(sessions[0]).toHaveProperty('sessionId');
     expect(sessions[0]).toHaveProperty('status');
+  });
+
+  it('sap_premium_webhook_relay_status returns not_found for an unknown session', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+
+    const response = await server.toolHandlers?.sap_premium_webhook_relay_status?.({
+      sessionId: 'nonexistent-relay-session',
+    });
+
+    expect(response?.structuredContent).toBeDefined();
+    expect(response?.structuredContent?.sessionStatus).toBe('not_found');
+    expect(response?.structuredContent?.bufferedEventCount).toBe(0);
+    expect(response?.structuredContent?.relaySubscriptions).toEqual([]);
+  });
+
+  it('sap_premium_webhook_relay rejects missing sessionId or events', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+
+    const noSession = await server.toolHandlers?.sap_premium_webhook_relay?.({
+      events: ['jupiter.quote.delta'],
+    });
+    expect(noSession?.structuredContent?.subscription).toBeNull();
+    expect(noSession?.isError).toBe(true);
+
+    const noEvents = await server.toolHandlers?.sap_premium_webhook_relay?.({
+      sessionId: 'some-session',
+    });
+    expect(noEvents?.structuredContent?.subscription).toBeNull();
+    expect(noEvents?.isError).toBe(true);
   });
 });
