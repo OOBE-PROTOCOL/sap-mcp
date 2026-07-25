@@ -322,26 +322,26 @@ export const MEME_RADAR_PREMIUM_PLUGINS: PremiumPluginManifest[] = [
       memeWebhookCapability(
         'meme.newlisting.alert',
         'New token listing alerts',
-        'Delivers signed webhook callbacks when new tokens are listed on Raydium, Orca, or Meteora. Each alert includes liquidity check results, honeypot scan status, and dev wallet holding analysis. Agents receive mint address, pool details, risk flags, and recommended action for instant decision-making on new meme token opportunities.',
+        'Delivers signed webhook callbacks when new tokens are listed on Raydium, Orca, or Meteora. Uses DexScreener pairCreatedAt to detect tokens listed within the last 60 minutes. Each alert includes liquidity check results, initial volume, risk flags (low liquidity, low volume, high FDV), and recommended action for instant decision-making on new meme token opportunities.',
         ['meme.newlisting.alert'],
         0.0015, // $0.0015/event
-        ['SAP_MCP_PREMIUM_BIRDEYE_API_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
+        ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL', 'SAP_MCP_PREMIUM_WEBHOOK_SIGNER'],
       ),
       memeStreamCapability(
         'meme.social.sentiment',
-        'Social sentiment stream',
-        'Streams real-time social sentiment scores for specified meme tokens. Continuously aggregates social signals from Twitter, Telegram, and Discord to produce bull/bear scores. Agents receive mint, bull score, bear score, confidence, and sentiment trend direction for social-driven trading decisions.',
+        'Market sentiment stream',
+        'Streams real-time market sentiment scores for specified meme tokens. Derives bull/bear scores from DexScreener price momentum (1h, 6h, 24h changes) and volume acceleration as a free sentiment proxy — no paid social media API required. Agents receive mint, bull score, bear score, confidence, trend direction, and signal confidence for sentiment-driven trading decisions.',
         ['social.sentiment'],
         0.01, // $0.01/min
-        ['SAP_MCP_PREMIUM_BIRDEYE_API_URL'],
+        ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL'],
       ),
       memeStreamCapability(
         'meme.rugpull.detector',
         'Rugpull risk detector',
-        'Continuously monitors pool liquidity changes, dev wallet movements, mint authority status, and freeze authority status for specified meme tokens. Emits risk alerts when rugpull indicators are detected — liquidity drain, dev wallet dump, mint authority activation, or freeze authority usage. Agents receive risk level, affected mint, and recommended action (avoid/exit).',
+        'Continuously monitors pool liquidity changes via DexScreener and checks mint authority + freeze authority status via Solana RPC for specified meme tokens. Emits risk alerts when rugpull indicators are detected — liquidity drain (>30%), mint authority active, freeze authority active, or very low liquidity. Agents receive risk score (0-1), risk factors, affected mint, and recommended action (exit/monitor/caution).',
         ['rugpull.risk'],
         0.02, // $0.02/min
-        ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL', 'SAP_MCP_PREMIUM_BIRDEYE_API_URL'],
+        ['SAP_MCP_PREMIUM_DEXSCREENER_API_URL', 'SAP_MCP_PREMIUM_SOLANA_RPC_URL'],
       ),
       memeStreamCapability(
         'meme.volume.spike',
