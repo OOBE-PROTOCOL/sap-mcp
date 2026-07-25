@@ -1508,7 +1508,7 @@ async function readBalanceSnapshot(
 
 function readAgentCommercePolicy(): AgentCommercePolicySnapshot {
   return {
-    autoPayX402BelowUsd: readPositiveNumberEnv('SAP_MCP_X402_AUTO_PAY_MAX_USD', 0.02),
+    autoPayX402BelowUsd: readPositiveNumberEnv('SAP_MCP_X402_AUTO_PAY_MAX_USD', 0.05),
     dailyX402LimitUsd: readOptionalPositiveNumberEnv('SAP_MCP_X402_DAILY_LIMIT_USD'),
     maxTradeUsd: readOptionalPositiveNumberEnv('SAP_MCP_MAX_TRADE_USD') ?? 10,
     maxSlippageBps: readPositiveNumberEnv('SAP_MCP_MAX_SLIPPAGE_BPS', 100),

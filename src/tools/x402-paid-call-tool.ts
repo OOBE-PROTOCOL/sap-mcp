@@ -96,6 +96,7 @@ interface PaymentsFinalizeTransactionToolInput {
   submitViaRelay?: boolean;
   submitRelayUrl?: string;
   confirm?: boolean;
+  signerProfile?: string;
   intentId?: string;
 }
 
@@ -826,6 +827,10 @@ function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcp
           type: 'boolean',
           description: 'Must be true. Confirms the user allows the local SAP MCP signer to sign this transaction.',
         },
+        signerProfile: {
+          type: 'string',
+          description: 'Optional profile name to use for signing instead of the global active profile. When provided, the bridge loads config-<signerProfile>.json and uses its keypair. This eliminates the need to switch .active-profile manually — multiple profiles can coexist in the same session. Falls back to the active profile if omitted.',
+        },
         intentId: {
           type: 'string',
           description: 'Optional caller-provided id used to bind preview, signature, submission, and audit output.',
@@ -1322,6 +1327,7 @@ function parseFinalizeTransactionInput(input: unknown): PaymentsFinalizeTransact
     submitViaRelay: record.submitViaRelay !== false,
     submitRelayUrl: record.submitRelayUrl,
     confirm: record.confirm === true,
+    signerProfile: typeof record.signerProfile === 'string' ? record.signerProfile : undefined,
     intentId: record.intentId,
   };
 }

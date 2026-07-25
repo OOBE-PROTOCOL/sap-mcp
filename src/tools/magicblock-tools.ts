@@ -822,7 +822,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<DepositInput>('magicblock_deposit',
-    'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Do not create local signing scripts. Builder fee applies.',
+    'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Do not create local signing scripts. Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), amount: f.number('Base-unit amount to deposit (integer, minimum 1)'), mint: f.string('SPL mint. Defaults to USDC (mainnet) or devnet USDC'), cluster: clusterField, validator: validatorField, initIfMissing: f.boolean('Initialize the transfer queue if missing (default true)'), initVaultIfMissing: f.boolean('Initialize the vault if missing (default true)'), initAtasIfMissing: f.boolean('Initialize associated token accounts if missing (default true)'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'amount']),
     async (raw) => {
       try {
@@ -840,7 +840,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<TransferInput>('magicblock_transfer',
-    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
+    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({
       from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
       amount: f.number('Base-unit amount to transfer (integer, minimum 1)'),
@@ -882,7 +882,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<WithdrawInput>('magicblock_withdraw',
-    'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
+    'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), mint: f.string('SPL mint on Solana'), amount: f.number('Base-unit amount to withdraw (integer, minimum 1)'), cluster: clusterField, validator: f.string('Optional ER validator pubkey'), initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'), initAtasIfMissing: f.boolean('Initialize ATAs if missing (default true)'), escrowIndex: f.number('Optional escrow index for the withdrawal'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'mint', 'amount']),
     async (raw) => {
       try {
@@ -952,7 +952,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   // ═══════════════════════════════════════════════════════════════
 
   register<InitializeMintInput>('magicblock_initializeMint',
-    'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction. Builder fee applies.',
+    'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that will sign the transaction'), mint: f.string('SPL mint to initialize a transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['owner', 'mint']),
     async (raw) => {
       try {

@@ -58,6 +58,7 @@ export interface FinalizeTransactionInput {
   submitViaRelay?: boolean;
   submitRelayUrl?: string;
   confirm?: boolean;
+  signerProfile?: string;
   intentId?: string;
 }
 
@@ -512,10 +513,6 @@ export async function finalizeTransactionWithLocalSigner(
   context: SapMcpContext,
   input: FinalizeTransactionInput,
 ): Promise<Record<string, unknown>> {
-  if (!context.signer) {
-    throw new Error('No local signer configured. Run the SAP MCP wizard full setup or repair the local sap_payments bridge, then restart the agent runtime.');
-  }
-
   if (input.confirm !== true) {
     throw new Error('confirm: true is required before the local SAP MCP signer can finalize a transaction.');
   }
@@ -525,30 +522,69 @@ export async function finalizeTransactionWithLocalSigner(
     throw new Error('transaction or transactionBase64 is required.');
   }
 
+  // Resolve signer: use signerProfile if provided, otherwise fall back to the
+  // active context signer. This eliminates the need to switch .active-profile
+  // manually — multiple profiles can coexist in the same session.
+  let signer = context.signer;
+  let signerProfileName: string | undefined;
+
+  if (input.signerProfile) {
+    const { loadProfileConfig } = await import('../config/profiles.js');
+    const { resolveSigner } = await import('../signer/signer-resolver.js');
+    const profileConfig = loadProfileConfig(input.signerProfile);
+    if (!profileConfig) {
+      throw new Error(
+        `signerProfile "${input.signerProfile}" not found. ` +
+        `Available profiles can be listed with sap_profile_list (local mode) or by checking ~/.config/mcp-sap/config-*.json files. ` +
+        `If the hosted server is accountless, use the local sap_payments bridge to inspect profiles.`,
+      );
+    }
+    // FullConfig does not include monetization — merge with the active context
+    // config to provide the required SapMcpConfig shape for resolveSigner.
+    const mergedConfig = { ...context.config, ...profileConfig };
+    const signerResult = await resolveSigner(mergedConfig);
+    if (!signerResult.signer) {
+      throw new Error(
+        `signerProfile "${input.signerProfile}" has no signer configured. ` +
+        `Ensure the profile config has a walletPath or externalSignerUrl set. ` +
+        `Run: sap-mcp-config wizard --profile ${input.signerProfile} to configure.`,
+      );
+    }
+    signer = signerResult.signer;
+    signerProfileName = input.signerProfile;
+  }
+
+  if (!signer) {
+    throw new Error('No local signer configured. Run the SAP MCP wizard full setup or repair the local sap_payments bridge, then restart the agent runtime.');
+  }
+
   const encoding = input.encoding ?? 'base64';
   const transaction = deserializeTransaction(transactionText, encoding);
   const preview = describeTransaction(transaction, context);
-  const nativeTransfer = await assertTransactionPolicy(context, transaction, context.signer.publicKey);
-  const signedTransaction = await context.signer.signTransaction(transaction);
+  const nativeTransfer = await assertTransactionPolicy(context, transaction, signer.publicKey);
+  const signedTransaction = await signer.signTransaction(transaction);
   const signedTransactionBase64 = serializeTransaction(signedTransaction);
 
   const result: Record<string, unknown> = {
     success: true,
     action: input.submit === true ? 'preview-sign-submit' : 'preview-sign',
     submitted: false,
-    signerPublicKey: context.signer.publicKey.toBase58(),
+    signerPublicKey: signer.publicKey.toBase58(),
+    signerProfile: signerProfileName ?? null,
     nativeTransferSol: nativeTransfer.sol,
     preview: {
       ...preview,
       canSign: true,
-      signer: context.signer.publicKey.toBase58(),
+      signer: signer.publicKey.toBase58(),
+      signerProfile: signerProfileName ?? null,
     },
     signedTransaction: signedTransactionBase64,
     encoding: 'base64',
     audit: {
       intentId: input.intentId ?? `sap-tx-${Date.now()}`,
       profileMode: context.config.mode,
-      signerPublicKey: context.signer.publicKey.toBase58(),
+      signerProfile: signerProfileName ?? null,
+      signerPublicKey: signer.publicKey.toBase58(),
       previewed: true,
       signedLocally: true,
       submitted: false,

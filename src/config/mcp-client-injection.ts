@@ -581,7 +581,7 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
         arguments: {
           toolName: 'sap_list_all_agents',
           arguments: { limit: 5 },
-          maxPriceUsd: 0.02,
+          maxPriceUsd: 0.05,
           confirm: true,
         },
       }),
