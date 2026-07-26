@@ -107,6 +107,10 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           const prices = monetization?.prices;
           if (prices) {
             switch (tier) {
+              case 'micro-read':
+                priceUsd = prices.microReadUsd;
+                reason = 'fresh lightweight hosted data read';
+                break;
               case 'read-premium':
                 priceUsd = prices.readPremiumUsd;
                 reason = 'premium read/discovery tool';
@@ -133,9 +137,10 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           } else {
             // Fallback to defaults if monetization config is not available
             switch (tier) {
-              case 'read-premium': priceUsd = 0.001; break;
-              case 'builder': priceUsd = 0.008; break;
-              case 'value-action': priceUsd = 0.09; break;
+              case 'micro-read': priceUsd = 0.001; break;
+              case 'read-premium': priceUsd = 0.002; break;
+              case 'builder': priceUsd = 0.006; break;
+              case 'value-action': priceUsd = 0.06; break;
               default: priceUsd = 0.001;
             }
           }

@@ -24,7 +24,7 @@ Always inspect runtime context through MCP tools, not by reading config files:
 1. `sap_agent_start`
 2. `sap_agent_runtime_status` with `intent: "connection"`, `"paid-call"`, `"registry-write"`, `"transaction-finalize"`, `"escrow"`, `"identity"`, or `"general"`
 3. `sap_prepare_action` with the closest intent before paid calls, swaps, registry writes, identity updates, Escrow V2, external x402 agents, premium streams, or transaction finalization
-4. `sap_agent_context` for free compact agent/directory orientation before paid discovery
+4. `sap_agent_context` for compact micro-read agent/directory orientation before broad discovery
 5. `sap_skills_bundle` with `includeContents: true`
 6. `sap_pricing_catalog` before estimating hosted paid call tiers
 7. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
@@ -65,8 +65,8 @@ and error strings unchanged.
   classifications. It must not be used as truth for token prices, Jupiter
   quotes/orders, balances, blockhashes, simulations, liquidity, routes, or SAP
   account state.
-- Use free exact/base reads first when the wallet, PDA, or a small orientation
-  page is enough: `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
+- Use low-cost exact/base micro-reads first when the wallet, PDA, or a small
+  orientation page is enough: `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
   `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
   `sap_list_agents` with `limit <= 20`, `view: "compact"`, and
   `includeProtocolIndexes: false`.
@@ -77,9 +77,9 @@ and error strings unchanged.
 - Use `sap_list_all_agents` when the user asks for all current SAP ecosystem
   agents. It performs global on-chain `AgentAccount` enumeration and returns
   `pagination.nextCursor` when more pages are available.
-- Use `sap_list_agents` for a free compact orientation page first. Larger
+- Use `sap_list_agents` for a compact micro-read orientation page first. Larger
   pages, `view: "full"`, hydration, protocol index summaries, and global scans
-  are paid read-premium.
+  are read-premium.
 - Use `sap_fetch_protocol_index` when a specific protocol ID is known.
 - If a capability lookup returns zero results, retry with `query` or `wallet`
   before saying an agent is absent. AgentAccount rows are canonical; indexes can
@@ -192,13 +192,13 @@ the local `sap_payments.sap_payments_readiness` bridge when it is configured.
 Use `sap_payments.sap_payments_profile_current` only as a narrower compatibility
 profile check.
 
-Basic wallet reads are free on hosted SAP MCP. Call `sol_get_balance`,
+Basic wallet reads are hosted micro-reads. Call `sol_get_balance`,
 `spl-token_getBalance`, `spl-token_getTokenAccounts`, and `magicblock_balance`
-directly on the hosted server. Do not send these balance checks through
-`sap_payments_call_paid_tool`, and do not summarize a balance read as a
-facilitator `BlockhashNotFound` problem unless a paid tool actually returned
-that error. Use `jupiter_getHoldings` only when the user needs enriched paid
-portfolio context.
+directly on the hosted server when the user needs fresh readiness data. Do not
+send these balance checks through `sap_payments_call_paid_tool`, and do not
+summarize a balance read as a facilitator `BlockhashNotFound` problem unless a
+paid x402 tool actually returned that error. Use `jupiter_getHoldings` only when
+the user needs enriched read-premium portfolio context.
 
 Before any paid tool call, use `sap_estimate_tool_cost` with the tool name to
 get the exact pricing tier, estimated USD cost, and recommended `maxPriceUsd`.

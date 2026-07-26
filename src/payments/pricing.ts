@@ -11,7 +11,7 @@ import { isRecord } from './json-rpc.js';
  * @name PaymentTier
  * @description Commercial pricing tier for an MCP request.
  */
-export type PaymentTier = 'free' | 'read-premium' | 'builder' | 'value-action' | 'batch';
+export type PaymentTier = 'free' | 'micro-read' | 'read-premium' | 'builder' | 'value-action' | 'batch';
 
 /**
  * @name ToolPricing
@@ -41,7 +41,9 @@ export interface PricingCatalog {
   }>;
   toolSets: {
     free: string[];
+    microRead: string[];
     conditionalFree: string[];
+    conditionalMicroRead: string[];
     readPremium: string[];
     builders: string[];
     valueActions: string[];
@@ -93,40 +95,18 @@ const FREE_TOOLS = new Set([
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
-  'sap_agent_context',
-  'sap_get_agent',
-  'sap_get_agent_profile',
-  'sap_get_agent_stats',
-  'sap_get_global_state',
-  'sap_is_agent_active',
-  'sol_get_balance',
-  'spl-token_getBalance',
-  'spl-token_getTokenAccounts',
-  'spl-token_getTokenAccount',
-  'spl-token_getMint',
-  'spl-token_getSupply',
   'sap_profile_current',
   'sap_profile_list',
   'sap_profile_public_key',
-  'sap_sns_check_domain',
   'sap_skills_list',
   'sap_skills_bundle',
   'sap_skills_install',
   'sap_skills_upgrade_plan',
   'sap_runtime_repair_plan',
-  'sap_get_network_overview',
-  'sap_get_tool_category_summary',
-  'sap_find_tools_by_category',
-  'sap_fetch_capability_index',
-  'sap_fetch_protocol_index',
-  'sap_fetch_tool_category_index',
   'sap_decode_transaction',
   'sap_preview_transaction',
   'sap_x402_estimate_cost',
   'sap_x402_calculate_cost',
-  'sap_x402_has_escrow',
-  'sap_x402_fetch_escrow',
-  'sap_x402_get_balance',
   'sap_payments_profile_current',
   'sap_payments_readiness',
   'sap_payments_prepare_challenge',
@@ -167,20 +147,6 @@ const FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
-  // Perps analytics and professional planning — no hosted execution.
-  'sap_perp_markets',
-  'sap_perp_position_info',
-  'sap_perp_funding_history',
-  'sap_perp_liquidation_zones',
-  'sap_perp_trade_plan',
-  'sap_chart_ohlc',
-  'sap_chart_long_term',
-  'sap_chart_volume_profile',
-  // Single-asset price snapshots are free preflight context. Broad token lists,
-  // trending scans, holdings enrichment, OHLCV history, and quotes stay paid.
-  'jupiter_getPrice',
-  'pyth_getPrice',
-  'coingecko_getTokenPrice',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -192,27 +158,14 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
-  'sap_agent_context',
-  'sap_get_agent',
-  'sap_get_agent_profile',
-  'sap_get_agent_stats',
-  'sap_get_global_state',
-  'sap_is_agent_active',
   'sap_profile_current',
   'sap_profile_list',
   'sap_profile_public_key',
-  'sap_sns_check_domain',
   'sap_skills_list',
   'sap_skills_bundle',
   'sap_skills_install',
   'sap_skills_upgrade_plan',
   'sap_runtime_repair_plan',
-  'sap_get_network_overview',
-  'sap_get_tool_category_summary',
-  'sap_find_tools_by_category',
-  'sap_fetch_capability_index',
-  'sap_fetch_protocol_index',
-  'sap_fetch_tool_category_index',
   'sap_decode_transaction',
   'sap_preview_transaction',
   'sap_x402_estimate_cost',
@@ -257,6 +210,21 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+]);
+
+const MICRO_READ_TOOLS = new Set([
+  'sap_agent_context',
+  'sap_get_agent',
+  'sap_get_agent_profile',
+  'sap_get_agent_stats',
+  'sap_get_global_state',
+  'sap_is_agent_active',
+  'sap_get_network_overview',
+  'sap_get_tool_category_summary',
+  'sap_find_tools_by_category',
+  'sap_fetch_capability_index',
+  'sap_fetch_protocol_index',
+  'sap_fetch_tool_category_index',
   'sol_get_balance',
   'spl-token_getBalance',
   'spl-token_getTokenAccounts',
@@ -264,7 +232,10 @@ const STRICT_FREE_TOOLS = new Set([
   'spl-token_getMint',
   'spl-token_getSupply',
   'sap_x402_get_balance',
+  'sap_x402_has_escrow',
+  'sap_x402_fetch_escrow',
   'magicblock_balance',
+  'sap_sns_check_domain',
   // Perps analytics and professional planning — no hosted execution.
   'sap_perp_markets',
   'sap_perp_position_info',
@@ -313,7 +284,7 @@ const READ_PREMIUM_TOOLS = new Set([
   'das_searchAssets',
 ]);
 
-const CONDITIONAL_FREE_TOOLS = new Set([
+const CONDITIONAL_MICRO_READ_TOOLS = new Set([
   'sap_list_agents',
 ]);
 
@@ -426,19 +397,29 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     tiers: {
       free: {
         paymentRequired: false,
-        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, core SOL/SPL balance checks for payment readiness, single-asset price snapshots, perp planning context, and compact orientation lists.',
+        pricingRule: 'No x402/pay.sh payment challenge. Free calls are control-plane only: MCP handshake, tool/schema discovery, runtime bootstrap, cost estimation, repair planning, local payment bridge control, local memory, and transaction preflight.',
         examples: [
           'initialize',
           'tools/list',
           'sap_agent_start',
           'sap_agent_runtime_status',
           'sap_prepare_action',
-          'sap_agent_context',
           'sap_agent_next_action',
           'sap_pricing_catalog',
           'sap_estimate_tool_cost',
-          'sap_get_agent_profile',
           'sap_payments_readiness',
+          'sap_decode_transaction',
+          'sap_preview_transaction',
+        ],
+      },
+      'micro-read': {
+        paymentRequired: true,
+        priceUsd: clampPrice(config.prices.microReadUsd, config),
+        pricingRule: 'Flat micro-read fee for fresh lightweight hosted data. Use these for exact agent/profile reads, compact directory pages, core wallet readiness reads, single-asset price snapshots, SNS availability checks, and lightweight trader context.',
+        examples: [
+          'sap_agent_context',
+          'sap_get_agent_profile',
+          'sap_list_agents limit<=20 view=compact',
           'sol_get_balance',
           'spl-token_getBalance',
           'spl-token_getTokenAccounts',
@@ -446,7 +427,6 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
           'pyth_getPrice',
           'coingecko_getTokenPrice',
           'magicblock_balance',
-          'sap_list_agents limit<=20 view=compact',
         ],
       },
       'read-premium': {
@@ -475,7 +455,9 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     },
     toolSets: {
       free: [...freeTools].sort(),
-      conditionalFree: [...CONDITIONAL_FREE_TOOLS].sort(),
+      microRead: [...MICRO_READ_TOOLS].sort(),
+      conditionalFree: [],
+      conditionalMicroRead: [...CONDITIONAL_MICRO_READ_TOOLS].sort(),
       readPremium: [...READ_PREMIUM_TOOLS].sort(),
       builders: [...BUILDER_TOOLS].sort(),
       valueActions: [...VALUE_ACTION_TOOLS].sort(),
@@ -484,13 +466,13 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     },
     runtimeRules: [
       'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
-      `Exact SAP agent/profile reads are free. Use sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, and sap_get_global_state before broad paid discovery.`,
-      'Core balance checks and single-asset price snapshots are free: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, spl-token_getMint, spl-token_getSupply, magicblock_balance, sap_x402_get_balance, jupiter_getPrice, pyth_getPrice, and coingecko_getTokenPrice. Enriched holdings, quotes, token lists, history/OHLCV, and broad market scans remain read-premium.',
+      `Free tools are control-plane only. Fresh hosted data starts at the micro-read tier (${formatUsdPrice(config.prices.microReadUsd)}): exact SAP agent/profile reads, compact directory pages, core balance checks, single-asset price snapshots, SNS availability checks, and lightweight trader context.`,
+      `Read-premium calls (${formatUsdPrice(config.prices.readPremiumUsd)}) cover broad discovery, enriched holdings, token lists, OHLCV/history, DAS enrichment, quotes/routes, analytics, and larger pages. Prefer exact IDs and small limits before broad scans.`,
       'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
       'Call sap_prepare_action before swaps, registry writes, escrow, external x402 calls, premium streams, or transaction finalization. It returns the fresh-data requirements, local/hosted route, confirmation policy, retry rules, and proof-tape shape without charging x402.',
       'Use session memory for operational context and audit only. Never use memory as cached truth for token prices, Jupiter quotes/orders, balances, blockhashes, simulations, liquidity, routes, or agent account state.',
-      `sap_list_agents is free only for compact orientation pages with limit <= ${FREE_DIRECTORY_LIMIT}; larger pages, full hydration, sap_discover_agents, and sap_list_all_agents are read-premium. The protocol, capability, tool-category, and network overview indexes stay free for agent orientation.`,
+      `sap_list_agents compact pages with limit <= ${FREE_DIRECTORY_LIMIT} are micro-read. Larger pages, full hydration, sap_discover_agents, and sap_list_all_agents are read-premium.`,
       'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',
       'Use sap_payments_call_external_x402 for external HTTP x402 agents discovered through SAP registry metadata.',
       'Use hosted unsigned builders plus sap_payments_finalize_transaction for hosted non-custodial transaction flows.',
@@ -562,12 +544,12 @@ export function priceToolCall(
   toolCall: McpToolCall,
   config: SapMcpMonetizationConfig,
 ): ToolPricing {
-  if (isConditionalFreeToolCall(toolCall)) {
+  if (isConditionalMicroReadToolCall(toolCall)) {
     return {
       toolName: toolCall.toolName,
-      tier: 'free',
-      priceUsd: 0,
-      reason: 'free compact orientation read',
+      tier: 'micro-read',
+      priceUsd: clampPrice(config.prices.microReadUsd, config),
+      reason: 'micro-paid compact fresh data read',
     };
   }
 
@@ -579,6 +561,15 @@ export function priceToolCall(
       tier,
       priceUsd: 0,
       reason: 'free tool',
+    };
+  }
+
+  if (tier === 'micro-read') {
+    return {
+      toolName: toolCall.toolName,
+      tier,
+      priceUsd: clampPrice(config.prices.microReadUsd, config),
+      reason: 'fresh lightweight hosted data read',
     };
   }
 
@@ -639,7 +630,11 @@ export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationC
     return 'read-premium';
   }
 
-  if (CONDITIONAL_FREE_TOOLS.has(toolName)) {
+  if (MICRO_READ_TOOLS.has(toolName)) {
+    return 'micro-read';
+  }
+
+  if (CONDITIONAL_MICRO_READ_TOOLS.has(toolName)) {
     return 'read-premium';
   }
 
@@ -667,7 +662,7 @@ export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationC
   return 'read-premium';
 }
 
-function isConditionalFreeToolCall(toolCall: McpToolCall): boolean {
+function isConditionalMicroReadToolCall(toolCall: McpToolCall): boolean {
   if (toolCall.toolName !== 'sap_list_agents') {
     return false;
   }

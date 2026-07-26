@@ -48,10 +48,11 @@ function buildClientSdkHostedPricing(toolName: string): string {
   const tier = classifyTool(toolName);
   if (tier === 'free') return 'free — no x402 payment required';
   const prices: Record<string, string> = {
-    'read-premium': '~$0.001',
-    'builder': '~$0.008',
-    'value-action': '~$0.09 standard / ~$0.05 heavy',
-    'batch': '~$0.09+',
+    'micro-read': '~$0.001',
+    'read-premium': '~$0.002',
+    'builder': '~$0.006',
+    'value-action': '~$0.06 standard / ~$0.035 heavy',
+    'batch': 'clamped sum',
   };
   const price = prices[tier] ?? '~$0.001';
   return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;

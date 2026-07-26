@@ -45,18 +45,21 @@ the non-custodial model: OOBE does not hold user keys. Paid and value-moving
 hosted calls still proceed through x402/pay.sh plus the user's local SAP profile
 or external signer.
 
-- Free: `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`,
-  `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
+- Free: MCP handshake, `tools/list`, `prompts/list`, `resources/list`,
+  `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`,
   `sap_agent_next_action`, `sap_estimate_tool_cost`, `sap_pricing_catalog`,
-  exact SAP agent/profile reads, compact `sap_list_agents` pages with
-  `limit <= 20`, `sap_get_network_overview`, core balance checks
+  repair/status tools, local payment bridge control, transaction
+  preview/finalization helpers, and memory/audit helpers.
+- Micro read: exact SAP agent/profile reads, compact `sap_list_agents` pages
+  with `limit <= 20`, `sap_get_network_overview`, core balance checks
   (`sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`,
   `spl-token_getMint`, `spl-token_getSupply`, `magicblock_balance`,
-  `sap_x402_get_balance`). Enriched holdings such as `jupiter_getHoldings`
-  are paid read-premium.
+  `sap_x402_get_balance`), SNS availability, single-asset prices, and
+  lightweight trader/perps context.
 - Read premium: `sap_discover_agents`, `sap_list_all_agents`, full/enriched or
-  large `sap_list_agents` pages, indexed discovery, network stats,
-  protocol/capability indexes.
+  large `sap_list_agents` pages, enriched holdings, indexed discovery, network
+  stats, protocol/capability indexes, DAS, token lists, quotes/routes, and
+  OHLCV/history.
 - Builder: batch SNS/domain checks, analytics, transaction builders.
 - Value action: fixed fee plus configured basis-points fee when public USD
   notional fields are present.

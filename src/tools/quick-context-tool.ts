@@ -277,10 +277,11 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
   const monPrices = context.config.monetization.prices;
   const pricingTiers = [
     'free=$0',
-    `read-premium=$${monPrices.readPremiumUsd ?? 0.001}`,
-    `builder=$${monPrices.builderUsd ?? 0.008}`,
-    `value-action=$${monPrices.valueFixedUsd ?? 0.09}`,
-    `heavy-value=$${monPrices.heavyValueUsd ?? 0.05}`,
+    `micro-read=$${monPrices.microReadUsd ?? 0.001}`,
+    `read-premium=$${monPrices.readPremiumUsd ?? 0.002}`,
+    `builder=$${monPrices.builderUsd ?? 0.006}`,
+    `value-action=$${monPrices.valueFixedUsd ?? 0.06}`,
+    `heavy-value=$${monPrices.heavyValueUsd ?? 0.035}`,
     'batch=clamped sum',
   ];
 

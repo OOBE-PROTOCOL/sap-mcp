@@ -49,7 +49,7 @@ SAP registry and discovery:
 `sap_deactivate_tool`, `sap_reactivate_tool`,
 `sap_report_tool_invocations`, `sap_report_calls`.
 
-Use free exact/base reads before paid discovery when possible:
+Use low-cost exact/base micro-reads before broad discovery when possible:
 `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
 `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
 `sap_list_agents` with `limit <= 20`, `view: "compact"`, and
@@ -197,7 +197,7 @@ Protocol routing shortcuts:
 
 | User intent | Most specific tools |
 | --- | --- |
-| SOL or SPL balance (free) | `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`, `magicblock_balance` |
+| SOL or SPL balance (micro-read) | `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`, `magicblock_balance` |
 | Enriched holdings (paid read-premium) | `jupiter_getHoldings` |
 | Pre-call cost estimate (free) | `sap_estimate_tool_cost` |
 | Pricing catalog (free) | `sap_pricing_catalog` |

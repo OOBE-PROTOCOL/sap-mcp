@@ -13,10 +13,11 @@ const monetizationConfig: SapMcpMonetizationConfig = {
   maxTimeoutSeconds: 120,
   strictTools: false,
   prices: {
-    readPremiumUsd: 0.001,
-    builderUsd: 0.008,
-    valueFixedUsd: 0.09,
-    heavyValueUsd: 0.05,
+    microReadUsd: 0.001,
+    readPremiumUsd: 0.002,
+    builderUsd: 0.006,
+    valueFixedUsd: 0.06,
+    heavyValueUsd: 0.035,
     valueBps: 0,
     minUsd: 0.001,
     maxUsd: 100,
@@ -102,7 +103,7 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
-  it('keeps exact SAP agent orientation reads free in default and strict mode', () => {
+  it('prices exact SAP agent orientation reads as micro-reads in default and strict mode', () => {
     for (const toolName of [
       'sap_get_agent',
       'sap_agent_context',
@@ -111,8 +112,8 @@ describe('SAP MCP monetization pricing', () => {
       'sap_get_global_state',
       'sap_is_agent_active',
     ]) {
-      expect(classifyTool(toolName)).toBe('free');
-      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+      expect(classifyTool(toolName)).toBe('micro-read');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('micro-read');
     }
 
     const parsed = parseJsonRpcBody({
@@ -125,14 +126,24 @@ describe('SAP MCP monetization pricing', () => {
       },
     });
 
-    expect(resolvePaymentDecision(parsed, monetizationConfig).required).toBe(false);
-    expect(resolvePaymentDecision(parsed, {
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('micro-read');
+      expect(decision.price).toBe('$0.001');
+    }
+
+    const strictDecision = resolvePaymentDecision(parsed, {
       ...monetizationConfig,
       strictTools: true,
-    }).required).toBe(false);
+    });
+    expect(strictDecision.required).toBe(true);
+    if (strictDecision.required) {
+      expect(strictDecision.tier).toBe('micro-read');
+    }
   });
 
-  it('keeps SAP orientation indexes free in default and strict mode', () => {
+  it('prices SAP orientation indexes as micro-reads in default and strict mode', () => {
     for (const toolName of [
       'sap_get_network_overview',
       'sap_get_tool_category_summary',
@@ -141,12 +152,12 @@ describe('SAP MCP monetization pricing', () => {
       'sap_fetch_protocol_index',
       'sap_fetch_tool_category_index',
     ]) {
-      expect(classifyTool(toolName)).toBe('free');
-      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+      expect(classifyTool(toolName)).toBe('micro-read');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('micro-read');
     }
   });
 
-  it('keeps compact SAP agent orientation pages free but prices broad directory reads', () => {
+  it('prices compact SAP agent orientation pages as micro-reads and broad directory reads as premium', () => {
     const compactParsed = parseJsonRpcBody({
       jsonrpc: '2.0',
       id: 1,
@@ -157,11 +168,20 @@ describe('SAP MCP monetization pricing', () => {
       },
     });
 
-    expect(resolvePaymentDecision(compactParsed, monetizationConfig).required).toBe(false);
-    expect(resolvePaymentDecision(compactParsed, {
+    const compactDecision = resolvePaymentDecision(compactParsed, monetizationConfig);
+    expect(compactDecision.required).toBe(true);
+    if (compactDecision.required) {
+      expect(compactDecision.tier).toBe('micro-read');
+      expect(compactDecision.price).toBe('$0.001');
+    }
+    const strictCompactDecision = resolvePaymentDecision(compactParsed, {
       ...monetizationConfig,
       strictTools: true,
-    }).required).toBe(false);
+    });
+    expect(strictCompactDecision.required).toBe(true);
+    if (strictCompactDecision.required) {
+      expect(strictCompactDecision.tier).toBe('micro-read');
+    }
 
     for (const arguments_ of [
       { limit: 21, view: 'compact' },
@@ -212,19 +232,24 @@ describe('SAP MCP monetization pricing', () => {
     expect(solParsed.toolCalls[0]?.toolName).toBe('sol_get_balance');
   });
 
-  it('keeps basic SOL and SPL balance reads free', () => {
-    expect(classifyTool('sol_get_balance')).toBe('free');
-    expect(resolvePaymentDecision(parseJsonRpcBody({
+  it('prices basic SOL and SPL balance reads as micro-reads', () => {
+    expect(classifyTool('sol_get_balance')).toBe('micro-read');
+    const solDecision = resolvePaymentDecision(parseJsonRpcBody({
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
       params: {
         name: 'sol_getBalance',
-        arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
-      },
-    }), monetizationConfig).required).toBe(false);
-    expect(classifyTool('spl-token_getBalance')).toBe('free');
-    expect(classifyTool('spl-token_getTokenAccounts')).toBe('free');
+          arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
+        },
+    }), monetizationConfig);
+    expect(solDecision.required).toBe(true);
+    if (solDecision.required) {
+      expect(solDecision.tier).toBe('micro-read');
+      expect(solDecision.price).toBe('$0.001');
+    }
+    expect(classifyTool('spl-token_getBalance')).toBe('micro-read');
+    expect(classifyTool('spl-token_getTokenAccounts')).toBe('micro-read');
 
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',
@@ -238,7 +263,10 @@ describe('SAP MCP monetization pricing', () => {
 
     const decision = resolvePaymentDecision(parsed, monetizationConfig);
 
-    expect(decision.required).toBe(false);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('micro-read');
+    }
   });
 
   it('prices enriched Jupiter holdings as read premium in default and strict mode', () => {
@@ -262,10 +290,10 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
-  it('keeps single-asset price snapshots free while broad market data stays paid', () => {
+  it('prices single-asset price snapshots as micro-reads while broad market data stays premium', () => {
     for (const toolName of ['jupiter_getPrice', 'pyth_getPrice', 'coingecko_getTokenPrice']) {
-      expect(classifyTool(toolName)).toBe('free');
-      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+      expect(classifyTool(toolName)).toBe('micro-read');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('micro-read');
 
       const decision = resolvePaymentDecision(parseJsonRpcBody({
         jsonrpc: '2.0',
@@ -277,7 +305,11 @@ describe('SAP MCP monetization pricing', () => {
         },
       }), monetizationConfig);
 
-      expect(decision.required).toBe(false);
+      expect(decision.required).toBe(true);
+      if (decision.required) {
+        expect(decision.tier).toBe('micro-read');
+        expect(decision.price).toBe('$0.001');
+      }
     }
 
     for (const toolName of ['jupiter_getTokenList', 'pyth_getPriceHistory', 'coingecko_getOHLCV']) {
@@ -285,9 +317,9 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
-  it('keeps single SNS availability checks free in default and strict mode', () => {
-    expect(classifyTool('sap_sns_check_domain')).toBe('free');
-    expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('free');
+  it('prices single SNS availability checks as micro-reads in default and strict mode', () => {
+    expect(classifyTool('sap_sns_check_domain')).toBe('micro-read');
+    expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('micro-read');
 
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',
@@ -299,21 +331,29 @@ describe('SAP MCP monetization pricing', () => {
       },
     });
 
-    expect(resolvePaymentDecision(parsed, monetizationConfig).required).toBe(false);
-    expect(resolvePaymentDecision(parsed, {
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('micro-read');
+    }
+    const strictDecision = resolvePaymentDecision(parsed, {
       ...monetizationConfig,
       strictTools: true,
-    }).required).toBe(false);
+    });
+    expect(strictDecision.required).toBe(true);
+    if (strictDecision.required) {
+      expect(strictDecision.tier).toBe('micro-read');
+    }
   });
 
   it('can price basic balance reads in strict hosted mode', () => {
-    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('free');
-    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('free');
+    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('micro-read');
+    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('micro-read');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_prepare_action', { strictTools: true })).toBe('free');
-    expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('micro-read');
     expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_skills_upgrade_plan', { strictTools: true })).toBe('free');
@@ -334,8 +374,11 @@ describe('SAP MCP monetization pricing', () => {
       strictTools: true,
     });
 
-    // sol_get_balance is now free in strict mode — balance reads should not be paywalled
-    expect(decision.required).toBe(false);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('micro-read');
+      expect(decision.price).toBe('$0.001');
+    }
   });
 
   it('prices enriched discovery as read premium', () => {
@@ -354,7 +397,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('read-premium');
-      expect(decision.price).toBe('$0.001');
+      expect(decision.price).toBe('$0.002');
     }
   });
 
@@ -375,7 +418,7 @@ describe('SAP MCP monetization pricing', () => {
       expect(decision.required).toBe(true);
       if (decision.required) {
         expect(decision.tier).toBe('read-premium');
-        expect(decision.price).toBe('$0.001');
+        expect(decision.price).toBe('$0.002');
       }
     }
   });
@@ -405,7 +448,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('builder');
-      expect(decision.price).toBe('$0.008');
+      expect(decision.price).toBe('$0.006');
     }
   });
 
@@ -433,8 +476,10 @@ describe('SAP MCP monetization pricing', () => {
 
     expect(catalog.source).toBe('sap-mcp-pricing-registry');
     expect(catalog.tiers.free.paymentRequired).toBe(false);
-    expect(catalog.tiers['read-premium'].priceUsd).toBe(0.001);
-    expect(catalog.tiers.builder.priceUsd).toBe(0.008);
+    expect(catalog.tiers['micro-read'].priceUsd).toBe(0.001);
+    expect(catalog.tiers['read-premium'].priceUsd).toBe(0.002);
+    expect(catalog.tiers.builder.priceUsd).toBe(0.006);
+    expect(catalog.toolSets.microRead).toContain('sap_agent_context');
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
     expect(catalog.toolSets.free).toContain('sap_prepare_action');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
@@ -459,7 +504,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('value-action');
-      expect(decision.price).toBe('$0.09');
+      expect(decision.price).toBe('$0.06');
     }
   });
 
@@ -479,7 +524,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('value-action');
-      expect(decision.price).toBe('$0.05');
+      expect(decision.price).toBe('$0.035');
     }
   });
 
@@ -504,7 +549,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(decision.required).toBe(true);
     if (decision.required) {
       expect(decision.tier).toBe('batch');
-      expect(decision.price).toBe('$0.009');
+      expect(decision.price).toBe('$0.008');
     }
   });
 

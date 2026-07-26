@@ -18,7 +18,7 @@ indexes, and filtered agent discovery.
 
 ## Rules
 
-- Start with free orientation when possible:
+- Start with low-cost micro-read orientation when possible:
   - `sap_agent_context` for a one-shot compact context read and routing hints.
   - `sap_get_agent` or `sap_get_agent_profile` for a known owner wallet.
   - `sap_is_agent_active` for a known owner wallet status check.
@@ -31,8 +31,9 @@ indexes, and filtered agent discovery.
 - Use `sap_list_all_agents` for global directory requests or when the user asks
   for the whole SAP ecosystem. Keep the first page small and follow
   `pagination.nextCursor` only when the previous page is useful.
-- Use paid discovery only when the user needs search, enrichment, full rows,
-  large pages, analytics, or global enumeration beyond the free compact page.
+- Use read-premium discovery only when the user needs search, enrichment, full
+  rows, large pages, analytics, or global enumeration beyond the compact
+  micro-read page.
 - Prefer exact filters before broad scans: `wallet` when a wallet is known,
   `query` for an agent name such as `XONA`, and `capability` for one exact
   capability such as `creative:imageGeneration`.

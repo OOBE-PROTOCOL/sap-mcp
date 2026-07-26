@@ -475,10 +475,10 @@ function estimateMagicBlockToolPrice(toolName: string): string {
   const tier = classifyMagicBlockToolTier(toolName);
   switch (tier) {
     case 'free': return '0.00';
-    case 'read-premium': return '~0.001';
-    case 'builder': return '~0.008';
-    case 'value-action': return '~0.05';
-    default: return '~0.001';
+    case 'read-premium': return '~0.002';
+    case 'builder': return '~0.006';
+    case 'value-action': return '~0.035';
+    default: return '~0.002';
   }
 }
 

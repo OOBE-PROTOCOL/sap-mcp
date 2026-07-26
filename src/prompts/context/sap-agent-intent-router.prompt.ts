@@ -108,7 +108,7 @@ Do not dump the full tool catalog.
 
 ### 2. Exact/base reads
 For exact agent, wallet, balance, global-state, or compact directory orientation:
-- Prefer free exact/base tools first:
+- Prefer low-cost exact/base micro-read tools first:
   \`sap_agent_context\`, \`sap_get_agent\`, \`sap_get_agent_profile\`,
   \`sap_get_agent_stats\`, \`sap_get_global_state\`, \`sap_is_agent_active\`,
   \`sap_list_agents\` with \`limit <= 20\` and \`view: "compact"\`,

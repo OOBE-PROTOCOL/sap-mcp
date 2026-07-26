@@ -602,10 +602,11 @@ function buildHostedPricingMeta(toolName: string): string {
   const tier = classifyTool(toolName);
   if (tier === 'free') return 'free — no x402 payment required';
   const prices: Record<string, string> = {
-    'read-premium': '~$0.001',
-    'builder': '~$0.008',
-    'value-action': '~$0.09 standard / ~$0.05 heavy',
-    'batch': '~$0.09+',
+    'micro-read': '~$0.001',
+    'read-premium': '~$0.002',
+    'builder': '~$0.006',
+    'value-action': '~$0.06 standard / ~$0.035 heavy',
+    'batch': 'clamped sum',
   };
   const price = prices[tier] ?? '~$0.001';
   return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;
@@ -1039,8 +1040,8 @@ async function buildSapAgentContext(input: JsonRecord, client: SapClient): Promi
     routing: {
       firstReads: [
         'Use sap_get_agent or sap_get_agent_profile when the owner wallet is known.',
-        'Use sap_list_agents with limit <= 20 and view: compact for free orientation.',
-        'Use sap_discover_agents or sap_list_all_agents only for paid search, enriched rows, large pages, or ecosystem-scale scans.',
+        'Use sap_list_agents with limit <= 20 and view: compact for low-cost micro-read orientation.',
+        'Use sap_discover_agents or sap_list_all_agents only for read-premium search, enriched rows, large pages, or ecosystem-scale scans.',
       ],
       paidHostedTools: 'Use sap_payments_call_paid_tool when a hosted tool returns x402 payment_required and the runtime cannot replay x402 natively.',
       registryWrites: 'Use sap_payments_register_agent and sap_payments_update_agent for wallet-owned SAP registry writes. Do not retry hosted accountless writes after hosted_local_signer_required.',
@@ -2657,11 +2658,11 @@ const discoveryTools: ToolRegistration[] = [
       },
       query: {
         type: 'string',
-        description: 'Optional text query for a free compact orientation search. Keep this narrow, for example "XONA" or "Solking".',
+        description: 'Optional text query for a compact micro-read orientation search. Keep this narrow, for example "XONA" or "Solking".',
       },
       limit: {
         type: 'number',
-        description: 'Maximum compact orientation rows to include when wallet is not supplied. Defaults to 10 and is capped at 20 to keep this tool free.',
+        description: 'Maximum compact orientation rows to include when wallet is not supplied. Defaults to 10 and is capped at 20 to keep this tool in the micro-read tier.',
       },
     },
     handler: async (input, client) => buildSapAgentContext(input, client),
@@ -2669,14 +2670,14 @@ const discoveryTools: ToolRegistration[] = [
   {
     name: 'sap_get_agent_profile',
     title: 'Get SAP Agent Profile',
-    description: 'Free exact SAP agent profile read by owner wallet. Use this for a known agent before paid discovery or enrichment.',
+    description: 'Micro-read exact SAP agent profile lookup by owner wallet. Use this for a known agent before read-premium discovery or enrichment.',
     inputSchema: { wallet: { type: 'string', description: 'Solana public key of the agent owner wallet (base58)' } },
     handler: async (input, client) => ({ profile: await client.discovery.getAgentProfile(requiredPublicKey(input, 'wallet')) }),
   },
   {
     name: 'sap_is_agent_active',
     title: 'Check SAP Agent Active',
-    description: 'Free exact activity check for an owner wallet. Use this before paid discovery when the wallet is known.',
+    description: 'Micro-read exact activity check for an owner wallet. Use this before read-premium discovery when the wallet is known.',
     inputSchema: { wallet: { type: 'string', description: 'Solana public key of the wallet to check for an active SAP agent (base58)' } },
     handler: async (input, client) => ({ active: await client.discovery.isAgentActive(requiredPublicKey(input, 'wallet')) }),
   },
@@ -2710,7 +2711,7 @@ const discoveryTools: ToolRegistration[] = [
   {
     name: 'sap_list_agents',
     title: 'List SAP Agents',
-    description: 'Compact SAP agent orientation list. Free only when limit <= 20, view is compact, hydrate is false, and includeProtocolIndexes is false; larger or enriched pages are paid read-premium.',
+    description: 'Compact SAP agent orientation list. Micro-read when limit <= 20, view is compact, hydrate is false, and includeProtocolIndexes is false; larger or enriched pages are read-premium.',
     inputSchema: makeAgentDirectoryInputSchema(20),
     handler: async (input, client) => {
       const limit = Math.max(1, Math.min(optionalNumber(input, 'limit') ?? 20, 500));

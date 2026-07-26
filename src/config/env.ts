@@ -143,10 +143,11 @@ export const envSchema = z.object({
   SAP_MCP_X402_MAX_TIMEOUT_SECONDS: z.coerce.number().positive().default(120),
   SAP_MCP_PAY_SH_CHECKOUT_URL: z.string().url().optional(),
   SAP_MCP_MONETIZATION_STRICT_TOOLS: booleanEnvSchema.default(false),
-  SAP_MCP_PRICE_READ_PREMIUM_USD: z.coerce.number().positive().default(0.001),
-  SAP_MCP_PRICE_BUILDER_USD: z.coerce.number().positive().default(0.008),
-  SAP_MCP_PRICE_VALUE_FIXED_USD: z.coerce.number().nonnegative().default(0.09),
-  SAP_MCP_PRICE_HEAVY_VALUE_USD: z.coerce.number().nonnegative().default(0.05),
+  SAP_MCP_PRICE_MICRO_READ_USD: z.coerce.number().positive().default(0.001),
+  SAP_MCP_PRICE_READ_PREMIUM_USD: z.coerce.number().positive().default(0.002),
+  SAP_MCP_PRICE_BUILDER_USD: z.coerce.number().positive().default(0.006),
+  SAP_MCP_PRICE_VALUE_FIXED_USD: z.coerce.number().nonnegative().default(0.06),
+  SAP_MCP_PRICE_HEAVY_VALUE_USD: z.coerce.number().nonnegative().default(0.035),
   SAP_MCP_PRICE_VALUE_BPS: z.coerce.number().nonnegative().default(0),
   SAP_MCP_PRICE_MIN_USD: z.coerce.number().nonnegative().default(0.001),
   SAP_MCP_PRICE_MAX_USD: z.coerce.number().positive().default(100),
@@ -247,6 +248,7 @@ export interface SapMcpMonetizationConfig {
   payShCheckoutUrl?: string;
   strictTools: boolean;
   prices: {
+    microReadUsd: number;
     readPremiumUsd: number;
     builderUsd: number;
     valueFixedUsd: number;
@@ -578,6 +580,9 @@ function normalizeFileConfig(config: ConfigFileData): ConfigFileData {
     }
 
     const prices = isRecord(monetization.prices) ? monetization.prices : {};
+    if (normalized.SAP_MCP_PRICE_MICRO_READ_USD === undefined && prices.microReadUsd !== undefined) {
+      envNormalized.SAP_MCP_PRICE_MICRO_READ_USD = prices.microReadUsd;
+    }
     if (normalized.SAP_MCP_PRICE_READ_PREMIUM_USD === undefined && prices.readPremiumUsd !== undefined) {
       envNormalized.SAP_MCP_PRICE_READ_PREMIUM_USD = prices.readPremiumUsd;
     }
@@ -634,10 +639,11 @@ function getDefaultEnvConfig(): Partial<SapEnvConfig> {
     SAP_MCP_MONETIZATION_ENABLED: false,
     SAP_MCP_MONETIZATION_PROVIDER: 'x402',
     SAP_MCP_X402_MAX_TIMEOUT_SECONDS: 120,
-    SAP_MCP_PRICE_READ_PREMIUM_USD: 0.001,
-    SAP_MCP_PRICE_BUILDER_USD: 0.008,
-    SAP_MCP_PRICE_VALUE_FIXED_USD: 0.09,
-    SAP_MCP_PRICE_HEAVY_VALUE_USD: 0.05,
+    SAP_MCP_PRICE_MICRO_READ_USD: 0.001,
+    SAP_MCP_PRICE_READ_PREMIUM_USD: 0.002,
+    SAP_MCP_PRICE_BUILDER_USD: 0.006,
+    SAP_MCP_PRICE_VALUE_FIXED_USD: 0.06,
+    SAP_MCP_PRICE_HEAVY_VALUE_USD: 0.035,
     SAP_MCP_PRICE_VALUE_BPS: 0,
     SAP_MCP_PRICE_MIN_USD: 0.001,
     SAP_MCP_PRICE_MAX_USD: 100,
@@ -729,6 +735,7 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
       strictTools: asOptionalBoolean(monetizationConfig.strictTools)
         ?? env.SAP_MCP_MONETIZATION_STRICT_TOOLS,
       prices: {
+        microReadUsd: asOptionalNumber(monetizationPrices.microReadUsd) ?? env.SAP_MCP_PRICE_MICRO_READ_USD,
         readPremiumUsd: asOptionalNumber(monetizationPrices.readPremiumUsd) ?? env.SAP_MCP_PRICE_READ_PREMIUM_USD,
         builderUsd: asOptionalNumber(monetizationPrices.builderUsd) ?? env.SAP_MCP_PRICE_BUILDER_USD,
         valueFixedUsd: asOptionalNumber(monetizationPrices.valueFixedUsd) ?? env.SAP_MCP_PRICE_VALUE_FIXED_USD,

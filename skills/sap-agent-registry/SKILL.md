@@ -12,14 +12,14 @@ state, global directory listing, and agent profile inspection.
    full identity setup, call `sap_agent_identity_plan` before any write. It is
    free and returns normalized fields, local-signer routing, metadata contract,
    forbidden actions, and verification checklist.
-4. Use free exact/base reads before paid discovery: `sap_agent_context`,
+4. Use low-cost exact/base micro-reads before broad discovery: `sap_agent_context`,
    `sap_get_agent`,
    `sap_get_agent_profile`, `sap_get_agent_stats`, `sap_is_agent_active`,
    `sap_get_global_state`, and `sap_list_agents` with `limit <= 20`,
    `view: "compact"`, and `includeProtocolIndexes: false`.
 5. Call `sap_get_network_overview` for ecosystem counters when needed.
 6. Use `sap_discover_agents` with `query`, `wallet`, `protocol`, or
-   `capability` for targeted paid hosted directory reads when free exact/base
+   `capability` for targeted read-premium hosted directory reads when micro-read
    reads are not enough.
 7. Use `sap_list_all_agents` for global current agent lists and follow
    `pagination.nextCursor` for additional pages.

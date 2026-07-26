@@ -10,10 +10,11 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 
 | Tier | Examples | Price |
 | --- | --- | --- |
-| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_context`, `sap_agent_next_action`, exact SAP agent/profile reads, compact `sap_list_agents` orientation pages with `limit <= 20` | Free |
-| Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, market/oracle/DAS reads | `$0.001` default |
-| Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.008` default, batch = sum of paid calls |
-| Value action | settlement-like or value-linked operations where appropriate | `$0.09` standard, `$0.15` for selected heavy execution paths |
+| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`, `sap_estimate_tool_cost`, repair/status tools, local payment bridge control, memory/audit helpers, and transaction preview/finalize helpers | Free |
+| Micro read | exact SAP agent/profile reads, compact `sap_list_agents` pages with `limit <= 20`, core balance checks, SNS availability checks, single-asset prices, lightweight trader/perps context | `$0.001` default |
+| Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, enriched holdings, DAS reads, token lists, quotes/routes, OHLCV/history, analytics | `$0.002` default |
+| Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.006` default, batch = sum of paid calls |
+| Value action | settlement-like or value-linked operations where appropriate | `$0.06` standard, `$0.035` for selected heavy execution paths |
 
 Do not apply percentage fees blindly to swaps or financial routing. Those workflows may create compliance, custody, and routing implications.
 
@@ -27,13 +28,15 @@ Agents can also call the free hosted tool `sap_pricing_catalog`. Use these
 surfaces for planning and UI copy, then treat the actual x402 challenge returned
 by the paid `tools/call` request as the final payment source of truth.
 
-The intended agent flow is to use free exact/base reads first, then pay only
-when the user needs broad discovery, enrichment, transaction builders, or
-value-moving actions. For SAP agent directory work, start with
+The intended agent flow is to use free control-plane tools first, then pay tiny
+micro-read fees for fresh exact data, and pay higher tiers only when the user
+needs broad discovery, enrichment, transaction builders, or value-moving
+actions. For SAP agent directory work, start with
 `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
 `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, or
 `sap_list_agents` with `limit <= 20`,
-`view: "compact"`, and `includeProtocolIndexes: false`. Use paid
+`view: "compact"`, and `includeProtocolIndexes: false`. These are micro-read
+calls. Use paid read-premium
 `sap_discover_agents` or `sap_list_all_agents` for search, full rows, large
 pages, protocol index summaries, or ecosystem-scale enumeration.
 

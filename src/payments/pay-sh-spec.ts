@@ -57,8 +57,10 @@ export function generatePayShProviderYaml(
   options: Partial<PayShSpecOptions> = {},
 ): string {
   const resolved = resolvePayShOptions(config, options);
+  const microReadUsd = formatYamlNumber(config.monetization.prices.microReadUsd);
   const readPremiumUsd = formatYamlNumber(config.monetization.prices.readPremiumUsd);
   const builderUsd = formatYamlNumber(config.monetization.prices.builderUsd);
+  const valueFixedUsd = formatYamlNumber(config.monetization.prices.valueFixedUsd);
   const maxUsd = formatYamlNumber(config.monetization.prices.maxUsd);
   const minUsd = formatYamlNumber(config.monetization.prices.minUsd);
   const yaml = [
@@ -96,11 +98,11 @@ export function generatePayShProviderYaml(
     '          unit: requests',
     '          scale: 1',
     '          tiers:',
-    `            - price_usd: ${readPremiumUsd}`,
+    `            - price_usd: ${microReadUsd}`,
     '',
     'notes: |',
     '  The pay.sh gateway protects the outer HTTP MCP endpoint and forwards verified calls to SAP MCP.',
-    `  SAP MCP still performs native x402 per-tool pricing internally: free tools stay free, premium reads start at $${readPremiumUsd}, builders at $${builderUsd}, and value actions are capped between $${minUsd} and $${maxUsd}.`,
+    `  SAP MCP still performs native x402 per-tool pricing internally: control-plane tools stay free, micro reads start at $${microReadUsd}, premium reads at $${readPremiumUsd}, builders at $${builderUsd}, standard value actions at $${valueFixedUsd}, and all paid calls are clamped between $${minUsd} and $${maxUsd}.`,
     '  Validate with: pay --sandbox server start sap-mcp-pay-sh.yml --bind 127.0.0.1:1402',
     '',
   ];

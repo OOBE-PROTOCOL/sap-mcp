@@ -26,7 +26,7 @@ Agents should:
 8. Answer in the user's language unless the user asks otherwise.
 9. Avoid showing internal thinking, keypair bytes, raw request secrets, or private config.
 10. Ask for approval before signing or value-moving operations when required by policy.
-11. Use free exact/base SAP reads before paid discovery when possible:
+11. Use low-cost exact/base SAP micro-reads before broad discovery when possible:
     `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
     `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and compact
     `sap_list_agents` pages with `limit <= 20`, `view: "compact"`, and
@@ -64,7 +64,7 @@ SAP MCP exposes a free startup path:
 1. `sap_agent_start` returns the machine-readable agent playbook.
 2. `sap_agent_runtime_status` returns the hosted/accountless/local-bridge routing table.
 3. `sap_prepare_action` returns the intent-level route, fresh-data requirements, confirmation policy, retry rules, and proof-tape fields before paid calls, swaps, registry writes, Escrow V2, external x402 agents, premium streams, or transaction finalization.
-4. `sap_agent_context` returns free compact SAP agent context before paid discovery.
+4. `sap_agent_context` returns compact micro-read SAP agent context before broad discovery.
 5. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
 6. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
 7. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
