@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.36 - 2026-07-27
+
+### Changed — Agent Readiness And Runtime Repair
+
+- Made wallet/payment readiness genuinely free for hosted agents: native SOL
+  balance, SPL token accounts/balances, x402 balance, MagicBlock balance, and
+  single-asset price snapshots no longer require x402. Agents can now check
+  whether the owner must top up SOL or USDC before spending.
+- Kept broad discovery, enriched indexes, quotes, historical market data, and
+  value-moving builders monetized so hosted SAP MCP remains usable as a paid
+  gateway without blocking basic wallet health checks.
+- Hardened Hermes repair against dirty mixed configs: the repair flow removes
+  only legacy SAP/SAP payments entries from nested `mcpServers` maps, preserves
+  unrelated third-party MCP servers, and rewrites canonical flat Hermes entries.
+- Added profile hygiene diagnostics for active profile, missing wallet files,
+  public mainnet RPC usage, and plaintext dedicated wallet risk.
+- Added a repair-time profile summary so users can see local profile issues
+  immediately after running the wizard or `sap-mcp-config repair`.
+- Added local JSONL audit logging for successful local x402 bridge calls at
+  `~/.config/mcp-sap/sap-payments-audit.jsonl`.
+- Updated SAP MCP startup guidance, payment docs, and skills so agents call free
+  readiness tools directly and reserve `sap_payments_call_paid_tool` for hosted
+  paid tools.
+
 ## 0.9.35 - 2026-07-26
 
 ### Changed — Protocol Safety And Perps Readiness
