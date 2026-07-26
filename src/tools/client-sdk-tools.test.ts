@@ -25,6 +25,7 @@ describe('AgentKit tool input normalization', () => {
 
   it('leaves unrelated tool inputs unchanged', () => {
     const input = { owner: 'abc' };
-    expect(normalizeAgentKitToolInput('das_getAssetsByOwner', input)).toBe(input);
+    const result = normalizeAgentKitToolInput('das_getAssetsByOwner', input);
+    expect(result).toEqual(input);
   });
 });

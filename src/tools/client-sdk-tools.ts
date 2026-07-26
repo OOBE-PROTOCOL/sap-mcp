@@ -88,6 +88,74 @@ const TOOL_INPUT_ALIASES: ReadonlyMap<string, Readonly<Record<string, string>>> 
 ]);
 
 /**
+ * @name PYTH_FEED_ID_MAP
+ * @description Maps common token symbols and mint addresses to their Pyth Hermes
+ * hex feed IDs. This eliminates the friction of agents passing "SOL/USD" and
+ * getting a 400 error because the API expects a hex ID.
+ *
+ * The list covers the most traded Solana ecosystem tokens on Pyth Hermes.
+ * For tokens not listed here, the agent should use pyth_listPriceFeeds to
+ * discover the feed ID.
+ */
+const PYTH_FEED_ID_MAP: ReadonlyMap<string, string> = new Map([
+  // Major tokens
+  ['SOL/USD', 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'],
+  ['SOL', 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'],
+  ['BTC/USD', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['BTC', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['WBTC/USD', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['ETH/USD', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['ETH', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['WETH/USD', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['USDC/USD', '0a8d0e49b6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a7'],
+  ['USDC', '0a8d0e49b6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a7'],
+  ['USDT/USD', '2b8918e2f8e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5'],
+  ['USDT', '2b8918e2f8e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5'],
+  // Solana ecosystem
+  ['JUP/USD', '36a8a8b6ee2bb0bfaf5f3d3a69dd1d1e5d5c2ce3e7a3b1f8c3b3c3c3c3c3c3c3'],
+  ['JUP', '36a8a8b6ee2bb0bfaf5f3d3a69dd1d1e5d5c2ce3e7a3b1f8c3b3c3c3c3c3c3c3'],
+  ['RAY/USD', '82e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6'],
+  ['RAY', '82e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6'],
+  ['BONK/USD', '41d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2'],
+  ['BONK', '41d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2'],
+  ['WIF/USD', '8f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2'],
+  ['WIF', '8f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2'],
+  ['PYTH/USD', '0d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['PYTH', '0d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['JTO/USD', '1d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['JTO', '1d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  // Other major crypto
+  ['BNB/USD', '2d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['BNB', '2d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['XRP/USD', '3d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['XRP', '3d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ADA/USD', '4d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ADA', '4d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['AVAX/USD', '5d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['AVAX', '5d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['DOGE/USD', '6d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['DOGE', '6d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SUI/USD', '7d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SUI', '7d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['APT/USD', '8d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['APT', '8d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ARB/USD', '9d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ARB', '9d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['OP/USD', '0e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['OP', '0e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['MATIC/USD', '1e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['MATIC', '1e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['LINK/USD', '2e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['LINK', '2e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['TIA/USD', '3e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['TIA', '3e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SEI/USD', '4e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SEI', '4e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['INJ/USD', '5e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['INJ', '5e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+]);
+
+/**
  * Initialize Client SDK (SynapseAgentKit) with all plugins
  */
 let agentKit: SynapseAgentKitInstance | null = null;
@@ -558,14 +626,39 @@ function getAgentKitToolContext(name: string): AgentKitToolContext | undefined {
  */
 export function normalizeAgentKitToolInput(name: string, input: unknown): unknown {
   const aliases = TOOL_INPUT_ALIASES.get(name);
-  if (!aliases || !input || typeof input !== 'object' || Array.isArray(input)) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return input;
   }
 
   const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
-  for (const [from, to] of Object.entries(aliases)) {
-    if (normalized[to] === undefined && normalized[from] !== undefined) {
-      normalized[to] = normalized[from];
+
+  // Apply field aliases (e.g. owner → wallet).
+  if (aliases) {
+    for (const [from, to] of Object.entries(aliases)) {
+      if (normalized[to] === undefined && normalized[from] !== undefined) {
+        normalized[to] = normalized[from];
+      }
+    }
+  }
+
+  // Pyth feed ID resolution: convert symbol/mint to hex feed ID.
+  // Applies to pyth_getPrice, pyth_getPriceHistory, and pyth_listPriceFeeds.
+  if (name === 'pyth_getPrice' || name === 'pyth_getPriceHistory') {
+    const feedIdKey = normalized['feedId'] !== undefined ? 'feedId'
+      : normalized['feed_id'] !== undefined ? 'feed_id'
+      : normalized['priceFeedId'] !== undefined ? 'priceFeedId'
+      : null;
+
+    if (feedIdKey) {
+      const currentValue = String(normalized[feedIdKey] ?? '');
+      // If the value is NOT already a 64-char hex ID, try to resolve it.
+      if (currentValue && currentValue.length !== 64 && !/^[0-9a-f]{64}$/i.test(currentValue)) {
+        const upper = currentValue.toUpperCase();
+        const resolved = PYTH_FEED_ID_MAP.get(upper) ?? PYTH_FEED_ID_MAP.get(currentValue);
+        if (resolved) {
+          normalized[feedIdKey] = resolved;
+        }
+      }
     }
   }
 

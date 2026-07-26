@@ -297,7 +297,7 @@ Use the exact names returned by \`tools/list\`. Do not replace hyphens with unde
 | SOL/SPL balances and transfers | \`sol_get_balance\`, \`spl-token_getBalance\`, \`spl-token_getTokenAccounts\`, \`spl-token_transfer\`, \`spl-token_transferSol\` |
 | Jupiter swaps and quotes | \`jupiter_getQuote\`, \`jupiter_swap\`, \`jupiter_swapInstructions\`, \`jupiter_smartSwap\`, \`jupiter_getOrder\`, \`jupiter_executeOrder\` |
 | Jupiter token intelligence | \`jupiter_searchTokens\`, \`jupiter_getTokenInfo\`, \`jupiter_getTokenList\`, \`jupiter_shield\`, \`jupiter_getHoldings\` |
-| DEX, perps, liquidity | \`drift_*\`, \`adrena_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
+| DEX, perps, liquidity | \`adrena_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
 | Price and market data | \`pyth_getPrice\`, \`pyth_getPriceHistory\`, \`pyth_listPriceFeeds\`, \`coingecko_getTokenPrice\`, \`coingecko_getTokenInfo\` |
 | NFTs and domains | \`metaplex-nft_*\`, \`3land_*\`, \`sap_sns_*\`, \`sns_*\`, \`alldomains_*\` |
 | Bridges, staking, actions | \`bridging_*\`, \`staking_*\`, \`jito_*\`, \`blinks_*\`, \`lulo_*\` |

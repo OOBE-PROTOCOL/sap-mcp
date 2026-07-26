@@ -400,7 +400,7 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
     'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
     'For signing: use sap_payments_finalize_transaction with signerProfile to sign with a specific profile — no need to switch .active-profile.',
     'For SOL/SPL transfers: use sap_build_sol_transfer or sap_build_spl_transfer (hosted builders), then sign locally with sap_payments_finalize_transaction.',
-    'For local-signer-only tools (jupiter_swap, spl-token_transfer, adrena_openPosition, drift_openPerpPosition, etc.): build unsigned on hosted, sign locally — do not create signing scripts.',
+    'For local-signer-only tools (jupiter_swap, spl-token_transfer, adrena_openPosition, etc.): build unsigned on hosted, sign locally — do not create signing scripts.',
     'Namespace: hosted tools are mcp__sap__* (e.g. mcp__sap__jupiter_getQuote). Local bridge tools are mcp__sap_payments__* (e.g. mcp__sap_payments__sap_payments_finalize_transaction). Search both namespaces when looking for a tool.',
   ].join(' ');
 }
