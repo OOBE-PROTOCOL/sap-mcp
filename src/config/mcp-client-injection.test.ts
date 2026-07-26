@@ -380,6 +380,68 @@ describe('MCP client injection', () => {
     expect(parsed.sap_payments.command).toMatch(/^npx/);
   });
 
+  it('auto-repairs Hermes global JSON by removing nested legacy SAP blocks only', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Global MCP',
+      path: '/tmp/mcp.json',
+      format: 'json',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, JSON.stringify({
+      mcpServers: {
+        sap: {
+          command: 'node',
+          args: ['/old/local/dist/cli.js'],
+          env: {
+            SAP_MCP_RPC_URL: 'https://api.devnet.solana.com',
+          },
+        },
+        sap_payments: {
+          command: 'npx',
+          args: ['--yes', '--package', '@oobe-protocol-labs/sap-mcp-server@0.9.1', 'sap-mcp-server'],
+        },
+        filesystem: {
+          command: 'npx',
+          args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+        },
+      },
+      otherSetting: true,
+    }), 'win32');
+    const parsed = JSON.parse(built.nextContent);
+
+    expect(built.hadSapConfig).toBe(true);
+    expect(parsed.sap).toEqual({
+      url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      transport: 'streamable-http',
+    });
+    expect(parsed.sap_payments.command).toBe('npx.cmd');
+    expect(parsed.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
+    expect(parsed.mcpServers.sap).toBeUndefined();
+    expect(parsed.mcpServers.sap_payments).toBeUndefined();
+    expect(parsed.mcpServers.filesystem).toEqual({
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+    });
+    expect(parsed.otherSetting).toBe(true);
+    expect(JSON.stringify(parsed)).not.toContain('api.devnet.solana.com');
+    expect(validateHostedPaymentBridgeContent(targetConfig, built.nextContent, 'win32')).toEqual([]);
+
+    const legacyOnly = JSON.stringify({
+      mcpServers: {
+        sap: { command: 'node', args: ['/old/local/dist/cli.js'] },
+      },
+      sap: {
+        url: 'https://mcp.sap.oobeprotocol.ai/mcp',
+        transport: 'streamable-http',
+      },
+      sap_payments: createNpxCodexServerConfig(),
+    });
+    expect(validateHostedPaymentBridgeContent(targetConfig, legacyOnly, 'darwin'))
+      .toContain('Hermes global mcp.json still has legacy mcpServers.sap or mcpServers.sap_payments; Hermes expects flat sap and sap_payments entries.');
+  });
+
   it('builds Windows hosted payment bridge commands for JSON, YAML, and TOML runtimes', () => {
     const hermesJsonTarget: McpClientTarget = {
       id: 'hermes',

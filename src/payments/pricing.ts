@@ -129,6 +129,19 @@ const FREE_TOOLS = new Set([
   'sap_premium_webhook_relay_status',
   'sap_premium_metrics',
   'sap_quick_context',
+  // Payment readiness and single-asset price checks stay free so agents can
+  // decide whether a user wallet needs SOL/USDC before any paid attempt.
+  'sol_get_balance',
+  'spl-token_getBalance',
+  'spl-token_getTokenAccounts',
+  'spl-token_getTokenAccount',
+  'spl-token_getMint',
+  'spl-token_getSupply',
+  'sap_x402_get_balance',
+  'magicblock_balance',
+  'jupiter_getPrice',
+  'pyth_getPrice',
+  'coingecko_getTokenPrice',
   // Local memory tools — all free, all local
   'sap_memory_record',
   'sap_memory_search',
@@ -192,6 +205,18 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_premium_webhook_relay_status',
   'sap_premium_metrics',
   'sap_quick_context',
+  // Payment readiness and single-asset price checks stay free in strict mode too.
+  'sol_get_balance',
+  'spl-token_getBalance',
+  'spl-token_getTokenAccounts',
+  'spl-token_getTokenAccount',
+  'spl-token_getMint',
+  'spl-token_getSupply',
+  'sap_x402_get_balance',
+  'magicblock_balance',
+  'jupiter_getPrice',
+  'pyth_getPrice',
+  'coingecko_getTokenPrice',
   // Local memory tools — always free, always local
   'sap_memory_record',
   'sap_memory_search',
@@ -225,16 +250,8 @@ const MICRO_READ_TOOLS = new Set([
   'sap_fetch_capability_index',
   'sap_fetch_protocol_index',
   'sap_fetch_tool_category_index',
-  'sol_get_balance',
-  'spl-token_getBalance',
-  'spl-token_getTokenAccounts',
-  'spl-token_getTokenAccount',
-  'spl-token_getMint',
-  'spl-token_getSupply',
-  'sap_x402_get_balance',
   'sap_x402_has_escrow',
   'sap_x402_fetch_escrow',
-  'magicblock_balance',
   'sap_sns_check_domain',
   // Perps analytics and professional planning — no hosted execution.
   'sap_perp_markets',
@@ -245,10 +262,6 @@ const MICRO_READ_TOOLS = new Set([
   'sap_chart_ohlc',
   'sap_chart_long_term',
   'sap_chart_volume_profile',
-  // Single-asset price snapshots are free preflight context in every hosted mode.
-  'jupiter_getPrice',
-  'pyth_getPrice',
-  'coingecko_getTokenPrice',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -397,7 +410,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     tiers: {
       free: {
         paymentRequired: false,
-        pricingRule: 'No x402/pay.sh payment challenge. Free calls are control-plane only: MCP handshake, tool/schema discovery, runtime bootstrap, cost estimation, repair planning, local payment bridge control, local memory, and transaction preflight.',
+        pricingRule: 'No x402/pay.sh payment challenge. Free calls cover MCP handshake, tool/schema discovery, runtime bootstrap, cost estimation, repair planning, local payment bridge control, payment-readiness balances, single-asset price snapshots, local memory, and transaction preflight.',
         examples: [
           'initialize',
           'tools/list',
@@ -408,6 +421,9 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
           'sap_pricing_catalog',
           'sap_estimate_tool_cost',
           'sap_payments_readiness',
+          'sol_get_balance',
+          'spl-token_getTokenAccounts',
+          'jupiter_getPrice',
           'sap_decode_transaction',
           'sap_preview_transaction',
         ],
@@ -415,18 +431,14 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'micro-read': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.microReadUsd, config),
-        pricingRule: 'Flat micro-read fee for fresh lightweight hosted data. Use these for exact agent/profile reads, compact directory pages, core wallet readiness reads, single-asset price snapshots, SNS availability checks, and lightweight trader context.',
+        pricingRule: 'Flat micro-read fee for fresh lightweight hosted data beyond readiness. Use these for exact agent/profile reads, compact directory pages, SNS availability checks, escrow state, and lightweight trader context.',
         examples: [
           'sap_agent_context',
           'sap_get_agent_profile',
           'sap_list_agents limit<=20 view=compact',
-          'sol_get_balance',
-          'spl-token_getBalance',
-          'spl-token_getTokenAccounts',
-          'jupiter_getPrice',
-          'pyth_getPrice',
-          'coingecko_getTokenPrice',
-          'magicblock_balance',
+          'sap_sns_check_domain',
+          'sap_perp_trade_plan',
+          'sap_chart_ohlc',
         ],
       },
       'read-premium': {
@@ -466,7 +478,8 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     },
     runtimeRules: [
       'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
-      `Free tools are control-plane only. Fresh hosted data starts at the micro-read tier (${formatUsdPrice(config.prices.microReadUsd)}): exact SAP agent/profile reads, compact directory pages, core balance checks, single-asset price snapshots, SNS availability checks, and lightweight trader context.`,
+      `Free tools include control-plane calls, local bridge readiness, SOL/SPL/x402 balance checks, MagicBlock balance, and single-asset price snapshots. Use them before paid calls so agents can detect missing SOL/USDC and ask the user to top up.`,
+      `Fresh hosted SAP data beyond readiness starts at the micro-read tier (${formatUsdPrice(config.prices.microReadUsd)}): exact SAP agent/profile reads, compact directory pages, SNS availability checks, escrow state, and lightweight trader context.`,
       `Read-premium calls (${formatUsdPrice(config.prices.readPremiumUsd)}) cover broad discovery, enriched holdings, token lists, OHLCV/history, DAS enrichment, quotes/routes, analytics, and larger pages. Prefer exact IDs and small limits before broad scans.`,
       'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',

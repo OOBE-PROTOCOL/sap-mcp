@@ -36,6 +36,11 @@ export interface ProfileInfo {
   agentPubkey?: string;
   mode?: FullConfig['mode'];
   walletPath?: string;
+  rpcUrl?: string;
+  walletEncrypted?: boolean;
+  active?: boolean;
+  walletExists?: boolean;
+  issues?: string[];
 }
 
 /**
@@ -54,6 +59,39 @@ export interface ProfileSwitchResult {
 
 const DEFAULT_PROFILE = 'default';
 const ACTIVE_PROFILE_FILE = '.active-profile';
+
+function profileIssues(profile: ProfileInfo): string[] {
+  const issues: string[] = [];
+  if (profile.walletPath && profile.walletExists === false) {
+    issues.push('missing-wallet');
+  }
+  if (profile.rpcUrl === 'https://api.mainnet-beta.solana.com') {
+    issues.push('public-mainnet-rpc');
+  }
+  if (profile.walletEncrypted === false && profile.walletPath) {
+    issues.push('plaintext-dedicated-wallet');
+  }
+  return issues;
+}
+
+function enrichProfileFromConfig(profile: ProfileInfo, rawConfig: unknown, activeProfile: string): ProfileInfo {
+  if (!rawConfig || typeof rawConfig !== 'object') {
+    profile.active = profile.name === activeProfile;
+    profile.issues = profileIssues(profile);
+    return profile;
+  }
+
+  const config = rawConfig as Partial<FullConfig>;
+  profile.agentPubkey = typeof config.agentPubkey === 'string' ? config.agentPubkey : undefined;
+  profile.mode = config.mode;
+  profile.walletPath = typeof config.walletPath === 'string' ? config.walletPath : undefined;
+  profile.rpcUrl = typeof config.rpcUrl === 'string' ? config.rpcUrl : undefined;
+  profile.walletEncrypted = typeof config.walletEncrypted === 'boolean' ? config.walletEncrypted : undefined;
+  profile.active = profile.name === activeProfile;
+  profile.walletExists = profile.walletPath ? existsSync(profile.walletPath) : undefined;
+  profile.issues = profileIssues(profile);
+  return profile;
+}
 
 // ============================================================================
 // Profile Path Management
@@ -130,6 +168,7 @@ export function listProfiles(): ProfileInfo[] {
   
   const files = readdirSync(configDir);
   const profiles: ProfileInfo[] = [];
+  const activeProfile = getActiveProfile();
   
   // Find all config files
   for (const file of files) {
@@ -143,11 +182,10 @@ export function listProfiles(): ProfileInfo[] {
       // Try to read profile info
       try {
         const config = JSON.parse(readFileSync(profile.path, 'utf-8'));
-        profile.agentPubkey = config.agentPubkey;
-        profile.mode = config.mode;
-        profile.walletPath = config.walletPath;
+        enrichProfileFromConfig(profile, config, activeProfile);
       } catch {
-        // Ignore read errors
+        profile.active = profile.name === activeProfile;
+        profile.issues = ['unreadable-config'];
       }
       
       profiles.push(profile);
@@ -162,11 +200,10 @@ export function listProfiles(): ProfileInfo[] {
       // Try to read profile info
       try {
         const config = JSON.parse(readFileSync(profile.path, 'utf-8'));
-        profile.agentPubkey = config.agentPubkey;
-        profile.mode = config.mode;
-        profile.walletPath = config.walletPath;
+        enrichProfileFromConfig(profile, config, activeProfile);
       } catch {
-        // Ignore read errors
+        profile.active = profile.name === activeProfile;
+        profile.issues = ['unreadable-config'];
       }
       
       profiles.push(profile);
@@ -174,7 +211,6 @@ export function listProfiles(): ProfileInfo[] {
   }
   
   // Sort: active profile first, then alphabetical
-  const activeProfile = getActiveProfile();
   profiles.sort((a, b) => {
     if (a.name === activeProfile) return -1;
     if (b.name === activeProfile) return 1;

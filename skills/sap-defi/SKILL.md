@@ -60,8 +60,8 @@ bridges, and staking protocols.
 
 ## Professional Perps Flow
 
-For perps or leveraged trading tasks, start with free SAP analytics and planning
-tools before any value-moving action:
+For perps or leveraged trading tasks, start with hosted SAP analytics and
+planning tools before any value-moving action:
 
 1. Call `sap_perp_markets` to inspect supported markets, mark prices, funding,
    and open interest.

@@ -232,8 +232,8 @@ describe('SAP MCP monetization pricing', () => {
     expect(solParsed.toolCalls[0]?.toolName).toBe('sol_get_balance');
   });
 
-  it('prices basic SOL and SPL balance reads as micro-reads', () => {
-    expect(classifyTool('sol_get_balance')).toBe('micro-read');
+  it('keeps basic SOL, SPL, and payment-readiness balance reads free', () => {
+    expect(classifyTool('sol_get_balance')).toBe('free');
     const solDecision = resolvePaymentDecision(parseJsonRpcBody({
       jsonrpc: '2.0',
       id: 1,
@@ -243,13 +243,14 @@ describe('SAP MCP monetization pricing', () => {
           arguments: { wallet: '28VEsvJpLodUaUReU6t2NFD2uWnqydi2vx2AMfa1HCQP' },
         },
     }), monetizationConfig);
-    expect(solDecision.required).toBe(true);
-    if (solDecision.required) {
-      expect(solDecision.tier).toBe('micro-read');
-      expect(solDecision.price).toBe('$0.001');
-    }
-    expect(classifyTool('spl-token_getBalance')).toBe('micro-read');
-    expect(classifyTool('spl-token_getTokenAccounts')).toBe('micro-read');
+    expect(solDecision.required).toBe(false);
+    expect(classifyTool('spl-token_getBalance')).toBe('free');
+    expect(classifyTool('spl-token_getTokenAccounts')).toBe('free');
+    expect(classifyTool('spl-token_getTokenAccount')).toBe('free');
+    expect(classifyTool('spl-token_getMint')).toBe('free');
+    expect(classifyTool('spl-token_getSupply')).toBe('free');
+    expect(classifyTool('sap_x402_get_balance')).toBe('free');
+    expect(classifyTool('magicblock_balance')).toBe('free');
 
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',
@@ -263,10 +264,7 @@ describe('SAP MCP monetization pricing', () => {
 
     const decision = resolvePaymentDecision(parsed, monetizationConfig);
 
-    expect(decision.required).toBe(true);
-    if (decision.required) {
-      expect(decision.tier).toBe('micro-read');
-    }
+    expect(decision.required).toBe(false);
   });
 
   it('prices enriched Jupiter holdings as read premium in default and strict mode', () => {
@@ -290,10 +288,10 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
-  it('prices single-asset price snapshots as micro-reads while broad market data stays premium', () => {
+  it('keeps single-asset price snapshots free while broad market data stays premium', () => {
     for (const toolName of ['jupiter_getPrice', 'pyth_getPrice', 'coingecko_getTokenPrice']) {
-      expect(classifyTool(toolName)).toBe('micro-read');
-      expect(classifyTool(toolName, { strictTools: true })).toBe('micro-read');
+      expect(classifyTool(toolName)).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
 
       const decision = resolvePaymentDecision(parseJsonRpcBody({
         jsonrpc: '2.0',
@@ -305,11 +303,7 @@ describe('SAP MCP monetization pricing', () => {
         },
       }), monetizationConfig);
 
-      expect(decision.required).toBe(true);
-      if (decision.required) {
-        expect(decision.tier).toBe('micro-read');
-        expect(decision.price).toBe('$0.001');
-      }
+      expect(decision.required).toBe(false);
     }
 
     for (const toolName of ['jupiter_getTokenList', 'pyth_getPriceHistory', 'coingecko_getOHLCV']) {
@@ -346,9 +340,9 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
-  it('can price basic balance reads in strict hosted mode', () => {
-    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('micro-read');
-    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('micro-read');
+  it('keeps basic balance reads free in strict hosted mode', () => {
+    expect(classifyTool('sol_get_balance', { strictTools: true })).toBe('free');
+    expect(classifyTool('spl-token_getTokenAccounts', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
@@ -374,11 +368,7 @@ describe('SAP MCP monetization pricing', () => {
       strictTools: true,
     });
 
-    expect(decision.required).toBe(true);
-    if (decision.required) {
-      expect(decision.tier).toBe('micro-read');
-      expect(decision.price).toBe('$0.001');
-    }
+    expect(decision.required).toBe(false);
   });
 
   it('prices enriched discovery as read premium', () => {
@@ -483,6 +473,11 @@ describe('SAP MCP monetization pricing', () => {
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
     expect(catalog.toolSets.free).toContain('sap_prepare_action');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
+    expect(catalog.toolSets.free).toContain('sol_get_balance');
+    expect(catalog.toolSets.free).toContain('spl-token_getTokenAccounts');
+    expect(catalog.toolSets.free).toContain('jupiter_getPrice');
+    expect(catalog.toolSets.microRead).not.toContain('sol_get_balance');
+    expect(catalog.toolSets.microRead).not.toContain('jupiter_getPrice');
     expect(catalog.toolSets.builders).toContain('sap_escrow_build_create_transaction');
     expect(catalog.toolSets.heavyValueActions).toContain('magicblock_swap');
     expect(catalog.runtimeRules.join(' ')).toContain('sap_payments_finalize_transaction');

@@ -878,10 +878,28 @@ function buildHostedPaymentBridgeJsonContent(
   }
 
   if (target.id === 'hermes') {
-    const hadSapConfig = isRecord(root[SAP_SERVER_NAME]) || isRecord(root[SAP_PAYMENT_BRIDGE_SERVER_NAME]);
+    const legacyServers = isRecord(root.mcpServers) ? { ...root.mcpServers } : undefined;
+    const hadSapConfig = isRecord(root[SAP_SERVER_NAME])
+      || isRecord(root[SAP_PAYMENT_BRIDGE_SERVER_NAME])
+      || Boolean(legacyServers && (
+        isRecord(legacyServers[SAP_SERVER_NAME])
+        || isRecord(legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME])
+      ));
+    const nextRoot: JsonRecord = { ...root };
+
+    if (legacyServers) {
+      delete legacyServers[SAP_SERVER_NAME];
+      delete legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME];
+      if (Object.keys(legacyServers).length > 0) {
+        nextRoot.mcpServers = legacyServers;
+      } else {
+        delete nextRoot.mcpServers;
+      }
+    }
+
     return {
       nextContent: formatJson({
-        ...root,
+        ...nextRoot,
         [SAP_SERVER_NAME]: hostedJsonServerConfig(target),
         [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
       }),
@@ -1327,6 +1345,21 @@ export function validateHostedPaymentBridgeContent(
     const codexPaymentBridgeSection = getCodexMcpServerSection(content, SAP_PAYMENT_BRIDGE_SERVER_NAME);
     if (codexSapSection.includes('mcp-remote') || codexPaymentBridgeSection.includes('mcp-remote')) {
       issues.push('Legacy mcp-remote wrapper remains; Codex should use native Streamable HTTP plus sap_payments.');
+    }
+  }
+  if (target.id === 'hermes' && target.format === 'json') {
+    try {
+      const parsed: unknown = content.trim() ? JSON.parse(content) : {};
+      const root = isRecord(parsed) ? parsed : {};
+      const legacyServers = isRecord(root.mcpServers) ? root.mcpServers : undefined;
+      if (legacyServers && (
+        isRecord(legacyServers[SAP_SERVER_NAME])
+        || isRecord(legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME])
+      )) {
+        issues.push('Hermes global mcp.json still has legacy mcpServers.sap or mcpServers.sap_payments; Hermes expects flat sap and sap_payments entries.');
+      }
+    } catch {
+      issues.push('Hermes global mcp.json is not valid JSON.');
     }
   }
 

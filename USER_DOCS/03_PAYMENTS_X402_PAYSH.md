@@ -123,7 +123,7 @@ MCP paid-tool helper. It signs the external provider's 402 challenge locally,
 retries the same HTTP request, and returns the provider response plus the x402
 receipt. It is for generic HTTP x402 endpoints, not hosted SAP MCP tool names.
 
-Basic wallet reads are hosted micro-reads. Call `sol_get_balance`, `spl-token_getBalance`, and `spl-token_getTokenAccounts` directly on hosted SAP MCP when you need fresh payment readiness data. They should not be routed through the local payment bridge unless your runtime is explicitly resolving an x402 challenge.
+Basic wallet and price-readiness checks are free hosted reads. Call `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`, `sap_x402_get_balance`, `magicblock_balance`, `jupiter_getPrice`, `pyth_getPrice`, or `coingecko_getTokenPrice` directly on hosted SAP MCP when you need fresh payment readiness data. They should not be routed through the local payment bridge unless your runtime is explicitly resolving an x402 challenge.
 
 If hosted SAP MCP returns `hosted_local_signer_required`, no x402 payment was
 charged. The requested tool requires a user-owned Solana signature or is not

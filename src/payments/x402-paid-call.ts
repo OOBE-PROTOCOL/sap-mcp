@@ -4,8 +4,9 @@
  * @description Local helper for paying and retrying hosted SAP MCP x402 tool calls with a user-controlled SAP profile signer.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
+import { join } from 'path';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
 import type { PaymentPayload, PaymentRequired, PaymentRequirements, SettleResponse } from '@x402/core/types';
 import { registerExactSvmScheme } from '@x402/svm/exact/client';
@@ -13,6 +14,7 @@ import { createKeyPairSignerFromBytes } from '@solana/kit';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
+import { getPreferredConfigDir } from '../config/paths.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import { getCachedSession, cacheSession, invalidateSession } from './mcp-session-cache.js';
 
@@ -24,6 +26,7 @@ const RETRY_BASE_DELAY_MS = 500;
 const MAX_EXTERNAL_BODY_BYTES = 256 * 1024;
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const DEVNET_USDC_MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const LOCAL_AUDIT_LOG = 'sap-payments-audit.jsonl';
 
 /**
  * @name X402PaidCallInput
@@ -294,6 +297,25 @@ export interface X402ExternalCallAudit {
   attempts: number;
   transientRetries: readonly string[];
   secretMaterial: 'keypair-bytes-never-returned';
+}
+
+/**
+ * @name appendLocalPaymentAudit
+ * @description Best-effort append-only local audit for x402 calls. Never writes keypair bytes.
+ */
+function appendLocalPaymentAudit(event: 'hosted-paid-tool' | 'external-x402', audit: X402PaidCallAudit | X402ExternalCallAudit): void {
+  try {
+    const dir = getPreferredConfigDir();
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    appendFileSync(join(dir, LOCAL_AUDIT_LOG), `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      event,
+      packageVersion: MCP_SERVER_VERSION,
+      audit,
+    })}\n`, { encoding: 'utf-8', mode: 0o600 });
+  } catch {
+    // Audit logging must never break a payment flow.
+  }
 }
 
 interface JsonRpcRequest {
@@ -835,6 +857,7 @@ async function executePaidAttempt(options: {
     transientRetries: options.transientRetries,
     secretMaterial: 'keypair-bytes-never-returned',
   };
+  appendLocalPaymentAudit('hosted-paid-tool', audit);
 
   return {
     success: true,
@@ -917,6 +940,7 @@ async function executeExternalPaidAttempt(options: {
     transientRetries: options.transientRetries,
     secretMaterial: 'keypair-bytes-never-returned',
   };
+  appendLocalPaymentAudit('external-x402', audit);
 
   return {
     success: true,

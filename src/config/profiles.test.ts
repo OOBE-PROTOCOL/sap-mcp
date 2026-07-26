@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -156,6 +156,30 @@ describe('profile management', () => {
       const profiles = listProfiles();
       expect(profiles[0].name).toBe('hermes');
       expect(profiles.slice(1).map(p => p.name)).toEqual([...profiles.slice(1).map(p => p.name)].sort());
+    });
+
+    it('reports active status, missing wallets, public RPC, and plaintext wallet hygiene issues', () => {
+      const dir = join(configHome, 'mcp-sap');
+      mkdirSync(dir, { recursive: true });
+      const walletPath = join(dir, 'keypairs', 'missing.json');
+      writeFileSync(join(dir, 'config-trader.json'), JSON.stringify({
+        mode: 'hosted-api',
+        walletPath,
+        rpcUrl: 'https://api.mainnet-beta.solana.com',
+        walletEncrypted: false,
+      }), 'utf-8');
+
+      setActiveProfile('trader');
+
+      const profile = listProfiles()[0];
+      expect(profile.name).toBe('trader');
+      expect(profile.active).toBe(true);
+      expect(profile.walletExists).toBe(false);
+      expect(profile.issues).toEqual(expect.arrayContaining([
+        'missing-wallet',
+        'public-mainnet-rpc',
+        'plaintext-dedicated-wallet',
+      ]));
     });
 
     it('ignores non-config JSON files', () => {

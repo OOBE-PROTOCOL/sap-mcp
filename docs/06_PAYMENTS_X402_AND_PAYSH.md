@@ -10,8 +10,8 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 
 | Tier | Examples | Price |
 | --- | --- | --- |
-| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`, `sap_estimate_tool_cost`, repair/status tools, local payment bridge control, memory/audit helpers, and transaction preview/finalize helpers | Free |
-| Micro read | exact SAP agent/profile reads, compact `sap_list_agents` pages with `limit <= 20`, core balance checks, SNS availability checks, single-asset prices, lightweight trader/perps context | `$0.001` default |
+| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`, `sap_estimate_tool_cost`, repair/status tools, local payment bridge control, SOL/SPL/x402 balance readiness, single-asset price snapshots, memory/audit helpers, and transaction preview/finalize helpers | Free |
+| Micro read | exact SAP agent/profile reads, compact `sap_list_agents` pages with `limit <= 20`, SNS availability checks, escrow state, lightweight trader/perps context | `$0.001` default |
 | Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, enriched holdings, DAS reads, token lists, quotes/routes, OHLCV/history, analytics | `$0.002` default |
 | Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.006` default, batch = sum of paid calls |
 | Value action | settlement-like or value-linked operations where appropriate | `$0.06` standard, `$0.035` for selected heavy execution paths |
@@ -28,10 +28,15 @@ Agents can also call the free hosted tool `sap_pricing_catalog`. Use these
 surfaces for planning and UI copy, then treat the actual x402 challenge returned
 by the paid `tools/call` request as the final payment source of truth.
 
-The intended agent flow is to use free control-plane tools first, then pay tiny
-micro-read fees for fresh exact data, and pay higher tiers only when the user
-needs broad discovery, enrichment, transaction builders, or value-moving
-actions. For SAP agent directory work, start with
+The intended agent flow is to use free control-plane and readiness tools first.
+Agents may call `sol_get_balance`, `spl-token_getBalance`,
+`spl-token_getTokenAccounts`, `sap_x402_get_balance`, `magicblock_balance`,
+`jupiter_getPrice`, `pyth_getPrice`, and `coingecko_getTokenPrice` directly on
+hosted SAP MCP before any payment. This lets the agent detect missing SOL/USDC
+and ask the user to top up instead of failing inside x402. After readiness,
+pay tiny micro-read fees for fresh exact SAP data, and pay higher tiers only
+when the user needs broad discovery, enrichment, transaction builders, or
+value-moving actions. For SAP agent directory work, start with
 `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
 `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, or
 `sap_list_agents` with `limit <= 20`,
@@ -45,6 +50,12 @@ When a request returns `payment_required`, `hosted_local_signer_required`,
 that has not confirmed, call the free `sap_agent_next_action` resolver before
 retrying. It tells the agent whether a retry is safe, whether a payment was
 charged, and which hosted or local bridge tool should be used next.
+
+The local `sap_payments` bridge writes a best-effort audit trail to
+`~/.config/mcp-sap/sap-payments-audit.jsonl` for hosted paid tools and external
+x402 calls. Entries include public signer address, intent id, payment amount,
+receipt/settlement metadata, attempt counts, and the guarantee that keypair
+bytes were never returned.
 
 For intent-level workflows such as swaps, registry writes, Escrow V2, external
 x402 agents, premium streams, or transaction finalization, call the free
@@ -221,9 +232,11 @@ SAP_MCP_MONETIZATION_STRICT_TOOLS=true
 ```
 
 Strict mode keeps MCP handshake/discovery, base profile context, skill bootstrap,
-and local `sap_payments` bridge helper tools free. Basic balance reads and other
-operational tool calls become paid `tools/call` requests. Use this for public
-marketplaces where every real operational call should produce an x402 challenge.
+local `sap_payments` bridge helper tools, payment-readiness balances, and
+single-asset price snapshots free. Other operational tool calls become paid
+`tools/call` requests. Use this for public marketplaces where real discovery,
+enrichment, builder, and value-action calls should produce an x402 challenge
+without blocking basic wallet readiness checks.
 
 ## 06.6 pay.sh Role
 

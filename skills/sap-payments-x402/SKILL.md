@@ -49,13 +49,11 @@ or external signer.
   `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`,
   `sap_agent_next_action`, `sap_estimate_tool_cost`, `sap_pricing_catalog`,
   repair/status tools, local payment bridge control, transaction
-  preview/finalization helpers, and memory/audit helpers.
+  preview/finalization helpers, SOL/SPL/x402 balance readiness, single-asset
+  price snapshots, and memory/audit helpers.
 - Micro read: exact SAP agent/profile reads, compact `sap_list_agents` pages
-  with `limit <= 20`, `sap_get_network_overview`, core balance checks
-  (`sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`,
-  `spl-token_getMint`, `spl-token_getSupply`, `magicblock_balance`,
-  `sap_x402_get_balance`), SNS availability, single-asset prices, and
-  lightweight trader/perps context.
+  with `limit <= 20`, `sap_get_network_overview`, SNS availability, escrow
+  state, and lightweight trader/perps context.
 - Read premium: `sap_discover_agents`, `sap_list_all_agents`, full/enriched or
   large `sap_list_agents` pages, enriched holdings, indexed discovery, network
   stats, protocol/capability indexes, DAS, token lists, quotes/routes, and
@@ -101,12 +99,14 @@ For fast x402 execution:
    the local SAP MCP `sap_payments_call_paid_tool` bridge configured by the SAP
    MCP wizard instead of falling back to local stdio automatically.
 
-Do not use x402 for core balance reads. `sol_get_balance`,
-`spl-token_getBalance`, `spl-token_getTokenAccounts`, `magicblock_balance`,
-and `sap_x402_get_balance` are free hosted tools and should be called directly
-through the remote SAP MCP connection. Use `jupiter_getHoldings` only when the
-user needs enriched paid portfolio context. Always verify USDC and SOL balances
-before attempting paid calls — an agent without USDC cannot make paid calls.
+Do not use x402 for core balance or single-asset price readiness reads.
+`sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`,
+`magicblock_balance`, `sap_x402_get_balance`, `jupiter_getPrice`,
+`pyth_getPrice`, and `coingecko_getTokenPrice` are free hosted tools and should
+be called directly through the remote SAP MCP connection. Use
+`jupiter_getHoldings` only when the user needs enriched paid portfolio context.
+Always verify USDC and SOL balances before attempting paid calls — an agent
+without USDC cannot make paid calls.
 
 Before any paid tool call, use `sap_estimate_tool_cost` with the tool name to
 get the exact tier, estimated USD cost, and recommended `maxPriceUsd`. This

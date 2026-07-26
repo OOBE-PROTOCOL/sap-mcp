@@ -508,7 +508,7 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentInten
     routing: {
       reads: {
         route: 'hosted sap',
-        rule: 'Use hosted reads directly with exact schemas. Control-plane tools are free; fresh exact profile reads, compact orientation pages, balances, and price snapshots are micro-read; broad discovery/enrichment is read-premium and should use cursors/pagination.',
+        rule: 'Use hosted reads directly with exact schemas. Control-plane tools, wallet/payment readiness balances, and single-asset price snapshots are free; fresh exact SAP profile reads and compact orientation pages are micro-read; broad discovery/enrichment is read-premium and should use cursors/pagination.',
         freeOrientation: [
           'sap_agent_context',
           'sap_get_agent',
@@ -718,8 +718,8 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'For hosted SAP agent discovery, prefer sap_discover_agents with query, wallet, agentPda, protocol, capability, capabilities, hasX402Endpoint, small limit, and pagination.nextCursor before broad scans.',
       'For initial orientation, use free control-plane tools first, then micro-read exact/base reads: sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, sap_get_global_state, or sap_list_agents with limit <= 20 and view: compact. Use read-premium sap_discover_agents or sap_list_all_agents only when the user needs search, enrichment, analytics, or larger pages.',
       'If a capability-filtered SAP agent lookup returns zero rows, retry with query or wallet before saying the agent is absent because secondary indexes can lag AgentAccount rows.',
-      'For free control-plane calls and micro-read data calls, call hosted tools directly.',
-      'Before any paid call, verify USDC and SOL balances using micro-read core balance tools: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, or magicblock_balance. Use read-premium holdings tools only when the user needs enriched portfolio context. An agent without USDC cannot make paid calls.',
+      'For free control-plane, free readiness, and micro-read data calls, call hosted tools directly.',
+      'Before any paid call, verify USDC and SOL balances using free readiness tools: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, sap_x402_get_balance, or magicblock_balance. Use read-premium holdings tools only when the user needs enriched portfolio context. An agent without USDC cannot make paid calls.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
       'Before paid calls, use sap_estimate_tool_cost to know the exact tier and estimated USD cost of a specific tool, or sap_pricing_catalog for the full tier overview. The x402 challenge itself is the final price source of truth.',
       'For external HTTP x402 agent endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402 instead of hand-rolled HTTP/sign/retry scripts.',

@@ -365,7 +365,23 @@ async function main() {
               console.log(`   Mode: ${profile.mode}`);
             }
             if (profile.walletPath) {
-              console.log(`   Wallet: ${profile.walletPath}`);
+              const walletState = profile.walletExists === false ? ' (missing)' : '';
+              console.log(`   Wallet: ${profile.walletPath}${walletState}`);
+            }
+            if (profile.rpcUrl) {
+              console.log(`   RPC: ${profile.rpcUrl}`);
+            }
+            if (typeof profile.walletEncrypted === 'boolean') {
+              console.log(`   Wallet encrypted: ${profile.walletEncrypted ? 'yes' : 'no'}`);
+            }
+            if (profile.issues && profile.issues.length > 0) {
+              console.log(`   Issues: ${profile.issues.join(', ')}`);
+              if (profile.issues.includes('public-mainnet-rpc')) {
+                console.log('   Hint: use a private or OOBE RPC endpoint for faster local signing/finalization.');
+              }
+              if (profile.issues.includes('plaintext-dedicated-wallet')) {
+                console.log('   Hint: keep only limited funds in local-dev-keypair profiles or use an external signer for production.');
+              }
             }
             console.log('');
           }

@@ -213,8 +213,8 @@ Initial model:
 
 | Tier | Examples | Price |
 | --- | --- | --- |
-| Free | `tools/list`, `prompts/list`, `resources/list`, bootstrap/status/repair, cost estimation, local payment bridge control, memory/audit, transaction preview/finalize helpers | Free |
-| Micro read | exact agent/profile reads, compact directory pages, core balances, SNS availability, single-asset prices, lightweight trader context | `$0.001` |
+| Free | `tools/list`, `prompts/list`, `resources/list`, bootstrap/status/repair, cost estimation, local payment bridge control, SOL/SPL/x402 balance readiness, single-asset price snapshots, memory/audit, transaction preview/finalize helpers | Free |
+| Micro read | exact agent/profile reads, compact directory pages, SNS availability, escrow state, lightweight trader context | `$0.001` |
 | Premium read | broad discovery, enriched holdings/DAS, token lists, quotes/routes, history/OHLCV, analytics, larger pages | `$0.002` |
 | Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.006`, batch = sum of paid calls |
 | Value action | selected value-linked operations | fixed `$0.06` standard, `$0.035` selected heavy paths, plus optional bps |

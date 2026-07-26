@@ -192,13 +192,15 @@ the local `sap_payments.sap_payments_readiness` bridge when it is configured.
 Use `sap_payments.sap_payments_profile_current` only as a narrower compatibility
 profile check.
 
-Basic wallet reads are hosted micro-reads. Call `sol_get_balance`,
-`spl-token_getBalance`, `spl-token_getTokenAccounts`, and `magicblock_balance`
-directly on the hosted server when the user needs fresh readiness data. Do not
-send these balance checks through `sap_payments_call_paid_tool`, and do not
-summarize a balance read as a facilitator `BlockhashNotFound` problem unless a
-paid x402 tool actually returned that error. Use `jupiter_getHoldings` only when
-the user needs enriched read-premium portfolio context.
+Basic wallet and price-readiness checks are free hosted reads. Call
+`sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`,
+`sap_x402_get_balance`, `magicblock_balance`, `jupiter_getPrice`,
+`pyth_getPrice`, and `coingecko_getTokenPrice` directly on the hosted server
+when the user needs fresh readiness data. Do not send these checks through
+`sap_payments_call_paid_tool`, and do not summarize a readiness read as a
+facilitator `BlockhashNotFound` problem unless a paid x402 tool actually
+returned that error. Use `jupiter_getHoldings` only when the user needs enriched
+read-premium portfolio context.
 
 Before any paid tool call, use `sap_estimate_tool_cost` with the tool name to
 get the exact pricing tier, estimated USD cost, and recommended `maxPriceUsd`.

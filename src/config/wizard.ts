@@ -33,6 +33,7 @@ import {
   type McpClientId,
   type McpClientTarget,
 } from './mcp-client-injection.js';
+import { listProfiles } from './profiles.js';
 
 type WizardLogLevel = WizardSetupInput['logLevel'];
 type WizardSetupPath = 'full-hosted' | 'repair-payments' | 'manual-snippets';
@@ -1212,6 +1213,47 @@ function installRecommendedPaymentBridgeConfigs(): void {
 }
 
 /**
+ * @name printProfileHygieneSummary
+ * @description Prints non-destructive local profile diagnostics after repair.
+ */
+function printProfileHygieneSummary(): void {
+  const profiles = listProfiles();
+  if (profiles.length === 0) {
+    printWarning('No local SAP profiles found yet. Run full hosted setup before paid/write flows.');
+    return;
+  }
+
+  const active = profiles.find(profile => profile.active) ?? profiles[0];
+  printLabel('Local profile check');
+  printBullet(`Active profile: ${active?.name ?? 'unknown'}`);
+  if (active?.walletPath) {
+    printBullet(`Wallet path: ${active.walletPath}${active.walletExists === false ? ' (missing)' : ''}`);
+  }
+  if (active?.rpcUrl) {
+    printBullet(`RPC: ${active.rpcUrl}`);
+  }
+  const problemProfiles = profiles.filter(profile => (profile.issues?.length ?? 0) > 0);
+  if (problemProfiles.length === 0) {
+    printSuccess('No profile hygiene issues detected.');
+    return;
+  }
+
+  printWarning(`${problemProfiles.length} profile hygiene issue group${problemProfiles.length === 1 ? '' : 's'} detected.`);
+  for (const profile of problemProfiles.slice(0, 5)) {
+    printBullet(`${profile.name}: ${(profile.issues ?? []).join(', ')}`);
+  }
+  if (problemProfiles.some(profile => profile.issues?.includes('missing-wallet'))) {
+    printInfo('If a profile points to a missing wallet, switch to a valid profile or rerun full hosted setup.');
+  }
+  if (problemProfiles.some(profile => profile.issues?.includes('public-mainnet-rpc'))) {
+    printInfo('For faster signing/finalization, configure a private or OOBE RPC endpoint instead of the public Solana RPC.');
+  }
+  if (problemProfiles.some(profile => profile.issues?.includes('plaintext-dedicated-wallet'))) {
+    printInfo('For production, use an external signer or keep only limited funds in a dedicated local-dev-keypair profile.');
+  }
+}
+
+/**
  * Repairs hosted SAP MCP plus local sap_payments runtime configuration without changing the active SAP profile.
  */
 export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void {
@@ -1239,6 +1281,8 @@ export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void 
   console.log('');
 
   installRecommendedPaymentBridgeConfigs();
+  console.log('');
+  printProfileHygieneSummary();
 
   console.log('');
   printSuccess('Repair complete.');
