@@ -50,7 +50,7 @@ const tradingStreamInputSchema = {
     },
     dexes: {
       type: 'array',
-      items: { type: 'string', enum: ['jupiter', 'raydium', 'orca', 'drift', 'phoenix', 'meteora'] },
+      items: { type: 'string', enum: ['jupiter', 'raydium', 'orca', 'phoenix', 'meteora'] },
       description: 'DEX protocols to scan. Empty = all DEXes.',
     },
     minSizeUsd: {

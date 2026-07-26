@@ -5,7 +5,7 @@
 ```
 main          ← production-ready, tagged releases only
 develop       ← integration branch, PRs merge here first
-release/*     ← optional release prep branches (release/0.9.21)
+release/*     ← optional release prep branches (release/0.9.35)
 feature/*     ← short-lived feature branches → PR to develop
 hotfix/*      ← urgent fixes → PR to main + cherry-pick to develop
 ```
@@ -57,7 +57,7 @@ GitHub Actions secrets (configured in repo settings):
 
 ## Tag convention
 
-Tags are plain version numbers: `0.9.21` (NOT `v0.9.21`).
+Tags are plain version numbers: `0.9.35` (NOT `v0.9.35`).
 
 ## Binary artifacts
 

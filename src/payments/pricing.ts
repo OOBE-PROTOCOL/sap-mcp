@@ -166,6 +166,15 @@ const FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+  // Perps analytics and professional planning — no hosted execution.
+  'sap_perp_markets',
+  'sap_perp_position_info',
+  'sap_perp_funding_history',
+  'sap_perp_liquidation_zones',
+  'sap_perp_trade_plan',
+  'sap_chart_ohlc',
+  'sap_chart_long_term',
+  'sap_chart_volume_profile',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -249,6 +258,15 @@ const STRICT_FREE_TOOLS = new Set([
   'spl-token_getSupply',
   'sap_x402_get_balance',
   'magicblock_balance',
+  // Perps analytics and professional planning — no hosted execution.
+  'sap_perp_markets',
+  'sap_perp_position_info',
+  'sap_perp_funding_history',
+  'sap_perp_liquidation_zones',
+  'sap_perp_trade_plan',
+  'sap_chart_ohlc',
+  'sap_chart_long_term',
+  'sap_chart_volume_profile',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([

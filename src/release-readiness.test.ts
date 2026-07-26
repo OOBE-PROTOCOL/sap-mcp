@@ -155,4 +155,21 @@ describe('release readiness documentation and package surface', () => {
     expect(activeSkillText).not.toContain('createEscrow(');
     expect(activeSkillText).not.toContain('settleEscrow(');
   });
+
+  it('keeps the disabled perps protocol out of public docs and skills', () => {
+    const disabledProtocolNeedle = ['dri', 'ft'].join('');
+    const publicSurface = [
+      readText('README.md'),
+      readText('skills/README.md'),
+      readText('skills/sap-defi/SKILL.md'),
+      readText('skills/sap-agentkit/SKILL.md'),
+      readText('skills/sap-mcp/TOOL_REFERENCE.md'),
+      readText('docs/README.md'),
+      readText('docs/13_BOUNTY_PROGRAM_PROPOSAL.md'),
+      readText('docs/15_DASHBOARD_SCREENSHARE_SCRIPT.md'),
+      readText('src/remote/public-home/sections.ts'),
+    ].join('\n').toLowerCase();
+
+    expect(publicSurface).not.toContain(disabledProtocolNeedle);
+  });
 });

@@ -73,7 +73,7 @@ SAP MCP groups tools into three practical buckets:
 
 | Bucket | What Agents Can Do |
 | --- | --- |
-| Solana DeFi protocol tools | Use Jupiter, Raydium, Orca, Meteora, Drift, Pyth, Metaplex, SPL Token, bridging, staking, and related Solana protocol integrations. |
+| Solana DeFi protocol tools | Use Jupiter, Raydium, Orca, Meteora, Pyth, Metaplex, SPL Token, bridging, staking, and related Solana protocol integrations. |
 | Solana RPC and chain methods | Read balances, token accounts, transactions, DAS assets, NFTs, network state, program data, and chain metadata. |
 | Synapse Agent Protocol methods | Register and discover agents, use SAP reputation, escrow, settlement, memory, proofs, SNS identity, policy context, and coordination flows. |
 

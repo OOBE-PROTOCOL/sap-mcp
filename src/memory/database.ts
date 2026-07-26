@@ -18,8 +18,8 @@ import Database from 'better-sqlite3';
 import type { Database as DatabaseType, Statement } from 'better-sqlite3';
 import { mkdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
-import { homedir } from 'os';
 import { logger } from '../core/logger.js';
+import { getMemoryDir } from '../config/paths.js';
 import type { MemoryConfig } from './types.js';
 
 /**
@@ -32,10 +32,10 @@ const SCHEMA_VERSION = 1;
 /**
  * @name DEFAULT_CONFIG
  * @description Default memory configuration. The DB is stored in
- * ~/.config/sap-mcp/memory/ which is the standard SAP MCP config directory.
+ * ~/.config/mcp-sap/memory/ which is the standard SAP MCP config directory.
  */
 export const DEFAULT_CONFIG: MemoryConfig = {
-  dbPath: join(homedir(), '.config', 'sap-mcp', 'memory', 'agent-memory.db'),
+  dbPath: join(getMemoryDir(), 'agent-memory.db'),
   enableWal: true,
   maxPayloadBytes: 8192,
   relevanceDecayPerDay: 0.01,

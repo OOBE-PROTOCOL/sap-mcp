@@ -1,6 +1,6 @@
 # SAP DeFi
 
-Use this skill for Jupiter swaps, DCA, limit orders, Drift, Adrena, Lulo,
+Use this skill for Jupiter swaps, DCA, limit orders, perps planning, Adrena, Lulo,
 Raydium, Orca, Meteora, OpenBook, Manifest, Pump.fun, Jito, bridges, and
 staking protocols.
 
@@ -24,7 +24,14 @@ staking protocols.
 
 ## Protocol Tools
 
-- `drift_*`
+- `sap_perp_trade_plan`
+- `sap_perp_markets`
+- `sap_perp_position_info`
+- `sap_perp_funding_history`
+- `sap_perp_liquidation_zones`
+- `sap_chart_ohlc`
+- `sap_chart_long_term`
+- `sap_chart_volume_profile`
 - `adrena_*`
 - `lulo_*`
 - `raydium-pools_*`
@@ -51,6 +58,28 @@ staking protocols.
    use `sap_payments_finalize_transaction`. For local SAP MCP stdio builders,
    use `sap_preview_transaction`, `sap_sign_transaction`, and
    `sap_submit_signed_transaction`. Do not write ad-hoc signing scripts.
+
+## Professional Perps Flow
+
+For perps or leveraged trading tasks, start with free SAP analytics and planning
+tools before any value-moving action:
+
+1. Call `sap_perp_markets` to inspect supported markets, mark prices, funding,
+   and open interest.
+2. Call `sap_perp_position_info` when the user has an existing wallet position.
+3. Call `sap_chart_ohlc`, `sap_chart_long_term`, or
+   `sap_chart_volume_profile` for trend, timeframe, and liquidity context.
+4. Call `sap_perp_liquidation_zones` to understand liquidation distance and
+   crowded-risk areas.
+5. Call `sap_perp_trade_plan` with market, side, collateral amount, leverage,
+   entry price, stop loss, take profit, max slippage, and max account-risk
+   policy.
+
+`sap_perp_trade_plan` is analysis-only. It returns trader-grade risk flags,
+liquidation estimate, reward/risk, and an execution checklist. Do not create
+temporary signing scripts, do not guess perps account graphs, and do not execute
+a perps transaction unless SAP MCP exposes a typed unsigned builder or a local
+SAP payments/signing tool for that exact action.
 
 ## Safety
 

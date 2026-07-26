@@ -9,7 +9,7 @@
  *
  * All types are designed for non-custodial, local-only operation — no data
  * leaves the user's machine. The memory DB is stored at
- * ~/.config/sap-mcp/memory/agent-memory.db.
+ * ~/.config/mcp-sap/memory/agent-memory.db.
  */
 
 /**

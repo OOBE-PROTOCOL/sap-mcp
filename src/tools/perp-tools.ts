@@ -2,7 +2,7 @@
  * @name tools/perp-tools
  * @description MCP tools for perpetual futures trading and chart analysis on Solana.
  *
- * Provides 10 tools across two categories:
+ * Provides 8 tools across two categories:
  *
  *   Read-only tools (7):
  *     - sap_perp_markets          — List Adrena perp markets with mark price, funding, OI.
@@ -13,20 +13,18 @@
  *     - sap_chart_volume_profile  — Volume profile analysis (POC, VAH, VAL).
  *     - sap_perp_liquidation_zones — Compute liquidation zones for open positions.
  *
- *   Inscribed tools (3 — build unsigned transactions for local signing):
- *     - sap_perp_build_open       — Build tx to open a leveraged perp position.
- *     - sap_perp_build_close      — Build tx to close a perp position.
- *     - sap_perp_build_modify     — Build tx to add/remove collateral.
+ *   Professional planning tools (1):
+ *     - sap_perp_trade_plan       — Build a trader-grade risk, route, and execution checklist.
  *
  * All read-only tools use free APIs (DexScreener, DeFiLlama) and Solana RPC
- * (Triton). Inscribed tools build unsigned transactions with @solana/web3.js
- * — the agent signs locally, no server-side signing keys.
+ * (Triton). Execution builders are intentionally not exposed unless the
+ * account graph is IDL-backed and safe for local finalization.
  *
  * @module tools/perp-tools
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
@@ -53,19 +51,6 @@ const DEFAULT_VP_BUCKETS = 20;
 
 /** Value area percentage for volume profile (70%). */
 const VALUE_AREA_PCT = 0.70;
-
-/* ═══════════════════════════════════════════════════════════════════
- *  Adrena instruction discriminators (from IDL v2.1.5, Anchor 0.31)
- * ═══════════════════════════════════════════════════════════════════ */
-
-const DISC_OPEN_LONG = Buffer.from([224, 114, 146, 60, 127, 166, 244, 56]);
-const DISC_OPEN_SHORT = Buffer.from([196, 212, 161, 82, 250, 39, 201, 102]);
-const DISC_CLOSE_LONG = Buffer.from([50, 66, 35, 214, 218, 31, 152, 68]);
-const DISC_CLOSE_SHORT = Buffer.from([158, 216, 38, 16, 140, 37, 15, 131]);
-const DISC_ADD_COLLATERAL_LONG = Buffer.from([101, 191, 243, 208, 154, 22, 72, 19]);
-const DISC_ADD_COLLATERAL_SHORT = Buffer.from([197, 235, 47, 1, 228, 10, 200, 184]);
-const DISC_REMOVE_COLLATERAL_LONG = Buffer.from([179, 122, 186, 139, 223, 72, 205, 58]);
-const DISC_REMOVE_COLLATERAL_SHORT = Buffer.from([242, 74, 116, 29, 106, 148, 241, 205]);
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Adrena account discriminators (Anchor 0.31 — sha256("account:<Name>")[0..8])
@@ -175,14 +160,6 @@ interface LiquidationZone {
   leverage: number;
 }
 
-interface InscribedTransactionResult {
-  transaction: string;
-  programId: string;
-  instruction: string;
-  accounts: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>;
-  dataLength: number;
-}
-
 /* ═══════════════════════════════════════════════════════════════════
  *  Helper: timed fetch
  * ═══════════════════════════════════════════════════════════════════ */
@@ -214,62 +191,6 @@ async function timedFetch<T>(url: string): Promise<T | null> {
   } catch {
     return null;
   }
-}
-
-/**
- * @name buildInscribedTx
- * @description Build an unsigned transaction from a single instruction and serialize it.
- *
- * @param instruction — The TransactionInstruction to include.
- * @returns Serialized base64 transaction + metadata.
- *
- * @internal
- */
-function buildInscribedTx(instruction: TransactionInstruction): InscribedTransactionResult {
-  const tx = new Transaction();
-  tx.add(instruction);
-  const serialized = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
-
-  return {
-    transaction: serialized,
-    programId: instruction.programId.toBase58(),
-    instruction: 'adrena',
-    accounts: instruction.keys.map(k => ({
-      pubkey: k.pubkey.toBase58(),
-      isSigner: k.isSigner,
-      isWritable: k.isWritable,
-    })),
-    dataLength: instruction.data.length,
-  };
-}
-
-/**
- * @name writeNumberU64LE
- * @description Write a u64 number as little-endian bytes into a Buffer at an offset.
- *
- * @param buf    — Target buffer.
- * @param value  — Number to write (must fit in u64).
- * @param offset — Write offset in the buffer.
- *
- * @internal
- */
-function writeNumberU64LE(buf: Buffer, value: number, offset: number): void {
-  const bigVal = BigInt(Math.floor(value));
-  buf.writeBigUInt64LE(bigVal, offset);
-}
-
-/**
- * @name writeNumberU32LE
- * @description Write a u32 number as little-endian bytes into a Buffer at an offset.
- *
- * @param buf    — Target buffer.
- * @param value  — Number to write (must fit in u32).
- * @param offset — Write offset in the buffer.
- *
- * @internal
- */
-function writeNumberU32LE(buf: Buffer, value: number, offset: number): void {
-  buf.writeUInt32LE(Math.floor(value), offset);
 }
 
 /**
@@ -352,7 +273,7 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
   };
 
   registerTool(server, 'sap_perp_markets', {
-    description: 'List available perpetual futures markets on Adrena with mark price, funding rate, open interest, and 24h volume. Read-only — reads Pool and Custody accounts directly from Solana RPC (on-chain). Returns pool and custody addresses needed by sap_perp_build_open.',
+    description: 'List available perpetual futures markets on Adrena with mark price, funding rate, open interest, and 24h volume. Read-only — reads Pool and Custody accounts directly from Solana RPC (on-chain). Use with sap_perp_trade_plan for professional pre-trade risk planning.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const marketFilter = typeof args['market'] === 'string' ? (args['market'] as string).toUpperCase() : '';
@@ -483,7 +404,7 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
         count: filtered.length,
         totalCustodies: custodyAccounts.length,
         totalPools: poolAccounts.length,
-        note: 'Data read directly from Solana on-chain Pool/Custody accounts. Use custodyAddress and poolAddress with sap_perp_build_open.',
+        note: 'Data read directly from Solana on-chain Pool/Custody accounts. Use custodyAddress and poolAddress for analysis and sap_perp_trade_plan before any external execution route.',
       }));
     } catch (err) {
       return createTextResponse(JSON.stringify({
@@ -1235,349 +1156,165 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- *  Tool 8: sap_perp_build_open (inscribedTool)
+ *  Tool 8: sap_perp_trade_plan
  * ═══════════════════════════════════════════════════════════════════ */
 
 /**
- * @name registerPerpBuildOpenTool
- * @description Register the sap_perp_build_open inscribedTool.
+ * @name registerPerpTradePlanTool
+ * @description Register the professional perps planning tool.
  *
- * Builds an unsigned transaction for opening a leveraged perp position on
- * Adrena. The agent provides pool and custody addresses obtained from
- * `sap_perp_markets` (on-chain). The agent signs locally — no server-side
- * signing keys.
+ * This tool does not build a transaction. It turns an intent into a compact
+ * risk, sizing, and execution checklist so agents can act like traders while
+ * avoiding fake or incomplete unsigned transaction builders.
  *
- * @param server  — MCP server instance.
- * @param context — Runtime context with Solana RPC connection.
+ * @param server — MCP server instance.
  *
  * @internal
  */
-function registerPerpBuildOpenTool(server: Server, _context: SapMcpContext): void {
+function registerPerpTradePlanTool(server: Server): void {
   const schema: JsonSchema = {
     type: 'object',
     properties: {
-      wallet: {
-        type: 'string',
-        description: 'Wallet public key (base58) — the signer and fee payer.',
-      },
-      poolAddress: {
-        type: 'string',
-        description: 'Pool account public key (base58). Obtain from sap_perp_markets output — the poolAddress field.',
-      },
-      custodyAddress: {
-        type: 'string',
-        description: 'Custody account public key (base58). Obtain from sap_perp_markets output — the custodyAddress field.',
-      },
       market: {
         type: 'string',
-        description: 'Market symbol (e.g. "SOL", "BTC", "ETH") for display/reference.',
+        description: 'Perp market symbol or pair, for example SOL-PERP, BTC-PERP, or ETH-PERP.',
       },
       side: {
         type: 'string',
-        description: 'Position direction.',
+        description: 'Intended direction for the trade.',
         enum: ['long', 'short'],
       },
-      collateralMint: {
-        type: 'string',
-        description: 'Collateral token mint address (base58, e.g. USDC mint).',
-      },
-      collateralAmount: {
+      collateralAmountUsd: {
         type: 'number',
-        description: 'Collateral amount in raw token units (account for decimals).',
-        minimum: 1,
+        description: 'Collateral to allocate in USD. This is the margin budget, not notional size.',
+        minimum: 0,
       },
       leverage: {
         type: 'number',
-        description: 'Leverage multiplier (1-100 for Adrena).',
+        description: 'Requested leverage multiplier. Keep conservative unless user policy explicitly allows more.',
         minimum: 1,
         maximum: 100,
       },
-      stopLoss: {
+      entryPrice: {
         type: 'number',
-        description: 'Optional stop-loss price in USD.',
+        description: 'Reference entry price in USD used for risk math.',
+        minimum: 0,
       },
-      takeProfit: {
+      stopLossPrice: {
         type: 'number',
-        description: 'Optional take-profit price in USD.',
+        description: 'Optional stop loss price in USD. Strongly recommended before execution.',
+        minimum: 0,
+      },
+      takeProfitPrice: {
+        type: 'number',
+        description: 'Optional take profit price in USD used to compute reward/risk.',
+        minimum: 0,
+      },
+      maxAccountRiskPct: {
+        type: 'number',
+        description: 'Maximum account risk percentage allowed by local policy. Default 1%.',
+        minimum: 0,
+        maximum: 100,
+      },
+      maxSlippageBps: {
+        type: 'number',
+        description: 'Maximum execution slippage in basis points. Default 50 bps.',
+        minimum: 0,
+        maximum: 10_000,
+      },
+      timeframe: {
+        type: 'string',
+        description: 'Trading horizon such as scalp, intraday, swing, or hedge.',
+      },
+      notes: {
+        type: 'string',
+        description: 'Optional user notes, catalyst, invalidation thesis, or strategy context.',
       },
     },
-    required: ['wallet', 'poolAddress', 'custodyAddress', 'side', 'collateralMint', 'collateralAmount', 'leverage'],
+    required: ['market', 'side', 'collateralAmountUsd', 'leverage', 'entryPrice'],
     additionalProperties: false,
   };
-  registerTool(server, 'sap_perp_build_open', {
-    description: 'Build an unsigned transaction to open a leveraged perpetual position on Adrena. Requires poolAddress and custodyAddress from sap_perp_markets (on-chain). Returns serialized base64 transaction for the agent to sign locally. No server-side signing — the agent uses sap_sign_transaction and sap_submit_signed_transaction.',
+
+  registerTool(server, 'sap_perp_trade_plan', {
+    description: 'Create a trader-grade perpetual futures plan from a simple intent. Returns notional size, stop risk, reward/risk, liquidation estimate, preflight checklist, and the exact SAP MCP read tools to call next. This is analysis-only: SAP MCP does not expose Adrena execution builders until they are IDL-backed and locally finalizable.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
-    const walletStr = typeof args['wallet'] === 'string' ? args['wallet'] as string : '';
-    const poolAddressStr = typeof args['poolAddress'] === 'string' ? args['poolAddress'] as string : '';
-    const custodyAddressStr = typeof args['custodyAddress'] === 'string' ? args['custodyAddress'] as string : '';
-    const side = args['side'] as 'long' | 'short';
-    const collateralAmount = args['collateralAmount'] as number;
-    const leverage = args['leverage'] as number;
-    const stopLoss = typeof args['stopLoss'] === 'number' ? args['stopLoss'] as number : 0;
-    const takeProfit = typeof args['takeProfit'] === 'number' ? args['takeProfit'] as number : 0;
+    const market = String(args['market'] ?? '').trim().toUpperCase();
+    const side = args['side'] === 'short' ? 'short' : 'long';
+    const collateralAmountUsd = typeof args['collateralAmountUsd'] === 'number' ? args['collateralAmountUsd'] : 0;
+    const leverage = typeof args['leverage'] === 'number' ? args['leverage'] : 1;
+    const entryPrice = typeof args['entryPrice'] === 'number' ? args['entryPrice'] : 0;
+    const stopLossPrice = typeof args['stopLossPrice'] === 'number' ? args['stopLossPrice'] : null;
+    const takeProfitPrice = typeof args['takeProfitPrice'] === 'number' ? args['takeProfitPrice'] : null;
+    const maxAccountRiskPct = typeof args['maxAccountRiskPct'] === 'number' ? args['maxAccountRiskPct'] : 1;
+    const maxSlippageBps = typeof args['maxSlippageBps'] === 'number' ? args['maxSlippageBps'] : 50;
 
-    if (!walletStr) {
-      return createTextResponse(JSON.stringify({ error: 'wallet is required' }), { isError: true });
-    }
-    if (!poolAddressStr) {
+    if (!market || collateralAmountUsd <= 0 || leverage <= 0 || entryPrice <= 0) {
       return createTextResponse(JSON.stringify({
-        error: 'poolAddress is required. Use sap_perp_markets to get the pool address for the desired market.',
-      }), { isError: true });
-    }
-    if (!custodyAddressStr) {
-      return createTextResponse(JSON.stringify({
-        error: 'custodyAddress is required. Use sap_perp_markets to get the custody address for the desired market.',
+        error: 'market, collateralAmountUsd, leverage, and entryPrice are required and must be positive.',
       }), { isError: true });
     }
 
-    let walletPubkey: PublicKey;
-    let poolPubkey: PublicKey;
-    let custodyPubkey: PublicKey;
-    try {
-      walletPubkey = new PublicKey(walletStr);
-      poolPubkey = new PublicKey(poolAddressStr);
-      custodyPubkey = new PublicKey(custodyAddressStr);
-    } catch {
-      return createTextResponse(JSON.stringify({ error: 'Invalid wallet, pool, or custody address' }), { isError: true });
+    const notionalUsd = collateralAmountUsd * leverage;
+    const stopMovePct = stopLossPrice && stopLossPrice > 0
+      ? Math.abs((entryPrice - stopLossPrice) / entryPrice) * 100
+      : null;
+    const takeProfitMovePct = takeProfitPrice && takeProfitPrice > 0
+      ? Math.abs((takeProfitPrice - entryPrice) / entryPrice) * 100
+      : null;
+    const estimatedStopRiskUsd = stopMovePct === null ? null : notionalUsd * (stopMovePct / 100);
+    const estimatedRewardUsd = takeProfitMovePct === null ? null : notionalUsd * (takeProfitMovePct / 100);
+    const rewardRisk = estimatedStopRiskUsd && estimatedRewardUsd
+      ? estimatedRewardUsd / estimatedStopRiskUsd
+      : null;
+    const liquidationEstimate = side === 'long'
+      ? entryPrice * (1 - (1 / leverage))
+      : entryPrice * (1 + (1 / leverage));
+
+    const riskFlags: string[] = [];
+    if (!stopLossPrice) riskFlags.push('missing_stop_loss');
+    if (estimatedStopRiskUsd !== null && estimatedStopRiskUsd > collateralAmountUsd * (maxAccountRiskPct / 100)) {
+      riskFlags.push('stop_risk_exceeds_policy');
     }
-
-    // Build instruction data: discriminator(8) + price(u64) + collateral(u64) + leverage(u32) + stopLoss(u64) + takeProfit(u64)
-    const disc = side === 'long' ? DISC_OPEN_LONG : DISC_OPEN_SHORT;
-    const dataLen = 8 + 8 + 8 + 4 + 8 + 8;
-    const data = Buffer.alloc(dataLen);
-    let offset = 0;
-
-    disc.copy(data, offset); offset += 8;
-    writeNumberU64LE(data, takeProfit, offset); offset += 8;  // price (take-profit as limit price, 0 for market)
-    writeNumberU64LE(data, collateralAmount, offset); offset += 8;
-    writeNumberU32LE(data, leverage, offset); offset += 4;
-    writeNumberU64LE(data, stopLoss, offset); offset += 8;
-    writeNumberU64LE(data, takeProfit, offset); offset += 8;
-
-    // Build instruction with required Adrena accounts.
-    // Real account layout from IDL: signer, pool, custody, collateral_custody, position, userProfile, system_program, token_program
-    // Pool and custody are now provided by the caller (from sap_perp_markets on-chain data).
-    const instruction = new TransactionInstruction({
-      programId: ADRENA_PROGRAM_ID,
-      keys: [
-        { pubkey: walletPubkey, isSigner: true, isWritable: true },
-        { pubkey: poolPubkey, isSigner: false, isWritable: true },
-        { pubkey: custodyPubkey, isSigner: false, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      data,
-    });
-
-    const result = buildInscribedTx(instruction);
+    if (leverage > 10) riskFlags.push('high_leverage_requires_explicit_user_confirmation');
+    if (maxSlippageBps > 100) riskFlags.push('slippage_above_1_percent');
 
     return createTextResponse(JSON.stringify({
-      ...result,
+      market,
       side,
+      executionStatus: 'analysis_only',
+      collateralAmountUsd,
       leverage,
-      collateralAmount,
-      poolAddress: poolAddressStr,
-      custodyAddress: custodyAddressStr,
-      stopLoss,
-      takeProfit,
-      note: 'Transaction is unsigned. Pool and custody accounts are included from sap_perp_markets on-chain data. Sign locally with sap_sign_transaction and submit with sap_submit_signed_transaction.',
-    }));
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════
- *  Tool 9: sap_perp_build_close (inscribedTool)
- * ═══════════════════════════════════════════════════════════════════ */
-
-/**
- * @name registerPerpBuildCloseTool
- * @description Register the sap_perp_build_close inscribedTool.
- *
- * @param server  — MCP server instance.
- * @param context — Runtime context (unused — builds instruction only).
- *
- * @internal
- */
-function registerPerpBuildCloseTool(server: Server, _context: SapMcpContext): void {
-  const schema: JsonSchema = {
-    type: 'object',
-    properties: {
-      wallet: {
-        type: 'string',
-        description: 'Wallet public key (base58) — the signer.',
-      },
-      positionKey: {
-        type: 'string',
-        description: 'Adrena position account public key (base58) to close.',
-      },
-      side: {
-        type: 'string',
-        description: 'Position side (determines which instruction discriminator to use).',
-        enum: ['long', 'short'],
-      },
-      percentage: {
-        type: 'number',
-        description: 'Percentage of position to close (1-100, default 100 = full close).',
-        minimum: 1,
-        maximum: 100,
-      },
-    },
-    required: ['wallet', 'positionKey', 'side'],
-    additionalProperties: false,
-  };
-  registerTool(server, 'sap_perp_build_close', {
-    description: 'Build an unsigned transaction to close a perpetual position on Adrena. Returns serialized base64 transaction for local signing. Supports partial closes via percentage parameter.',
-    inputSchema: schema,
-  }, async (args: Record<string, unknown>) => {
-    const walletStr = args['wallet'] as string;
-    const positionKeyStr = args['positionKey'] as string;
-    const side = args['side'] as 'long' | 'short';
-    const percentage = typeof args['percentage'] === 'number' ? args['percentage'] as number : 100;
-
-    let walletPubkey: PublicKey;
-    let positionPubkey: PublicKey;
-    try {
-      walletPubkey = new PublicKey(walletStr);
-      positionPubkey = new PublicKey(positionKeyStr);
-    } catch {
-      return createTextResponse(JSON.stringify({ error: 'Invalid wallet or position key' }), { isError: true });
-    }
-
-    const disc = side === 'long' ? DISC_CLOSE_LONG : DISC_CLOSE_SHORT;
-    // close_position params: price(Option<u64>) + percentage(u64)
-    const dataLen = 8 + 8 + 8;
-    const data = Buffer.alloc(dataLen);
-    let offset = 0;
-
-    disc.copy(data, offset); offset += 8;
-    writeNumberU64LE(data, 0, offset); offset += 8;  // price = 0 (market close)
-    writeNumberU64LE(data, percentage * 1_000_000, offset); offset += 8;  // percentage in u64
-
-    const instruction = new TransactionInstruction({
-      programId: ADRENA_PROGRAM_ID,
-      keys: [
-        { pubkey: walletPubkey, isSigner: true, isWritable: true },
-        { pubkey: positionPubkey, isSigner: false, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      notionalUsd,
+      entryPrice,
+      stopLossPrice,
+      takeProfitPrice,
+      maxAccountRiskPct,
+      maxSlippageBps,
+      liquidationEstimate,
+      estimatedStopRiskUsd,
+      estimatedRewardUsd,
+      rewardRisk,
+      riskFlags,
+      professionalChecklist: [
+        'Call sap_perp_markets for current market/custody data before execution.',
+        'Call sap_chart_ohlc and sap_chart_volume_profile to validate trend, liquidity, POC, VAH, and VAL.',
+        'Call sap_perp_position_info and sap_perp_liquidation_zones for the user wallet before increasing exposure.',
+        'Show the user one compact preview: side, notional, margin, leverage, stop, take profit, liquidation estimate, slippage, and risk flags.',
+        'Use native Adrena UI/SDK or a future SAP MCP IDL-backed builder for execution. Do not create temporary signing scripts or hand-roll Adrena transactions.',
       ],
-      data,
-    });
-
-    const result = buildInscribedTx(instruction);
-
-    return createTextResponse(JSON.stringify({
-      ...result,
-      positionKey: positionKeyStr,
-      side,
-      percentage,
-      note: 'Transaction is unsigned. Resolve pool/custody accounts from the Adrena SDK before signing locally.',
-    }));
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════
- *  Tool 10: sap_perp_build_modify (inscribedTool)
- * ═══════════════════════════════════════════════════════════════════ */
-
-/**
- * @name registerPerpBuildModifyTool
- * @description Register the sap_perp_build_modify inscribedTool.
- *
- * @param server  — MCP server instance.
- * @param context — Runtime context (unused — builds instruction only).
- *
- * @internal
- */
-function registerPerpBuildModifyTool(server: Server, _context: SapMcpContext): void {
-  const schema: JsonSchema = {
-    type: 'object',
-    properties: {
-      wallet: {
-        type: 'string',
-        description: 'Wallet public key (base58) — the signer.',
-      },
-      positionKey: {
-        type: 'string',
-        description: 'Adrena position account public key (base58).',
-      },
-      side: {
-        type: 'string',
-        description: 'Position side (determines instruction discriminator).',
-        enum: ['long', 'short'],
-      },
-      action: {
-        type: 'string',
-        description: 'Collateral action.',
-        enum: ['add', 'remove'],
-      },
-      amount: {
-        type: 'number',
-        description: 'Collateral amount in raw token units.',
-        minimum: 1,
-      },
-    },
-    required: ['wallet', 'positionKey', 'side', 'action', 'amount'],
-    additionalProperties: false,
-  };
-  registerTool(server, 'sap_perp_build_modify', {
-    description: 'Build an unsigned transaction to add or remove collateral from an Adrena perp position. Returns serialized base64 transaction for local signing.',
-    inputSchema: schema,
-  }, async (args: Record<string, unknown>) => {
-    const walletStr = args['wallet'] as string;
-    const positionKeyStr = args['positionKey'] as string;
-    const side = args['side'] as 'long' | 'short';
-    const action = args['action'] as 'add' | 'remove';
-    const amount = args['amount'] as number;
-
-    let walletPubkey: PublicKey;
-    let positionPubkey: PublicKey;
-    try {
-      walletPubkey = new PublicKey(walletStr);
-      positionPubkey = new PublicKey(positionKeyStr);
-    } catch {
-      return createTextResponse(JSON.stringify({ error: 'Invalid wallet or position key' }), { isError: true });
-    }
-
-    // Select discriminator based on action + side.
-    const disc = action === 'add'
-      ? (side === 'long' ? DISC_ADD_COLLATERAL_LONG : DISC_ADD_COLLATERAL_SHORT)
-      : (side === 'long' ? DISC_REMOVE_COLLATERAL_LONG : DISC_REMOVE_COLLATERAL_SHORT);
-
-    // add_collateral params: collateral(u64)
-    // remove_collateral params: collateral_usd(u64)
-    const dataLen = 8 + 8;
-    const data = Buffer.alloc(dataLen);
-    let offset = 0;
-
-    disc.copy(data, offset); offset += 8;
-    writeNumberU64LE(data, amount, offset); offset += 8;
-
-    const instruction = new TransactionInstruction({
-      programId: ADRENA_PROGRAM_ID,
-      keys: [
-        { pubkey: walletPubkey, isSigner: true, isWritable: true },
-        { pubkey: positionPubkey, isSigner: false, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      recommendedReadTools: [
+        'sap_perp_markets',
+        'sap_chart_ohlc',
+        'sap_chart_volume_profile',
+        'sap_perp_position_info',
+        'sap_perp_liquidation_zones',
       ],
-      data,
-    });
-
-    const result = buildInscribedTx(instruction);
-
-    return createTextResponse(JSON.stringify({
-      ...result,
-      positionKey: positionKeyStr,
-      action,
-      side,
-      amount,
-      note: 'Transaction is unsigned. Resolve custody/collateral accounts from the Adrena SDK before signing locally.',
-    }));
+      executionWarning: 'SAP MCP 0.9.35 intentionally does not expose manual Adrena execution builders. Execution must use a complete IDL-backed route before local finalization.',
+      notes: typeof args['notes'] === 'string' ? args['notes'] : undefined,
+    }, null, 2));
   });
 }
-
-/* ═══════════════════════════════════════════════════════════════════
- *  Import SystemProgram for inscribed tools
- * ═══════════════════════════════════════════════════════════════════ */
 
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1586,7 +1323,7 @@ function registerPerpBuildModifyTool(server: Server, _context: SapMcpContext): v
 
 /**
  * @name registerPerpTools
- * @description Register all 10 perp trading and chart analysis MCP tools.
+ * @description Register all 8 perp trading analytics and planning MCP tools.
  *
  * @param server  — MCP server instance.
  * @param context — Shared runtime context with SAP client, connection, and config.
@@ -1594,7 +1331,7 @@ function registerPerpBuildModifyTool(server: Server, _context: SapMcpContext): v
  * @usedBy `register-tools.ts`
  */
 export function registerPerpTools(server: Server, context: SapMcpContext): void {
-  logger.debug('Registering perp trading and chart tools');
+  logger.debug('Registering perp trading analytics and planning tools');
 
   registerPerpMarketsTool(server, context);
   registerPerpPositionInfoTool(server, context);
@@ -1603,9 +1340,7 @@ export function registerPerpTools(server: Server, context: SapMcpContext): void 
   registerChartLongTermTool(server, context);
   registerChartVolumeProfileTool(server, context);
   registerPerpLiquidationZonesTool(server, context);
-  registerPerpBuildOpenTool(server, context);
-  registerPerpBuildCloseTool(server, context);
-  registerPerpBuildModifyTool(server, context);
+  registerPerpTradePlanTool(server);
 
-  logger.debug('Perp tools registered', { count: 10 });
+  logger.debug('Perp tools registered', { count: 8 });
 }

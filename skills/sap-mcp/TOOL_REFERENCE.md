@@ -178,9 +178,7 @@ Jupiter protocol toolkit:
 `adrena_openPosition`, `adrena_removeCollateral`,
 `bridging_bridgeDeBridge`, `bridging_bridgeDeBridgeStatus`,
 `bridging_bridgeWormhole`, `bridging_bridgeWormholeStatus`,
-`drift_borrow`, `drift_closePerpPosition`, `drift_deposit`,
-`drift_getPositions`, `drift_lend`, `drift_openPerpPosition`,
-`drift_withdraw`, `jito_getBundleStatus`, `jito_getTipEstimate`,
+`jito_getBundleStatus`, `jito_getTipEstimate`,
 `jito_sendBundle`, `lulo_deposit`, `lulo_getBestRates`,
 `lulo_getPositions`, `lulo_withdraw`, `manifest_cancelOrder`,
 `manifest_createMarket`, `manifest_getOrderbook`,
@@ -209,7 +207,7 @@ Protocol routing shortcuts:
 | Token launch/mint/burn | `spl-token_deployToken`, `spl-token_mintTo`, `spl-token_burn` |
 | Jupiter quote/swap | `jupiter_getQuote`, `jupiter_smartSwap`, `jupiter_swap`, `jupiter_swapInstructions` |
 | Jupiter limit/DCA | `jupiter_createLimitOrder`, `jupiter_getLimitOrders`, `jupiter_createDCA`, `jupiter_getDCAOrders` |
-| Perps/lending | `drift_*`, `adrena_*`, `lulo_*` |
+| Perps/lending | `sap_perp_trade_plan`, `sap_perp_*`, `adrena_*`, `lulo_*` |
 | Liquidity pools | `raydium-pools_*`, `orca_*`, `meteora_*` |
 | Orderbooks | `openbook_*`, `manifest_*` |
 | Price data | `pyth_*`, `coingecko_*` |

@@ -80,7 +80,6 @@ function renderDefiLogoRail(): string {
     ['Raydium', '/logos/raydium.ico'],
     ['Orca', '/logos/orca.ico'],
     ['Meteora', '/logos/meteora.png'],
-    ['Drift', '/logos/drift.svg'],
   ] as const;
   const items = [...protocols, ...protocols];
 
@@ -381,7 +380,7 @@ export function renderHero(model: LandingPageModel): string {
 export function renderHeroBento(model: LandingPageModel): string {
   const stats = model.paymentStats;
   const cards = [
-    ['Solana DeFi Protocols', 'Jupiter, Raydium, Orca, Meteora, Drift, Pyth, DAS, Metaplex and more.', 'coral', 'protocols'],
+    ['Solana DeFi Protocols', 'Jupiter, Raydium, Orca, Meteora, Pyth, DAS, Metaplex and more.', 'coral', 'protocols'],
     ['Solana RPC Methods', 'Balances, token accounts, assets, simulation, programs, transactions and raw chain reads.', 'yellow', 'rpc'],
     ['Synapse Agent Protocol', 'Registry, tools, reputation, attestations, escrow, settlement, memory, SNS identity.', 'green', 'sap'],
     ['x402 / pay.sh Revenue', `${formatUsd(stats.totalVolumeUsd)} settled volume across ${formatInteger(stats.totalSettlements)} settlement events.`, 'aqua', 'payments'],
@@ -544,7 +543,7 @@ export function renderMetrics(model: LandingPageModel): string {
  */
 export function renderFeatureEngine(): string {
   const features = [
-    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora, Drift and market data flows.', 'wide', 'defi'],
+    ['Solana DeFi', 'Jupiter, Raydium, Orca, Meteora and market data flows.', 'wide', 'defi'],
     ['Solana RPC', 'Balances, token accounts, DAS assets, transactions, programs and simulation.', '', 'rpc'],
     ['SAP Protocol', 'Agent registry, discovery, reputation, escrow, settlement and attestations.', 'tall', 'sap'],
     ['Identity', 'SNS domain checks, reverse lookup, linked identity and agent profile context.', '', 'identity'],

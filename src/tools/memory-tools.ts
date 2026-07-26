@@ -2,8 +2,8 @@
  * @module memory-tools
  * @description MCP tools for the local agent memory subsystem.
  *
- * All 15 tools are FREE (no x402 charge) and operate entirely on the local
- * SQLite database at ~/.config/sap-mcp/memory/agent-memory.db. No data
+ * All 17 tools are FREE (no x402 charge) and operate entirely on the local
+ * SQLite database at ~/.config/mcp-sap/memory/agent-memory.db. No data
  * leaves the user's machine.
  *
  * Categories:
@@ -25,7 +25,7 @@ import type { ToolCallOutcome, MemoryType } from '../memory/types.js';
 
 /**
  * @name registerMemoryTools
- * @description Registers all 15 local memory/strategy/stream/audit MCP tools.
+ * @description Registers all 17 local memory/strategy/stream/audit MCP tools.
  * All tools are free, local-only, and require no x402 payment.
  */
 export function registerMemoryTools(server: Server, _context: SapMcpContext): void {
@@ -216,7 +216,7 @@ function registerMemoryPruneTool(server: Server): void {
 function registerStrategySaveTool(server: Server): void {
   registerTool(server, 'sap_strategy_save', {
     title: 'Save Strategy',
-    description: 'Free local tool. Saves or updates a strategy JSON in ~/.config/sap-mcp/strategies/. Strategies persist agent learnings (e.g. buyback rules, slippage thresholds, risk limits) across sessions. No x402 charge.',
+    description: 'Free local tool. Saves or updates a strategy JSON in ~/.config/mcp-sap/strategies/. Strategies persist agent learnings (e.g. buyback rules, slippage thresholds, risk limits) across sessions. No x402 charge.',
     inputSchema: {
       type: 'object',
       properties: {

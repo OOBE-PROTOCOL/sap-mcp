@@ -135,7 +135,7 @@ Codex supports Streamable HTTP MCP servers with URL-based TOML entries. Use loca
 ```toml
 [mcp_servers.sap]
 command = "npx"
-args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.21", "sap-mcp-server"]
+args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.35", "sap-mcp-server"]
 
 [mcp_servers.sap.env]
 SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE = "false"

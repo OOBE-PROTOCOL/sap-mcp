@@ -60,7 +60,6 @@ let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServer
 const PUBLIC_LOGO_ASSETS = {
   '/logos/claude.png': { filename: 'claude.png', contentType: 'image/png' },
   '/logos/codex.webp': { filename: 'codex.webp', contentType: 'image/webp' },
-  '/logos/drift.svg': { filename: 'drift.svg', contentType: 'image/svg+xml' },
   '/logos/hermes.png': { filename: 'hermes.png', contentType: 'image/png' },
   '/logos/jupiter.ico': { filename: 'jupiter.ico', contentType: 'image/x-icon' },
   '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
@@ -1369,7 +1368,7 @@ export function readSmitheryConfigSchema(): unknown {
 
 /**
  * @name getStaticServerCardCapabilities
- * @description Reads capabilities from the real MCP registration store so static metadata never drifts from tools/list.
+ * @description Reads capabilities from the real MCP registration store so static metadata never diverges from tools/list.
  */
 async function getStaticServerCardCapabilities(appConfig: SapMcpConfig): Promise<StaticServerCardCapabilities> {
   const now = Date.now();
@@ -2459,7 +2458,7 @@ export class RemoteMCPServer {
     await preloadPremiumProviders();
 
     // Initialize the local agent memory subsystem (SQLite FTS5).
-    // The database is created at ~/.config/sap-mcp/memory/agent-memory.db.
+    // The database is created at ~/.config/mcp-sap/memory/agent-memory.db.
     // If the DB cannot be opened, the subsystem enters degraded mode and
     // all memory tools return empty results instead of crashing.
     memoryDatabase.init();

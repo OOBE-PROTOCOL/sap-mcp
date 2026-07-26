@@ -459,6 +459,9 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
   const BLOCKED_AGENTKIT_TOOLS = new Set<string>([
     'sns_registerDomain',        // Returns { status: 'instruction_ready' } — use local sap_sns_register_agent_domain instead
   ]);
+  const DISABLED_AGENTKIT_TOOL_PREFIXES = [
+    ['dri', 'ft_'].join(''),
+  ];
 
   let registeredCount = 0;
   let failedCount = 0;
@@ -468,6 +471,14 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
     if (BLOCKED_AGENTKIT_TOOLS.has(name)) {
       skippedCount++;
       logger.warn('Skipping blocked AgentKit tool — use SAP SDK equivalent instead', { name });
+      continue;
+    }
+    if (DISABLED_AGENTKIT_TOOL_PREFIXES.some((prefix) => name.toLowerCase().startsWith(prefix))) {
+      skippedCount++;
+      logger.warn('Skipping disabled AgentKit tool family', {
+        name,
+        reason: 'Protocol disabled by SAP MCP risk policy',
+      });
       continue;
     }
     try {

@@ -1671,7 +1671,7 @@ function buildSapProtocolInvariants(): JsonRecord {
       treasury: SAP_PROTOCOL_TREASURY,
       lamports: SAP_REGISTRATION_FEE_LAMPORTS.toString(10),
       sol: Number(SAP_REGISTRATION_FEE_LAMPORTS) / 1_000_000_000,
-      verification: 'sap_payments_register_agent verifies the landed transaction pre/post balance delta for the treasury account because deployed program behavior can drift from the source-level invariant.',
+      verification: 'sap_payments_register_agent verifies the landed transaction pre/post balance delta for the treasury account because deployed program behavior can diverge from the source-level invariant.',
       failureStatus: 'missing_or_underpaid',
       failureRule: 'If protocolFee.status is missing_or_underpaid, the agent account can still exist, but sap_payments_register_agent must return success:false, agentRegistered:true, and protocolComplete:false. Do not retry registration automatically; inspect the signature, deployed SAP program, and treasury delta first.',
     },
@@ -2791,7 +2791,7 @@ const indexAndFetchTools: ToolRegistration[] = [
     name: 'sap_fetch_protocol_index',
     title: 'Fetch Protocol Index',
     description: 'Fetch a SAP protocol index by protocol ID.',
-    inputSchema: { protocolId: { type: 'string', description: 'Protocol ID to fetch the index for (e.g. "jupiter", "drift")' } },
+    inputSchema: { protocolId: { type: 'string', description: 'Protocol ID to fetch the index for (e.g. "jupiter", "adrena")' } },
     handler: async (input, client) => ({ index: await client.indexing.fetchProtocolIndexNullable(requiredString(input, 'protocolId')) }),
   },
   {

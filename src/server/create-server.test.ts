@@ -108,7 +108,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(336);
+    expect(names).toHaveLength(327);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sap_quick_context');
     expect(names).toContain('sol_get_balance');
@@ -200,6 +200,15 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_escrow_build_finalize_transaction');
     expect(names).toContain('sap_escrow_build_withdraw_transaction');
     expect(names).toContain('sap_escrow_build_close_transaction');
+    expect(names).toContain('sap_perp_trade_plan');
+    expect(names).toContain('sap_perp_markets');
+    expect(names).toContain('sap_perp_position_info');
+    expect(names).toContain('sap_perp_liquidation_zones');
+    const disabledPerpBuilderPrefix = ['sap', 'perp', 'build'].join('_');
+    expect(names).not.toContain(`${disabledPerpBuilderPrefix}_open`);
+    expect(names).not.toContain(`${disabledPerpBuilderPrefix}_close`);
+    expect(names).not.toContain(`${disabledPerpBuilderPrefix}_modify`);
+    expect(names.some((name) => name.toLowerCase().startsWith(['dri', 'ft_'].join('')))).toBe(false);
     expect(names).toContain('sap_chat_derive_room');
     expect(names).toContain('sap_chat_start_room');
     expect(names).toContain('sap_chat_send_message');

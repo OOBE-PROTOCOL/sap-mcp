@@ -973,7 +973,7 @@ export const LANDING_CSS = `
       linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.032)),
       rgba(255,255,255,.035);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
-    animation: surfaceRise .34s cubic-bezier(0, 0, .2, 1) both, bentoDrift 14s ease-in-out infinite;
+    animation: surfaceRise .34s cubic-bezier(0, 0, .2, 1) both, bentoFloat 14s ease-in-out infinite;
   }
   .protocol-card:nth-child(2n) { animation-delay: .06s, -4s; }
   .protocol-card:nth-child(3n) { animation-delay: .12s, -8s; }
@@ -1085,7 +1085,7 @@ export const LANDING_CSS = `
     margin-bottom: 0;
     color: var(--muted);
   }
-  @keyframes bentoDrift {
+  @keyframes bentoFloat {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-4px); }
   }

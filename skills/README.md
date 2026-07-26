@@ -47,7 +47,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-escrow-settlement` | Escrow V2, settlement, pending settlement, disputes |
 | `sap-staking` | SAP stake initialization, deposit, unstake, and stake reads |
 | `sap-solana-token` | SOL/SPL balances, transfers, token deploy, mint, burn, token admin |
-| `sap-defi` | Jupiter, Drift, Adrena, Lulo, liquidity, orderbooks, bridges, Jito, staking |
+| `sap-defi` | Jupiter, perps planning, Adrena, Lulo, liquidity, orderbooks, bridges, Jito, staking |
 | `sap-market-data` | Pyth, CoinGecko, Jupiter token intelligence, prices, OHLCV, risk data |
 | `sap-nft-metaplex` | DAS, Metaplex NFT, 3.Land collections, mints, listings, authorities |
 | `sap-social-gaming` | Blinks, Gibwork bounties, Send Arcade gaming |

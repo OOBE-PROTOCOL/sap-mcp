@@ -186,7 +186,7 @@ Builders should compose at least one of these tool buckets.
 
 | Bucket | Examples |
 | --- | --- |
-| Solana protocol tools | Jupiter, Raydium, Orca, Meteora, Drift, Pyth, SPL Token, Metaplex-related identity/asset flows, bridging, staking, DAS, NFTs. |
+| Solana protocol tools | Jupiter, Raydium, Orca, Meteora, Pyth, SPL Token, Metaplex-related identity/asset flows, bridging, staking, DAS, NFTs. |
 | Solana RPC and chain methods | Balances, token accounts, transactions, assets, program data, network state, signatures, block data. |
 | Synapse Agent Protocol methods | SAP agent registry, bridged identity, discovery, reputation, escrow, settlement, memory, proof-of-execution, x402 tools, SNS identity. |
 | Partner credit and monetization flows | x402/pay.sh paid calls, optional Krexa-style agent credit, lending, repayment, and risk-aware execution if the partner integration is confirmed. |

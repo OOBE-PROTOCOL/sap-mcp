@@ -2,12 +2,12 @@
  * @module strategies/strategy-store
  * @description File-based strategy store with JSON persistence.
  *
- * Strategies are stored as JSON files in ~/.config/sap-mcp/strategies/<category>/<name>.json
+ * Strategies are stored as JSON files in ~/.config/mcp-sap/strategies/<category>/<name>.json
  * Each strategy has a version number, active flag, and arbitrary JSON config.
  *
  * The store uses synchronous file I/O (strategies are small JSON files).
  * The directory structure is:
- *   ~/.config/sap-mcp/strategies/
+ *   ~/.config/mcp-sap/strategies/
  *     defi/
  *       jupiter-arb.json
  *     trading/
@@ -22,7 +22,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getStrategiesDir } from '../config/paths.js';
 
 /**
  * @name StrategyRecord
@@ -47,7 +47,7 @@ export interface StrategyRecord {
   path: string;
 }
 
-const STRATEGIES_ROOT = join(homedir(), '.config', 'sap-mcp', 'strategies');
+const STRATEGIES_ROOT = getStrategiesDir();
 
 /**
  * @name getStrategiesRoot

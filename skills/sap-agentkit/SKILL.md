@@ -29,7 +29,7 @@ authority, and verification flows.
 
 ## DeFi And Markets
 
-Use `adrena_*`, `drift_*`, `lulo_*`, `manifest_*`, `meteora_*`,
+Use `adrena_*`, `lulo_*`, `manifest_*`, `meteora_*`,
 `openbook_*`, `orca_*`, `raydium-pools_*`, `pump_*`, `bridging_*`,
 `staking_*`, and `jito_*` tools for DeFi execution.
 
@@ -37,4 +37,3 @@ Use `adrena_*`, `drift_*`, `lulo_*`, `manifest_*`, `meteora_*`,
 
 Use `blinks_*`, `gibwork_*`, and `send-arcade_*` tools when the task is about
 actions, bounties, or games rather than direct SAP protocol operations.
-

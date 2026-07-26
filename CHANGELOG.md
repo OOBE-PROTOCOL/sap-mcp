@@ -2,14 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
-## 0.9.3 - 2026-07-25
+## 0.9.35 - 2026-07-26
+
+### Changed — Protocol Safety And Perps Readiness
+
+- Removed the disabled perp protocol family from the public SAP MCP surface while
+  it is under active exploit review. Public docs, skills, landing-page copy,
+  logo carousels, and dynamic AgentKit registration now exclude those tools.
+- Replaced incomplete Adrena transaction builders with `sap_perp_trade_plan`,
+  a free trader-grade planning tool that returns notional sizing, liquidation
+  estimate, stop risk, reward/risk, risk flags, and the exact read tools an
+  agent should call before any external perps execution route.
+- Kept perps analytics free and fast: markets, positions, funding, OHLC,
+  long-term charts, volume profile, liquidation zones, and trade planning.
+- Moved local memory and strategy stores onto the canonical SAP MCP profile
+  directory: `~/.config/mcp-sap/`.
+- Updated release metadata, hosted server card, desktop wizard references, and
+  npm/client snippets to `0.9.35`.
+
+### Added — Local Agent Memory Subsystem (SQLite FTS5)
 
 ### Added — Local Agent Memory Subsystem (SQLite FTS5)
 
 A complete serverless local-memory subsystem built on SQLite FTS5, using
 inverted full-text indexes and relevance-ranked retrieval to recover historical
 agent interactions. All data is stored locally at
-`~/.config/sap-mcp/memory/agent-memory.db` — no data leaves the user's machine.
+`~/.config/mcp-sap/memory/agent-memory.db` — no data leaves the user's machine.
 
 **10 module files:**
 - `src/memory/types.ts` — 11 TypeScript interfaces with strict typing
@@ -23,7 +41,7 @@ agent interactions. All data is stored locally at
 - `src/memory/utils.ts` — truncate, decayRelevance, isExpired
 - `src/strategies/strategy-store.ts` — File-based JSON strategy store with versioning + path traversal protection
 
-**17 new FREE MCP tools (319 → 336 total, all local, no x402):**
+**17 FREE MCP memory tools (tool surface now 327 total after risk-policy removals, all local, no x402):**
 
 | Category | Tool | Function |
 |---|---|---|
@@ -69,7 +87,7 @@ Also returns `serverCommit` (git short hash), `environment` (network, mode, auth
 
 ### Added — Wizard Directory Creation
 
-`ensureConfigDirectories()` now creates `~/.config/sap-map/memory/` and `~/.config/sap-mcp/strategies/` with private permissions (mode 0o700) alongside the existing config, keypair, data, log, and cache directories.
+`ensureConfigDirectories()` now creates `~/.config/mcp-sap/memory/` and `~/.config/mcp-sap/strategies/` with private permissions (mode 0o700) alongside the existing config, keypair, data, log, and cache directories.
 
 ### Security
 
@@ -257,7 +275,7 @@ Also returns `serverCommit` (git short hash), `environment` (network, mode, auth
 
 ### Added
 
-- Added 10 new MCP tools for perpetual futures trading and chart analysis:
+- Added MCP tools for perpetual futures market analytics and chart analysis:
   - `sap_perp_markets` — List Adrena perp markets with mark price, funding, OI.
   - `sap_perp_position_info` — Read on-chain Adrena perp positions for a wallet.
   - `sap_perp_funding_history` — Historical funding rates from Adrena API.
@@ -265,11 +283,8 @@ Also returns `serverCommit` (git short hash), `environment` (network, mode, auth
   - `sap_chart_long_term` — Long-term price history + protocol TVL (DexScreener + DeFiLlama).
   - `sap_chart_volume_profile` — Volume profile analysis with POC, VAH, VAL.
   - `sap_perp_liquidation_zones` — Compute liquidation zones for open positions.
-  - `sap_perp_build_open` — Build unsigned tx to open leveraged perp position (Adrena).
-  - `sap_perp_build_close` — Build unsigned tx to close a perp position.
-  - `sap_perp_build_modify` — Build unsigned tx to add/remove collateral.
-- All 10 tools use only free APIs (DexScreener, DeFiLlama, Adrena REST, Solana RPC).
-- Inscribed tools (`sap_perp_build_*`) return unsigned transactions for local agent signing.
+- Execution builders were later removed from the public surface until IDL-backed, locally finalizable
+  perps transactions can meet the SAP MCP signing and safety bar.
 
 ### Removed
 

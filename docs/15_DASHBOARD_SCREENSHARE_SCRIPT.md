@@ -32,7 +32,7 @@ The model is remote tools, local signatures. The hosted server provides the tool
 
 SAP MCP is organized around three core buckets.
 
-First: Solana DeFi protocols. Agents can access integrations across Jupiter, Raydium, Orca, Meteora, Drift, market data, swaps, quotes, and related execution flows.
+First: Solana DeFi protocols. Agents can access integrations across Jupiter, Raydium, Orca, Meteora, market data, swaps, quotes, and related execution flows.
 
 Second: Solana RPC and asset primitives. Balances, token accounts, DAS assets, NFT metadata, program reads, transactions, simulations, and chain inspection are exposed as MCP tools.
 
