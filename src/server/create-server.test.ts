@@ -108,7 +108,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(327);
+    expect(names).toHaveLength(328);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sap_quick_context');
     expect(names).toContain('sol_get_balance');
@@ -124,6 +124,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_agent_runtime_status');
     expect(names).toContain('sap_agent_context');
     expect(names).toContain('sap_agent_next_action');
+    expect(names).toContain('sap_prepare_action');
     expect(names).toContain('sap_premium_plugin_catalog');
     expect(names).toContain('sap_stream_catalog');
     expect(names).toContain('sap_webhook_catalog');
@@ -166,6 +167,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_profile_switch');
     expect(names).toContain('sap_agent_start');
     expect(names).toContain('sap_agent_runtime_status');
+    expect(names).toContain('sap_prepare_action');
     expect(names).toContain('sap_pricing_catalog');
     expect(names).toContain('sap_skills_list');
     expect(names).toContain('sap_skills_bundle');
@@ -997,13 +999,41 @@ describe('createSapMcpServer', () => {
     expect(text).toContain('sap_skills_bundle');
     expect(text).toContain('sap_payments_readiness');
     expect(text).toContain('sap_payments_call_paid_tool');
+    expect(text).toContain('sap_prepare_action');
+    expect(text).toContain('sessionContextPacket');
+    expect(text).toContain('neverCacheAsTruth');
     expect(text).toContain('sap_skills_upgrade_plan');
     expect(text).toContain('sap_runtime_repair_plan');
     expect(text).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(text).toContain('connectionCheck');
     expect(text).toContain('Do not list all tools or categories');
     expect(start?.structuredContent?.success).toBe(true);
+    expect(start?.structuredContent?.sessionContextPacket).toBeTruthy();
     expect(start?.structuredContent?.repairCommand).toContain('sap-mcp-config repair');
+  });
+
+  it('exposes a free intent-level SAP MCP action planner', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+
+    const response = await server.toolHandlers?.sap_prepare_action({
+      intent: 'swap',
+      toolName: 'jupiter_getOrder',
+      userGoal: 'swap SOL to USDC',
+      estimatedNotionalUsd: 12,
+      maxPriceUsd: 0.1,
+    });
+    const plan = JSON.parse(response?.content[0]?.text ?? '{}');
+
+    expect(plan).toMatchObject({
+      success: true,
+      intent: 'swap',
+      toolName: 'jupiter_getOrder',
+    });
+    expect(plan.sessionContextPacket.dataFreshness.neverCacheAsTruth).toContain('Jupiter quotes and orders');
+    expect(plan.freePreflightTools).toContain('sap_payments_readiness');
+    expect(JSON.stringify(plan.paidOrWriteRoute)).toContain('sap_payments_call_paid_tool');
+    expect(JSON.stringify(plan.retryRules)).toContain('fresh challenge');
+    expect(JSON.stringify(plan.sessionContextPacket.forbiddenActions)).toContain('Do not read or print keypair JSON.');
   });
 
   it('returns structured SAP startup content through the MCP tools/call handler', async () => {

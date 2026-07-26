@@ -10,7 +10,7 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 
 | Tier | Examples | Price |
 | --- | --- | --- |
-| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`, `sap_agent_next_action`, exact SAP agent/profile reads, compact `sap_list_agents` orientation pages with `limit <= 20` | Free |
+| Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_context`, `sap_agent_next_action`, exact SAP agent/profile reads, compact `sap_list_agents` orientation pages with `limit <= 20` | Free |
 | Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, market/oracle/DAS reads | `$0.001` default |
 | Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.008` default, batch = sum of paid calls |
 | Value action | settlement-like or value-linked operations where appropriate | `$0.09` standard, `$0.15` for selected heavy execution paths |
@@ -42,6 +42,14 @@ When a request returns `payment_required`, `hosted_local_signer_required`,
 that has not confirmed, call the free `sap_agent_next_action` resolver before
 retrying. It tells the agent whether a retry is safe, whether a payment was
 charged, and which hosted or local bridge tool should be used next.
+
+For intent-level workflows such as swaps, registry writes, Escrow V2, external
+x402 agents, premium streams, or transaction finalization, call the free
+`sap_prepare_action` planner before execution. It returns the correct
+hosted/local route, fresh-data requirements, confirmation policy, retry rules,
+and proof-tape fields. Session memory may keep those operational facts and
+receipts, but never treat memory as truth for prices, quotes, balances,
+blockhashes, simulations, liquidity/routes, or SAP account state.
 
 ## 06.3 x402 Role
 
@@ -130,10 +138,11 @@ has a user-controlled wallet profile:
 The public hosted server should not advertise the signing helpers in
 non-custodial mode because signing belongs on the user's machine.
 
-For runtime routing, call the free hosted `sap_agent_runtime_status` tool before
-paid/write work. It tells the agent whether the request should use hosted SAP,
-the local `sap_payments` bridge, a hosted unsigned transaction builder plus
-`sap_payments_finalize_transaction`, or a repair path.
+For runtime routing, call the free hosted `sap_agent_runtime_status` and
+`sap_prepare_action` tools before paid/write work. They tell the agent whether
+the request should use hosted SAP, the local `sap_payments` bridge, a hosted
+unsigned transaction builder plus `sap_payments_finalize_transaction`, or a
+repair path.
 
 When hosted accountless SAP MCP returns `hosted_local_signer_required`, the
 request was rejected before any x402 verification or settlement. Treat it as a

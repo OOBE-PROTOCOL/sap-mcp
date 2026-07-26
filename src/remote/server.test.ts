@@ -468,9 +468,10 @@ describe('remote MCP server config', () => {
       type: 'streamable-http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(card.tools).toHaveLength(316);
+    expect(card.tools).toHaveLength(317);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_start')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_runtime_status')).toBe(true);
+    expect(card.tools.some((tool) => tool.name === 'sap_prepare_action')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_context')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_agent_next_action')).toBe(true);
     expect(card.tools.some((tool) => tool.name === 'sap_pricing_catalog')).toBe(true);

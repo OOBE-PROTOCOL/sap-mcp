@@ -78,6 +78,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_start')).toBe('free');
     expect(classifyTool('sap_agent_runtime_status')).toBe('free');
     expect(classifyTool('sap_agent_next_action')).toBe('free');
+    expect(classifyTool('sap_prepare_action')).toBe('free');
     expect(classifyTool('sap_pricing_catalog')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
@@ -288,6 +289,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_start', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_prepare_action', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
@@ -411,6 +413,7 @@ describe('SAP MCP monetization pricing', () => {
     expect(catalog.tiers['read-premium'].priceUsd).toBe(0.001);
     expect(catalog.tiers.builder.priceUsd).toBe(0.008);
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
+    expect(catalog.toolSets.free).toContain('sap_prepare_action');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
     expect(catalog.toolSets.builders).toContain('sap_escrow_build_create_transaction');
     expect(catalog.toolSets.heavyValueActions).toContain('magicblock_swap');

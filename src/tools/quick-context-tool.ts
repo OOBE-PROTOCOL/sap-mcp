@@ -14,6 +14,11 @@ import type { SapMcpContext } from '../core/types.js';
 import { listPremiumPlugins, publicPremiumProviderStatus } from '../premium/index.js';
 import { listBundledSkillNames, getBundledSkillContents } from './skills-tools.js';
 import { CAPABILITIES } from '../server/server-metadata.js';
+import {
+  buildSessionContextPacket,
+  normalizeSapAgentIntent,
+  type SapAgentIntent,
+} from './session-context-packet.js';
 
 /**
  * @name getServerCommit
@@ -46,7 +51,7 @@ function resolveNetwork(rpcUrl: string | undefined): string {
  */
 function buildRecommendedFlow(mode: string): string {
   if (mode === 'hosted-api') {
-    return 'Hosted mode: use sap_payments_finalize_transaction (with signerProfile) for signing. Build unsigned with sap_build_sol_transfer / sap_build_spl_transfer / jupiter_getOrder, then sign locally. Never create signing scripts or read keypair JSON.';
+    return 'Hosted mode: use hosted reads directly, sap_payments_call_paid_tool for x402 paid hosted calls, sap_payments_register_agent/update_agent for wallet-owned registry writes, and sap_payments_finalize_transaction for hosted unsigned transactions. Never create signing scripts or read keypair JSON.';
   }
   if (mode === 'local-dev-keypair') {
     return 'Local mode: use sap_preview_transaction → sap_sign_transaction → sap_submit_signed_transaction for signing. The active profile keypair is available for direct signing.';
@@ -63,6 +68,7 @@ interface QuickContextInput {
   compact: boolean;
   maxChars: number;
   agentKnownVersion?: string;
+  intent: SapAgentIntent;
 }
 
 /**
@@ -92,6 +98,7 @@ interface QuickContextPayload {
   recommendedFlow: string;
   summary: string;
   nextAction: string;
+  sessionContextPacket: Record<string, unknown>;
   truncated: boolean;
 }
 
@@ -140,6 +147,11 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
             type: 'string',
             description: 'The SAP MCP version the agent currently knows about. When this differs from the server version, skillsUpdateRequired is set to true and skillsContents is populated with full SKILL.md contents. Omit to always force a skills update (first bootstrap).',
           },
+          intent: {
+            type: 'string',
+            enum: ['connection', 'paid-call', 'registry-write', 'update-agent', 'transaction-finalize', 'escrow', 'identity', 'swap', 'external-x402', 'premium-stream', 'balance', 'discovery', 'general'],
+            description: 'Optional user intent for the embedded sessionContextPacket. Use this to route bootstrap toward paid calls, registry writes, swaps, escrow, external x402 agents, premium streams, balance reads, or discovery.',
+          },
         },
       },
       outputSchema: {
@@ -161,9 +173,10 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
           recommendedFlow: { type: 'string', description: 'Recommended agent workflow based on server mode. Hosted: build unsigned → sign locally. Local: preview → sign → submit.' },
           summary: { type: 'string', description: 'Compact markdown-like summary string suitable for agent context loading.' },
           nextAction: { type: 'string', description: 'Concrete next action for the agent after loading this context.' },
+          sessionContextPacket: { type: 'object', description: 'Machine-readable SAP MCP routing, freshness, memory, proof-tape, and forbidden-action rules for this session.' },
           truncated: { type: 'boolean', description: 'Whether the summary was truncated to fit within maxChars.' },
         },
-        required: ['success', 'version', 'serverCommit', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'environment', 'recommendedFlow', 'summary', 'nextAction', 'truncated'],
+        required: ['success', 'version', 'serverCommit', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'environment', 'recommendedFlow', 'summary', 'nextAction', 'sessionContextPacket', 'truncated'],
       },
       annotations: {
         readOnlyHint: true,
@@ -203,8 +216,9 @@ function parseQuickContextInput(input: unknown): QuickContextInput {
   const agentKnownVersion = typeof record.agentKnownVersion === 'string' && record.agentKnownVersion.length > 0
     ? record.agentKnownVersion
     : undefined;
+  const intent = normalizeSapAgentIntent(record.intent);
 
-  return { include, compact, maxChars, agentKnownVersion };
+  return { include, compact, maxChars, agentKnownVersion, intent };
 }
 
 /**
@@ -307,6 +321,7 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     recommendedFlow: buildRecommendedFlow(context.config.mode),
     summary: summary.text,
     nextAction: buildNextAction(sections),
+    sessionContextPacket: buildSessionContextPacket(context, input.intent),
     truncated: summary.truncated,
   };
 }
@@ -397,6 +412,8 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
     'If the server version is newer than your local SAP MCP repo, update it: git pull origin main && pnpm run build && pm2 restart sap-mcp-remote (or npx @oobe-protocol-labs/sap-mcp-server@latest for client installs).',
     'Use sap_estimate_tool_cost before any paid tool call — set maxPriceUsd to estimate × 1.25.',
     'Use sap_payments_readiness before any write or paid workflow.',
+    'Use sap_prepare_action before swaps, registry writes, escrow, external x402 calls, premium streams, or transaction finalization.',
+    'Treat memory as operational context/proof tape only; never use it as cached truth for balances, prices, quotes, blockhashes, simulations, liquidity, or agent account state.',
     'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
     'For signing: use sap_payments_finalize_transaction with signerProfile to sign with a specific profile — no need to switch .active-profile.',
     'For SOL/SPL transfers: use sap_build_sol_transfer or sap_build_spl_transfer (hosted builders), then sign locally with sap_payments_finalize_transaction.',

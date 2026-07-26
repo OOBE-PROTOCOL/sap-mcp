@@ -110,7 +110,7 @@ const techStreamOutputSchema = {
         rank: { type: 'number', description: 'Protocol TVL rank on Solana.' },
         expiresAt: { type: 'string', format: 'date-time', description: 'Signal expiry timestamp.' },
       },
-      additionalProperties: true,
+      additionalProperties: false,
     },
   },
   additionalProperties: false,
@@ -164,7 +164,7 @@ const techWebhookOutputSchema = {
     signature: { type: 'string', description: 'HMAC-SHA256 signature.' },
     payload: {
       type: 'object',
-      additionalProperties: true,
+      additionalProperties: false,
       description: 'Tech fundamentals payload with GitHub activity, TVL, or tokenomics analysis data.',
     },
   },

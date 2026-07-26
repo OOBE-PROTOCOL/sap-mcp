@@ -66,6 +66,63 @@ describe('premium plugin manifest validator', () => {
     );
   });
 
+  it('rejects loose nested object schemas for premium payloads and filters', () => {
+    const manifest = structuredClone(BUILTIN_PREMIUM_PLUGINS[0]);
+    manifest.capabilities[0].inputSchema = {
+      ...manifest.capabilities[0].inputSchema,
+      properties: {
+        subscriptionKey: {
+          type: 'string',
+          minLength: 3,
+          description: 'Stable subscription key.',
+        },
+        filters: {
+          type: 'object',
+          additionalProperties: true,
+          description: 'Loose filters should not pass premium validation.',
+        },
+      },
+    };
+
+    const report = validatePremiumPluginManifest(manifest);
+
+    expect(report.valid).toBe(false);
+    expect(report.errors).toContainEqual(
+      expect.objectContaining({
+        path: 'capabilities[0].inputSchema.properties.filters',
+        message: 'Object schemas must set additionalProperties: false at every nested level for strict premium contracts.',
+      }),
+    );
+  });
+
+  it('rejects blocked protocol terms in private premium manifests', () => {
+    const manifest = structuredClone(BUILTIN_PREMIUM_PLUGINS[0]);
+    manifest.capabilities[0].inputSchema = {
+      ...manifest.capabilities[0].inputSchema,
+      properties: {
+        subscriptionKey: manifest.capabilities[0].inputSchema.properties?.subscriptionKey,
+        dexes: {
+          type: 'array',
+          items: {
+            type: 'string',
+            enum: ['jupiter', 'drift'],
+          },
+          description: 'Protocols to scan.',
+        },
+      },
+    };
+
+    const report = validatePremiumPluginManifest(manifest);
+
+    expect(report.valid).toBe(false);
+    expect(report.errors).toContainEqual(
+      expect.objectContaining({
+        path: 'capabilities[0].inputSchema.properties.dexes.items.enum[1]',
+        message: 'Blocked protocol term "drift" is not allowed in premium manifests.',
+      }),
+    );
+  });
+
   it('only unblocks provider-backed sessions when provider env is configured', () => {
     const original = process.env.SAP_MCP_PREMIUM_JUPITER_STREAM_URL;
     try {

@@ -123,7 +123,7 @@ const memeStreamOutputSchema = {
         },
         expiresAt: { type: 'string', format: 'date-time', description: 'Signal expiry timestamp.' },
       },
-      additionalProperties: true,
+      additionalProperties: false,
     },
   },
   additionalProperties: false,
@@ -185,7 +185,7 @@ const memeWebhookOutputSchema = {
     signature: { type: 'string', description: 'HMAC-SHA256 signature.' },
     payload: {
       type: 'object',
-      additionalProperties: true,
+      additionalProperties: false,
       description: 'Meme radar payload with listing details, honeypot scan, and dev wallet analysis.',
     },
   },

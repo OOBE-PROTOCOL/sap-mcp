@@ -9,6 +9,12 @@ import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 import { buildPricingCatalog } from '../payments/pricing.js';
+import {
+  buildActionPreparation,
+  buildSessionContextPacket,
+  normalizeSapAgentIntent,
+  type SapAgentIntent,
+} from './session-context-packet.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
@@ -49,11 +55,12 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
             items: { type: 'object' },
           },
           paymentFlow: { type: 'object', description: 'How to handle hosted x402/pay.sh paid calls safely.' },
+          sessionContextPacket: { type: 'object', description: 'Machine-readable SAP MCP routing, freshness, memory, proof-tape, and forbidden-action rules for this session.' },
           connectionCheck: { type: 'object', description: 'How agents should answer simple connection/status questions.' },
           userFacingSummary: { type: 'string', description: 'Short text the agent can show the user after startup.' },
           repairCommand: { type: 'string', description: 'Wizard command to repair local hosted/profile/payment bridge setup.' },
         },
-        required: ['success', 'activationPhrases', 'hostedEndpoint', 'serverMode', 'immediateToolCalls', 'paymentFlow', 'connectionCheck', 'userFacingSummary', 'repairCommand'],
+        required: ['success', 'activationPhrases', 'hostedEndpoint', 'serverMode', 'immediateToolCalls', 'paymentFlow', 'sessionContextPacket', 'connectionCheck', 'userFacingSummary', 'repairCommand'],
       },
       annotations: {
         readOnlyHint: true,
@@ -89,11 +96,12 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
           hosted: { type: 'object', description: 'Observable hosted SAP MCP status for this server process.' },
           localBridge: { type: 'object', description: 'Expected local sap_payments bridge status and verification tools.' },
           routing: { type: 'object', description: 'Canonical tool routes for reads, paid calls, writes, and unsigned transactions.' },
+          sessionContextPacket: { type: 'object', description: 'Machine-readable SAP MCP routing, freshness, memory, proof-tape, and forbidden-action rules for this intent.' },
           nextToolCalls: { type: 'array', description: 'Exact next tool calls agents should make when available.', items: { type: 'object' } },
           userFacingSummary: { type: 'string', description: 'Short summary safe to show to the user.' },
           forbiddenActions: { type: 'array', description: 'Actions agents must not perform.', items: { type: 'string' } },
         },
-        required: ['success', 'intent', 'hosted', 'localBridge', 'routing', 'nextToolCalls', 'userFacingSummary', 'forbiddenActions'],
+        required: ['success', 'intent', 'hosted', 'localBridge', 'routing', 'sessionContextPacket', 'nextToolCalls', 'userFacingSummary', 'forbiddenActions'],
       },
       annotations: {
         readOnlyHint: true,
@@ -106,6 +114,76 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
       const intent = parseStatusIntent(input);
       return createStructuredJsonResponse(buildRuntimeStatusPayload(context, intent));
     },
+  );
+
+  registerTool(
+    server,
+    'sap_prepare_action',
+    {
+      title: 'Prepare SAP MCP Action',
+      description: 'Free intent-level preflight planner for SAP MCP. Call before paid calls, swaps, registry writes, escrow, identity updates, external x402 calls, premium streams, or transaction finalization. It returns the correct hosted/local route, fresh-data requirements, max-price guidance, confirmation policy, retry rules, proof-tape shape, and forbidden actions without charging x402.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          intent: {
+            type: 'string',
+            enum: ['connection', 'paid-call', 'registry-write', 'update-agent', 'transaction-finalize', 'escrow', 'identity', 'swap', 'external-x402', 'premium-stream', 'balance', 'discovery', 'general'],
+            description: 'Closest user intent. Use registry-write for agent registration, update-agent for profile/image updates, swap for token swaps, escrow for SAP Escrow V2, external-x402 for third-party x402 agents, and premium-stream for premium plugin streams/webhooks.',
+          },
+          toolName: {
+            type: 'string',
+            description: 'Exact hosted or local tool name being planned, such as jupiter_getOrder, sap_update_agent, sap_create_escrow_v2, or sap_payments_register_agent.',
+          },
+          userGoal: {
+            type: 'string',
+            description: 'Short user-facing goal in natural language, used only to tailor the plan and proof-tape shape.',
+          },
+          maxPriceUsd: {
+            type: 'number',
+            description: 'Optional user or policy x402 spend cap for this planned action. Agents should normally estimate first and use estimate × 1.25.',
+          },
+          estimatedNotionalUsd: {
+            type: 'number',
+            description: 'Optional estimated trade, escrow, or value-moving notional in USD for confirmation-policy guidance.',
+          },
+          hasUnsignedTransaction: {
+            type: 'boolean',
+            description: 'Set true when a hosted builder already returned unsigned transaction bytes that should be finalized locally.',
+          },
+          hasSubmittedSignature: {
+            type: 'boolean',
+            description: 'Set true when a transaction signature was already submitted. The planner will route to verification before any retry.',
+          },
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the action preparation plan was generated.' },
+          intent: { type: 'string', description: 'Normalized intent used for routing.' },
+          userGoal: { type: ['string', 'null'], description: 'Goal provided by the user, or null when omitted.' },
+          toolName: { type: ['string', 'null'], description: 'Tool name provided for the planned action, or null when omitted.' },
+          sessionContextPacket: { type: 'object', description: 'Shared SAP MCP session routing, freshness, memory, and forbidden-action rules.' },
+          freshDataRequired: { type: 'array', description: 'Fresh data that must be fetched before user-facing claims, payment, signing, or execution.', items: { type: 'string' } },
+          freePreflightTools: { type: 'array', description: 'Free tools that should be called before paid/write execution for this intent.', items: { type: 'string' } },
+          paidOrWriteRoute: { type: 'object', description: 'Canonical paid/write route, including local bridge or hosted builder path.' },
+          maxPricePolicy: { type: 'object', description: 'How to set maxPriceUsd and when to estimate paid call cost.' },
+          confirmationPolicy: { type: 'object', description: 'Whether confirmation is required and why.' },
+          proofTapeTemplate: { type: 'object', description: 'Audit object shape the agent should fill during execution.' },
+          nextToolCalls: { type: 'array', description: 'Exact recommended next tool calls.', items: { type: 'object' } },
+          retryRules: { type: 'object', description: 'Safe retry rules for x402, RPC, hosted signer guards, and submitted signatures.' },
+          userFacingPreviewShape: { type: 'array', description: 'Fields that should appear in a compact human preview before value-moving work.', items: { type: 'string' } },
+        },
+        required: ['success', 'intent', 'userGoal', 'toolName', 'sessionContextPacket', 'freshDataRequired', 'freePreflightTools', 'paidOrWriteRoute', 'maxPricePolicy', 'confirmationPolicy', 'proofTapeTemplate', 'nextToolCalls', 'retryRules', 'userFacingPreviewShape'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => createStructuredJsonResponse(buildActionPreparation(context, parsePrepareActionInput(input))),
   );
 
   registerTool(
@@ -205,18 +283,26 @@ function parseGoal(input: unknown): string | undefined {
   return typeof goal === 'string' && goal.trim().length > 0 ? goal.trim() : undefined;
 }
 
-function parseStatusIntent(input: unknown): string {
+function parseStatusIntent(input: unknown): SapAgentIntent {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return 'general';
   }
-  const intent = (input as Record<string, unknown>).intent;
-  if (typeof intent !== 'string') {
-    return 'general';
-  }
-  if (['connection', 'paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity', 'general'].includes(intent)) {
-    return intent;
-  }
-  return 'general';
+  return normalizeSapAgentIntent((input as Record<string, unknown>).intent);
+}
+
+function parsePrepareActionInput(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  return {
+    intent: normalizeSapAgentIntent(record.intent),
+    toolName: readOptionalString(record.toolName),
+    userGoal: readOptionalString(record.userGoal),
+    maxPriceUsd: readOptionalNumber(record.maxPriceUsd),
+    estimatedNotionalUsd: readOptionalNumber(record.estimatedNotionalUsd),
+    hasUnsignedTransaction: record.hasUnsignedTransaction === true,
+    hasSubmittedSignature: record.hasSubmittedSignature === true,
+  };
 }
 
 interface NextActionInput {
@@ -244,6 +330,10 @@ function parseNextActionInput(input: unknown): NextActionInput {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function buildAgentNextActionPayload(input: NextActionInput): Record<string, unknown> {
@@ -375,7 +465,7 @@ function nextAction(payload: {
   return { success: true, ...payload };
 }
 
-function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Record<string, unknown> {
+function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentIntent): Record<string, unknown> {
   const signerConfigured = Boolean(context.signer || context.config.walletPath || context.config.externalSignerUrl);
   const hostedMode = context.config.mode === 'hosted-api';
   const localBridgeStatus = hostedMode
@@ -460,6 +550,7 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Reco
         rule: 'When a hosted tool returns transactionBase64 or an unsigned transaction, finalize locally with submit:true and confirm:true.',
       },
     },
+    sessionContextPacket: buildSessionContextPacket(context, intent),
     nextToolCalls: buildRuntimeStatusNextCalls(intent),
     userFacingSummary: hostedMode
       ? 'Hosted SAP MCP is reachable and accountless. For paid/write flows, verify the local sap_payments bridge and use it for payments, registry writes, and transaction finalization.'
@@ -474,9 +565,10 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: string): Reco
   };
 }
 
-function buildRuntimeStatusNextCalls(intent: string): Record<string, unknown>[] {
+function buildRuntimeStatusNextCalls(intent: SapAgentIntent): Record<string, unknown>[] {
   const calls: Record<string, unknown>[] = [
     { namespace: 'hosted sap', tool: 'sap_agent_start', arguments: {}, reason: 'Load startup rules.' },
+    { namespace: 'hosted sap', tool: 'sap_prepare_action', arguments: { intent }, reason: 'Resolve the correct paid/write/local route and freshness rules before execution.' },
   ];
   if (['paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity'].includes(intent)) {
     calls.push({
@@ -518,6 +610,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
     hostedEndpoint: HOSTED_MCP_URL,
     serverMode: context.config.mode,
     goal: goal ?? null,
+    sessionContextPacket: buildSessionContextPacket(context, 'general', goal),
     immediateToolCalls: [
       {
         namespace: 'hosted sap',
@@ -531,6 +624,13 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
         arguments: { intent: goal ? 'general' : 'connection' },
         required: true,
         reason: 'Get the concise hosted/accountless/local-bridge truth table before answering connection or write-readiness questions.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_prepare_action',
+        arguments: { intent: goal ? 'general' : 'connection', userGoal: goal ?? undefined },
+        required: false,
+        reason: 'Create an intent-level route plan with fresh-data requirements, local/hosted tool path, confirmation policy, retry rules, and proof-tape shape.',
       },
       {
         namespace: 'hosted sap',

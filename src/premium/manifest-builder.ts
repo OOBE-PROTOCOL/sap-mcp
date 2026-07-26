@@ -67,7 +67,9 @@ export interface PremiumManifestTemplateRequest {
 
 /**
  * @description Default input schema for template-generated capabilities.
- * Requires a `requestId` for idempotency and allows free-form `filters`.
+ * Requires a `requestId` for idempotency and provides strict, common filter
+ * fields. Plugin authors can add provider-specific filters, but every added
+ * field must be explicitly typed.
  */
 const defaultInputSchema = {
   type: 'object',
@@ -79,8 +81,31 @@ const defaultInputSchema = {
     },
     filters: {
       type: 'object',
-      additionalProperties: true,
-      description: 'Narrow capability-specific filters. Keep broad scans out of premium delivery paths.',
+      properties: {
+        wallet: {
+          type: 'string',
+          minLength: 32,
+          maxLength: 64,
+          description: 'Optional Solana wallet public key used to scope premium events.',
+        },
+        mint: {
+          type: 'string',
+          minLength: 32,
+          maxLength: 64,
+          description: 'Optional token mint used to scope premium events.',
+        },
+        protocol: {
+          type: 'string',
+          description: 'Optional protocol id used to narrow premium delivery.',
+        },
+        minUsd: {
+          type: 'number',
+          minimum: 0,
+          description: 'Optional minimum USD threshold for event emission.',
+        },
+      },
+      additionalProperties: false,
+      description: 'Strict capability filters. Add provider-specific fields explicitly before production.',
     },
   },
   additionalProperties: false,
@@ -89,8 +114,8 @@ const defaultInputSchema = {
 /**
  * @description Default output schema for template-generated capabilities.
  * Returns a stable event id, ISO timestamp, and a versioned provider payload.
- * The `payload` field uses `additionalProperties: true` as a placeholder —
- * plugin authors should replace it with a strict object schema before production.
+ * The payload is intentionally minimal and strict; plugin authors should extend
+ * it with explicit provider fields before production.
  */
 const defaultOutputSchema = {
   type: 'object',
@@ -107,8 +132,19 @@ const defaultOutputSchema = {
     },
     payload: {
       type: 'object',
-      additionalProperties: true,
-      description: 'Provider-specific payload. Replace this with a strict object schema before production.',
+      required: ['schemaVersion', 'summary'],
+      properties: {
+        schemaVersion: {
+          type: 'string',
+          description: 'Semver-like payload schema version for consumer compatibility.',
+        },
+        summary: {
+          type: 'string',
+          description: 'Short human-readable event or result summary.',
+        },
+      },
+      additionalProperties: false,
+      description: 'Strict provider payload. Extend with explicit typed fields before production.',
     },
   },
   additionalProperties: false,

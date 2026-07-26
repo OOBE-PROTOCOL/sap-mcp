@@ -63,14 +63,22 @@ SAP MCP exposes a free startup path:
 
 1. `sap_agent_start` returns the machine-readable agent playbook.
 2. `sap_agent_runtime_status` returns the hosted/accountless/local-bridge routing table.
-3. `sap_agent_context` returns free compact SAP agent context before paid discovery.
-4. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
-5. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
-6. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
-7. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
+3. `sap_prepare_action` returns the intent-level route, fresh-data requirements, confirmation policy, retry rules, and proof-tape fields before paid calls, swaps, registry writes, Escrow V2, external x402 agents, premium streams, or transaction finalization.
+4. `sap_agent_context` returns free compact SAP agent context before paid discovery.
+5. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
+6. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
+7. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
+8. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
 
 These calls are free. Paid tools should only start after the agent has loaded
 skills and, when needed, verified the local `sap_payments` bridge.
+
+Session memory may store operational context such as active profile names,
+public wallet keys, runtime namespace availability, receipts, submitted
+signatures, final statuses, and error classifications. It must not be treated
+as cached truth for prices, quotes, balances, blockhashes, simulations,
+liquidity/routes, SNS ownership, or SAP account state; fetch those fresh before
+payment, signing, and user-facing claims.
 
 ## 09.4 Skills Directory
 

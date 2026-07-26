@@ -12,6 +12,9 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   BUILTIN_PREMIUM_PLUGINS,
   listPremiumPlugins,
@@ -105,6 +108,32 @@ describe('premium builtin-plugins', () => {
         'sap-premium-trading-streams',
       ].sort(),
     );
+  });
+
+  it('deduplicates private manifests by plugin id when private discovery is enabled', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sap-premium-duplicate-'));
+    try {
+      mkdirSync(join(root, 'manifests'));
+      const privateMarketData = structuredClone(BUILTIN_PREMIUM_PLUGINS[0]);
+      privateMarketData.visibility = 'private';
+      privateMarketData.title = 'Private Market Data Override';
+      writeFileSync(
+        join(root, 'manifests', 'sap-premium-market-data.json'),
+        JSON.stringify(privateMarketData, null, 2),
+      );
+
+      process.env.SAP_MCP_ENABLE_PREMIUM_PLUGINS = 'true';
+      process.env.SAP_MCP_PLUGIN_DIR = root;
+      process.env.SAP_MCP_PREMIUM_EXPOSE_PRIVATE_DISCOVERY = 'true';
+
+      const allPlugins = listPremiumPlugins({ includePrivate: true });
+      const marketDataPlugins = allPlugins.filter(plugin => plugin.id === 'sap-premium-market-data');
+
+      expect(marketDataPlugins).toHaveLength(1);
+      expect(marketDataPlugins[0]?.title).toBe('Private Market Data Override');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('listPremiumCapabilities filters by type', () => {

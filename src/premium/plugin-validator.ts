@@ -68,6 +68,7 @@ const PRICING_TIERS = new Set(['premium-stream', 'premium-webhook', 'premium-too
 const PRICING_MODELS = new Set(['x402-per-open', 'x402-per-minute', 'x402-per-event', 'x402-session']);
 const PRICING_UNITS = new Set(['open', 'minute', 'event', 'session']);
 const DELIVERY_TRANSPORTS = new Set(['mcp-streamable-http', 'webhook-http']);
+const BLOCKED_PROTOCOL_TERMS = new Set(['drift']);
 
 /* -------------------------------------------------------------------------- */
 /* Internal helpers                                                           */
@@ -132,7 +133,9 @@ function pushUnknownKeyIssues(
  * @name pushSchemaIssues
  * @description Validate that a JSON Schema field meets strict requirements:
  * must be an object, root type must be `object`, must have a `properties`
- * object (warning), and must set `additionalProperties: false` (error).
+ * object (warning), and must set `additionalProperties: false` at the root
+ * and on every nested object schema. Premium provider contracts are sold to
+ * agents and marketplaces, so loose payloads make paid delivery brittle.
  *
  * @param issues - Accumulating issue array (mutated in place).
  * @param schema - The schema value to check.
@@ -153,6 +156,74 @@ function pushSchemaIssues(issues: PremiumValidationIssue[], schema: unknown, pat
   }
   if (schema.additionalProperties !== false) {
     issues.push(issue(path, 'error', 'Schema root must set additionalProperties: false for strict agent/runtime validation.'));
+  }
+  pushNestedSchemaStrictnessIssues(issues, schema, path, false);
+}
+
+/**
+ * @name pushNestedSchemaStrictnessIssues
+ * @description Recursively require nested object schemas to reject unknown
+ * fields. This catches loose payload/filter objects that otherwise pass root
+ * validation and later confuse agents consuming paid premium data.
+ *
+ * @param issues - Accumulating issue array (mutated in place).
+ * @param schema - JSON Schema object or child schema.
+ * @param path   - JSON path for error reporting.
+ *
+ * @internal
+ */
+function pushNestedSchemaStrictnessIssues(
+  issues: PremiumValidationIssue[],
+  schema: Record<string, unknown>,
+  path: string,
+  checkCurrentObject = true,
+): void {
+  if (checkCurrentObject && schema.type === 'object' && schema.additionalProperties !== false) {
+    issues.push(issue(path, 'error', 'Object schemas must set additionalProperties: false at every nested level for strict premium contracts.'));
+  }
+
+  if (isRecord(schema.properties)) {
+    for (const [propertyName, propertySchema] of Object.entries(schema.properties)) {
+      if (isRecord(propertySchema)) {
+        pushNestedSchemaStrictnessIssues(issues, propertySchema, `${path}.properties.${propertyName}`);
+      }
+    }
+  }
+
+  if (isRecord(schema.items)) {
+    pushNestedSchemaStrictnessIssues(issues, schema.items, `${path}.items`);
+  }
+}
+
+/**
+ * @name pushBlockedTermIssues
+ * @description Recursively reject disabled or paused protocol identifiers from
+ * premium manifests. This prevents stale private plugin contracts from
+ * re-exposing protocols that OOBE has intentionally removed from SAP MCP.
+ *
+ * @param issues - Accumulating issue array (mutated in place).
+ * @param value  - Unknown manifest subtree to scan.
+ * @param path   - JSON path for error reporting.
+ *
+ * @internal
+ */
+function pushBlockedTermIssues(issues: PremiumValidationIssue[], value: unknown, path: string): void {
+  if (typeof value === 'string') {
+    if (BLOCKED_PROTOCOL_TERMS.has(value.toLowerCase())) {
+      issues.push(issue(path, 'error', `Blocked protocol term "${value}" is not allowed in premium manifests.`));
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => pushBlockedTermIssues(issues, entry, `${path}[${index}]`));
+    return;
+  }
+
+  if (isRecord(value)) {
+    for (const [key, entry] of Object.entries(value)) {
+      pushBlockedTermIssues(issues, entry, path === '$' ? key : `${path}.${key}`);
+    }
   }
 }
 
@@ -320,6 +391,7 @@ export function validatePremiumPluginManifest(manifest: unknown): PremiumValidat
 
   // Reject unknown top-level keys.
   pushUnknownKeyIssues(issues, manifest, PLUGIN_KEYS, '$');
+  pushBlockedTermIssues(issues, manifest, '$');
 
   // Identity and metadata checks.
   if (typeof candidate.id !== 'string' || !PLUGIN_ID_PATTERN.test(candidate.id)) {

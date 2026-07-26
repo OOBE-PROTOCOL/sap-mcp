@@ -28,6 +28,19 @@ interface BalanceToolInput {
   commitment?: CommitmentOverride;
 }
 
+interface JupiterGatewayConfig {
+  apiBaseUrl: string;
+  tokensApiBaseUrl?: string;
+  apiKeyConfigured: boolean;
+  timeoutMs: number;
+}
+
+const DEFAULT_JUPITER_GATEWAY_CONFIG: JupiterGatewayConfig = {
+  apiBaseUrl: 'https://api.jup.ag',
+  apiKeyConfigured: false,
+  timeoutMs: 30000,
+};
+
 /**
  * Build a hostedPricing hint for a Client SDK tool.
  */
@@ -161,6 +174,7 @@ const PYTH_FEED_ID_MAP: ReadonlyMap<string, string> = new Map([
 let agentKit: SynapseAgentKitInstance | null = null;
 let pluginTools: Array<{ name: string; tool: AgentKitTool }> | null = null;
 let jupiterProtocolTools: Array<{ name: string; tool: ProtocolTool }> | null = null;
+let clientSdkCacheKey: string | null = null;
 
 const REQUIRED_AGENTKIT_TOOL_NAMES = [
   'bridging_bridgeWormhole',
@@ -356,13 +370,44 @@ function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): v
   );
 }
 
-async function initializeClientSdk(rpcUrl: string): Promise<void> {
-  if (agentKit) {
+function buildClientSdkCacheKey(rpcUrl: string, jupiter: JupiterGatewayConfig): string {
+  return JSON.stringify({
+    rpcUrl,
+    jupiterApiBaseUrl: jupiter.apiBaseUrl,
+    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? null,
+    jupiterApiKeyConfigured: jupiter.apiKeyConfigured,
+    jupiterTimeoutMs: jupiter.timeoutMs,
+  });
+}
+
+function normalizeJupiterGatewayConfig(jupiter?: Partial<JupiterGatewayConfig>): JupiterGatewayConfig {
+  return {
+    apiBaseUrl: jupiter?.apiBaseUrl ?? DEFAULT_JUPITER_GATEWAY_CONFIG.apiBaseUrl,
+    tokensApiBaseUrl: jupiter?.tokensApiBaseUrl,
+    apiKeyConfigured: jupiter?.apiKeyConfigured ?? Boolean(process.env.SAP_MCP_JUPITER_API_KEY?.trim()),
+    timeoutMs: jupiter?.timeoutMs ?? DEFAULT_JUPITER_GATEWAY_CONFIG.timeoutMs,
+  };
+}
+
+function readJupiterApiKey(): string | undefined {
+  const apiKey = process.env.SAP_MCP_JUPITER_API_KEY?.trim();
+  return apiKey ? apiKey : undefined;
+}
+
+async function initializeClientSdk(rpcUrl: string, jupiter: JupiterGatewayConfig): Promise<void> {
+  const nextCacheKey = buildClientSdkCacheKey(rpcUrl, jupiter);
+  if (agentKit && pluginTools && jupiterProtocolTools && clientSdkCacheKey === nextCacheKey) {
     logger.debug('Client SDK already initialized');
     return;
   }
 
-  logger.debug('Initializing Client SDK with all plugins', { rpcUrl });
+  logger.debug('Initializing Client SDK with all plugins', {
+    rpcUrl,
+    jupiterApiBaseUrl: jupiter.apiBaseUrl,
+    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? jupiter.apiBaseUrl,
+    jupiterApiKeyConfigured: jupiter.apiKeyConfigured,
+    jupiterTimeoutMs: jupiter.timeoutMs,
+  });
 
   try {
     const sdk = await import('@oobe-protocol-labs/synapse-client-sdk/ai/plugins');
@@ -408,15 +453,24 @@ async function initializeClientSdk(rpcUrl: string): Promise<void> {
 
     const protocols = await import('@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols') as ProtocolToolsModule;
     const jupiterToolkit = protocols.createJupiterTools({
+      apiUrl: jupiter.apiBaseUrl,
+      tokensApiUrl: jupiter.tokensApiBaseUrl,
+      apiKey: readJupiterApiKey(),
+      timeout: jupiter.timeoutMs,
       prettyJson: true,
     });
     jupiterProtocolTools = jupiterToolkit.tools.map((tool) => ({
       name: tool.name,
       tool,
     }));
+    clientSdkCacheKey = nextCacheKey;
     logger.debug('Jupiter protocol tools cached', {
       count: jupiterProtocolTools.length,
       methods: jupiterToolkit.methodNames.length,
+      apiBaseUrl: jupiter.apiBaseUrl,
+      tokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? jupiter.apiBaseUrl,
+      apiKeyConfigured: jupiter.apiKeyConfigured,
+      timeoutMs: jupiter.timeoutMs,
     });
     
     return;
@@ -440,7 +494,7 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
   registerLegacySolanaRpcTools(server, context);
 
   try {
-    await initializeClientSdk(context.config.rpcUrl);
+    await initializeClientSdk(context.config.rpcUrl, normalizeJupiterGatewayConfig(context.config.jupiter));
   } catch (error) {
     logger.error('Failed to initialize Client SDK', { error });
     throw error;

@@ -9,6 +9,7 @@ safe signing behavior.
 If the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or "SAP
 mode", treat it as the activation command. Call `sap_agent_start` when it is
 available, then call `sap_agent_runtime_status` with the closest intent and
+`sap_prepare_action` when the request is more than a status check. Then call
 `sap_skills_bundle` with `includeContents: true`. Load the returned SAP MCP
 skill contents into context before selecting advanced tools.
 
@@ -22,18 +23,19 @@ Always inspect runtime context through MCP tools, not by reading config files:
 
 1. `sap_agent_start`
 2. `sap_agent_runtime_status` with `intent: "connection"`, `"paid-call"`, `"registry-write"`, `"transaction-finalize"`, `"escrow"`, `"identity"`, or `"general"`
-3. `sap_agent_context` for free compact agent/directory orientation before paid discovery
-4. `sap_skills_bundle` with `includeContents: true`
-5. `sap_pricing_catalog` before estimating hosted paid call tiers
-6. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
-7. `sap_skills_upgrade_plan` when local skills are missing or stale
-8. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
-9. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
-10. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
-11. `sap_profile_current`
-12. `sap_profile_list`
-13. `sap_profile_public_key`
-14. `sap_network_stats`
+3. `sap_prepare_action` with the closest intent before paid calls, swaps, registry writes, identity updates, Escrow V2, external x402 agents, premium streams, or transaction finalization
+4. `sap_agent_context` for free compact agent/directory orientation before paid discovery
+5. `sap_skills_bundle` with `includeContents: true`
+6. `sap_pricing_catalog` before estimating hosted paid call tiers
+7. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
+8. `sap_skills_upgrade_plan` when local skills are missing or stale
+9. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
+10. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
+11. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
+12. `sap_profile_current`
+13. `sap_profile_list`
+14. `sap_profile_public_key`
+15. `sap_network_stats`
 
 For simple "are you connected?" checks, do not dump tool counts or inspect
 local files. Use `sap_agent_runtime_status` first and answer with the hosted
@@ -57,6 +59,12 @@ and error strings unchanged.
   agent profile reads as fresh data. Do not rely on old chat memory when the
   user asks for current state; use exact lightweight reads first, then paid
   discovery only when enrichment or broad search is needed.
+- Treat session memory as operational context and proof tape, not cached market
+  or on-chain truth. It may store active profile names, public wallet keys,
+  runtime namespace availability, receipts, signatures, and error
+  classifications. It must not be used as truth for token prices, Jupiter
+  quotes/orders, balances, blockhashes, simulations, liquidity, routes, or SAP
+  account state.
 - Use free exact/base reads first when the wallet, PDA, or a small orientation
   page is enough: `sap_agent_context`, `sap_get_agent`, `sap_get_agent_profile`,
   `sap_get_agent_stats`, `sap_is_agent_active`, `sap_get_global_state`, and
@@ -100,7 +108,7 @@ Use the bundled routing map for local MCP tool selection:
 
 SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
 `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
-`sap_agent_next_action`, `sap_pricing_catalog`,
+`sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`,
 `sap_skills_list`, `sap_skills_bundle`, `sap_skills_upgrade_plan`,
 `sap_runtime_repair_plan`, and local `sap_skills_install` directly. Do not
 route startup, runtime status, pricing catalog, skill listing, bundling,
@@ -198,6 +206,9 @@ This prevents silent cap aborts and failed x402 attempts on local-signer-only
 tools. For local-signer-only tools (e.g. `sap_register_agent`), the estimate
 will say `tier: "local-signer-only"` and tell you to use the local
 `sap_payments_*` equivalent instead of `sap_payments_call_paid_tool`.
+For any intent-level workflow, call `sap_prepare_action` before execution. It
+returns the correct hosted/local route, fresh-data requirements, confirmation
+policy, retry rules, and proof-tape shape without charging x402.
 
 If a hosted paid tool returns `BlockhashNotFound`,
 `transaction_simulation_failed`, `smart_wallet_simulation_failed`, `node is

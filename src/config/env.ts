@@ -126,6 +126,13 @@ export const envSchema = z.object({
   SAP_ENABLE_RATE_LIMIT: booleanEnvSchema.default(true),
   SAP_RATE_LIMIT_PER_MINUTE: z.coerce.number().positive().default(60),
 
+  // Hosted gateway provider keys. These are server-side only and must never be
+  // written into client MCP configs, public metadata, or tool responses.
+  SAP_MCP_JUPITER_API_BASE_URL: z.string().url().default('https://api.jup.ag'),
+  SAP_MCP_JUPITER_TOKENS_API_BASE_URL: z.string().url().optional(),
+  SAP_MCP_JUPITER_API_KEY: z.string().optional(),
+  SAP_MCP_JUPITER_TIMEOUT_MS: z.coerce.number().positive().default(30000),
+
   // Remote MCP monetization. Applies only when explicitly enabled by hosted HTTP deployments.
   SAP_MCP_MONETIZATION_ENABLED: booleanEnvSchema.default(false),
   SAP_MCP_MONETIZATION_PROVIDER: monetizationProviderSchema.default('x402'),
@@ -189,6 +196,12 @@ export interface SapMcpConfig {
   cacheTtlSeconds: number;
   enableRateLimit: boolean;
   rateLimitPerMinute: number;
+  jupiter: {
+    apiBaseUrl: string;
+    tokensApiBaseUrl?: string;
+    apiKeyConfigured: boolean;
+    timeoutMs: number;
+  };
   bento?: {
     enabled: boolean;
     apiKey?: string;
@@ -683,6 +696,12 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
     cacheTtlSeconds: env.SAP_CACHE_TTL_SECONDS,
     enableRateLimit: env.SAP_ENABLE_RATE_LIMIT,
     rateLimitPerMinute: env.SAP_RATE_LIMIT_PER_MINUTE,
+    jupiter: {
+      apiBaseUrl: env.SAP_MCP_JUPITER_API_BASE_URL,
+      tokensApiBaseUrl: env.SAP_MCP_JUPITER_TOKENS_API_BASE_URL,
+      apiKeyConfigured: Boolean(env.SAP_MCP_JUPITER_API_KEY?.trim()),
+      timeoutMs: env.SAP_MCP_JUPITER_TIMEOUT_MS,
+    },
     bento: {
       enabled: effectiveBentoEnabled,
       apiKey: process.env.SAP_MCP_BENTO_API_KEY || asOptionalString(bentoConfig.apiKey),

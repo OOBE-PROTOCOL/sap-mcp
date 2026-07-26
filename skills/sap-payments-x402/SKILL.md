@@ -16,6 +16,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_payments_prepare_challenge`
 - `sap_payments_sign_challenge`
 - `sap_payments_verify_receipt`
+- `sap_prepare_action`
 - `sap_x402_paid_call`
 - `sap_create_subscription`
 - `sap_fund_subscription`
@@ -70,6 +71,15 @@ Before retrying `payment_required`, `hosted_local_signer_required`,
 signature, call `sap_agent_next_action`. Use its `safeToRetryNow`, `nextTool`,
 and `paymentCharged` fields as the retry guard.
 
+Before starting a paid or value-moving workflow, call the free hosted
+`sap_prepare_action` planner with the closest intent. It returns:
+
+- fresh data that must be fetched again before payment/signing;
+- whether to use hosted `sap`, local `sap_payments`, or a hosted unsigned
+  builder plus `sap_payments_finalize_transaction`;
+- max-price and confirmation guidance;
+- retry rules and the proof-tape fields to report back to the user.
+
 For fast x402 execution:
 
 1. Reuse the MCP session returned by `initialize`.
@@ -78,9 +88,11 @@ For fast x402 execution:
 3. Use `PAYMENT-SIGNATURE` first; use `X-PAYMENT` only for clients that require
    the alternate header.
 4. Cache only static MCP surface metadata such as `tools/list`, `prompts/list`,
-   and `resources/list` inside the runtime when useful. Do not cache on-chain
-   balances, SAP agent rows, pricing, SNS ownership, quotes, or settlement
-   state when the user expects fresh data.
+   and `resources/list` inside the runtime when useful. Session memory can
+   store operational context, receipts, signatures, and error classifications.
+   Do not cache on-chain balances, SAP agent rows, pricing, SNS ownership,
+   quotes, blockhashes, simulations, liquidity, routes, or settlement state
+   when the user expects fresh data.
 5. Treat `PAYMENT-RESPONSE` as the receipt bound to the tool output.
 6. If the client runtime cannot sign or attach x402 payment headers itself, use
    the local SAP MCP `sap_payments_call_paid_tool` bridge configured by the SAP

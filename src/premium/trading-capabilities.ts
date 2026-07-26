@@ -127,7 +127,7 @@ const tradingStreamOutputSchema = {
         mevProtected: { type: 'boolean', description: 'Whether the route is MEV-protected.' },
         expiresAt: { type: 'string', format: 'date-time', description: 'Signal expiry timestamp.' },
       },
-      additionalProperties: true,
+      additionalProperties: false,
     },
   },
   additionalProperties: false,

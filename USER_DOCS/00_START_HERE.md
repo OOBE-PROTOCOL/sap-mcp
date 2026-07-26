@@ -71,7 +71,14 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 9. For registrations, check `success`, `agentRegistered`, `agentPda`, `protocolFee`, and `protocolComplete`. Local registration does not pay a hosted x402 fee. `success: true` means the agent account exists and the source-level protocol fee invariant was verified. If `success: false` with `agentRegistered: true`, the account may exist but SAP registration is not protocol-complete.
 10. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign locally, and optionally submit already-signed bytes through the hosted OOBE relay.
 11. Use `sap_agent_runtime_status` when asking an agent whether SAP MCP is connected or ready for paid/write work. It returns the hosted/local bridge routing truth without reading local files.
-12. Use `sap_pricing_catalog` or `https://mcp.sap.oobeprotocol.ai/pricing.json` to inspect generated hosted pricing tiers. The x402 challenge returned by a paid tool remains the final payment source of truth.
+12. Use `sap_prepare_action` before swaps, registry writes, identity updates, Escrow V2, external x402 calls, premium streams, or transaction finalization. It returns fresh-data requirements, the correct hosted/local route, confirmation policy, retry rules, and proof-tape fields without charging x402.
+13. Use `sap_pricing_catalog` or `https://mcp.sap.oobeprotocol.ai/pricing.json` to inspect generated hosted pricing tiers. The x402 challenge returned by a paid tool remains the final payment source of truth.
+
+Session memory is for operational context and audit: active profile name after
+readiness, public wallet keys, runtime namespace availability, x402 receipts,
+submitted signatures, final statuses, and error classifications. Do not use
+memory as cached truth for balances, token prices, Jupiter quotes/orders,
+blockhashes, simulations, liquidity/routes, SNS ownership, or SAP account state.
 
 Agent identity, profile images, Metaplex bridging, SNS linking, capabilities,
 pricing, and update fields are documented in:
@@ -87,6 +94,7 @@ server exposes these free maintenance tools:
 | --- | --- |
 | `sap_agent_start` | Load the canonical startup playbook. |
 | `sap_agent_runtime_status` | Free runtime truth table for hosted connection, local `sap_payments` readiness expectations, write routing, forbidden actions, and next tool calls. |
+| `sap_prepare_action` | Free intent-level planner for paid calls, writes, swaps, escrow, external x402, premium streams, confirmation policy, retry rules, and proof-tape shape. |
 | `sap_pricing_catalog` | Free machine-readable pricing catalog generated from the hosted pricing registry. Also available at `/pricing.json`. |
 | `sap_protocol_invariants` | Return the canonical SAP program id, protocol treasury, registration fee, hosted/local routing rules, and forbidden actions. |
 | `sap_agent_identity_plan` | Free planner for SAP registration, image/profile updates, Metaplex identity, SNS linking, and verification. |

@@ -71,8 +71,17 @@ const streamInputSchema = {
     },
     filters: {
       type: 'object',
-      additionalProperties: true,
-      description: 'Narrow filters such as mint, wallet, protocol, agentId, capability, priceFeedId, or threshold.',
+      properties: {
+        mint: { type: 'string', minLength: 32, maxLength: 64, description: 'Optional token mint public key.' },
+        wallet: { type: 'string', minLength: 32, maxLength: 64, description: 'Optional wallet public key.' },
+        protocol: { type: 'string', description: 'Optional protocol id.' },
+        agentId: { type: 'string', description: 'Optional SAP agent id.' },
+        capability: { type: 'string', description: 'Optional SAP capability id.' },
+        priceFeedId: { type: 'string', description: 'Optional oracle price feed id.' },
+        threshold: { type: 'number', description: 'Optional numeric trigger threshold.' },
+      },
+      additionalProperties: false,
+      description: 'Strict narrow filters such as mint, wallet, protocol, agentId, capability, priceFeedId, or threshold.',
     },
   },
   additionalProperties: false,
@@ -101,7 +110,12 @@ const streamOutputSchema = {
     },
     payload: {
       type: 'object',
-      additionalProperties: true,
+      required: ['schemaVersion', 'summary'],
+      properties: {
+        schemaVersion: { type: 'string', description: 'Payload schema version emitted by the premium provider.' },
+        summary: { type: 'string', description: 'Short event summary suitable for agent planning.' },
+      },
+      additionalProperties: false,
       description: 'Provider-specific event payload. Schemas are versioned per premium plugin manifest.',
     },
   },
@@ -148,7 +162,16 @@ const webhookOutputSchema = {
     eventType: { type: 'string', description: 'Delivered premium event type.' },
     deliveredAt: { type: 'string', format: 'date-time', description: 'ISO timestamp for delivery attempt.' },
     signature: { type: 'string', description: 'Provider signature over deliveryId, deliveredAt, and payload.' },
-    payload: { type: 'object', additionalProperties: true, description: 'Versioned event payload.' },
+    payload: {
+      type: 'object',
+      required: ['schemaVersion', 'summary'],
+      properties: {
+        schemaVersion: { type: 'string', description: 'Payload schema version emitted by the premium provider.' },
+        summary: { type: 'string', description: 'Short delivery summary suitable for agent planning.' },
+      },
+      additionalProperties: false,
+      description: 'Versioned event payload.',
+    },
   },
   additionalProperties: false,
 };
@@ -377,9 +400,13 @@ export function listPremiumPlugins(options: PremiumPluginListOptions = {}): Prem
     ...TECH_FUNDAMENTALS_PREMIUM_PLUGINS,
     ...loadPrivatePremiumPluginManifests(),
   ];
-  return plugins
-    .filter(plugin => plugin.visibility === 'public' || includePrivate)
-    .map(clonePlugin);
+  const merged = new Map<string, PremiumPluginManifest>();
+  for (const plugin of plugins) {
+    if (plugin.visibility !== 'public' && !includePrivate) continue;
+    merged.set(plugin.id, plugin);
+  }
+
+  return [...merged.values()].map(clonePlugin);
 }
 
 /**

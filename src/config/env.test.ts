@@ -126,6 +126,33 @@ describe('loadConfig profile precedence', () => {
     }
   });
 
+  it('loads server-side Jupiter provider config without exposing the key value', () => {
+    const configHome = mkdtempSync(join(tmpdir(), 'sap-mcp-config-'));
+
+    try {
+      process.env.XDG_CONFIG_HOME = configHome;
+      process.env.SAP_MCP_CONFIG_PATH = join(configHome, 'mcp-sap', 'hosted.json');
+      process.env.SAP_MCP_MODE = 'hosted-api';
+      process.env.SAP_MCP_RPC_URL = 'https://api.mainnet-beta.solana.com';
+      process.env.SAP_MCP_JUPITER_API_BASE_URL = 'https://api.jup.ag';
+      process.env.SAP_MCP_JUPITER_TOKENS_API_BASE_URL = 'https://tokens.jup.ag';
+      process.env.SAP_MCP_JUPITER_API_KEY = 'jup_test_secret';
+      process.env.SAP_MCP_JUPITER_TIMEOUT_MS = '45000';
+
+      const config = loadConfig();
+
+      expect(config.jupiter).toEqual({
+        apiBaseUrl: 'https://api.jup.ag',
+        tokensApiBaseUrl: 'https://tokens.jup.ag',
+        apiKeyConfigured: true,
+        timeoutMs: 45000,
+      });
+      expect(JSON.stringify(config.jupiter)).not.toContain('jup_test_secret');
+    } finally {
+      rmSync(configHome, { recursive: true, force: true });
+    }
+  });
+
   it('parses string boolean environment values explicitly', () => {
     const configHome = mkdtempSync(join(tmpdir(), 'sap-mcp-config-'));
 
