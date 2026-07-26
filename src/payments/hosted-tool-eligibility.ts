@@ -182,6 +182,8 @@ export function evaluateHostedToolEligibility(
         'sap_payments_readiness',
         'sap_payments_call_paid_tool',
         'sap_payments_finalize_transaction',
+        'sap_build_sol_transfer',
+        'sap_build_spl_transfer',
         'sap_escrow_build_create_transaction',
         'sap_escrow_build_settle_transaction',
         'sap_sns_build_manage_record_transaction',

@@ -59,10 +59,17 @@ describe('premium session-manager', () => {
     expect(record.nextAction).toBeTruthy();
   });
 
-  it('throws when the plugin id is unknown', () => {
+  it('throws when both plugin id and capability id are unknown', () => {
     expect(() =>
-      createPremiumSessionPlan(validRequest({ pluginId: 'nonexistent-plugin' })),
+      createPremiumSessionPlan(validRequest({ pluginId: 'nonexistent-plugin', capabilityId: 'nonexistent.capability' })),
     ).toThrow();
+  });
+
+  it('auto-discovers capability across plugins when pluginId is wrong', () => {
+    // The capability exists in a different plugin — auto-discovery should find it.
+    const plan = createPremiumSessionPlan(validRequest({ pluginId: 'nonexistent-plugin' }));
+    expect(plan).toBeDefined();
+    expect(plan.status).toBeDefined();
   });
 
   it('throws when the capability id is unknown', () => {

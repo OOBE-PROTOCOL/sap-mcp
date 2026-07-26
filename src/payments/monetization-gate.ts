@@ -211,6 +211,65 @@ export class McpMonetizationGate {
   }
 
   /**
+   * @name isJsonRpcError
+   * @description Checks if a buffered HTTP response body contains a JSON-RPC error.
+   *
+   * JSON-RPC errors have the shape `{ "error": { "code": <number>, "message": <string> } }`
+   * or MCP tool results with `isError: true`. When detected, settlement is skipped
+   * so the user is not charged for failed tool calls.
+   *
+   * @internal
+   */
+  private isJsonRpcError(body: Buffer): boolean {
+    try {
+      const text = body.toString('utf-8');
+      if (!text) return false;
+
+      // Try parsing as JSON-RPC.
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+
+      // JSON-RPC error: { "error": { "code": ..., "message": ... } }
+      if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
+        const error = parsed['error'];
+        if (typeof error === 'object' && error !== null && 'code' in error) {
+          return true;
+        }
+        // `error` can be a string in some MCP responses.
+        if (typeof error === 'string' && error.length > 0) {
+          return true;
+        }
+      }
+
+      // MCP tool result with isError: { "result": { "content": [...], "isError": true } }
+      if (typeof parsed === 'object' && parsed !== null && 'result' in parsed) {
+        const result = parsed['result'];
+        if (typeof result === 'object' && result !== null && 'isError' in result) {
+          return result['isError'] === true;
+        }
+        // Some tools return { "result": { "content": [{ "text": "Error: ..." }] }
+        if (typeof result === 'object' && result !== null && 'content' in result) {
+          const content = result['content'];
+          if (Array.isArray(content)) {
+            for (const item of content) {
+              if (typeof item === 'object' && item !== null && 'text' in item) {
+                const text = String(item['text'] ?? '');
+                if (text.startsWith('Error:') || text.includes('"isError":true') || text.includes('"error"')) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return false;
+    } catch {
+      // Not JSON — can't determine, don't block settlement.
+      return false;
+    }
+  }
+
+  /**
    * @name pruneExpiredIdempotencyEntries
    * @description Opportunistically remove expired entries from the idempotency cache.
    *
@@ -622,6 +681,27 @@ export class McpMonetizationGate {
         'handler_failed',
         `MCP handler returned HTTP ${options.response.statusCode}`,
       );
+      buffered.restoreAndReplay();
+      return;
+    }
+
+    // Check if the tool returned a JSON-RPC error in the response body.
+    // Even with HTTP 200, the tool may have failed (e.g. "Adrena API unreachable",
+    // "Pyth API error: 400"). In this case, we skip settlement and return the
+    // error to the client without charging them.
+    const responseBody = buffered.getBody();
+    if (responseBody && this.isJsonRpcError(responseBody)) {
+      await this.usageLedger.recordCanceled(
+        options.metadata,
+        options.decision,
+        'tool_returned_error',
+        'Tool handler returned a JSON-RPC error — settlement skipped, no charge applied.',
+      );
+      logger.info('Settlement skipped — tool returned error', {
+        toolNames: options.decision.toolNames,
+        price: options.decision.price,
+        requestHash: options.metadata.requestHash.slice(0, 12),
+      });
       buffered.restoreAndReplay();
       return;
     }

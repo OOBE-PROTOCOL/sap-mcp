@@ -426,6 +426,39 @@ export function findPremiumCapability(
 }
 
 /**
+ * @name findPremiumCapabilityById
+ * @description Resolve a capability by its id alone, searching across ALL plugins.
+ *
+ * This is the auto-discovery path: the agent doesn't need to know which plugin
+ * contains a capability. If the capability exists in any plugin, it's returned.
+ *
+ * If `pluginId` is provided AND matches, that plugin is preferred. If the
+ * capability is not found in the specified plugin but exists in another, the
+ * other plugin's capability is returned with a note.
+ *
+ * @param capabilityId  - The capability id to search for (e.g. "pyth.volatility.watch").
+ * @param type          - Optional capability type filter.
+ * @param options       - Discovery options.
+ * @returns `{ plugin, capability }` if found, otherwise `null`.
+ */
+export function findPremiumCapabilityById(
+  capabilityId: string,
+  type?: PremiumCapabilityType,
+  options: PremiumPluginListOptions = {},
+): { plugin: PremiumPluginManifest; capability: PremiumCapabilityDefinition } | null {
+  const plugins = listPremiumPlugins(options);
+  for (const plugin of plugins) {
+    const capability = plugin.capabilities.find(
+      candidate => candidate.id === capabilityId && (!type || candidate.type === type),
+    );
+    if (capability) {
+      return { plugin, capability };
+    }
+  }
+  return null;
+}
+
+/**
  * @name publicPremiumProviderStatus
  * @description Return a map of all provider env var names to their current
  * readiness state (true/false based on `process.env`).

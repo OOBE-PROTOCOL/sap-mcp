@@ -27,7 +27,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { findPremiumCapability } from './builtin-plugins.js';
+import { findPremiumCapability, findPremiumCapabilityById } from './builtin-plugins.js';
 import type { PremiumActivationResult, PremiumSessionRecord, PremiumSessionRequest } from './types.js';
 
 /**
@@ -117,9 +117,21 @@ function pruneExpiredSessions(): void {
  */
 export function createPremiumSessionPlan(request: PremiumSessionRequest): PremiumSessionRecord {
   pruneExpiredSessions();
-  const resolved = findPremiumCapability(request.pluginId, request.capabilityId, request.capabilityType);
+
+  // Try exact plugin/capability match first, then fall back to auto-discovery
+  // across all plugins. This eliminates the friction of needing to know the
+  // exact pluginId for a capability.
+  let resolved = findPremiumCapability(request.pluginId, request.capabilityId, request.capabilityType);
   if (!resolved) {
-    throw new Error(`unknown_premium_capability:${request.pluginId}/${request.capabilityId}`);
+    // Auto-discover: search all plugins for the capability.
+    resolved = findPremiumCapabilityById(request.capabilityId, request.capabilityType);
+  }
+  if (!resolved) {
+    throw new Error(
+      `unknown_premium_capability:${request.pluginId}/${request.capabilityId}. ` +
+      `The capability was not found in any plugin. ` +
+      `Use sap_premium_plugin_catalog to list all available capabilities and their plugin IDs.`,
+    );
   }
 
   const { capability } = resolved;

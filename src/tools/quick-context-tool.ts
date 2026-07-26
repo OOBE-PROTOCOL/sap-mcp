@@ -258,12 +258,15 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
   const toolsByCategory = CAPABILITIES.tools.categories as Record<string, number>;
   const totalTools = CAPABILITIES.tools.count;
 
+  // Build pricing tiers from the actual monetization config, not hardcoded values.
+  // This ensures quick_context and estimate_tool_cost always agree.
+  const monPrices = context.config.monetization.prices;
   const pricingTiers = [
     'free=$0',
-    'read-premium=$0.001',
-    'builder=$0.008',
-    'value-action=$0.04',
-    'heavy-value=$0.05',
+    `read-premium=$${monPrices.readPremiumUsd ?? 0.001}`,
+    `builder=$${monPrices.builderUsd ?? 0.008}`,
+    `value-action=$${monPrices.valueFixedUsd ?? 0.09}`,
+    `heavy-value=$${monPrices.heavyValueUsd ?? 0.05}`,
     'batch=clamped sum',
   ];
 
@@ -397,6 +400,7 @@ function buildNextAction(sections: Set<QuickContextSection>): string {
     'For wallet/profile info: the hosted server is accountless — use sap_payments_profile_current (local bridge) not sap_profile_current.',
     'For signing: use sap_payments_finalize_transaction with signerProfile to sign with a specific profile — no need to switch .active-profile.',
     'For SOL/SPL transfers: use sap_build_sol_transfer or sap_build_spl_transfer (hosted builders), then sign locally with sap_payments_finalize_transaction.',
-    'For local-signer-only tools (jupiter_swap, spl-token_transfer, etc.): build unsigned on hosted, sign locally — do not create signing scripts.',
+    'For local-signer-only tools (jupiter_swap, spl-token_transfer, adrena_openPosition, drift_openPerpPosition, etc.): build unsigned on hosted, sign locally — do not create signing scripts.',
+    'Namespace: hosted tools are mcp__sap__* (e.g. mcp__sap__jupiter_getQuote). Local bridge tools are mcp__sap_payments__* (e.g. mcp__sap_payments__sap_payments_finalize_transaction). Search both namespaces when looking for a tool.',
   ].join(' ');
 }
