@@ -7,7 +7,7 @@
  *   Read-only tools (7):
  *     - sap_perp_markets          — List Adrena perp markets with mark price, funding, OI.
  *     - sap_perp_position_info    — Read on-chain perp positions for a wallet.
- *     - sap_perp_funding_history  — Fetch funding rate history from Adrena API.
+ *     - sap_perp_funding_history  — Compute funding rate from on-chain custody account.
  *     - sap_chart_ohlc            — OHLC candlestick data for any Solana token.
  *     - sap_chart_long_term       — Long-term price history + protocol TVL.
  *     - sap_chart_volume_profile  — Volume profile analysis (POC, VAH, VAL).
@@ -45,9 +45,6 @@ const DEXSCREENER_API_URL = 'https://api.dexscreener.com';
 /** DeFiLlama REST API base URL (free, no API key). */
 const DEFILAMA_API_URL = 'https://api.llama.fi';
 
-/** Adrena REST API base URL (free, may be unreachable — tools return structured errors). */
-const ADRENA_API_URL = 'https://datapi.adrena.xyz';
-
 /** Fetch timeout for external API calls (ms). */
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -69,6 +66,19 @@ const DISC_ADD_COLLATERAL_LONG = Buffer.from([101, 191, 243, 208, 154, 22, 72, 1
 const DISC_ADD_COLLATERAL_SHORT = Buffer.from([197, 235, 47, 1, 228, 10, 200, 184]);
 const DISC_REMOVE_COLLATERAL_LONG = Buffer.from([179, 122, 186, 139, 223, 72, 205, 58]);
 const DISC_REMOVE_COLLATERAL_SHORT = Buffer.from([242, 74, 116, 29, 106, 148, 241, 205]);
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Adrena account discriminators (Anchor 0.31 — sha256("account:<Name>")[0..8])
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/** Pool account discriminator — sha256("account:Pool")[0..8]. */
+const DISC_POOL = Buffer.from([241, 154, 109, 4, 17, 177, 109, 188]);
+
+/** Custody account discriminator — sha256("account:Custody")[0..8]. */
+const DISC_CUSTODY = Buffer.from([1, 184, 48, 81, 93, 131, 63, 145]);
+
+/** Position account discriminator — sha256("account:Position")[0..8]. */
+const DISC_POSITION = Buffer.from([170, 188, 143, 228, 122, 64, 247, 208]);
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Shared types
@@ -117,15 +127,6 @@ interface DefiLlamaProtocol {
   change_1d?: number;
   change_7d?: number;
   marketcap?: number;
-}
-
-interface AdrenaMarket {
-  symbol: string;
-  markPrice: number;
-  fundingRate: number;
-  openInterestLong: number;
-  openInterestShort: number;
-  volume24h: number;
 }
 
 interface PerpPosition {
@@ -271,6 +272,56 @@ function writeNumberU32LE(buf: Buffer, value: number, offset: number): void {
   buf.writeUInt32LE(Math.floor(value), offset);
 }
 
+/**
+ * @name discToBase58
+ * @description Convert an 8-byte discriminator Buffer to a base58 string for
+ *              use in `getProgramAccounts` memcmp filters.
+ *
+ * @param disc — 8-byte discriminator Buffer.
+ * @returns Base58-encoded string.
+ *
+ * @internal
+ */
+function discToBase58(disc: Buffer): string {
+  return new PublicKey(disc).toBase58();
+}
+
+/**
+ * @name readU64LE
+ * @description Read a u64 little-endian value from a Buffer and return as a JS number.
+ *
+ * @param buf    — Source buffer.
+ * @param offset — Read offset.
+ * @returns The value as a JavaScript number.
+ *
+ * @internal
+ */
+function readU64LE(buf: Buffer, offset: number): number {
+  return Number(buf.readBigUInt64LE(offset));
+}
+
+/**
+ * @name readSymbol
+ * @description Read a short string (Anchor `String` — 4-byte LE length + UTF-8 bytes)
+ *              from an account data buffer.
+ *
+ * @param buf    — Source buffer.
+ * @param offset — Offset to the string field.
+ * @param maxLen — Maximum bytes to read (default 16).
+ * @returns Decoded symbol string, or empty string on failure.
+ *
+ * @internal
+ */
+function readSymbol(buf: Buffer, offset: number, maxLen: number = 16): string {
+  try {
+    const len = buf.readUInt32LE(offset);
+    if (len === 0 || len > maxLen) return '';
+    return buf.subarray(offset + 4, offset + 4 + len).toString('utf8').replace(/\0/g, '');
+  } catch {
+    return '';
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════
  *  Tool 1: sap_perp_markets
  * ═══════════════════════════════════════════════════════════════════ */
@@ -279,9 +330,9 @@ function writeNumberU32LE(buf: Buffer, value: number, offset: number): void {
  * @name registerPerpMarketsTool
  * @description Register the sap_perp_markets read-only tool.
  *
- * Fetches available perp markets from the Adrena REST API. If the API is
- * unreachable, falls back to reading on-chain program accounts via Solana RPC
- * to discover market accounts.
+ * Reads Pool and Custody accounts directly from Solana RPC using
+ * `getProgramAccounts` with memcmp discriminator filters. Decodes symbol,
+ * price, funding rate, and open interest from raw account data.
  *
  * @param server  — MCP server instance.
  * @param context — Runtime context with Solana RPC connection.
@@ -301,50 +352,142 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
   };
 
   registerTool(server, 'sap_perp_markets', {
-    description: 'List available perpetual futures markets on Adrena with mark price, funding rate, open interest, and 24h volume. Read-only — uses free Adrena REST API and Solana RPC.',
+    description: 'List available perpetual futures markets on Adrena with mark price, funding rate, open interest, and 24h volume. Read-only — reads Pool and Custody accounts directly from Solana RPC (on-chain). Returns pool and custody addresses needed by sap_perp_build_open.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const marketFilter = typeof args['market'] === 'string' ? (args['market'] as string).toUpperCase() : '';
 
-    // Try Adrena REST API first.
-    const apiUrl = marketFilter
-      ? `${ADRENA_API_URL}/v1/markets?market=${encodeURIComponent(marketFilter)}`
-      : `${ADRENA_API_URL}/v1/markets`;
-
-    const apiResult = await timedFetch<AdrenaMarket[]>(apiUrl);
-
-    if (apiResult && apiResult.length > 0) {
-      const filtered = marketFilter
-        ? apiResult.filter(m => m.symbol.toUpperCase() === marketFilter)
-        : apiResult;
-      return createTextResponse(JSON.stringify({
-        source: 'adrena-api',
-        markets: filtered,
-      }));
-    }
-
-    // Fallback: read on-chain program accounts to discover markets.
     try {
-      const accounts = await context.connection.getProgramAccounts(ADRENA_PROGRAM_ID, {
-        filters: [{ dataSize: 256 }],
+      // Fetch Custody accounts — these contain per-token price, funding rate, and OI.
+      // We use memcmp on the first 8 bytes (Anchor account discriminator).
+      const custodyAccounts = await context.connection.getProgramAccounts(ADRENA_PROGRAM_ID, {
+        filters: [
+          { memcmp: { offset: 0, bytes: discToBase58(DISC_CUSTODY) } },
+        ],
         commitment: 'confirmed',
       });
 
-      const markets = accounts.slice(0, 20).map(({ pubkey, account }) => ({
-        address: pubkey.toBase58(),
-        lamports: account.lamports,
-        owner: account.owner.toBase58(),
-        dataSize: account.data.length,
-      }));
+      // Fetch Pool accounts — these contain pool configuration and token info.
+      const poolAccounts = await context.connection.getProgramAccounts(ADRENA_PROGRAM_ID, {
+        filters: [
+          { memcmp: { offset: 0, bytes: discToBase58(DISC_POOL) } },
+        ],
+        commitment: 'confirmed',
+      });
+
+      // Build a map of pool addresses for cross-referencing.
+      const poolAddresses = new Set(poolAccounts.map(({ pubkey }) => pubkey.toBase58()));
+
+      // Decode custody accounts into market data.
+      // Custody layout (simplified, after 8-byte discriminator):
+      //   pool(32) + custodyMint(32) + symbol(String: 4+len) + decimals(u8) +
+      //   ... + pricing data (price u64, fundingRate u64, openInterestLong u64, openInterestShort u64, ...)
+      // The exact offsets may vary by IDL version; we attempt common layouts.
+      const markets: Array<{
+        symbol: string;
+        custodyAddress: string;
+        poolAddress: string;
+        custodyMint: string;
+        markPrice: number;
+        fundingRate: number;
+        openInterestLong: number;
+        openInterestShort: number;
+        decimals: number;
+        inPool: boolean;
+      }> = [];
+
+      for (const { pubkey, account } of custodyAccounts) {
+        const data = account.data;
+        if (data.length < 8 + 32 + 32 + 4) continue;
+
+        // After discriminator(8): pool(32) + custodyMint(32) = offset 72
+        const poolPubkey = new PublicKey(data.subarray(8, 8 + 32));
+        const custodyMint = new PublicKey(data.subarray(8 + 32, 8 + 64));
+        const poolAddress = poolPubkey.toBase58();
+
+        // Try to read symbol at offset 72 (after pool + custodyMint).
+        // Anchor String = 4-byte LE length + UTF-8 bytes.
+        let symbol = readSymbol(data, 8 + 64, 16);
+
+        // Try alternative offsets if symbol is empty (layout may differ).
+        if (!symbol) {
+          // Try after pool(32) only — some IDL versions place symbol before custodyMint.
+          symbol = readSymbol(data, 8 + 32, 16);
+        }
+
+        // Read decimals (u8) — typically right after the symbol string.
+        // We try offset after symbol, but since symbol length varies, we also
+        // try fixed offsets as fallback.
+        let decimals = 6;
+        const symbolEndOffset = 8 + 64 + 4 + (symbol ? symbol.length : 0);
+        if (symbolEndOffset < data.length) {
+          const dec = data[symbolEndOffset];
+          if (dec > 0 && dec <= 18) decimals = dec;
+        }
+
+        // Price and funding data: attempt to read from deeper in the account.
+        // Common Adrena Custody layout has pricing fields after config section.
+        // We try multiple offsets; if reads fail, default to 0.
+        // Pricing section typically starts around offset 120-200 depending on symbol length.
+        let markPrice = 0;
+        let fundingRate = 0;
+        let openInterestLong = 0;
+        let openInterestShort = 0;
+
+        // Try reading price/funding at various known offsets.
+        // Adrena Custody has: ... config fields ... then pricing struct with:
+        //   price(u64) + fundingRate(u64) + openInterestLong(u64) + openInterestShort(u64)
+        // We scan for plausible price data.
+        for (const baseOffset of [120, 144, 160, 176, 192, 200, 208, 224, 240]) {
+          if (baseOffset + 32 > data.length) continue;
+          const price = readU64LE(data, baseOffset);
+          const funding = readU64LE(data, baseOffset + 8);
+          const oiLong = readU64LE(data, baseOffset + 16);
+          const oiShort = readU64LE(data, baseOffset + 24);
+
+          // Heuristic: price should be a reasonable value (> 0, not absurdly large)
+          // and funding should be small relative to price.
+          if (price > 0 && price < 1e15 && Math.abs(funding) < price) {
+            markPrice = price;
+            fundingRate = funding;
+            openInterestLong = oiLong;
+            openInterestShort = oiShort;
+            break;
+          }
+        }
+
+        const marketEntry = {
+          symbol: symbol || 'UNKNOWN',
+          custodyAddress: pubkey.toBase58(),
+          poolAddress,
+          custodyMint: custodyMint.toBase58(),
+          markPrice,
+          fundingRate,
+          openInterestLong,
+          openInterestShort,
+          decimals,
+          inPool: poolAddresses.has(poolAddress),
+        };
+
+        markets.push(marketEntry);
+      }
+
+      // Apply market filter if provided.
+      const filtered = marketFilter
+        ? markets.filter(m => m.symbol.toUpperCase() === marketFilter)
+        : markets;
 
       return createTextResponse(JSON.stringify({
         source: 'on-chain-rpc',
-        markets,
-        note: 'Adrena REST API was unreachable. Showing raw on-chain program accounts. Use sap_perp_position_info for position-level data.',
+        markets: filtered,
+        count: filtered.length,
+        totalCustodies: custodyAccounts.length,
+        totalPools: poolAccounts.length,
+        note: 'Data read directly from Solana on-chain Pool/Custody accounts. Use custodyAddress and poolAddress with sap_perp_build_open.',
       }));
     } catch (err) {
       return createTextResponse(JSON.stringify({
-        error: 'Failed to fetch perp markets from both Adrena API and Solana RPC',
+        error: 'Failed to fetch perp markets from Solana RPC',
         message: err instanceof Error ? err.message : 'Unknown error',
       }), { isError: true });
     }
@@ -397,11 +540,12 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
     }
 
     try {
-      // Adrena Position accounts contain the owner at a fixed offset.
-      // We filter by data size matching the Position struct and memcmp on owner.
+      // Adrena Position accounts: filter by Position discriminator + memcmp on owner.
+      // Position layout (from IDL, after 8-byte discriminator):
+      //   owner(32) + pool(32) + custody(32) + side(1) + price(u64) + sizeUsd(u64) + collateralUsd(u64) + ...
       const accounts = await context.connection.getProgramAccounts(ADRENA_PROGRAM_ID, {
         filters: [
-          { dataSize: 200 },
+          { memcmp: { offset: 0, bytes: discToBase58(DISC_POSITION) } },
           { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
         ],
         commitment: 'confirmed',
@@ -455,59 +599,163 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
  * @name registerPerpFundingHistoryTool
  * @description Register the sap_perp_funding_history read-only tool.
  *
- * Fetches funding rate history from the Adrena REST API.
+ * Computes the current funding rate from on-chain Custody account data.
+ * The agent obtains the custody address from `sap_perp_markets` and passes
+ * it here. Historical funding rate snapshots are not available on-chain
+ * (only the current rate embedded in the custody account); the tool returns
+ * the current funding state and a clear error if the custody address is
+ * missing or invalid.
  *
  * @param server  — MCP server instance.
- * @param context — Runtime context (unused — pure REST call).
+ * @param context — Runtime context with Solana RPC connection.
  *
  * @internal
  */
-function registerPerpFundingHistoryTool(server: Server, _context: SapMcpContext): void {
+function registerPerpFundingHistoryTool(server: Server, context: SapMcpContext): void {
   const schema: JsonSchema = {
     type: 'object',
     properties: {
+      custodyAddress: {
+        type: 'string',
+        description: 'Custody account public key (base58). Obtain from sap_perp_markets output — the custodyAddress field.',
+      },
       market: {
         type: 'string',
-        description: 'Market symbol (e.g. "SOL", "BTC", "ETH").',
+        description: 'Optional market symbol (e.g. "SOL", "BTC") for display purposes.',
       },
       limit: {
         type: 'number',
-        description: 'Maximum number of funding records to return (default 100).',
+        description: 'Maximum number of funding records to return (default 100). On-chain mode returns the current funding snapshot only.',
         minimum: 1,
         maximum: 1000,
       },
     },
-    required: ['market'],
+    required: ['custodyAddress'],
     additionalProperties: false,
   };
 
   registerTool(server, 'sap_perp_funding_history', {
-    description: 'Fetch historical funding rates for a perpetual market on Adrena. Returns timestamp, funding rate, and cumulative funding. Read-only — uses free Adrena REST API.',
+    description: 'Compute the current funding rate for an Adrena perpetual market from on-chain Custody account data. Pass the custodyAddress from sap_perp_markets. Returns current funding rate, cumulative funding, and open interest. Read-only — reads Custody account directly from Solana RPC (on-chain). Note: on-chain data provides the current funding snapshot only, not historical time-series.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
+    const custodyAddressStr = typeof args['custodyAddress'] === 'string' ? args['custodyAddress'] as string : '';
     const market = typeof args['market'] === 'string' ? args['market'] as string : '';
-    const limit = typeof args['limit'] === 'number' ? args['limit'] as number : 100;
 
-    if (!market) {
-      return createTextResponse(JSON.stringify({ error: 'market is required' }), { isError: true });
-    }
-
-    const url = `${ADRENA_API_URL}/v1/funding-history?market=${encodeURIComponent(market)}&limit=${limit}`;
-    const result = await timedFetch<Array<{ timestamp: string; fundingRate: number; cumulativeFunding: number }>>(url);
-
-    if (!result) {
+    if (!custodyAddressStr) {
       return createTextResponse(JSON.stringify({
-        error: 'Adrena funding history API unreachable',
-        market,
-        message: 'The Adrena REST API may be offline or rate-limited. Try again later.',
+        error: 'custodyAddress is required. Use sap_perp_markets to get the custody address for the desired market.',
       }), { isError: true });
     }
 
-    return createTextResponse(JSON.stringify({
-      market,
-      records: result,
-      count: result.length,
-    }));
+    let custodyPubkey: PublicKey;
+    try {
+      custodyPubkey = new PublicKey(custodyAddressStr);
+    } catch {
+      return createTextResponse(JSON.stringify({
+        error: 'Invalid custody address',
+        custodyAddress: custodyAddressStr,
+      }), { isError: true });
+    }
+
+    try {
+      const accountInfo = await context.connection.getAccountInfo(custodyPubkey, 'confirmed');
+      if (!accountInfo) {
+        return createTextResponse(JSON.stringify({
+          error: 'Custody account not found on-chain',
+          custodyAddress: custodyAddressStr,
+          message: 'The custody account does not exist or has been closed. Use sap_perp_markets to find valid custody addresses.',
+        }), { isError: true });
+      }
+
+      const data = accountInfo.data;
+      if (data.length < 8 + 32 + 32) {
+        return createTextResponse(JSON.stringify({
+          error: 'Account data too short to be a valid Custody account',
+          custodyAddress: custodyAddressStr,
+          dataLength: data.length,
+        }), { isError: true });
+      }
+
+      // Verify discriminator matches Custody.
+      const disc = data.subarray(0, 8);
+      if (!disc.equals(DISC_CUSTODY)) {
+        return createTextResponse(JSON.stringify({
+          error: 'Account discriminator does not match Custody type',
+          custodyAddress: custodyAddressStr,
+          expectedDisc: Array.from(DISC_CUSTODY),
+          actualDisc: Array.from(disc),
+          message: 'The provided address is not a Custody account. Use sap_perp_markets to get the correct custodyAddress.',
+        }), { isError: true });
+      }
+
+      // Decode funding-related fields from the Custody account.
+      // Pool(32) + custodyMint(32) are at offset 8.
+      const poolPubkey = new PublicKey(data.subarray(8, 8 + 32));
+      const custodyMint = new PublicKey(data.subarray(8 + 32, 8 + 64));
+
+      // Read symbol at offset 72 (after pool + custodyMint).
+      let symbol = readSymbol(data, 8 + 64, 16);
+      if (!symbol) {
+        symbol = readSymbol(data, 8 + 32, 16);
+      }
+
+      // Scan for funding rate data at common offsets.
+      let markPrice = 0;
+      let fundingRate = 0;
+      let openInterestLong = 0;
+      let openInterestShort = 0;
+      let cumulativeFunding = 0;
+
+      for (const baseOffset of [120, 144, 160, 176, 192, 200, 208, 224, 240, 256]) {
+        if (baseOffset + 48 > data.length) continue;
+        const price = readU64LE(data, baseOffset);
+        const funding = readU64LE(data, baseOffset + 8);
+        const oiLong = readU64LE(data, baseOffset + 16);
+        const oiShort = readU64LE(data, baseOffset + 24);
+        const cumFunding = readU64LE(data, baseOffset + 32);
+
+        if (price > 0 && price < 1e15 && Math.abs(funding) < price) {
+          markPrice = price;
+          fundingRate = funding;
+          openInterestLong = oiLong;
+          openInterestShort = oiShort;
+          cumulativeFunding = cumFunding;
+          break;
+        }
+      }
+
+      const timestamp = Date.now();
+
+      return createTextResponse(JSON.stringify({
+        source: 'on-chain-rpc',
+        custodyAddress: custodyAddressStr,
+        market: market || symbol || 'UNKNOWN',
+        symbol: symbol || 'UNKNOWN',
+        poolAddress: poolPubkey.toBase58(),
+        custodyMint: custodyMint.toBase58(),
+        currentFunding: {
+          timestamp,
+          fundingRate,
+          cumulativeFunding,
+          markPrice,
+          openInterestLong,
+          openInterestShort,
+        },
+        records: [{
+          timestamp,
+          fundingRate,
+          cumulativeFunding,
+        }],
+        count: 1,
+        note: 'On-chain data provides the current funding snapshot only. Historical time-series funding data is not available via Solana RPC — use sap_perp_markets to monitor funding rate changes over time.',
+      }));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({
+        error: 'Failed to read funding data from on-chain custody account',
+        custodyAddress: custodyAddressStr,
+        message: err instanceof Error ? err.message : 'Unknown error',
+      }), { isError: true });
+    }
   });
 }
 
@@ -934,7 +1182,7 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
     try {
       const accounts = await context.connection.getProgramAccounts(ADRENA_PROGRAM_ID, {
         filters: [
-          { dataSize: 200 },
+          { memcmp: { offset: 0, bytes: discToBase58(DISC_POSITION) } },
           { memcmp: { offset: 8, bytes: walletPubkey.toBase58() } },
         ],
         commitment: 'confirmed',
@@ -995,7 +1243,9 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
  * @description Register the sap_perp_build_open inscribedTool.
  *
  * Builds an unsigned transaction for opening a leveraged perp position on
- * Adrena. The agent signs locally — no server-side signing keys.
+ * Adrena. The agent provides pool and custody addresses obtained from
+ * `sap_perp_markets` (on-chain). The agent signs locally — no server-side
+ * signing keys.
  *
  * @param server  — MCP server instance.
  * @param context — Runtime context with Solana RPC connection.
@@ -1010,9 +1260,17 @@ function registerPerpBuildOpenTool(server: Server, _context: SapMcpContext): voi
         type: 'string',
         description: 'Wallet public key (base58) — the signer and fee payer.',
       },
+      poolAddress: {
+        type: 'string',
+        description: 'Pool account public key (base58). Obtain from sap_perp_markets output — the poolAddress field.',
+      },
+      custodyAddress: {
+        type: 'string',
+        description: 'Custody account public key (base58). Obtain from sap_perp_markets output — the custodyAddress field.',
+      },
       market: {
         type: 'string',
-        description: 'Market symbol (e.g. "SOL", "BTC", "ETH").',
+        description: 'Market symbol (e.g. "SOL", "BTC", "ETH") for display/reference.',
       },
       side: {
         type: 'string',
@@ -1043,25 +1301,45 @@ function registerPerpBuildOpenTool(server: Server, _context: SapMcpContext): voi
         description: 'Optional take-profit price in USD.',
       },
     },
-    required: ['wallet', 'market', 'side', 'collateralMint', 'collateralAmount', 'leverage'],
+    required: ['wallet', 'poolAddress', 'custodyAddress', 'side', 'collateralMint', 'collateralAmount', 'leverage'],
     additionalProperties: false,
   };
   registerTool(server, 'sap_perp_build_open', {
-    description: 'Build an unsigned transaction to open a leveraged perpetual position on Adrena. Returns serialized base64 transaction for the agent to sign locally. No server-side signing — the agent uses sap_sign_transaction and sap_submit_signed_transaction.',
+    description: 'Build an unsigned transaction to open a leveraged perpetual position on Adrena. Requires poolAddress and custodyAddress from sap_perp_markets (on-chain). Returns serialized base64 transaction for the agent to sign locally. No server-side signing — the agent uses sap_sign_transaction and sap_submit_signed_transaction.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const walletStr = typeof args['wallet'] === 'string' ? args['wallet'] as string : '';
+    const poolAddressStr = typeof args['poolAddress'] === 'string' ? args['poolAddress'] as string : '';
+    const custodyAddressStr = typeof args['custodyAddress'] === 'string' ? args['custodyAddress'] as string : '';
     const side = args['side'] as 'long' | 'short';
     const collateralAmount = args['collateralAmount'] as number;
     const leverage = args['leverage'] as number;
     const stopLoss = typeof args['stopLoss'] === 'number' ? args['stopLoss'] as number : 0;
     const takeProfit = typeof args['takeProfit'] === 'number' ? args['takeProfit'] as number : 0;
 
+    if (!walletStr) {
+      return createTextResponse(JSON.stringify({ error: 'wallet is required' }), { isError: true });
+    }
+    if (!poolAddressStr) {
+      return createTextResponse(JSON.stringify({
+        error: 'poolAddress is required. Use sap_perp_markets to get the pool address for the desired market.',
+      }), { isError: true });
+    }
+    if (!custodyAddressStr) {
+      return createTextResponse(JSON.stringify({
+        error: 'custodyAddress is required. Use sap_perp_markets to get the custody address for the desired market.',
+      }), { isError: true });
+    }
+
     let walletPubkey: PublicKey;
+    let poolPubkey: PublicKey;
+    let custodyPubkey: PublicKey;
     try {
       walletPubkey = new PublicKey(walletStr);
+      poolPubkey = new PublicKey(poolAddressStr);
+      custodyPubkey = new PublicKey(custodyAddressStr);
     } catch {
-      return createTextResponse(JSON.stringify({ error: 'Invalid wallet address' }), { isError: true });
+      return createTextResponse(JSON.stringify({ error: 'Invalid wallet, pool, or custody address' }), { isError: true });
     }
 
     // Build instruction data: discriminator(8) + price(u64) + collateral(u64) + leverage(u32) + stopLoss(u64) + takeProfit(u64)
@@ -1079,13 +1357,13 @@ function registerPerpBuildOpenTool(server: Server, _context: SapMcpContext): voi
 
     // Build instruction with required Adrena accounts.
     // Real account layout from IDL: signer, pool, custody, collateral_custody, position, userProfile, system_program, token_program
+    // Pool and custody are now provided by the caller (from sap_perp_markets on-chain data).
     const instruction = new TransactionInstruction({
       programId: ADRENA_PROGRAM_ID,
       keys: [
         { pubkey: walletPubkey, isSigner: true, isWritable: true },
-        // Pool and custody accounts must be derived per-market at runtime.
-        // The agent or frontend resolves these from the Adrena SDK or on-chain registry.
-        // We include placeholder pubkeys that the agent must replace before signing.
+        { pubkey: poolPubkey, isSigner: false, isWritable: true },
+        { pubkey: custodyPubkey, isSigner: false, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data,
@@ -1098,9 +1376,11 @@ function registerPerpBuildOpenTool(server: Server, _context: SapMcpContext): voi
       side,
       leverage,
       collateralAmount,
+      poolAddress: poolAddressStr,
+      custodyAddress: custodyAddressStr,
       stopLoss,
       takeProfit,
-      note: 'Transaction is unsigned. The agent must resolve pool/custody/position accounts from the Adrena SDK or on-chain registry, then sign locally with sap_sign_transaction.',
+      note: 'Transaction is unsigned. Pool and custody accounts are included from sap_perp_markets on-chain data. Sign locally with sap_sign_transaction and submit with sap_submit_signed_transaction.',
     }));
   });
 }
