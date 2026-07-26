@@ -588,7 +588,7 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
         },
         async (input: unknown) => {
           try {
-            const result = await tool.invoke(input);
+            const result = await tool.invoke(normalizeJupiterProtocolToolInput(name, input));
             const pricing = buildClientSdkHostedPricing(name);
             const wrapped = typeof result === 'string'
               ? { success: true, hostedPricing: pricing, result }
@@ -669,9 +669,12 @@ function buildAgentKitToolDescription(name: string, sdkDescription?: string): st
 
 function buildJupiterProtocolToolDescription(name: string, sdkDescription?: string): string {
   const base = sdkDescription || `${name} (Synapse Jupiter Protocol)`;
+  const aliasHint = name === 'jupiter_getPrice'
+    ? ' Parameter aliases accepted by SAP MCP: mint/id/token/address -> ids[0]. Prefer canonical ids: string[] in new calls.'
+    : '';
   return [
     base,
-    'SAP MCP context: Jupiter protocol tools are served as AgentKit ecosystem tools. Use them for quote, route, and swap preparation, then use SAP transaction preview/sign/submit tools when an unsigned transaction must pass MCP signer policy.',
+    `SAP MCP context: Jupiter protocol tools are served as AgentKit ecosystem tools. Use them for quote, route, and swap preparation, then use SAP transaction preview/sign/submit tools when an unsigned transaction must pass MCP signer policy.${aliasHint}`,
   ].join(' ');
 }
 
@@ -725,6 +728,37 @@ export function normalizeAgentKitToolInput(name: string, input: unknown): unknow
           normalized[feedIdKey] = resolved;
         }
       }
+    }
+  }
+
+  return normalized;
+}
+
+/**
+ * @name normalizeJupiterProtocolToolInput
+ * @description Accepts common agent aliases for Jupiter protocol tools before
+ * invoking SDK validation. Keeps public schemas canonical while avoiding a
+ * needless schema-discovery retry for simple price snapshots.
+ */
+export function normalizeJupiterProtocolToolInput(name: string, input: unknown): unknown {
+  if (name !== 'jupiter_getPrice' || !input || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  if (normalized.ids !== undefined) {
+    return normalized;
+  }
+
+  for (const alias of ['mint', 'id', 'token', 'address']) {
+    const value = normalized[alias];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      normalized.ids = [value.trim()];
+      return normalized;
+    }
+    if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+      normalized.ids = value;
+      return normalized;
     }
   }
 

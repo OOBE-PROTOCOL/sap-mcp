@@ -387,6 +387,56 @@ describe('MCP monetization gate readiness', () => {
     }
   });
 
+  it('bypasses x402 for MCP session cleanup DELETE requests', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-delete-bypass-test-'));
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      if (String(input).endsWith('/supported')) {
+        return new Response(JSON.stringify({
+          kinds: [{
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+            extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+          }],
+          signers: {
+            'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': ['FeePayer111111111111111111111111111111111'],
+          },
+          extensions: [],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      const request = createRequest(Buffer.alloc(0), { accept: 'application/json, text/event-stream' });
+      request.method = 'DELETE';
+      const response = createResponse();
+      const next = vi.fn(async (_request: IncomingMessage, mcpResponse: ServerResponse) => {
+        mcpResponse.writeHead(200, { 'Content-Type': 'application/json' });
+        mcpResponse.end(JSON.stringify({ ok: true }));
+      });
+
+      await gate.handle(request, response.response, next);
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(response.body).toContain('"ok":true');
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
   it('fails hosted accountless local-signer writes before issuing x402 challenges', async () => {
     const previousXdgDataHome = process.env.XDG_DATA_HOME;
     process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-hosted-write-guard-test-'));

@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.37 - 2026-07-27
+
+### Fixed — Hosted Gateway Pricing And Transport Friction
+
+- Kept MCP session cleanup out of the x402 gate. `DELETE`, `OPTIONS`, and
+  `HEAD` requests now bypass monetization so Streamable HTTP clients can close
+  or probe sessions without receiving a misleading `402` challenge.
+- Made `sap_estimate_tool_cost` use the same canonical pricing engine as the
+  hosted x402 challenge path. Estimates now include configured minimum prices
+  such as `$0.005` micro-read floors, avoiding the old `$0.001` estimate versus
+  `$0.005` challenge mismatch.
+- Added Jupiter price alias normalization before SDK schema validation.
+  `jupiter_getPrice` now accepts common agent inputs like `mint`, `id`,
+  `token`, or `address` and maps them to canonical `ids[]`, while preserving
+  canonical schemas and not overriding explicit `ids`.
+
 ## 0.9.36 - 2026-07-27
 
 ### Changed — Agent Readiness And Runtime Repair

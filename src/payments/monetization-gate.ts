@@ -1094,6 +1094,11 @@ function buildPayShCheckoutUrl(config: SapMcpConfig, decision: PaymentDecision):
 }
 
 function shouldInspectRequest(request: http.IncomingMessage): boolean {
+  const method = request.method?.toUpperCase();
+  if (method === 'DELETE' || method === 'OPTIONS' || method === 'HEAD') {
+    return false;
+  }
+
   // Accept both GET and POST on /mcp so x402 discovery scanners (x402scan.com)
   // that probe with GET requests trigger the payment challenge.
   return Boolean(request.url?.startsWith('/mcp'));

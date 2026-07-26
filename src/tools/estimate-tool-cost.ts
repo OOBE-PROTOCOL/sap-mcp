@@ -9,12 +9,12 @@ import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
 import {
-  classifyTool,
   formatUsdPrice,
   priceToolCall,
   type PaymentTier,
 } from '../payments/pricing.js';
 import { isHostedAccountlessBlockedTool } from '../payments/hosted-tool-eligibility.js';
+import { canonicalizeToolName } from './tool-aliases.js';
 
 interface EstimateToolCostInput {
   toolName: string;
@@ -74,21 +74,26 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           );
         }
 
+        const canonicalToolName = canonicalizeToolName(toolName);
         const monetization = context.config.monetization;
-        const strictTools = monetization?.strictTools ?? false;
-        const tier = classifyTool(toolName, { strictTools });
+        const pricing = priceToolCall({
+          toolName: canonicalToolName,
+          arguments: input.arguments,
+        }, monetization);
+        const tier = pricing.tier;
 
         // Check if this tool is local-signer-only (never x402, always blocked on hosted)
         const isLocalSignerOnly = context.config.mode === 'hosted-api'
           && !context.config.walletPath
           && !context.config.externalSignerUrl
-          && isHostedAccountlessBlockedTool(toolName);
+          && isHostedAccountlessBlockedTool(canonicalToolName);
 
         if (isLocalSignerOnly) {
           return createTextResponse(JSON.stringify({
             success: true,
             estimate: {
-              toolName,
+              toolName: canonicalToolName,
+              requestedToolName: toolName === canonicalToolName ? undefined : toolName,
               tier: 'local-signer-only',
               priceUsd: 0,
               priceFormatted: '$0',
@@ -100,54 +105,10 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           }, null, 2));
         }
 
-        let priceUsd = 0;
-        let reason = 'free tool — no x402 payment required';
-
-        if (tier !== 'free') {
-          const prices = monetization?.prices;
-          if (prices) {
-            switch (tier) {
-              case 'micro-read':
-                priceUsd = prices.microReadUsd;
-                reason = 'fresh lightweight hosted data read';
-                break;
-              case 'read-premium':
-                priceUsd = prices.readPremiumUsd;
-                reason = 'premium read/discovery tool';
-                break;
-              case 'builder':
-                priceUsd = prices.builderUsd;
-                reason = 'complex builder, batch, SNS, analytics, or routing tool';
-                break;
-              case 'value-action':
-                priceUsd = priceToolCall({
-                  toolName,
-                  arguments: input.arguments,
-                }, monetization).priceUsd;
-                reason = 'value-changing action fixed fee; heavy execution paths may use the configured heavy value-action fee';
-                break;
-              case 'batch':
-                priceUsd = prices.valueFixedUsd;
-                reason = 'batch call — sum of individual tool costs, clamped';
-                break;
-              default:
-                priceUsd = prices.readPremiumUsd;
-                reason = 'unknown tier — defaulting to read-premium';
-            }
-          } else {
-            // Fallback to defaults if monetization config is not available
-            switch (tier) {
-              case 'micro-read': priceUsd = 0.001; break;
-              case 'read-premium': priceUsd = 0.002; break;
-              case 'builder': priceUsd = 0.006; break;
-              case 'value-action': priceUsd = 0.06; break;
-              default: priceUsd = 0.001;
-            }
-          }
-        }
+        const priceUsd = pricing.priceUsd;
 
         const estimate: ToolCostEstimate = {
-          toolName,
+          toolName: canonicalToolName,
           tier,
           priceUsd,
           priceFormatted: formatUsdPrice(priceUsd),
@@ -155,15 +116,16 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           maxPriceUsdHint: tier === 'free'
             ? 'no maxPriceUsd needed — this tool is free'
             : `Set maxPriceUsd to at least ${formatUsdPrice(priceUsd * 1.5)} to allow for price variance. For sap_payments_call_paid_tool, pass maxPriceUsd: ${(priceUsd * 1.5).toFixed(6)}.`,
-          reason,
+          reason: pricing.reason,
         };
 
         return createTextResponse(JSON.stringify({
           success: true,
+          requestedToolName: toolName === canonicalToolName ? undefined : toolName,
           estimate,
           hint: tier === 'free'
             ? 'This tool is free. Call it directly without sap_payments_call_paid_tool.'
-            : `This tool requires x402 payment. Use sap_payments_call_paid_tool with toolName="${toolName}" and maxPriceUsd >= ${priceUsd.toFixed(6)}. The actual x402 challenge is the final source of truth for pricing.`,
+            : `This tool requires x402 payment. Use sap_payments_call_paid_tool with toolName="${canonicalToolName}" and maxPriceUsd >= ${priceUsd.toFixed(6)}. The actual x402 challenge is the final source of truth for pricing.`,
         }, null, 2));
       } catch (error) {
         return createTextResponse(

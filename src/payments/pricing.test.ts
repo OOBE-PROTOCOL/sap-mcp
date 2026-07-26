@@ -3,7 +3,7 @@ import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { parseJsonRpcBody } from './json-rpc.js';
 import { buildPaidVirtualPath } from './monetization-gate.js';
 import { generatePayShProviderYaml, resolvePayShNetwork } from './pay-sh-spec.js';
-import { buildPricingCatalog, classifyTool, resolvePaymentDecision } from './pricing.js';
+import { buildPricingCatalog, classifyTool, priceToolCall, resolvePaymentDecision } from './pricing.js';
 
 const monetizationConfig: SapMcpMonetizationConfig = {
   enabled: true,
@@ -73,6 +73,39 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_protocol_invariants', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_identity_plan')).toBe('free');
     expect(classifyTool('sap_agent_identity_plan', { strictTools: true })).toBe('free');
+  });
+
+  it('applies the configured minimum price to micro-read estimates and challenges', () => {
+    const hostedConfig = {
+      ...monetizationConfig,
+      prices: {
+        ...monetizationConfig.prices,
+        minUsd: 0.005,
+      },
+    };
+
+    const pricing = priceToolCall({
+      toolName: 'sap_chart_ohlc',
+      arguments: { symbol: 'SOL' },
+    }, hostedConfig);
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_chart_ohlc',
+        arguments: { symbol: 'SOL' },
+      },
+    });
+    const decision = resolvePaymentDecision(parsed, hostedConfig);
+
+    expect(pricing.tier).toBe('micro-read');
+    expect(pricing.priceUsd).toBe(0.005);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.price).toBe('$0.005');
+    }
   });
 
   it('keeps SAP MCP skill bootstrap tools free', () => {
