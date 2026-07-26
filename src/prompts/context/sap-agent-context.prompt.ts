@@ -297,8 +297,8 @@ Use the exact names returned by \`tools/list\`. Do not replace hyphens with unde
 | SOL/SPL balances and transfers | \`sol_get_balance\`, \`spl-token_getBalance\`, \`spl-token_getTokenAccounts\`, \`spl-token_transfer\`, \`spl-token_transferSol\` |
 | Jupiter swaps and quotes | \`jupiter_getQuote\`, \`jupiter_swap\`, \`jupiter_swapInstructions\`, \`jupiter_smartSwap\`, \`jupiter_getOrder\`, \`jupiter_executeOrder\` |
 | Jupiter token intelligence | \`jupiter_searchTokens\`, \`jupiter_getTokenInfo\`, \`jupiter_getTokenList\`, \`jupiter_shield\`, \`jupiter_getHoldings\` |
-| DEX, perps, liquidity | \`adrena_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
-| Price and market data | \`pyth_getPrice\`, \`pyth_getPriceHistory\`, \`pyth_listPriceFeeds\`, \`coingecko_getTokenPrice\`, \`coingecko_getTokenInfo\` |
+| DEX, perps, liquidity | \`sap_perp_trade_plan\`, \`sap_perp_markets\`, \`sap_perp_position_info\`, \`sap_perp_liquidation_zones\`, \`sap_chart_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
+| Price and market data | \`jupiter_getPrice\`, \`pyth_getPrice\`, \`coingecko_getTokenPrice\`, \`pyth_getPriceHistory\`, \`pyth_listPriceFeeds\`, \`coingecko_getTokenInfo\` |
 | NFTs and domains | \`metaplex-nft_*\`, \`3land_*\`, \`sap_sns_*\`, \`sns_*\`, \`alldomains_*\` |
 | Bridges, staking, actions | \`bridging_*\`, \`staking_*\`, \`jito_*\`, \`blinks_*\`, \`lulo_*\` |
 
@@ -316,7 +316,8 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 ### ⚡ x402 Hosted Payment Fast Path
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
 - SAP MCP skill bootstrap tools are free: use \`sap_skills_list\`, \`sap_skills_bundle\`, and \`sap_skills_install\` directly. Do not route skill installation through \`sap_x402_paid_call\`.
-- Basic wallet balance reads are free hosted tools: call \`sol_get_balance\`, \`spl-token_getBalance\`, and \`spl-token_getTokenAccounts\` directly on hosted SAP MCP. Do not route them through \`sap_payments_call_paid_tool\` or describe balance failures as x402 facilitator failures unless a paid tool actually returned the error.
+- Basic wallet balance reads and single-asset price snapshots are free hosted tools: call \`sol_get_balance\`, \`spl-token_getBalance\`, \`spl-token_getTokenAccounts\`, \`jupiter_getPrice\`, \`pyth_getPrice\`, and \`coingecko_getTokenPrice\` directly on hosted SAP MCP. Do not route them through \`sap_payments_call_paid_tool\` or describe balance/price failures as x402 facilitator failures unless a paid tool actually returned the error.
+- Executable quotes, routes, token lists, OHLCV/history, broad discovery, and enriched holdings are paid fresh-data calls; call \`sap_estimate_tool_cost\` or \`sap_pricing_catalog\` first when the user has not already approved paid market context.
 - Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.
 - Treat \`402 Payment Required\` as the expected hosted payment handshake, not as a tool failure.
 - Before any hosted paid/write workflow, call local \`sap_payments_readiness\` when the \`sap_payments\` bridge is available. It reports hosted MCP connectivity, local profile, signer, SOL/USDC payment balance, policy limits, and next action without exposing keypair bytes.

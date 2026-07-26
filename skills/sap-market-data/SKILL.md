@@ -24,11 +24,15 @@ trending assets, token metadata, and security/intelligence checks.
 
 ## Flow
 
-1. Resolve token mints with `jupiter_searchTokens` when the user gives only a
-   ticker.
-2. Use Pyth for oracle-style price feeds.
-3. Use CoinGecko for market data, OHLCV, pools, trending, gainers, and losers.
-4. Use `jupiter_shield` and `jupiter_getTokenInfo` for token risk context.
+1. If the mint/feed id is already known, start with free single-asset snapshots:
+   `jupiter_getPrice`, `pyth_getPrice`, or `coingecko_getTokenPrice`.
+2. Resolve token mints with `jupiter_searchTokens` only when the user gives
+   a ticker or ambiguous asset name; this is broader discovery and may be paid.
+3. Use `jupiter_getQuote` for executable route pricing, not as a generic price
+   check. Quotes are fresh, paid, and must not be cached as truth.
+4. Use Pyth history, CoinGecko OHLCV/pools/trending/gainers/losers, and Jupiter
+   token lists only when the user needs broader market context.
+5. Use `jupiter_shield` and `jupiter_getTokenInfo` for token risk context.
 
 ## Safety
 

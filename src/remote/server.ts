@@ -1499,7 +1499,7 @@ export function buildOpenApiSpec(
     info: {
       title: 'SAP MCP Server',
       version: MCP_SERVER_VERSION,
-      description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments across Jupiter, Adrena, Metaplex, Pump.fun, Raydium, Orca, and more.',
+      description: 'MCP gateway for Solana DeFi, SAP agent registry, and x402 micropayments across Jupiter, Metaplex, Pump.fun, Raydium, Orca, perps analytics, and more.',
       'x-guidance': 'Connect to POST /mcp with Accept: application/json, text/event-stream. Initialize an MCP session first, then call tools. Paid tools return a payment_required JSON-RPC error (HTTP 200 for MCP SDK compatibility) or HTTP 402 for non-MCP clients. Use the local sap_payments_call_paid_tool bridge or npx sap-mcp-x402-paid-call to self-pay and retry.',
       contact: {
         name: 'OOBE Protocol Labs',

@@ -1,8 +1,8 @@
 # SAP DeFi
 
-Use this skill for Jupiter swaps, DCA, limit orders, perps planning, Adrena, Lulo,
-Raydium, Orca, Meteora, OpenBook, Manifest, Pump.fun, Jito, bridges, and
-staking protocols.
+Use this skill for Jupiter swaps, DCA, limit orders, perps planning, chart
+analysis, Lulo, Raydium, Orca, Meteora, OpenBook, Manifest, Pump.fun, Jito,
+bridges, and staking protocols.
 
 ## Jupiter
 
@@ -32,7 +32,6 @@ staking protocols.
 - `sap_chart_ohlc`
 - `sap_chart_long_term`
 - `sap_chart_volume_profile`
-- `adrena_*`
 - `lulo_*`
 - `raydium-pools_*`
 - `orca_*`
@@ -76,10 +75,19 @@ tools before any value-moving action:
    policy.
 
 `sap_perp_trade_plan` is analysis-only. It returns trader-grade risk flags,
-liquidation estimate, reward/risk, and an execution checklist. Do not create
-temporary signing scripts, do not guess perps account graphs, and do not execute
-a perps transaction unless SAP MCP exposes a typed unsigned builder or a local
-SAP payments/signing tool for that exact action.
+liquidation estimate, reward/risk, and an execution checklist. `sap_perp_markets`
+may return `dataAvailability.status="unavailable"` when the configured RPC does
+not serve the required perps account indexes; treat that as missing data, not as
+proof that markets do not exist. Do not create temporary signing scripts, do not
+guess perps account graphs, and do not execute a perps transaction unless SAP MCP
+exposes a typed unsigned builder or a local SAP payments/signing tool for that
+exact action.
+
+Direct Adrena signer tools may exist in some local AgentKit builds, but hosted
+SAP MCP blocks them before x402 payment because the hosted server is
+accountless. Do not route `adrena_openPosition`, `adrena_closePosition`, or
+collateral-changing Adrena calls through `sap_payments_call_paid_tool`; there is
+no payment challenge and no unsigned transaction to finalize.
 
 ## Safety
 

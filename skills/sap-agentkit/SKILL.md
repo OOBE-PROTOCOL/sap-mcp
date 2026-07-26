@@ -29,9 +29,16 @@ authority, and verification flows.
 
 ## DeFi And Markets
 
-Use `adrena_*`, `lulo_*`, `manifest_*`, `meteora_*`,
-`openbook_*`, `orca_*`, `raydium-pools_*`, `pump_*`, `bridging_*`,
-`staking_*`, and `jito_*` tools for DeFi execution.
+Use `lulo_*`, `manifest_*`, `meteora_*`, `openbook_*`, `orca_*`,
+`raydium-pools_*`, `pump_*`, `bridging_*`, `staking_*`, and `jito_*` tools for
+DeFi execution when the tool is available in the current runtime and the
+required signing route is explicit.
+
+For perps, prefer SAP MCP analysis tools first: `sap_perp_trade_plan`,
+`sap_perp_markets`, `sap_perp_position_info`, `sap_perp_liquidation_zones`, and
+`sap_chart_*`. Hosted SAP MCP does not expose Adrena unsigned execution builders
+yet. Do not call direct Adrena signer tools through `sap_payments_call_paid_tool`;
+they are local-signer-only and should be rejected before any x402 payment.
 
 ## Social, Blinks, Gaming
 

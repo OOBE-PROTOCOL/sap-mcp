@@ -262,6 +262,29 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
+  it('keeps single-asset price snapshots free while broad market data stays paid', () => {
+    for (const toolName of ['jupiter_getPrice', 'pyth_getPrice', 'coingecko_getTokenPrice']) {
+      expect(classifyTool(toolName)).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('free');
+
+      const decision = resolvePaymentDecision(parseJsonRpcBody({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: { id: 'So11111111111111111111111111111111111111112' },
+        },
+      }), monetizationConfig);
+
+      expect(decision.required).toBe(false);
+    }
+
+    for (const toolName of ['jupiter_getTokenList', 'pyth_getPriceHistory', 'coingecko_getOHLCV']) {
+      expect(classifyTool(toolName)).toBe('read-premium');
+    }
+  });
+
   it('keeps single SNS availability checks free in default and strict mode', () => {
     expect(classifyTool('sap_sns_check_domain')).toBe('free');
     expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('free');

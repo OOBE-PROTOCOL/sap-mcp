@@ -176,6 +176,11 @@ const FREE_TOOLS = new Set([
   'sap_chart_ohlc',
   'sap_chart_long_term',
   'sap_chart_volume_profile',
+  // Single-asset price snapshots are free preflight context. Broad token lists,
+  // trending scans, holdings enrichment, OHLCV history, and quotes stay paid.
+  'jupiter_getPrice',
+  'pyth_getPrice',
+  'coingecko_getTokenPrice',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -269,6 +274,10 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_chart_ohlc',
   'sap_chart_long_term',
   'sap_chart_volume_profile',
+  // Single-asset price snapshots are free preflight context in every hosted mode.
+  'jupiter_getPrice',
+  'pyth_getPrice',
+  'coingecko_getTokenPrice',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -284,17 +293,14 @@ const READ_PREMIUM_TOOLS = new Set([
   'sap_sns_get_domain_pda',
   'sap_sns_get_record_pda',
   'jupiter_getQuote',
-  'jupiter_getPrice',
   'jupiter_getTokenList',
   'jupiter_getTokenInfo',
   'jupiter_getHoldings',
   'jupiter_programLabels',
   'jupiter_searchTokens',
   'magicblock_swapQuote',
-  'pyth_getPrice',
   'pyth_getPriceHistory',
   'pyth_listPriceFeeds',
-  'coingecko_getTokenPrice',
   'coingecko_getTrending',
   'coingecko_getTopGainersLosers',
   'coingecko_getTokenInfo',
@@ -420,7 +426,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     tiers: {
       free: {
         paymentRequired: false,
-        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, core SOL/SPL balance checks for payment readiness, and compact orientation lists.',
+        pricingRule: 'No x402/pay.sh payment challenge. These calls are for bootstrap, status, schema discovery, exact SAP agent/profile reads, local payment bridge control, core SOL/SPL balance checks for payment readiness, single-asset price snapshots, perp planning context, and compact orientation lists.',
         examples: [
           'initialize',
           'tools/list',
@@ -436,6 +442,9 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
           'sol_get_balance',
           'spl-token_getBalance',
           'spl-token_getTokenAccounts',
+          'jupiter_getPrice',
+          'pyth_getPrice',
+          'coingecko_getTokenPrice',
           'magicblock_balance',
           'sap_list_agents limit<=20 view=compact',
         ],
@@ -443,8 +452,8 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'read-premium': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.readPremiumUsd, config),
-        pricingRule: 'Flat premium read/discovery fee per tool call. Broad scans, enriched directory views, analytics, market data, and large pages are paid. Narrow filters, small limits, and pagination are expected.',
-        examples: ['sap_discover_agents', 'sap_list_all_agents', 'sap_list_agents view=full', 'jupiter_getQuote', 'pyth_getPrice', 'das_getAsset'],
+        pricingRule: 'Flat premium read/discovery fee per tool call. Broad scans, enriched directory views, analytics, OHLCV/history, quotes/routes, and large pages are paid. Narrow filters, small limits, and pagination are expected.',
+        examples: ['sap_discover_agents', 'sap_list_all_agents', 'sap_list_agents view=full', 'jupiter_getQuote', 'pyth_getPriceHistory', 'das_getAsset'],
       },
       builder: {
         paymentRequired: true,
@@ -476,7 +485,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
     runtimeRules: [
       'The x402 Payment Required challenge is the final source of truth for paid hosted calls.',
       `Exact SAP agent/profile reads are free. Use sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, and sap_get_global_state before broad paid discovery.`,
-      'Core balance checks are free: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, spl-token_getMint, spl-token_getSupply, magicblock_balance, sap_x402_get_balance. Enriched holdings tools such as jupiter_getHoldings are read-premium because they perform broader market/index work.',
+      'Core balance checks and single-asset price snapshots are free: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, spl-token_getMint, spl-token_getSupply, magicblock_balance, sap_x402_get_balance, jupiter_getPrice, pyth_getPrice, and coingecko_getTokenPrice. Enriched holdings, quotes, token lists, history/OHLCV, and broad market scans remain read-premium.',
       'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
       'Call sap_prepare_action before swaps, registry writes, escrow, external x402 calls, premium streams, or transaction finalization. It returns the fresh-data requirements, local/hosted route, confirmation policy, retry rules, and proof-tape shape without charging x402.',

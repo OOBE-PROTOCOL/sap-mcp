@@ -174,8 +174,6 @@ Jupiter protocol toolkit:
 `jupiter_getLimitOrders`, `jupiter_createDCA`, `jupiter_executeDCA`,
 `jupiter_cancelDCA`, `jupiter_getDCAOrders`, `jupiter_smartSwap`.
 
-`adrena_addCollateral`, `adrena_closePosition`, `adrena_getPositions`,
-`adrena_openPosition`, `adrena_removeCollateral`,
 `bridging_bridgeDeBridge`, `bridging_bridgeDeBridgeStatus`,
 `bridging_bridgeWormhole`, `bridging_bridgeWormholeStatus`,
 `jito_getBundleStatus`, `jito_getTipEstimate`,
@@ -207,7 +205,7 @@ Protocol routing shortcuts:
 | Token launch/mint/burn | `spl-token_deployToken`, `spl-token_mintTo`, `spl-token_burn` |
 | Jupiter quote/swap | `jupiter_getQuote`, `jupiter_smartSwap`, `jupiter_swap`, `jupiter_swapInstructions` |
 | Jupiter limit/DCA | `jupiter_createLimitOrder`, `jupiter_getLimitOrders`, `jupiter_createDCA`, `jupiter_getDCAOrders` |
-| Perps/lending | `sap_perp_trade_plan`, `sap_perp_*`, `adrena_*`, `lulo_*` |
+| Perps/lending | `sap_perp_trade_plan`, `sap_perp_*`, `sap_chart_*`, `lulo_*` |
 | Liquidity pools | `raydium-pools_*`, `orca_*`, `meteora_*` |
 | Orderbooks | `openbook_*`, `manifest_*` |
 | Price data | `pyth_*`, `coingecko_*` |
@@ -221,3 +219,8 @@ Social, Blinks, bounties, gaming:
 `blinks_getAction`, `blinks_resolveBlinkUrl`, `blinks_validateActionsJson`,
 `gibwork_createBounty`, `gibwork_listBounties`, `gibwork_submitWork`,
 `send-arcade_listGames`, `send-arcade_playGame`.
+
+Perps note: SAP MCP hosted supports perps analytics and trader-grade planning,
+not direct hosted Adrena execution. If direct Adrena signer tools are visible in
+a local runtime, use them only with that local runtime's signer path and policy.
+Do not route direct Adrena writes through hosted x402 paid-call replay.

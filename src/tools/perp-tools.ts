@@ -273,7 +273,7 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
   };
 
   registerTool(server, 'sap_perp_markets', {
-    description: 'List available perpetual futures markets on Adrena with mark price, funding rate, open interest, and 24h volume. Read-only — reads Pool and Custody accounts directly from Solana RPC (on-chain). Use with sap_perp_trade_plan for professional pre-trade risk planning.',
+    description: 'List available perpetual futures markets from Adrena Pool/Custody accounts with mark price, funding rate, open interest, and 24h volume when the configured RPC can serve the required account indexes. Read-only analysis tool. If markets are empty, treat it as data unavailable, not proof that markets do not exist. SAP MCP currently exposes no hosted Adrena execution builder; use sap_perp_trade_plan plus chart tools for planning only.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const marketFilter = typeof args['market'] === 'string' ? (args['market'] as string).toUpperCase() : '';
@@ -397,6 +397,17 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
       const filtered = marketFilter
         ? markets.filter(m => m.symbol.toUpperCase() === marketFilter)
         : markets;
+      const dataAvailability = custodyAccounts.length === 0 && poolAccounts.length === 0
+        ? {
+            status: 'unavailable',
+            reason: 'No Adrena Pool/Custody accounts were returned by the configured Solana RPC. This can mean the RPC does not serve the required getProgramAccounts index, the upstream account layout changed, or Adrena markets are unavailable for this route.',
+            agentAction: 'Do not infer that no perp markets exist and do not retry in a loop. Use sap_chart_ohlc/sap_chart_volume_profile for market context, then stop before execution until an IDL-backed builder or native venue route is available.',
+          }
+        : {
+            status: 'available',
+            reason: 'Adrena account scan returned on-chain accounts from the configured RPC.',
+            agentAction: 'Use custodyAddress and poolAddress only for analysis. SAP MCP does not expose a hosted Adrena execution builder yet.',
+          };
 
       return createTextResponse(JSON.stringify({
         source: 'on-chain-rpc',
@@ -404,7 +415,14 @@ function registerPerpMarketsTool(server: Server, context: SapMcpContext): void {
         count: filtered.length,
         totalCustodies: custodyAccounts.length,
         totalPools: poolAccounts.length,
-        note: 'Data read directly from Solana on-chain Pool/Custody accounts. Use custodyAddress and poolAddress for analysis and sap_perp_trade_plan before any external execution route.',
+        dataAvailability,
+        recommendedNextTools: [
+          'sap_chart_ohlc',
+          'sap_chart_volume_profile',
+          'sap_perp_trade_plan',
+        ],
+        executionStatus: 'analysis_only_no_hosted_builder',
+        note: 'Data read directly from Solana on-chain Pool/Custody accounts. Use custodyAddress and poolAddress for analysis only. Do not execute perps unless SAP MCP exposes a typed unsigned builder or a local signer tool for that exact action.',
       }));
     } catch (err) {
       return createTextResponse(JSON.stringify({
@@ -1310,7 +1328,7 @@ function registerPerpTradePlanTool(server: Server): void {
         'sap_perp_position_info',
         'sap_perp_liquidation_zones',
       ],
-      executionWarning: 'SAP MCP 0.9.35 intentionally does not expose manual Adrena execution builders. Execution must use a complete IDL-backed route before local finalization.',
+      executionWarning: 'SAP MCP intentionally does not expose manual Adrena execution builders. Execution must use a complete IDL-backed route before local finalization. If a hosted direct Adrena signer tool returns hosted_local_signer_required, do not route it through sap_payments_call_paid_tool; no x402 fee should be charged and there is no unsigned transaction to finalize.',
       notes: typeof args['notes'] === 'string' ? args['notes'] : undefined,
     }, null, 2));
   });
