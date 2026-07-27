@@ -631,7 +631,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     {
       title: 'Activate Premium Session',
       description:
-        'Activates a pending premium session with a verified x402/pay.sh payment receipt. The caller must have already settled the payment challenge on the delivery rail. This tool does not charge — it binds the receipt and transitions the session from pending_payment to active so the stream/webhook delivery rail can start.',
+        'Activates a pending premium session with a verified x402/pay.sh payment receipt. This tool is FREE — it does not charge x402. The paymentReceipt must be the actual Solana transaction signature (tx hash) from the x402 facilitator settlement, NOT "pending" or any placeholder. Flow: 1) sap_premium_session_start creates a pending session (free). 2) The x402 challenge is settled via the local bridge (sap_payments_call_paid_tool or direct facilitator payment) — the facilitator returns a tx signature. 3) Pass that tx signature as paymentReceipt to this tool. Do NOT pass "pending" — it will always be rejected and waste a tool call.',
       inputSchema: {
         type: 'object',
         required: ['sessionId', 'paymentReceipt'],
@@ -642,7 +642,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
           },
           paymentReceipt: {
             type: 'string',
-            description: 'Opaque x402/pay.sh payment receipt string proving settlement.',
+            description: 'The Solana transaction signature (tx hash) from the x402 facilitator settlement. NOT "pending" — must be the real tx hash like "3ozKaRujGGymu3s9q67qfwfG21s2BpjJQ5zEEFCWen1u...". Get this by settling the payment challenge first, then pass the returned signature here.',
           },
           payerAddress: {
             type: 'string',

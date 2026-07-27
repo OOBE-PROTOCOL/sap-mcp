@@ -34,6 +34,10 @@ import type { PremiumActivationRequest, PremiumActivationResult } from './types.
  * is the caller's responsibility. It only checks that the receipt is a non-empty
  * string of reasonable length.
  *
+ * Special case: the literal string "pending" is accepted but returns a special
+ * result telling the caller to provide the actual tx signature after settlement.
+ * This prevents agents from wasting a paid call when they don't have the receipt yet.
+ *
  * @param receipt - The opaque receipt string from x402/pay.sh settlement.
  * @returns True if the receipt has a valid structural format.
  *
@@ -41,10 +45,27 @@ import type { PremiumActivationRequest, PremiumActivationResult } from './types.
  */
 function verifyReceiptFormat(receipt: string): boolean {
   if (typeof receipt !== 'string') return false;
-  if (receipt.trim().length < 8) return false;
+  if (receipt.trim().length < 8) {
+    return false;
+  }
   if (receipt.length > 2048) return false;
   return true;
 }
+
+/**
+ * @name RECEIPT_HELP_MESSAGE
+ * @description Help message shown when an agent passes "pending" or an invalid
+ * receipt. Explains exactly what the receipt should be and how to get it.
+ */
+const RECEIPT_HELP_MESSAGE =
+  'The paymentReceipt must be the actual Solana transaction signature (tx hash) ' +
+  'from the x402 facilitator settlement, not "pending" or a placeholder. ' +
+  'Flow: 1) sap_premium_session_start creates a pending session (free). ' +
+  '2) The x402 challenge is settled via the local bridge (sap_payments_call_paid_tool ' +
+  'or direct facilitator payment) — the facilitator returns a tx signature. ' +
+  '3) Pass that tx signature as paymentReceipt to this tool. ' +
+  'Do NOT pass "pending" — it will always be rejected. ' +
+  'If you do not have the tx signature yet, settle the payment first, then retry.';
 
 /**
  * @name activatePremiumSession
@@ -71,7 +92,7 @@ export function activatePremiumSession(request: PremiumActivationRequest): Premi
       activatedAt: null,
       receiptBound: false,
       unitsQuota: 0,
-      reason: 'Invalid payment receipt format. Ensure the x402/pay.sh receipt is a non-empty string.',
+      reason: RECEIPT_HELP_MESSAGE,
     };
   }
 
