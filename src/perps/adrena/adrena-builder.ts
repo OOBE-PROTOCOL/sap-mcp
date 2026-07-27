@@ -235,12 +235,11 @@ async function ensureUserProfileInstructions(
     new PublicKey(ADRENA_PROGRAM_ID),
   );
 
-  // referrer_profile is optional in the IDL. Anchor 0.31 checks the account
-  // owner even for optional accounts, so we can't pass SystemProgram or
-  // PublicKey.default (owned by NativeLoader). Instead we pass the cortex PDA
-  // which is owned by the Adrena program — the program's init logic checks
-  // if the referrer is a valid UserProfile and if not, sets it to default.
-  const referrerProfile = cortex;
+  // referrer_profile is optional in the IDL ("optional": true).
+  // Anchor 0.30.x handles this by passing null — the instruction builder
+  // omits the account and the program treats it as "no referrer".
+  // Passing PublicKey.default or cortex doesn't work because the program
+  // checks the account discriminator (AccountDiscriminatorMismatch).
 
   const ix = await buildInstruction(program, 'initUserProfile', [
     {
@@ -257,7 +256,7 @@ async function ensureUserProfileInstructions(
     payer: owner,
     userProfile,
     userNickname,
-    referrerProfile,
+    referrerProfile: null,
     cortex,
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
@@ -309,12 +308,14 @@ async function buildInstruction(
   program: Program,
   ixName: string,
   args: unknown[],
-  accounts: Record<string, PublicKey>,
+  accounts: Record<string, PublicKey | null>,
 ): Promise<TransactionInstruction> {
   // Anchor v0.30 exposes methods via program.methods.
   // .instruction() is async and returns a Promise<TransactionInstruction>.
+  // For optional accounts (null values), Anchor handles them internally
+  // when passed as null in the accounts object.
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
-    accounts: (accs: Record<string, PublicKey>) => { instruction: () => Promise<TransactionInstruction> };
+    accounts: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
   }>;
 
   const ixBuilder = methods[ixName];
@@ -323,7 +324,7 @@ async function buildInstruction(
   }
 
   const ixWithArgs = ixBuilder(...args);
-  const ixWithAccounts = ixWithArgs.accounts(accounts);
+  const ixWithAccounts = ixWithArgs.accounts(accounts as Record<string, unknown>);
   return await ixWithAccounts.instruction();
 }
 
@@ -414,7 +415,7 @@ export async function buildOpenPositionLong(
   const position = derivePositionPda(owner, pool, custody, 'long');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -491,7 +492,7 @@ export async function buildOpenPositionShort(
   const position = derivePositionPda(owner, pool, custody, 'short');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -564,7 +565,7 @@ export async function buildClosePositionLong(
   const position = derivePositionPda(owner, pool, custody, 'long');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(principalToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(principalToken);
@@ -635,7 +636,7 @@ export async function buildClosePositionShort(
   const position = derivePositionPda(owner, pool, custody, 'short');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(collateralToken);
@@ -1547,7 +1548,7 @@ async function buildOpenPositionLongInternal(
   const position = derivePositionPda(owner, pool, custody, side);
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -1613,7 +1614,7 @@ async function buildClosePositionLongInternal(
   const position = derivePositionPda(owner, pool, custody, side);
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = cortex;
+  const referrerProfile = null;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(collateralToken);
