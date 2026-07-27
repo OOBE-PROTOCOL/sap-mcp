@@ -1130,7 +1130,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     {
       title: 'Poll Premium Stream Events',
       description:
-        'Long-poll buffered premium stream events for an active session. Returns events that have been delivered to the server-side event buffer since the last poll. This is the MCP-compatible alternative to holding open an SSE connection — call this tool periodically to drain the event buffer. This tool is transport-agnostic: because it is a standard MCP tool call (request/response), it works over any MCP transport including stdio, streamable-http, and WebSocket-based MCP transports. There is no need for a separate WebSocket endpoint — this poll tool IS the WebSocket-compatible consumption path. Events are returned oldest-first. Use the sinceEventId cursor from the last poll to fetch only new events. If no events are available, returns an empty array (does not block).',
+        'Long-poll buffered premium stream events for an active session. Returns events that have been delivered to the server-side event buffer since the last poll. This is the MCP-compatible alternative to holding open an SSE connection — call this tool periodically to drain the event buffer. This tool is transport-agnostic: because it is a standard MCP tool call (request/response), it works over any MCP transport including stdio, streamable-http, and WebSocket-based MCP transports. There is no need for a separate WebSocket endpoint — this poll tool IS the WebSocket-compatible consumption path. Events are returned oldest-first. Use the sinceEventId cursor from the last poll to fetch only new events. If no events are available, the tool will wait up to waitMs (default 15s, max 30s) for events to arrive before returning an empty array — this gives near-real-time delivery without repeated polling. Set waitMs=0 for instant return.',
       inputSchema: {
         type: 'object',
         required: ['sessionId'],
@@ -1146,6 +1146,12 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
           maxEvents: {
             type: 'number',
             description: 'Maximum number of events to return in a single poll. Default: 10, max: 100.',
+          },
+          waitMs: {
+            type: 'number',
+            description: 'Long-poll wait timeout in milliseconds. If no events are available, the tool waits up to this duration for events to arrive before returning. Default: 15000 (15s). Max: 30000 (30s). Set to 0 for instant return.',
+            minimum: 0,
+            maximum: 30000,
           },
           eventType: {
             type: 'string',
@@ -1212,6 +1218,14 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const sinceEventId = readString(raw.sinceEventId);
       const eventTypeFilter = readString(raw.eventType);
 
+      // Long-poll: if no events are available on the first check, wait up to
+      // waitMs for events to arrive before returning. This gives near-real-time
+      // delivery without requiring the agent to repeatedly call the tool.
+      // Default: 15 seconds. Max: 30 seconds. Set to 0 for instant return.
+      const waitMs = Math.min(Math.max(readNumber(raw.waitMs, 15_000), 0), 30_000);
+      const pollIntervalMs = 500;
+      const deadline = Date.now() + waitMs;
+
       // If a cursor is provided, find its deliveredAt timestamp and use it as the since filter.
       let sinceIso: string | undefined;
       if (sinceEventId) {
@@ -1224,12 +1238,30 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       // Fetch one extra to determine hasMore.
       const queryLimit = maxEvents + 1;
-      const allEvents = getEvents({
+      let allEvents = getEvents({
         sessionId,
         eventType: eventTypeFilter,
         since: sinceIso,
         limit: queryLimit,
       });
+
+      // Long-poll loop: if no events yet, wait and retry until events arrive or timeout.
+      if (allEvents.length === 0 && waitMs > 0) {
+        while (Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          allEvents = getEvents({
+            sessionId,
+            eventType: eventTypeFilter,
+            since: sinceIso,
+            limit: queryLimit,
+          });
+          if (allEvents.length > 0) break;
+
+          // Check if session is still active — stop if closed.
+          const currentSession = getPremiumSession(sessionId);
+          if (!currentSession || currentSession.status !== 'active') break;
+        }
+      }
 
       const hasMore = allEvents.length > maxEvents;
       const batch = hasMore ? allEvents.slice(0, maxEvents) : allEvents;
