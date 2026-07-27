@@ -202,6 +202,63 @@ async function readCustodyTokenAccount(
 }
 
 /**
+ * Check if a user profile PDA exists on-chain. If it doesn't, build an
+ * init_user_profile instruction to create it before any Adrena position operation.
+ *
+ * @param connection — Solana RPC connection.
+ * @param owner — Wallet public key that needs a user profile.
+ * @returns Array of pre-instructions (empty if profile exists, or [initUserProfile] if not).
+ */
+async function ensureUserProfileInstructions(
+  connection: Connection,
+  owner: PublicKey,
+): Promise<TransactionInstruction[]> {
+  const userProfile = deriveUserProfilePda(owner);
+  try {
+    const accountInfo = await connection.getAccountInfo(userProfile);
+    if (accountInfo && accountInfo.data.length > 0) {
+      return []; // Profile exists, no instruction needed.
+    }
+  } catch {
+    // Account check failed — assume profile doesn't exist and try to init.
+  }
+
+  // Profile doesn't exist — build init_user_profile instruction.
+  const program = createAdrenaProgram(connection);
+  const cortex = deriveCortexPda();
+
+  // user_nickname PDA: ['nickname', nickname_string]
+  // Use a default nickname derived from the wallet address.
+  const nickname = owner.toBase58().slice(0, 10);
+  const [userNickname] = PublicKey.findProgramAddressSync(
+    [Buffer.from('nickname'), Buffer.from(nickname)],
+    new PublicKey(ADRENA_PROGRAM_ID),
+  );
+
+  const ix = await buildInstruction(program, 'initUserProfile', [
+    {
+      nickname,
+      profilePicture: 0,
+      wallpaper: 0,
+      title: 0,
+      team: 0,
+      continent: 0,
+    },
+  ], {
+    user: owner,
+    caller: owner,
+    payer: owner,
+    userProfile,
+    userNickname,
+    referrerProfile: PublicKey.default,
+    cortex,
+    systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
+  });
+
+  return [ix];
+}
+
+/**
  * Always return a CreateAssociatedTokenAccountIdempotent instruction.
  * The instruction is a no-op if the ATA already exists, so it's safe to always include.
  *
@@ -359,6 +416,10 @@ export async function buildOpenPositionLong(
   const collateralMint = getMintPublicKey(collateralToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
 
+  // Ensure user profile exists — Adrena requires it before opening positions.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionLong', [
     {
       price: toBN(priceRaw),
@@ -386,7 +447,7 @@ export async function buildOpenPositionLong(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position);
 }
 
@@ -432,6 +493,10 @@ export async function buildOpenPositionShort(
   const collateralMint = getMintPublicKey(collateralToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
 
+  // Ensure user profile exists — Adrena requires it before opening positions.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [
     {
       price: toBN(priceRaw),
@@ -459,7 +524,7 @@ export async function buildOpenPositionShort(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position);
 }
 
@@ -498,6 +563,10 @@ export async function buildClosePositionLong(
   const receivingMint = getMintPublicKey(principalToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
 
+  // Ensure user profile exists — Adrena requires it for position operations.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, 'closePositionLong', [
     {
       price: toBNOrNull(price),
@@ -524,7 +593,7 @@ export async function buildClosePositionLong(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, ['closePositionLong'], position);
 }
 
@@ -565,6 +634,10 @@ export async function buildClosePositionShort(
   const receivingMint = getMintPublicKey(collateralToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
 
+  // Ensure user profile exists — Adrena requires it for position operations.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, 'closePositionShort', [
     {
       price: toBNOrNull(price),
@@ -591,7 +664,7 @@ export async function buildClosePositionShort(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, ['closePositionShort'], position);
 }
 
@@ -1476,6 +1549,10 @@ async function buildOpenPositionLongInternal(
   const collateralMint = getMintPublicKey(collateralToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
 
+  // Ensure user profile exists — Adrena requires it before opening positions.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, ixName, [
     {
       price: toBN(priceRaw),
@@ -1503,7 +1580,7 @@ async function buildOpenPositionLongInternal(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, [ixName], position);
 }
 
@@ -1535,6 +1612,10 @@ async function buildClosePositionLongInternal(
   const receivingMint = getMintPublicKey(collateralToken);
   const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
 
+  // Ensure user profile exists — Adrena requires it for position operations.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
   const ix = await buildInstruction(program, ixName, [
     {
       price: toBNOrNull(price),
@@ -1561,7 +1642,7 @@ async function buildClosePositionLongInternal(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   return buildResult(transactionBase64, owner, [ixName], position);
 }
 
