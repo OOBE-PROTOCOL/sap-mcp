@@ -235,6 +235,13 @@ async function ensureUserProfileInstructions(
     new PublicKey(ADRENA_PROGRAM_ID),
   );
 
+  // referrer_profile is optional in the IDL. Anchor 0.31 checks the account
+  // owner even for optional accounts, so we can't pass SystemProgram or
+  // PublicKey.default (owned by NativeLoader). Instead we pass the cortex PDA
+  // which is owned by the Adrena program — the program's init logic checks
+  // if the referrer is a valid UserProfile and if not, sets it to default.
+  const referrerProfile = cortex;
+
   const ix = await buildInstruction(program, 'initUserProfile', [
     {
       nickname,
@@ -250,7 +257,7 @@ async function ensureUserProfileInstructions(
     payer: owner,
     userProfile,
     userNickname,
-    referrerProfile: PublicKey.default,
+    referrerProfile,
     cortex,
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
@@ -407,7 +414,7 @@ export async function buildOpenPositionLong(
   const position = derivePositionPda(owner, pool, custody, 'long');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -484,7 +491,7 @@ export async function buildOpenPositionShort(
   const position = derivePositionPda(owner, pool, custody, 'short');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -557,7 +564,7 @@ export async function buildClosePositionLong(
   const position = derivePositionPda(owner, pool, custody, 'long');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(principalToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(principalToken);
@@ -628,7 +635,7 @@ export async function buildClosePositionShort(
   const position = derivePositionPda(owner, pool, custody, 'short');
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(collateralToken);
@@ -1540,7 +1547,7 @@ async function buildOpenPositionLongInternal(
   const position = derivePositionPda(owner, pool, custody, side);
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
@@ -1606,7 +1613,7 @@ async function buildClosePositionLongInternal(
   const position = derivePositionPda(owner, pool, custody, side);
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
-  const referrerProfile = PublicKey.default;
+  const referrerProfile = cortex;
 
   // Ensure the receiving ATA exists before closing.
   const receivingMint = getMintPublicKey(collateralToken);
