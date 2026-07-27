@@ -86,6 +86,7 @@ import {
   type PositionSide,
   type AdrenaPool,
 } from '../perps/adrena/index.js';
+import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS } from '../perps/adrena/adrena-constants.js';
 
 /* ═══════════════════════════════════════════════════════════════════
  *  JSON Schema types
@@ -1129,6 +1130,189 @@ function registerAdrenaDataApiTools(server: Server): void {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+ *  On-chain Markets Reader
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * @name registerAdrenaGetMarketsTool
+ * @description Register sap_adrena_get_markets — reads all custody accounts on-chain
+ * and returns real market data: mint, decimals, max leverage, trade/swap flags,
+ * oracle feed IDs, open interest, and collateral stats.
+ * @internal
+ */
+function registerAdrenaGetMarketsTool(server: Server, context: SapMcpContext): void {
+  registerTool(server, 'sap_adrena_get_markets', {
+    description: 'Read all Adrena custody accounts directly from Solana mainnet and return real market data for every supported asset: mint address, decimals, max initial leverage, max leverage, allowTrade/allowSwap flags, oracle feed IDs, open interest (long/short USD), locked amounts, borrow rates, and funding rates. This is the authoritative source for what markets Adrena supports and their current on-chain parameters. Use this before opening positions to verify leverage limits and trade availability.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        poolName: {
+          type: 'string',
+          description: 'Optional pool filter. Supported: main-pool, commodities-pool. Omit for all pools.',
+          enum: ['main-pool', 'commodities-pool'],
+        },
+      },
+      additionalProperties: false,
+    },
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const poolFilter = args['poolName'] === 'commodities-pool'
+        ? 'commodities-pool'
+        : args['poolName'] === 'main-pool'
+          ? 'main-pool'
+          : null;
+
+      const connection = getConnection(context);
+      const allCustodies = Object.entries(ADRENA_CUSTODIES).map(([symbol, info]) => ({
+        symbol,
+        address: info.address,
+        pool: info.pool === ADRENA_MAIN_POOL_ADDRESS ? 'main-pool' : 'commodities-pool',
+        kind: info.kind,
+      }));
+
+      const markets = [];
+      for (const cust of allCustodies) {
+        if (poolFilter && cust.pool !== poolFilter) continue;
+
+        try {
+          const accountInfo = await connection.getAccountInfo(new PublicKey(cust.address), 'confirmed');
+          if (!accountInfo || !accountInfo.data || accountInfo.data.length < 916) {
+            markets.push({
+              symbol: cust.symbol,
+              custodyAddress: cust.address,
+              pool: cust.pool,
+              kind: cust.kind,
+              error: 'Custody account not found or too small',
+            });
+            continue;
+          }
+
+          const d = accountInfo.data;
+          const mintRaw = new PublicKey(d.subarray(48, 80)).toBase58();
+          const tokenAccount = new PublicKey(d.subarray(80, 112)).toBase58();
+
+          // Leverage values are in BPS: divide by 10000 for human-readable
+          const maxInitialLeverageBps = d.readUInt32LE(176);
+          const maxLeverageBps = d.readUInt32LE(180);
+          const maxPositionLockedUsd = Number(d.readBigUInt64LE(184)) / 1e6; // USD 6 decimals
+
+          // Open interest
+          const longOiUsd = Number(d.readBigUInt64LE(408)) / 1e6;
+          const shortOiUsd = Number(d.readBigUInt64LE(608)) / 1e6;
+
+          // Collateral
+          const longCollateralUsd = Number(d.readBigUInt64LE(472)) / 1e6;
+          const shortCollateralUsd = Number(d.readBigUInt64LE(672)) / 1e6;
+
+          // Locked amounts
+          const longLockedRaw = d.readBigUInt64LE(424).toString();
+          const shortLockedRaw = d.readBigUInt64LE(624).toString();
+
+          // Position counts
+          const longCount = Number(d.readBigUInt64LE(400));
+          const shortCount = Number(d.readBigUInt64LE(600));
+
+          // Borrow rate
+          const borrowRateRaw = d.readBigUInt64LE(800).toString();
+          const borrowRateLastUpdate = Number(d.readBigUInt64LE(808));
+
+          // Funding
+          const fundingLongToShortRaw = d.readBigUInt64LE(864).toString();
+          const fundingLastUpdate = Number(d.readBigUInt64LE(872));
+          const fundingMaxHourlyRateRaw = d.readBigUInt64LE(840).toString();
+          const minTotalOiUsd = Number(d.readBigUInt64LE(848)) / 1e6;
+          const imbalanceSensitivityBps = d.readUInt32LE(856);
+
+          // Flags
+          const allowTrade = d[10] === 1;
+          const allowSwap = d[11] === 1;
+          const oracleFeedId = d[914];
+          const tradeOracleFeedId = d[915];
+
+          // Assets
+          const assetsCollateralRaw = d.readBigUInt64LE(376).toString();
+          const assetsOwnedRaw = d.readBigUInt64LE(384).toString();
+          const assetsLockedRaw = d.readBigUInt64LE(392).toString();
+
+          const isSystemMint = mintRaw === '11111111111111111111111111111111';
+
+          markets.push({
+            symbol: cust.symbol,
+            custodyAddress: cust.address,
+            pool: cust.pool,
+            kind: cust.kind,
+            mint: isSystemMint ? null : mintRaw,
+            mintIsSynthetic: isSystemMint,
+            decimals: d[12],
+            tokenAccount,
+            allowTrade,
+            allowSwap,
+            maxInitialLeverage: maxInitialLeverageBps / 10000,
+            maxLeverage: maxLeverageBps / 10000,
+            maxInitialLeverageBps,
+            maxLeverageBps,
+            maxPositionLockedUsd,
+            openInterest: {
+              longUsd: longOiUsd,
+              shortUsd: shortOiUsd,
+              longPositions: longCount,
+              shortPositions: shortCount,
+            },
+            collateral: {
+              longUsd: longCollateralUsd,
+              shortUsd: shortCollateralUsd,
+            },
+            lockedAmounts: {
+              longRaw: longLockedRaw,
+              shortRaw: shortLockedRaw,
+            },
+            assets: {
+              collateralRaw: assetsCollateralRaw,
+              ownedRaw: assetsOwnedRaw,
+              lockedRaw: assetsLockedRaw,
+            },
+            borrowRate: {
+              raw: borrowRateRaw,
+              lastUpdate: borrowRateLastUpdate,
+            },
+            funding: {
+              currentLongToShortRaw: fundingLongToShortRaw,
+              maxHourlyRateRaw: fundingMaxHourlyRateRaw,
+              lastUpdate: fundingLastUpdate,
+              minTotalOiUsd,
+              imbalanceSensitivityBps,
+            },
+            oracle: {
+              feedId: oracleFeedId,
+              tradeFeedId: tradeOracleFeedId,
+            },
+          });
+        } catch (err) {
+          markets.push({
+            symbol: cust.symbol,
+            custodyAddress: cust.address,
+            pool: cust.pool,
+            kind: cust.kind,
+            error: err instanceof Error ? err.message : 'Failed to read custody account',
+          });
+        }
+      }
+
+      return createTextResponse(JSON.stringify({
+        poolFilter: poolFilter ?? 'all',
+        marketCount: markets.length,
+        markets,
+      }, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({
+        error: 'Failed to read Adrena markets from on-chain custody accounts',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      }), { isError: true });
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
  *  Main registration function
  * ═══════════════════════════════════════════════════════════════════ */
 
@@ -1172,5 +1356,8 @@ export function registerAdrenaTools(server: Server, context: SapMcpContext): voi
   // Data API tools
   registerAdrenaDataApiTools(server);
 
-  logger.debug('Adrena perps tools registered', { count: 32 });
+  // On-chain markets reader
+  registerAdrenaGetMarketsTool(server, context);
+
+  logger.debug('Adrena perps tools registered', { count: 33 });
 }
