@@ -1185,6 +1185,10 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
             type: 'number',
             description: 'Remaining billable units in the session quota, if the session is active.',
           },
+          hint: {
+            type: 'string',
+            description: 'Optional hint message, e.g. when delivery loop was just auto-started and no events have arrived yet.',
+          },
         },
         additionalProperties: false,
       },
