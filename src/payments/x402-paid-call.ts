@@ -213,6 +213,13 @@ export interface X402PaidCallResult {
   response: unknown;
   attempts: number;
   transientRetries: readonly string[];
+  /** HTTP status code from the upstream server after payment. Present when
+   * payment was charged but the upstream returned a non-OK response (401,
+   * 500, etc.). The agent can use this to request a credit or refund. */
+  upstreamHttpStatus?: number;
+  /** True when the payment was charged but the upstream failed. Agent should
+   * not retry with the same parameters — the failure is upstream, not local. */
+  paymentChargedButUpstreamFailed?: boolean;
   audit: X402PaidCallAudit;
 }
 
@@ -303,7 +310,7 @@ export interface X402ExternalCallAudit {
  * @name appendLocalPaymentAudit
  * @description Best-effort append-only local audit for x402 calls. Never writes keypair bytes.
  */
-function appendLocalPaymentAudit(event: 'hosted-paid-tool' | 'external-x402', audit: X402PaidCallAudit | X402ExternalCallAudit): void {
+function appendLocalPaymentAudit(event: 'hosted-paid-tool' | 'hosted-paid-tool-upstream-failed' | 'external-x402', audit: X402PaidCallAudit | X402ExternalCallAudit): void {
   try {
     const dir = getPreferredConfigDir();
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -825,7 +832,56 @@ async function executePaidAttempt(options: {
   );
 
   if (!paid.response.ok) {
-    throw new Error(`Paid MCP call failed with HTTP ${paid.response.status}: ${JSON.stringify(paid.body)}`);
+    // Payment was already settled, but the upstream returned an error (401,
+    // 500, etc.). Return a structured failure instead of throwing so the
+    // agent knows the payment was charged but the service failed.
+    // This enables future credit/refund workflows.
+    const toolName = extractToolName(options.requestBody);
+    const audit: X402PaidCallAudit = {
+      intentId: buildIntentId(options.requestBody, options.sessionId),
+      profileName: options.profileName,
+      signerAddress: options.signerAddress,
+      endpoint: options.endpoint,
+      ...(toolName ? { toolName } : {}),
+      requestMethod: options.requestBody.method,
+      payment: {
+        amountUsd,
+        network: selectedRequirements.network,
+        asset: selectedRequirements.asset,
+        payTo: selectedRequirements.payTo,
+      },
+      receipt: {
+        present: Boolean(paymentResult.settleResponse),
+        ...(paymentResult.settleResponse?.transaction ? { transaction: paymentResult.settleResponse.transaction } : {}),
+        ...(paymentResult.settleResponse?.network ? { network: paymentResult.settleResponse.network } : {}),
+        ...(paymentResult.settleResponse?.amount ? { amount: paymentResult.settleResponse.amount } : {}),
+        ...(paymentResult.settleResponse?.payer ? { payer: paymentResult.settleResponse.payer } : {}),
+      },
+      attempts: options.attempt,
+      transientRetries: options.transientRetries,
+      secretMaterial: 'keypair-bytes-never-returned',
+    };
+    appendLocalPaymentAudit('hosted-paid-tool-upstream-failed', audit);
+
+    return {
+      success: false,
+      endpoint: options.endpoint,
+      sessionId: options.sessionId,
+      signerAddress: options.signerAddress,
+      payment: {
+        amountUsd,
+        network: selectedRequirements.network,
+        asset: selectedRequirements.asset,
+        payTo: selectedRequirements.payTo,
+      },
+      settlement: paymentResult.settleResponse,
+      response: paid.body,
+      attempts: options.attempt,
+      transientRetries: options.transientRetries,
+      upstreamHttpStatus: paid.response.status,
+      paymentChargedButUpstreamFailed: true,
+      audit,
+    };
   }
 
   if (isJsonRpcError(paid.body)) {

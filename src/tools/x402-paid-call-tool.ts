@@ -9,6 +9,7 @@ import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
+import { setValidationServer, validateToolArguments } from '../payments/schema-validation.js';
 import {
   executeX402PaidCall,
   executeExternalX402Call,
@@ -216,6 +217,10 @@ function networkFromRpcUrl(value: string | undefined): string | undefined {
  * @description Registers local hosted-payment tools for agents that need to resolve x402-gated SAP MCP calls.
  */
 export function registerX402PaidCallTool(server: Server, _context: SapMcpContext): void {
+  // Store server reference for pre-payment schema validation.
+  // The paid-call handler uses this to look up tool schemas from the local
+  // registration store and validate arguments before paying x402.
+  setValidationServer(server);
   registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsReadinessTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
@@ -1029,6 +1034,25 @@ function registerPaymentsCallPaidTool(server: Server, name: 'sap_payments_call_p
     async (input: unknown) => {
       try {
         const parsed = parseInput(input);
+
+        // Pre-payment schema validation: check arguments against the local
+        // tool registration store BEFORE paying the x402 challenge. This
+        // prevents wasted USDC on calls with invalid schemas. If the tool is
+        // not registered locally (hosted-only), validation is skipped.
+        if (parsed.toolName && parsed.arguments && typeof parsed.arguments === 'object') {
+          const validation = validateToolArguments(parsed.toolName, parsed.arguments);
+          if (!validation.valid) {
+            return createTextResponse(JSON.stringify({
+              success: false,
+              error: 'schema_validation_failed',
+              message: 'Tool arguments do not match the expected schema. Payment was NOT charged.',
+              toolName: parsed.toolName,
+              errors: validation.errors,
+              skipped: validation.skipped,
+            }, null, 2), { isError: true });
+          }
+        }
+
         const result = await executeX402PaidCall(parsed);
         return createTextResponse(JSON.stringify(result, null, 2));
       } catch (error) {
