@@ -22,6 +22,9 @@ import {
   getWebhookDeliveries,
   getPremiumMetrics,
   getEvents,
+  startStream,
+  streamEvents,
+  findPremiumCapability,
   type PremiumCapabilityType,
   type PremiumManifestTemplateRequest,
   type PremiumSessionRequest,
@@ -32,6 +35,80 @@ const CAPABILITY_TYPES = ['stream', 'webhook', 'tool'] as const;
 function parseCapabilityType(value: unknown): PremiumCapabilityType | undefined {
   if (typeof value !== 'string') return undefined;
   return CAPABILITY_TYPES.includes(value as PremiumCapabilityType) ? (value as PremiumCapabilityType) : undefined;
+}
+
+/**
+ * Set of session IDs for which the auto-start delivery loop has been launched.
+ * Prevents duplicate background loops on repeated poll calls.
+ */
+const autoStartedSessions = new Set<string>();
+
+/**
+ * @name autoStartDelivery
+ * @description Automatically start the provider delivery loop for a session when
+ * the agent polls for events but no delivery has been started yet.
+ *
+ * For stream capabilities: starts the stream broker + background event generator
+ * that feeds the event store.
+ * For webhook capabilities: registers a relay (buffer-only) subscription and
+ * starts the webhook delivery loop that feeds the event store.
+ *
+ * This eliminates the need for the agent to explicitly call
+ * sap_premium_webhook_relay or open an SSE connection before polling.
+ *
+ * @param sessionId - Active premium session id.
+ * @internal
+ */
+async function autoStartDelivery(sessionId: string): Promise<void> {
+  if (autoStartedSessions.has(sessionId)) return;
+
+  const session = getPremiumSession(sessionId);
+  if (!session || session.status !== 'active') return;
+
+  // Look up the capability to determine its type.
+  const resolved = findPremiumCapability(session.pluginId, session.capabilityId);
+  if (!resolved) return;
+
+  autoStartedSessions.add(sessionId);
+
+  try {
+    if (resolved.capability.type === 'stream') {
+      // Start the stream broker subscription + background event generator.
+      const subscriptionKey = `auto-${sessionId}`;
+      const filters: Record<string, unknown> = {};
+      await startStream(sessionId, subscriptionKey, filters);
+
+      // Launch the async event generator in the background.
+      // It feeds events into the event store until the quota is exhausted
+      // or the provider iterable ends.
+      void (async () => {
+        try {
+          for await (const _event of streamEvents(sessionId)) {
+            // Events are already appended to the event store inside streamEvents.
+            // This loop just consumes the generator to keep it running.
+          }
+        } catch {
+          // Best-effort: log and stop silently on provider errors.
+        }
+      })();
+    } else if (resolved.capability.type === 'webhook') {
+      // Register a relay (buffer-only) subscription and start the delivery loop.
+      const eventTypes = resolved.capability.delivery?.events ?? [];
+      if (eventTypes.length === 0) return;
+
+      const sub = await registerWebhookRelay(sessionId, eventTypes);
+      if (sub) {
+        // Start the webhook delivery loop in the background.
+        // It feeds matching events into the event store.
+        void startWebhookDelivery(sub).catch(() => {
+          // Best-effort: provider may not be available.
+        });
+      }
+    }
+  } catch {
+    // Best-effort: if auto-start fails, the poll still returns existing events.
+    // The agent can retry on the next poll.
+  }
 }
 
 function readString(value: unknown): string | undefined {
@@ -1124,6 +1201,11 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         });
       }
 
+      // Auto-start the provider delivery loop if not already running.
+      // This eliminates the need for the agent to call sap_premium_webhook_relay
+      // or open an SSE connection before polling.
+      await autoStartDelivery(sessionId);
+
       const maxEvents = Math.min(Math.max(readNumber(raw.maxEvents, 10), 1), 100);
       const sinceEventId = readString(raw.sinceEventId);
       const eventTypeFilter = readString(raw.eventType);
@@ -1245,6 +1327,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
           totalReturned: 0,
         });
       }
+
+      // Auto-start the provider delivery loop if not already running.
+      await autoStartDelivery(sessionId);
 
       const limit = Math.min(Math.max(readNumber(raw.limit, 50), 1), 500);
       const sinceEventId = readString(raw.sinceEventId);
