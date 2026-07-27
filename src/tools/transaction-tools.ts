@@ -560,6 +560,23 @@ export async function finalizeTransactionWithLocalSigner(
 
   const encoding = input.encoding ?? 'base64';
   const transaction = deserializeTransaction(transactionText, encoding);
+
+  // Refresh the blockhash before signing. The unsigned transaction may have
+  // been built minutes ago — the blockhash inside it can be stale by the time
+  // the agent calls finalize. We fetch a fresh blockhash and replace it so
+  // the signed transaction has the maximum possible window to land on-chain.
+  if (transaction instanceof Transaction && transaction.feePayer) {
+    try {
+      const freshBlockhash = await context.connection.getLatestBlockhash({
+        commitment: 'confirmed',
+      });
+      transaction.recentBlockhash = freshBlockhash.blockhash;
+      // Keep the existing feePayer — it was set by the builder.
+    } catch {
+      // If the RPC call fails, keep the original blockhash — better than crashing.
+    }
+  }
+
   const preview = describeTransaction(transaction, context);
   const nativeTransfer = await assertTransactionPolicy(context, transaction, signer.publicKey);
   const signedTransaction = await signer.signTransaction(transaction);
@@ -715,6 +732,20 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         }
 
         const transaction = deserializeTransaction(input.transaction, input.encoding);
+
+        // Refresh the blockhash before signing — the transaction may have been
+        // built earlier with a now-stale blockhash.
+        if (transaction instanceof Transaction && transaction.feePayer) {
+          try {
+            const freshBlockhash = await context.connection.getLatestBlockhash({
+              commitment: 'confirmed',
+            });
+            transaction.recentBlockhash = freshBlockhash.blockhash;
+          } catch {
+            // Keep original blockhash if RPC fails.
+          }
+        }
+
         const nativeTransfer = await assertTransactionPolicy(context, transaction, context.signer.publicKey);
         const signedTransaction = await context.signer.signTransaction(transaction);
         return createTextResponse(JSON.stringify({
