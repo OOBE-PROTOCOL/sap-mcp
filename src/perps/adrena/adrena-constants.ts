@@ -112,6 +112,7 @@ export const ADRENA_CUSTODIES = {
   WBTC: { address: 'GFu3qS22mo6bAjg4Lr5R7L8pPgHq6GvbjJPKEHkbbs2c', pool: ADRENA_MAIN_POOL_ADDRESS, symbol: 'WBTC', decimals: 8, kind: 'perp' },
   BONK: { address: '8aJuzsgjxBnvRhDcfQBD7z4CUj7QoPEpaNwVd7KqsSk5', pool: ADRENA_MAIN_POOL_ADDRESS, symbol: 'BONK', decimals: 5, kind: 'perp' },
   // Commodities pool custodies
+  USDC_COMMODITIES: { address: 'woVG8fmrUzFJhWa6mRjiYC2qFCY73oAnQeioYK1m1JX', pool: ADRENA_COMMODITIES_POOL_ADDRESS, symbol: 'USDC', decimals: 6, kind: 'collateral' },
   XAU: { address: 'JB86ouHXGYgF4UbPs8yxYdaHudrdsintf5EbBfMydzYt', pool: ADRENA_COMMODITIES_POOL_ADDRESS, symbol: 'XAU', decimals: 6, kind: 'synthetic-perp' },
   XAG: { address: 'PexsCkkxpVmY4HNxUjT3U9PEg69kYScc8GukUwn6Q3Q', pool: ADRENA_COMMODITIES_POOL_ADDRESS, symbol: 'XAG', decimals: 6, kind: 'synthetic-perp' },
   WTI: { address: 'De21TFyUPHkvFsWAt6xJLBBXGp636VuL5cKk2DvfbHiR', pool: ADRENA_COMMODITIES_POOL_ADDRESS, symbol: 'WTI', decimals: 6, kind: 'synthetic-perp' },

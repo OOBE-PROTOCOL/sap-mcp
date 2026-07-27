@@ -19,7 +19,10 @@ import {
   buildSetTakeProfit,
   buildCancelStopLoss,
   buildCancelTakeProfit,
+  buildSimulatePosition,
+  buildPositionPackage,
   type PositionSide,
+  type AdrenaPool,
 } from '../../perps/adrena/index.js';
 import {
   MAIN_POOL_TOKENS,
@@ -342,6 +345,105 @@ export function registerAdrenaCancelTakeProfitTool(server: Server, context: SapM
       return createTextResponse(JSON.stringify(result, null, 2));
     } catch (err) {
       return createTextResponse(JSON.stringify({ error: 'Failed to build cancel take profit transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ *  Free Simulation (dry-run, no x402 charge)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * @name registerAdrenaSimulatePositionTool
+ * @description Register sap_adrena_simulate_position — a FREE dry-run tool that
+ *   simulates opening a perp position without building or paying for a transaction.
+ * @internal
+ */
+export function registerAdrenaSimulatePositionTool(server: Server, context: SapMcpContext): void {
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: {
+      owner: { type: 'string', description: 'Position owner wallet public key (base58). This is the fee payer and signer.' },
+      principalToken: { type: 'string', description: 'Asset to trade. Supported: JITOSOL, WBTC, BONK, plus XAU, XAG, WTI in the commodities pool.', enum: [...MAIN_POOL_TOKENS, ...COMMODITY_TOKENS] },
+      collateralToken: { type: 'string', description: 'Collateral token. For longs must match principal (main pool) or be USDC (commodities pool). For shorts must be USDC. Supported: USDC, JITOSOL, WBTC, BONK.', enum: COLLATERAL_TOKENS },
+      collateralAmount: { type: 'number', description: 'Collateral amount in human-readable units (e.g. 10 = 10 JITOSOL or 10 USDC).', minimum: 0 },
+      leverage: { type: 'number', description: 'Leverage multiplier (e.g. 3 = 3x).', minimum: 1, maximum: 100 },
+      side: { type: 'string', description: 'Position side: long or short.', enum: ['long', 'short'] },
+      poolName: { type: 'string', description: 'Pool to use. Default: main-pool. Use commodities-pool for XAU/XAG/WTI.', enum: ['main-pool', 'commodities-pool'] },
+    },
+    required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage', 'side'],
+    additionalProperties: false,
+  };
+
+  registerTool(server, 'sap_adrena_simulate_position', {
+    description: 'FREE dry-run tool (no x402 charge): simulates opening a perp position on Adrena by building the same instructions as the open position builder, then calling connection.simulateTransaction(). Returns Adrena program logs, compute units consumed, whether the position would succeed, and the pre-flight balance check — without serializing or returning transaction bytes. Use this to validate position parameters and diagnose on-chain failures before building a paid transaction.',
+    inputSchema: schema,
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const owner = parsePublicKey(String(args['owner']));
+      const principalToken = String(args['principalToken']).toUpperCase();
+      const collateralToken = String(args['collateralToken']).toUpperCase();
+      const collateralAmount = Number(args['collateralAmount']);
+      const leverage = Number(args['leverage']);
+      const side = args['side'] === 'short' ? 'short' : 'long';
+      const poolName = (args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool') as AdrenaPool;
+
+      const result = await buildSimulatePosition(
+        getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, side, poolName,
+      );
+      return createTextResponse(JSON.stringify(result, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to simulate position', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+    }
+  });
+}
+
+/**
+ * @name registerAdrenaPositionPackageTool
+ * @description Register sap_adrena_build_position_package — batch open+SL+TP.
+ * @internal
+ */
+export function registerAdrenaPositionPackageTool(server: Server, context: SapMcpContext): void {
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: {
+      owner: { type: 'string', description: 'Position owner wallet public key (base58).' },
+      principalToken: { type: 'string', description: 'Asset to trade.', enum: [...MAIN_POOL_TOKENS] },
+      collateralToken: { type: 'string', description: 'Collateral token. USDC for shorts, match principal for longs.', enum: [...COLLATERAL_TOKENS] },
+      collateralAmount: { type: 'number', description: 'Collateral amount in human-readable units.', minimum: 0 },
+      leverage: { type: 'number', description: 'Leverage multiplier (e.g. 3 = 3x).', minimum: 1, maximum: 100 },
+      side: { type: 'string', description: 'Position side.', enum: ['long', 'short'] },
+      stopLossPriceUsd: { type: 'number', description: 'Optional stop loss trigger price in USD. Omit to skip.', minimum: 0 },
+      takeProfitPriceUsd: { type: 'number', description: 'Optional take profit trigger price in USD. Omit to skip.', minimum: 0 },
+      priceUsd: { type: 'number', description: 'Optional limit price in USD for the open. Omit for market order.', minimum: 0 },
+    },
+    required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage', 'side'],
+    additionalProperties: false,
+  };
+
+  registerTool(server, 'sap_adrena_build_position_package', {
+    description: 'Build a single unsigned transaction that atomically opens a perp position AND sets stop loss AND take profit in one transaction. 1 payment, 1 signing, 1 submit — instead of 3 separate calls. If stopLossPriceUsd or takeProfitPriceUsd is omitted, that instruction is skipped. Returns transactionBase64 for local signing via sap_payments_finalize_transaction. Includes balanceCheck.',
+    inputSchema: schema,
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const owner = parsePublicKey(String(args['owner']));
+      const principalToken = String(args['principalToken']).toUpperCase();
+      const collateralToken = String(args['collateralToken']).toUpperCase();
+      const collateralAmount = Number(args['collateralAmount']);
+      const leverage = Number(args['leverage']);
+      const side = (args['side'] === 'short' ? 'short' : 'long') as PositionSide;
+      const stopLossPriceUsd = args['stopLossPriceUsd'] !== undefined ? Number(args['stopLossPriceUsd']) : null;
+      const takeProfitPriceUsd = args['takeProfitPriceUsd'] !== undefined ? Number(args['takeProfitPriceUsd']) : null;
+      const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
+      const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
+
+      const result = await buildPositionPackage(
+        getConnection(context), owner, principalToken, collateralToken,
+        collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, price,
+      );
+      return createTextResponse(JSON.stringify(result, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to build position package', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
     }
   });
 }

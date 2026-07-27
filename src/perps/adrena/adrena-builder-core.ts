@@ -108,6 +108,41 @@ export interface BalanceCheck {
   solSufficientForFees: boolean;
 }
 
+/**
+ * Pool/custody metadata read from the on-chain custody account.
+ * Included in UnsignedTransactionResult for open-position builders so the
+ * agent/user can see leverage limits and open interest before signing.
+ */
+export interface PoolMetadata {
+  /** Maximum initial leverage for new positions (human-readable, e.g. 100 = 100x). */
+  maxInitialLeverage: number;
+  /** Maximum leverage after position is open (human-readable, e.g. 150 = 150x). */
+  maxLeverage: number;
+  /** Maximum position size locked in USD (human-readable). */
+  maxPositionLockedUsd: number;
+  /** Current open interest on the long side in USD (human-readable). */
+  openInterestLongUsd: number;
+  /** Current open interest on the short side in USD (human-readable). */
+  openInterestShortUsd: number;
+}
+
+/**
+ * Result of simulating a position open without building or serializing a transaction.
+ * Free dry-run — no x402 charge, no transaction bytes returned.
+ */
+export interface SimulatePositionResult {
+  /** Program simulation logs from the Adrena instruction. */
+  simulationLogs: string[];
+  /** Simulation error string if the transaction would fail on-chain. */
+  simulationError?: string;
+  /** Compute units consumed by the simulated instructions. */
+  unitsConsumed?: number;
+  /** True if the simulation succeeded (no error in simulation). */
+  wouldSucceed: boolean;
+  /** Pre-flight balance check for the collateral token. */
+  balanceCheck: BalanceCheck;
+}
+
 /** Result of building an unsigned transaction. */
 export interface UnsignedTransactionResult {
   /** Base64-serialized unsigned transaction. */
@@ -129,6 +164,8 @@ export interface UnsignedTransactionResult {
   };
   /** Pre-flight balance check (present when the builder performed one). */
   balanceCheck?: BalanceCheck;
+  /** Pool/custody metadata (present for open-position builders). */
+  poolMetadata?: PoolMetadata;
   /** Warning message if balance is insufficient or other pre-flight concern. */
   warning?: string;
 }
@@ -171,7 +208,14 @@ export function getPoolPublicKey(poolName: AdrenaPool): PublicKey {
  * @returns Custody public key.
  */
 export function getCustodyPublicKey(symbol: string, poolName: AdrenaPool = 'main-pool'): PublicKey {
-  const custody = ADRENA_CUSTODIES[symbol.toUpperCase() as keyof typeof ADRENA_CUSTODIES];
+  const sym = symbol.toUpperCase();
+  // Special case: USDC collateral in the commodities pool uses a different
+  // custody address than main-pool USDC.
+  if (sym === 'USDC' && poolName === 'commodities-pool') {
+    const commoditiesUsdc = ADRENA_CUSTODIES['USDC_COMMODITIES' as keyof typeof ADRENA_CUSTODIES];
+    if (commoditiesUsdc) return new PublicKey(commoditiesUsdc.address);
+  }
+  const custody = ADRENA_CUSTODIES[sym as keyof typeof ADRENA_CUSTODIES];
   if (!custody) {
     throw new Error(`Unknown custody symbol: ${symbol}. Supported: ${Object.keys(ADRENA_CUSTODIES).join(', ')}`);
   }
@@ -281,6 +325,80 @@ export async function readCustodyTokenAccount(
   }
   // tokenAccount is at offset 80 (32 bytes)
   return new PublicKey(accountInfo.data.subarray(80, 112));
+}
+
+/**
+ * Read pool/custody metadata from the on-chain custody account.
+ *
+ * Fields and their byte offsets (all little-endian):
+ *   - maxInitialLeverage: u32 at offset 176 (in BPS, 1000000 = 100x)
+ *   - maxLeverage:        u32 at offset 180 (in BPS, 1000000 = 100x)
+ *   - maxPositionLockedUsd: u128 at offset 184 (scaled by 1e6)
+ *   - openInterestLongUsd:  u128 at offset 408 (scaled by 1e6)
+ *   - openInterestShortUsd: u128 at offset 608 (scaled by 1e6)
+ *
+ * Leverage values are divided by 10000 for human-readable form.
+ * USD values are divided by 1e6 for human-readable form.
+ *
+ * @param connection — Solana RPC connection.
+ * @param custodyAddress — The custody PDA public key.
+ * @returns PoolMetadata with human-readable values.
+ */
+export async function readCustodyMetadata(
+  connection: Connection,
+  custodyAddress: PublicKey,
+): Promise<PoolMetadata> {
+  const accountInfo = await connection.getAccountInfo(custodyAddress);
+  if (!accountInfo || accountInfo.data.length < 624) {
+    throw new Error(`Custody account ${custodyAddress.toBase58()} not found or too small for metadata (need >= 624 bytes, got ${accountInfo?.data.length ?? 0})`);
+  }
+  const data = accountInfo.data;
+
+  // maxInitialLeverage: u32 LE at offset 176 (BPS)
+  const maxInitialLeverageBps = data.readUInt32LE(176);
+  // maxLeverage: u32 LE at offset 180 (BPS)
+  const maxLeverageBps = data.readUInt32LE(180);
+
+  // maxPositionLockedUsd: u128 LE at offset 184 (scaled by 1e6)
+  // u128 = 16 bytes, read as two u64s (low, high) and combine
+  const maxPositionLockedUsdRaw = data.readBigUInt64LE(184) | (data.readBigUInt64LE(192) << 64n);
+
+  // openInterestLongUsd: u128 LE at offset 408 (scaled by 1e6)
+  const openInterestLongUsdRaw = data.readBigUInt64LE(408) | (data.readBigUInt64LE(416) << 64n);
+
+  // openInterestShortUsd: u128 LE at offset 608 (scaled by 1e6)
+  const openInterestShortUsdRaw = data.readBigUInt64LE(608) | (data.readBigUInt64LE(616) << 64n);
+
+  return {
+    maxInitialLeverage: maxInitialLeverageBps / 10000,
+    maxLeverage: maxLeverageBps / 10000,
+    maxPositionLockedUsd: Number(maxPositionLockedUsdRaw) / 1e6,
+    openInterestLongUsd: Number(openInterestLongUsdRaw) / 1e6,
+    openInterestShortUsd: Number(openInterestShortUsdRaw) / 1e6,
+  };
+}
+
+/**
+ * Validate that the requested leverage does not exceed the custody's
+ * maxInitialLeverage. Throws a clear error if it does.
+ *
+ * @param leverage — Requested leverage (human-readable, e.g. 3 = 3x).
+ * @param maxInitialLeverageBps — Max initial leverage in BPS (e.g. 1000000 = 100x).
+ * @param principalToken — Token symbol for the error message.
+ */
+export function validateLeverage(
+  leverage: number,
+  maxInitialLeverageBps: number,
+  principalToken: string,
+): void {
+  const leverageBps = Math.floor(leverage * 10000);
+  if (leverageBps > maxInitialLeverageBps) {
+    const maxLeverage = maxInitialLeverageBps / 10000;
+    const suggested = Math.floor(maxLeverage * 100) / 100; // round down to 2 decimals
+    throw new Error(
+      `Leverage ${leverage} exceeds maxInitialLeverage ${maxLeverage} for ${principalToken}. Suggested leverage: ${suggested} or lower.`,
+    );
+  }
 }
 
 /**
@@ -577,6 +695,7 @@ export async function serializeUnsignedTx(
  * @param positionAddress — Optional position PDA.
  * @param balanceCheck — Optional pre-flight balance check result.
  * @param warning — Optional warning message (e.g. insufficient balance).
+ * @param poolMetadata — Optional pool/custody metadata (for open-position builders).
  * @returns Unsigned transaction result.
  */
 export function buildResult(
@@ -586,6 +705,7 @@ export function buildResult(
   positionAddress?: PublicKey,
   balanceCheck?: BalanceCheck,
   warning?: string,
+  poolMetadata?: PoolMetadata,
 ): UnsignedTransactionResult {
   return {
     transactionBase64,
@@ -599,6 +719,7 @@ export function buildResult(
       submit: false,
     },
     ...(balanceCheck ? { balanceCheck } : {}),
+    ...(poolMetadata ? { poolMetadata } : {}),
     ...(warning ? { warning } : {}),
   };
 }

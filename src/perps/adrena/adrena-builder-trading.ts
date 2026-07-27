@@ -11,6 +11,7 @@
 import {
   PublicKey,
   Connection,
+  Transaction,
 } from '@solana/web3.js';
 import {
   ADRENA_CUSTODIES,
@@ -33,6 +34,9 @@ import {
   type PositionSide,
   type BalanceCheck,
   type UnsignedTransactionResult,
+  type PoolMetadata,
+  type SimulatePositionResult,
+  type AdrenaPool,
   toBN,
   toBNOrNull,
   getPoolPublicKey,
@@ -40,6 +44,8 @@ import {
   getMintPublicKey,
   fetchOraclePrice,
   readCustodyTokenAccount,
+  readCustodyMetadata,
+  validateLeverage,
   getWalletTokenBalances,
   checkSufficientBalance,
   ensureUserProfileInstructions,
@@ -65,6 +71,104 @@ import {
  * @param price — Price in USD (scaled by 10^10), or null for market order.
  * @returns Unsigned transaction result.
  */
+export async function buildSimulatePosition(
+  connection: Connection,
+  owner: PublicKey,
+  principalToken: string,
+  collateralToken: string,
+  collateralAmount: number,
+  leverage: number,
+  side: PositionSide,
+  poolName: AdrenaPool,
+  price: bigint | null = null,
+): Promise<SimulatePositionResult> {
+  const program = createAdrenaProgram(connection);
+  const pool = getPoolPublicKey(poolName);
+  const custody = getCustodyPublicKey(principalToken, poolName);
+  const collateralCustody = getCustodyPublicKey(collateralToken, poolName);
+  const cortex = deriveCortexPda();
+  const oracle = deriveOraclePda();
+  const transferAuthority = deriveTransferAuthorityPda();
+  const userProfile = deriveUserProfilePda(owner);
+  const position = derivePositionPda(owner, pool, custody, side);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
+  const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
+  const referrerProfile = null;
+
+  const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
+  const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
+
+  // Ensure the funding ATA exists before the Adrena instruction.
+  const collateralMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
+
+  // Ensure user profile exists — Adrena requires it before opening positions.
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
+  // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
+  const leverageBps = Math.floor(leverage * 10000);
+
+  const ixName = side === 'long' ? 'openOrIncreasePositionLong' : 'openOrIncreasePositionShort';
+
+  const ix = await buildInstruction(program, ixName, [
+    {
+      price: toBN(priceRaw),
+      collateral: toBN(collateralRaw),
+      leverage: leverageBps,
+      oraclePrices: null,
+      multiOraclePrices: null,
+    },
+  ], {
+    owner,
+    payer: owner,
+    fundingAccount,
+    oracle,
+    custody,
+    collateralCustody,
+    collateralCustodyTokenAccount,
+    transferAuthority,
+    cortex,
+    pool,
+    position,
+    systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
+    tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
+    adrenaProgram: new PublicKey(ADRENA_PROGRAM_ID),
+    userProfile,
+    referrerProfile,
+  });
+
+  // Build the transaction for simulation — no serialization needed.
+  const blockhash = await connection.getLatestBlockhash();
+  const tx = new Transaction({
+    recentBlockhash: blockhash.blockhash,
+    feePayer: owner,
+  });
+  tx.add(...allPreInstructions, ix);
+
+  // Simulate the transaction to extract program logs and compute units.
+  const simulation = await connection.simulateTransaction(tx);
+  const simulationLogs = simulation.value.logs ?? [];
+  const simulationError = simulation.value.err
+    ? (typeof simulation.value.err === 'string'
+        ? simulation.value.err
+        : JSON.stringify(simulation.value.err))
+    : undefined;
+  const unitsConsumed = simulation.value.unitsConsumed;
+  const wouldSucceed = simulation.value.err === null;
+
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+
+  return {
+    simulationLogs,
+    ...(simulationError ? { simulationError } : {}),
+    ...(unitsConsumed !== undefined ? { unitsConsumed } : {}),
+    wouldSucceed,
+    balanceCheck,
+  };
+}
+
 export async function buildOpenPositionLong(
   connection: Connection,
   owner: PublicKey,
@@ -86,6 +190,10 @@ export async function buildOpenPositionLong(
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = null;
+
+  // Read custody metadata for leverage pre-validation and poolMetadata.
+  const poolMetadata: PoolMetadata = await readCustodyMetadata(connection, custody);
+  validateLeverage(leverage, Math.floor(poolMetadata.maxInitialLeverage * 10000), principalToken);
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, 'long');
@@ -138,7 +246,7 @@ export async function buildOpenPositionLong(
       : undefined;
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata);
 }
 
 /**
@@ -175,6 +283,10 @@ export async function buildOpenPositionShort(
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = null;
+
+  // Read custody metadata for leverage pre-validation and poolMetadata.
+  const poolMetadata: PoolMetadata = await readCustodyMetadata(connection, custody);
+  validateLeverage(leverage, Math.floor(poolMetadata.maxInitialLeverage * 10000), principalToken);
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, 'short');
@@ -226,7 +338,7 @@ export async function buildOpenPositionShort(
       : undefined;
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata);
 }
 
 /**
@@ -784,4 +896,147 @@ export async function buildCancelLimitOrder(
   };
 
   return buildResult(transactionBase64, owner, ['cancelLimitOrder'], undefined, balanceCheck, warning);
+}
+
+// ─── Batch Position Package Builder ────────────────────────────────────────────
+
+/**
+ * @name buildPositionPackage
+ * @description Build a single unsigned transaction that atomically opens a
+ * position AND sets stop loss AND take profit. This combines 3 separate
+ * builder calls into 1 transaction — 1 payment, 1 signing, 1 submit.
+ *
+ * If stopLossPriceUsd or takeProfitPriceUsd is null, that instruction is
+ * omitted (e.g. you can open + SL without TP).
+ *
+ * @param connection — Solana RPC connection.
+ * @param owner — Position owner and fee payer.
+ * @param principalToken — Asset to trade (e.g. "BONK").
+ * @param collateralToken — Collateral token (USDC for shorts, match principal for longs).
+ * @param collateralAmount — Collateral amount in human-readable units.
+ * @param leverage — Leverage multiplier (e.g. 3 = 3x).
+ * @param side — Position side: 'long' or 'short'.
+ * @param stopLossPriceUsd — Stop loss trigger price in USD, or null to skip.
+ * @param takeProfitPriceUsd — Take profit trigger price in USD, or null to skip.
+ * @param price — Optional limit price in USD (scaled by 10^10), null for market.
+ * @returns Unsigned transaction result with all instructions combined.
+ */
+export async function buildPositionPackage(
+  connection: Connection,
+  owner: PublicKey,
+  principalToken: string,
+  collateralToken: string,
+  collateralAmount: number,
+  leverage: number,
+  side: PositionSide,
+  stopLossPriceUsd: number | null,
+  takeProfitPriceUsd: number | null,
+  price: bigint | null = null,
+): Promise<UnsignedTransactionResult> {
+  const program = createAdrenaProgram(connection);
+  const pool = getPoolPublicKey('main-pool');
+  const custody = getCustodyPublicKey(principalToken, 'main-pool');
+  const collateralCustody = getCustodyPublicKey(collateralToken, 'main-pool');
+  const cortex = deriveCortexPda();
+  const oracle = deriveOraclePda();
+  const transferAuthority = deriveTransferAuthorityPda();
+  const userProfile = deriveUserProfilePda(owner);
+  const position = derivePositionPda(owner, pool, custody, side);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
+  const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
+  const referrerProfile = null;
+
+  const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
+  const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
+  const leverageBps = Math.floor(leverage * 10000);
+
+  // Pre-instructions: ATA + user profile
+  const collateralMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
+  const profileInstructions = await ensureUserProfileInstructions(connection, owner);
+  const allPreInstructions = [...preInstructions, ...profileInstructions];
+
+  // 1. Open position instruction
+  const ixName = side === 'long' ? 'openOrIncreasePositionLong' : 'openOrIncreasePositionShort';
+  const openIx = await buildInstruction(program, ixName, [
+    {
+      price: toBN(priceRaw),
+      collateral: toBN(collateralRaw),
+      leverage: leverageBps,
+      oraclePrices: null,
+      multiOraclePrices: null,
+    },
+  ], {
+    owner,
+    payer: owner,
+    fundingAccount,
+    oracle,
+    custody,
+    collateralCustody,
+    collateralCustodyTokenAccount,
+    transferAuthority,
+    cortex,
+    pool,
+    position,
+    systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
+    tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
+    adrenaProgram: new PublicKey(ADRENA_PROGRAM_ID),
+    userProfile,
+    referrerProfile,
+  });
+
+  const instructions = [...allPreInstructions, openIx];
+  const instructionNames = [ixName];
+
+  // 2. Stop loss instruction (optional)
+  if (stopLossPriceUsd !== null) {
+    const slLimitPrice = BigInt(Math.floor(stopLossPriceUsd * Math.pow(10, 10)));
+    const slIxName = side === 'long' ? 'setStopLossLong' : 'setStopLossShort';
+    const slIx = await buildInstruction(program, slIxName, [
+      {
+        stopLossLimitPrice: toBN(slLimitPrice),
+        closePositionPrice: toBNOrNull(null),
+      },
+    ], {
+      owner,
+      cortex,
+      pool,
+      position,
+      custody,
+      systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
+    });
+    instructions.push(slIx);
+    instructionNames.push(slIxName);
+  }
+
+  // 3. Take profit instruction (optional)
+  if (takeProfitPriceUsd !== null) {
+    const tpLimitPrice = BigInt(Math.floor(takeProfitPriceUsd * Math.pow(10, 10)));
+    const tpIxName = side === 'long' ? 'setTakeProfitLong' : 'setTakeProfitShort';
+    const tpIx = await buildInstruction(program, tpIxName, [
+      {
+        takeProfitLimitPrice: toBN(tpLimitPrice),
+      },
+    ], {
+      owner,
+      cortex,
+      pool,
+      position,
+      custody,
+      systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
+    });
+    instructions.push(tpIx);
+    instructionNames.push(tpIxName);
+  }
+
+  // Balance check
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${collateralAmount}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, instructions);
+  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning);
 }
