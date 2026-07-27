@@ -21,6 +21,8 @@ import {
   buildCancelTakeProfit,
   buildSimulatePosition,
   buildPositionPackage,
+  getCustodyPublicKey,
+  fetchOraclePrice,
   type PositionSide,
   type AdrenaPool,
 } from '../../perps/adrena/index.js';
@@ -444,6 +446,139 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
       return createTextResponse(JSON.stringify(result, null, 2));
     } catch (err) {
       return createTextResponse(JSON.stringify({ error: 'Failed to build position package', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+    }
+  });
+}
+
+/**
+ * @name registerAdrenaTradeIntentTool
+ * @description Register sap_adrena_trade_intent — intent-level trading API.
+ * Resolves mint, decimals, max leverage, collateral token automatically.
+ * @internal
+ */
+export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpContext): void {
+  registerTool(server, 'sap_adrena_trade_intent', {
+    description: 'Intent-level Adrena trading API. Pass market name, side, USD collateral, and leverage (or "max"). The tool resolves mint addresses, decimals, max leverage from on-chain custody accounts, converts USD collateral to token amounts via oracle price, validates parameters, and returns a ready-to-sign transaction. Supports optional stopLossPct and takeProfitPct for atomic position+SL+TP in one transaction. Reduces 5 tool calls to 1.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string', description: 'Wallet public key (base58).' },
+        market: { type: 'string', description: 'Market symbol: BONK, JITOSOL, WBTC, USDC, XAU, XAG, WTI.', },
+        side: { type: 'string', description: 'Position side.', enum: ['long', 'short'] },
+        collateralUsd: { type: 'number', description: 'Collateral amount in USD. Converted to token amount using oracle price.', minimum: 0 },
+        leverage: { type: 'string', description: 'Leverage multiplier (e.g. "3" for 3x) or "max" for maxInitialLeverage.' },
+        stopLossPct: { type: 'number', description: 'Optional stop loss as % from entry (e.g. 5 = 5% away). Omit to skip.' },
+        takeProfitPct: { type: 'number', description: 'Optional take profit as % from entry (e.g. 15 = 15% away). Omit to skip.' },
+        poolName: { type: 'string', description: 'Pool: main-pool (default) or commodities-pool.', enum: ['main-pool', 'commodities-pool'] },
+      },
+      required: ['owner', 'market', 'side', 'collateralUsd', 'leverage'],
+      additionalProperties: false,
+    },
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const owner = parsePublicKey(String(args['owner']));
+      const market = String(args['market']).toUpperCase();
+      const side = (args['side'] === 'short' ? 'short' : 'long') as PositionSide;
+      const collateralUsd = Number(args['collateralUsd']);
+      const leverageInput = String(args['leverage']);
+      const poolName = (args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool') as AdrenaPool;
+      const stopLossPct = args['stopLossPct'] !== undefined ? Number(args['stopLossPct']) : null;
+      const takeProfitPct = args['takeProfitPct'] !== undefined ? Number(args['takeProfitPct']) : null;
+
+      const connection = getConnection(context);
+
+      // Resolve custody address for the market
+      const custodyAddr = getCustodyPublicKey(market, poolName);
+      const custodyInfo = await connection.getAccountInfo(custodyAddr, 'confirmed');
+      if (!custodyInfo || !custodyInfo.data || custodyInfo.data.length < 184) {
+        return createTextResponse(JSON.stringify({ error: `Custody account for ${market} not found` }), { isError: true });
+      }
+      const d = custodyInfo.data;
+      const maxInitialLeverageBps = d.readUInt32LE(176);
+      const maxLeverageBps = d.readUInt32LE(180);
+      const maxInitialLeverage = maxInitialLeverageBps / 10000;
+      const maxLeverage = maxLeverageBps / 10000;
+
+      // Resolve leverage
+      let leverage: number;
+      if (leverageInput.toLowerCase() === 'max') {
+        leverage = maxInitialLeverage;
+      } else {
+        leverage = Number(leverageInput);
+        if (leverage > maxInitialLeverage) {
+          return createTextResponse(JSON.stringify({
+            error: `Leverage ${leverage} exceeds maxInitialLeverage ${maxInitialLeverage} for ${market}`,
+            suggestedLeverage: maxInitialLeverage,
+          }), { isError: true });
+        }
+      }
+
+      // Resolve collateral token: USDC for shorts, match market for longs
+      const collateralToken = side === 'short' ? 'USDC' : market;
+
+      // Get oracle price to convert USD → token amount
+      const oraclePrice = await fetchOraclePrice(market, side);
+      const priceUsd = Number(oraclePrice) / Math.pow(10, 10);
+      if (priceUsd <= 0) {
+        return createTextResponse(JSON.stringify({ error: `Oracle price for ${market} unavailable` }), { isError: true });
+      }
+
+      // Convert USD collateral to token amount
+      // For shorts: collateral is USDC (6 decimals), 1 USDC ≈ $1
+      // For longs: collateral is the token itself, amount = USD / price
+      let collateralAmount: number;
+      if (side === 'short') {
+        // USDC is ~$1, so collateralAmount ≈ collateralUsd
+        collateralAmount = collateralUsd;
+      } else {
+        // Token collateral: amount = USD / token price
+        collateralAmount = collateralUsd / priceUsd;
+      }
+
+      // Resolve SL/TP prices from percentages
+      let stopLossPriceUsd: number | null = null;
+      let takeProfitPriceUsd: number | null = null;
+      if (stopLossPct !== null) {
+        // For long: SL below entry. For short: SL above entry
+        stopLossPriceUsd = side === 'long'
+          ? priceUsd * (1 - stopLossPct / 100)
+          : priceUsd * (1 + stopLossPct / 100);
+      }
+      if (takeProfitPct !== null) {
+        // For long: TP above entry. For short: TP below entry
+        takeProfitPriceUsd = side === 'long'
+          ? priceUsd * (1 + takeProfitPct / 100)
+          : priceUsd * (1 - takeProfitPct / 100);
+      }
+
+      // Build position package (open + SL + TP atomic)
+      const result = await buildPositionPackage(
+        connection, owner, market, collateralToken,
+        collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, null,
+      );
+
+      // Enrich with intent metadata
+      const enrichedResult = {
+        ...result,
+        intent: {
+          market,
+          side,
+          collateralUsd,
+          collateralToken,
+          collateralAmount,
+          leverage,
+          maxInitialLeverage,
+          maxLeverage,
+          oraclePriceUsd: priceUsd,
+          stopLossPriceUsd,
+          takeProfitPriceUsd,
+          poolName,
+        },
+      };
+
+      return createTextResponse(JSON.stringify(enrichedResult, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to build trade intent', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
     }
   });
 }

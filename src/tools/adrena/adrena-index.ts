@@ -20,6 +20,7 @@ import { registerAdrenaCancelStopLossTool } from './adrena-trading-tools.js';
 import { registerAdrenaCancelTakeProfitTool } from './adrena-trading-tools.js';
 import { registerAdrenaSimulatePositionTool } from './adrena-trading-tools.js';
 import { registerAdrenaPositionPackageTool } from './adrena-trading-tools.js';
+import { registerAdrenaTradeIntentTool } from './adrena-trading-tools.js';
 import { registerAdrenaAddLimitOrderTool } from './adrena-limit-order-tools.js';
 import { registerAdrenaCancelLimitOrderTool } from './adrena-limit-order-tools.js';
 import { registerAdrenaCommodityTools } from './adrena-commodity-tools.js';
@@ -62,6 +63,9 @@ export function registerAdrenaTools(server: Server, context: SapMcpContext): voi
   // Batch position builder (open + SL + TP atomic)
   registerAdrenaPositionPackageTool(server, context);
 
+  // Intent-level trading API (resolves mint, leverage, collateral automatically)
+  registerAdrenaTradeIntentTool(server, context);
+
   // Limit order builders
   registerAdrenaAddLimitOrderTool(server, context);
   registerAdrenaCancelLimitOrderTool(server, context);
@@ -81,5 +85,5 @@ export function registerAdrenaTools(server: Server, context: SapMcpContext): voi
   // On-chain markets reader
   registerAdrenaGetMarketsTool(server, context);
 
-  logger.debug('Adrena perps tools registered', { count: 35 });
+  logger.debug('Adrena perps tools registered', { count: 36 });
 }

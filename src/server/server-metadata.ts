@@ -71,7 +71,7 @@ export const SERVER_METADATA = {
 export const CAPABILITIES = {
   tools: {
     /** Static fallback count. Use getDynamicToolCount() for the real count. */
-    count: 364,
+    count: 365,
     categories: {
       sap: 75,
       sns: 13,
@@ -85,7 +85,7 @@ export const CAPABILITIES = {
       premium: 17,
       quickContext: 1,
       perps: 9,
-      adrena: 35,
+      adrena: 36,
     },
   },
 };
