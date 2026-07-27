@@ -194,7 +194,7 @@ function createAtaIdempotentIx(owner: PublicKey, mint: PublicKey, payer: PublicK
       { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
       { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
     ],
-    data: Buffer.from([0x1e]), // CreateAssociatedTokenAccountIdempotent instruction discriminator
+    data: Buffer.from([0x01]), // CreateAssociatedTokenAccountIdempotent instruction index = 1
   });
 }
 

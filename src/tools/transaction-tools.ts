@@ -953,7 +953,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           ASSOCIATED_TOKEN_PROGRAM_ID,
         );
 
-        // CreateAssociatedTokenAccountIdempotent instruction (0x1e data).
+        // CreateAssociatedTokenAccountIdempotent instruction (index 1).
         const createAtaInstruction = new TransactionInstruction({
           programId: ASSOCIATED_TOKEN_PROGRAM_ID,
           keys: [
@@ -964,7 +964,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
             { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
           ],
-          data: Buffer.from([0x1e]),
+          data: Buffer.from([0x01]), // CreateAssociatedTokenAccountIdempotent instruction index = 1
         });
 
         // Token Transfer instruction (0x03 + 64-bit amount in little-endian).
