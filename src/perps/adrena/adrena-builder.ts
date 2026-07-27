@@ -480,11 +480,15 @@ export async function buildOpenPositionLong(
   const profileInstructions = await ensureUserProfileInstructions(connection, owner);
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
+  // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
+  // The SDK does: Math.floor(normalLeverage * BPS) where BPS = 10000.
+  const leverageBps = Math.floor(leverage * 10000);
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionLong', [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
-      leverage,
+      leverage: leverageBps,
       oraclePrices: null,
       multiOraclePrices: null,
     },
@@ -557,11 +561,14 @@ export async function buildOpenPositionShort(
   const profileInstructions = await ensureUserProfileInstructions(connection, owner);
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
+  // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
+  const leverageBps = Math.floor(leverage * 10000);
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
-      leverage,
+      leverage: leverageBps,
       oraclePrices: null,
       multiOraclePrices: null,
     },
@@ -1613,11 +1620,14 @@ async function buildOpenPositionLongInternal(
   const profileInstructions = await ensureUserProfileInstructions(connection, owner);
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
+  // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
+  const leverageBps = Math.floor(leverage * 10000);
+
   const ix = await buildInstruction(program, ixName, [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
-      leverage,
+      leverage: leverageBps,
       oraclePrices: null,
       multiOraclePrices: null,
     },
