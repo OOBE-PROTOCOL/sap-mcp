@@ -82,6 +82,53 @@ export type PositionSide = 'long' | 'short';
 /** Pool identifier. */
 export type AdrenaPool = 'main-pool' | 'commodities-pool';
 
+/**
+ * Token balance for a single token in the owner's wallet.
+ * All amounts are in human-readable units (e.g. 1.5 USDC = 1.5).
+ */
+export interface TokenBalance {
+  /** Token symbol (USDC, JITOSOL, WBTC, BONK, SOL). */
+  symbol: string;
+  /** Mint address. */
+  mint: string;
+  /** Human-readable balance (adjusted for decimals). */
+  balance: number;
+  /** Raw bigint balance (lamports/atoms). */
+  balanceRaw: string;
+  /** Token decimals. */
+  decimals: number;
+  /** ATA address (empty string if SOL). */
+  ata: string;
+  /** Whether the ATA exists on-chain. */
+  ataExists: boolean;
+}
+
+/**
+ * Pre-flight balance check result. Returned alongside the unsigned transaction
+ * so the agent/user can see exactly what token balances are available and
+ * whether the requested operation will succeed on-chain.
+ */
+export interface BalanceCheck {
+  /** Wallet address that was checked. */
+  wallet: string;
+  /** All token balances fetched (USDC, JITOSOL, WBTC, BONK, SOL). */
+  balances: TokenBalance[];
+  /** The token symbol required as collateral/funding for this operation. */
+  requiredToken: string;
+  /** Human-readable amount required. */
+  requiredAmount: number;
+  /** Human-readable balance available. */
+  availableBalance: number;
+  /** True if available >= required. */
+  sufficient: boolean;
+  /** Human-readable shortfall (0 if sufficient). */
+  shortfall: number;
+  /** SOL balance for gas/fees. */
+  solBalance: number;
+  /** True if SOL balance is enough for transaction fees (~0.005 SOL minimum). */
+  solSufficientForFees: boolean;
+}
+
 /** Result of building an unsigned transaction. */
 export interface UnsignedTransactionResult {
   /** Base64-serialized unsigned transaction. */
@@ -101,6 +148,10 @@ export interface UnsignedTransactionResult {
     transactionBase64: string;
     submit: boolean;
   };
+  /** Pre-flight balance check (present when the builder performed one). */
+  balanceCheck?: BalanceCheck;
+  /** Warning message if balance is insufficient or other pre-flight concern. */
+  warning?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -251,6 +302,124 @@ async function readCustodyTokenAccount(
   }
   // tokenAccount is at offset 80 (32 bytes)
   return new PublicKey(accountInfo.data.subarray(80, 112));
+}
+
+/**
+ * Fetch all Adrena-relevant token balances for a wallet: USDC, JITOSOL, WBTC, BONK, and SOL.
+ *
+ * For SPL tokens, reads the Associated Token Account (ATA) balance via
+ * `connection.getParsedTokenAccountsByOwner`. For SOL, reads lamports via
+ * `connection.getBalance`.
+ *
+ * @param connection — Solana RPC connection.
+ * @param owner — Wallet public key.
+ * @returns Array of TokenBalance for each supported token (including zero balances).
+ */
+export async function getWalletTokenBalances(
+  connection: Connection,
+  owner: PublicKey,
+): Promise<TokenBalance[]> {
+  const balances: TokenBalance[] = [];
+  const solBalanceLamports = await connection.getBalance(owner, 'confirmed');
+  balances.push({
+    symbol: 'SOL',
+    mint: 'So11111111111111111111111111111111111111112',
+    balance: solBalanceLamports / 1e9,
+    balanceRaw: String(solBalanceLamports),
+    decimals: 9,
+    ata: '',
+    ataExists: true,
+  });
+
+  for (const [symbol, mintStr] of Object.entries(ADRENA_TOKEN_MINTS)) {
+    const mint = new PublicKey(mintStr);
+    const ata = getAssociatedTokenAddressSync(mint, owner);
+    const custodyInfo = ADRENA_CUSTODIES[symbol as keyof typeof ADRENA_CUSTODIES];
+    const decimals = custodyInfo?.decimals ?? 6;
+
+    try {
+      const ataInfo = await connection.getAccountInfo(ata, 'confirmed');
+      if (!ataInfo || !ataInfo.data || ataInfo.data.length < 64) {
+        balances.push({
+          symbol,
+          mint: mintStr,
+          balance: 0,
+          balanceRaw: '0',
+          decimals,
+          ata: ata.toBase58(),
+          ataExists: false,
+        });
+        continue;
+      }
+      // Token account layout: amount is at offset 64 (u64 LE), but we should use
+      // getParsedAccountInfo for reliability.
+      const parsed = await connection.getParsedAccountInfo(ata, 'confirmed');
+      const parsedData = (parsed.value?.data as unknown as { parsed?: { info?: { tokenAmount?: { amount: string; decimals: number } } } } | undefined);
+      const amountStr = parsedData?.parsed?.info?.tokenAmount?.amount ?? '0';
+      const amount = Number(amountStr);
+      const humanReadable = amount / Math.pow(10, decimals);
+      balances.push({
+        symbol,
+        mint: mintStr,
+        balance: humanReadable,
+        balanceRaw: amountStr,
+        decimals,
+        ata: ata.toBase58(),
+        ataExists: true,
+      });
+    } catch {
+      balances.push({
+        symbol,
+        mint: mintStr,
+        balance: 0,
+        balanceRaw: '0',
+        decimals,
+        ata: ata.toBase58(),
+        ataExists: false,
+      });
+    }
+  }
+
+  return balances;
+}
+
+/**
+ * Pre-flight balance check: compare requested collateral/amount against the
+ * wallet's actual token balance, and check SOL for fees.
+ *
+ * Returns a BalanceCheck object that can be embedded in the UnsignedTransactionResult
+ * so the agent/user sees balances and warnings before signing.
+ *
+ * @param connection — Solana RPC connection.
+ * @param owner — Wallet public key.
+ * @param requiredToken — Token symbol required (e.g. "USDC", "JITOSOL").
+ * @param requiredAmount — Human-readable amount required.
+ * @returns BalanceCheck with all balances and sufficiency flags.
+ */
+export async function checkSufficientBalance(
+  connection: Connection,
+  owner: PublicKey,
+  requiredToken: string,
+  requiredAmount: number,
+): Promise<BalanceCheck> {
+  const balances = await getWalletTokenBalances(connection, owner);
+  const required = requiredToken.toUpperCase();
+  const requiredBalance = balances.find(b => b.symbol === required);
+  const available = requiredBalance?.balance ?? 0;
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const shortfall = Math.max(0, requiredAmount - available);
+
+  return {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: required,
+    requiredAmount,
+    availableBalance: available,
+    sufficient: available >= requiredAmount,
+    shortfall,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
 }
 
 /**
@@ -410,6 +579,8 @@ async function serializeUnsignedTx(
  * @param feePayer — Fee payer public key.
  * @param instructionNames — List of instruction names.
  * @param positionAddress — Optional position PDA.
+ * @param balanceCheck — Optional pre-flight balance check result.
+ * @param warning — Optional warning message (e.g. insufficient balance).
  * @returns Unsigned transaction result.
  */
 function buildResult(
@@ -417,6 +588,8 @@ function buildResult(
   feePayer: PublicKey,
   instructionNames: string[],
   positionAddress?: PublicKey,
+  balanceCheck?: BalanceCheck,
+  warning?: string,
 ): UnsignedTransactionResult {
   return {
     transactionBase64,
@@ -429,6 +602,8 @@ function buildResult(
       transactionBase64,
       submit: false,
     },
+    ...(balanceCheck ? { balanceCheck } : {}),
+    ...(warning ? { warning } : {}),
   };
 }
 
@@ -511,8 +686,16 @@ export async function buildOpenPositionLong(
     referrerProfile,
   });
 
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${collateralAmount}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning);
 }
 
 /**
@@ -591,8 +774,16 @@ export async function buildOpenPositionShort(
     referrerProfile,
   });
 
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${collateralAmount}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning);
 }
 
 /**
@@ -661,7 +852,26 @@ export async function buildClosePositionLong(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['closePositionLong'], position);
+
+  // Pre-flight: show balances and check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['closePositionLong'], position, balanceCheck, warning);
 }
 
 /**
@@ -732,7 +942,26 @@ export async function buildClosePositionShort(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, ['closePositionShort'], position);
+
+  // Pre-flight: show balances and check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['closePositionShort'], position, balanceCheck, warning);
 }
 
 // ─── SL / TP Builders ──────────────────────────────────────────────────────────
@@ -779,7 +1008,26 @@ export async function buildSetStopLoss(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, [ixName], position);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
 }
 
 /**
@@ -821,7 +1069,26 @@ export async function buildSetTakeProfit(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, [ixName], position);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
 }
 
 /**
@@ -855,7 +1122,26 @@ export async function buildCancelStopLoss(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['cancelStopLoss'], position);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['cancelStopLoss'], position, balanceCheck, warning);
 }
 
 /**
@@ -889,7 +1175,26 @@ export async function buildCancelTakeProfit(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['cancelTakeProfit'], position);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['cancelTakeProfit'], position, balanceCheck, warning);
 }
 
 // ─── Limit Order Builders ───────────────────────────────────────────────────────
@@ -958,7 +1263,16 @@ export async function buildAddLimitOrder(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['addLimitOrder']);
+
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${collateralAmount}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
+  return buildResult(transactionBase64, owner, ['addLimitOrder'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1007,7 +1321,26 @@ export async function buildCancelLimitOrder(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['cancelLimitOrder']);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['cancelLimitOrder'], undefined, balanceCheck, warning);
 }
 
 // ─── Liquidity & Swap Builders ──────────────────────────────────────────────────
@@ -1070,7 +1403,16 @@ export async function buildAddLiquidity(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['addLiquidity']);
+
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, amountIn);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${amountIn}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
+  return buildResult(transactionBase64, owner, ['addLiquidity'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1127,7 +1469,26 @@ export async function buildRemoveLiquidity(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['removeLiquidity']);
+
+  // Pre-flight: show balances and check SOL for fees (removeLiquidity burns LP tokens).
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'LP',
+    requiredAmount: Number(lpAmountIn),
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['removeLiquidity'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1189,7 +1550,16 @@ export async function buildSwap(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['swap']);
+
+  // Pre-flight balance check.
+  const balanceCheck = await checkSufficientBalance(connection, owner, fromToken, amountIn);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${fromToken.toUpperCase()} balance: need ${amountIn}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
+  return buildResult(transactionBase64, owner, ['swap'], undefined, balanceCheck, warning);
 }
 
 // ─── Staking Builders ──────────────────────────────────────────────────────────
@@ -1240,7 +1610,26 @@ export async function buildInitUserStaking(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['initUserStaking']);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['initUserStaking'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1305,7 +1694,26 @@ export async function buildAddLiquidStake(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['addLiquidStake']);
+
+  // Pre-flight: check SOL for fees (LP token balance is not in standard token mints).
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'LP',
+    requiredAmount: Number(amount),
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['addLiquidStake'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1370,7 +1778,26 @@ export async function buildRemoveLiquidStake(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['removeLiquidStake']);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'LP',
+    requiredAmount: Number(amount),
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['removeLiquidStake'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1429,7 +1856,26 @@ export async function buildAddLockedStake(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['addLockedStake']);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'LP',
+    requiredAmount: Number(amount),
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['addLockedStake'], undefined, balanceCheck, warning);
 }
 
 /**
@@ -1489,7 +1935,26 @@ export async function buildClaimStakes(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
-  return buildResult(transactionBase64, owner, ['claimStakes']);
+
+  // Pre-flight: check SOL for fees.
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, ['claimStakes'], undefined, balanceCheck, warning);
 }
 
 // ─── Commodity Builders (synthetic perps) ──────────────────────────────────────
@@ -1651,7 +2116,16 @@ async function buildOpenPositionLongInternal(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, [ixName], position);
+
+  // Pre-flight balance check (commodity positions use USDC collateral).
+  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
+  const warning = !balanceCheck.sufficient
+    ? `Insufficient ${collateralToken.toUpperCase()} balance: need ${collateralAmount}, have ${balanceCheck.availableBalance} (shortfall: ${balanceCheck.shortfall}). The transaction will fail on-chain.`
+    : !balanceCheck.solSufficientForFees
+      ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
+      : undefined;
+
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
 }
 
 async function buildClosePositionLongInternal(
@@ -1713,7 +2187,26 @@ async function buildClosePositionLongInternal(
   });
 
   const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  return buildResult(transactionBase64, owner, [ixName], position);
+
+  // Pre-flight: show balances and check SOL for fees (close returns tokens, doesn't require collateral).
+  const balances = await getWalletTokenBalances(connection, owner);
+  const solBalance = balances.find(b => b.symbol === 'SOL')?.balance ?? 0;
+  const warning = solBalance < 0.005
+    ? `Insufficient SOL for transaction fees: have ${solBalance} SOL, need ~0.005 SOL.`
+    : undefined;
+  const balanceCheck: BalanceCheck = {
+    wallet: owner.toBase58(),
+    balances,
+    requiredToken: 'NONE',
+    requiredAmount: 0,
+    availableBalance: 0,
+    sufficient: true,
+    shortfall: 0,
+    solBalance,
+    solSufficientForFees: solBalance >= 0.005,
+  };
+
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
 }
 
 // ─── Re-exports ─────────────────────────────────────────────────────────────────
