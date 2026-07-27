@@ -970,17 +970,19 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         const destOwnerKey = new PublicKey(destinationOwner);
         const mintKey = new PublicKey(mint);
 
-        // Derive Associated Token Account addresses using findProgramAddress.
+        // Derive Associated Token Account addresses using the standard SPL
+        // seed layout: [owner, TOKEN_PROGRAM_ID, mint] — NO string prefix.
+        // The Associated Token Account program does NOT use a "AssociatedTokenAddress"
+        // prefix in its PDA seeds. Using one produces a wrong ATA address.
         const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
-        // ATA = PDA(['AssociatedTokenAddress', owner, tokenProgram, mint])
         const [sourceAta] = PublicKey.findProgramAddressSync(
-          [Buffer.from('AssociatedTokenAddress'), sourceOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
+          [sourceOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
           ASSOCIATED_TOKEN_PROGRAM_ID,
         );
         const [destAta] = PublicKey.findProgramAddressSync(
-          [Buffer.from('AssociatedTokenAddress'), destOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
+          [destOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
           ASSOCIATED_TOKEN_PROGRAM_ID,
         );
 
