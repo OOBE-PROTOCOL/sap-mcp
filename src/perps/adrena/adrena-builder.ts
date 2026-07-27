@@ -20,6 +20,7 @@ import {
   Connection,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
+import BN from 'bn.js';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,
@@ -102,6 +103,25 @@ export interface UnsignedTransactionResult {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a bigint to a BN instance for Anchor instruction encoding.
+ * Anchor 0.30.x uses @coral-xyz/borsh which requires BN, not native BigInt.
+ * @param value — bigint value.
+ * @returns BN instance.
+ */
+function toBN(value: bigint): BN {
+  return new BN(value.toString());
+}
+
+/**
+ * Convert a bigint or null to a BN or null for optional Anchor fields.
+ * @param value — bigint or null.
+ * @returns BN instance or null.
+ */
+function toBNOrNull(value: bigint | null): BN | null {
+  return value === null ? null : new BN(value.toString());
+}
 
 /**
  * Get pool public key by name.
@@ -280,8 +300,8 @@ export async function buildOpenPositionLong(
 
   const ix = buildInstruction(program, 'openOrIncreasePositionLong', [
     {
-      price: priceRaw,
-      collateral: collateralRaw,
+      price: toBN(priceRaw),
+      collateral: toBN(collateralRaw),
       leverage,
       oraclePrices: null,
       multiOraclePrices: null,
@@ -349,8 +369,8 @@ export async function buildOpenPositionShort(
 
   const ix = buildInstruction(program, 'openOrIncreasePositionShort', [
     {
-      price: priceRaw,
-      collateral: collateralRaw,
+      price: toBN(priceRaw),
+      collateral: toBN(collateralRaw),
       leverage,
       oraclePrices: null,
       multiOraclePrices: null,
@@ -411,10 +431,10 @@ export async function buildClosePositionLong(
 
   const ix = buildInstruction(program, 'closePositionLong', [
     {
-      price: price ?? null,
+      price: toBNOrNull(price),
       oraclePrices: null,
       multiOraclePrices: null,
-      percentage,
+      percentage: toBN(percentage),
     },
   ], {
     caller: owner,
@@ -474,10 +494,10 @@ export async function buildClosePositionShort(
 
   const ix = buildInstruction(program, 'closePositionShort', [
     {
-      price: price ?? null,
+      price: toBNOrNull(price),
       oraclePrices: null,
       multiOraclePrices: null,
-      percentage,
+      percentage: toBN(percentage),
     },
   ], {
     caller: owner,
@@ -533,8 +553,8 @@ export async function buildSetStopLoss(
 
   const ix = buildInstruction(program, ixName, [
     {
-      stopLossLimitPrice,
-      closePositionPrice: closePositionPrice ?? null,
+      stopLossLimitPrice: toBN(stopLossLimitPrice),
+      closePositionPrice: toBNOrNull(closePositionPrice),
     },
   ], {
     owner,
@@ -576,7 +596,7 @@ export async function buildSetTakeProfit(
 
   const ix = buildInstruction(program, ixName, [
     {
-      takeProfitLimitPrice,
+      takeProfitLimitPrice: toBN(takeProfitLimitPrice),
     },
   ], {
     owner,
@@ -702,10 +722,10 @@ export async function buildAddLimitOrder(
 
   const ix = buildInstruction(program, 'addLimitOrder', [
     {
-      triggerPrice,
-      limitPrice: limitPrice ?? null,
+      triggerPrice: toBN(triggerPrice),
+      limitPrice: toBNOrNull(limitPrice),
       side: side === 'long' ? 0 : 1,
-      amount: amountRaw,
+      amount: toBN(amountRaw),
       leverage,
     },
   ], {
@@ -756,7 +776,7 @@ export async function buildCancelLimitOrder(
 
   const ix = buildInstruction(program, 'cancelLimitOrder', [
     {
-      id: orderId,
+      id: toBN(orderId),
     },
   ], {
     owner,
@@ -815,8 +835,8 @@ export async function buildAddLiquidity(
 
   const ix = buildInstruction(program, 'addLiquidity', [
     {
-      amountIn: amountRaw,
-      minLpAmountOut,
+      amountIn: toBN(amountRaw),
+      minLpAmountOut: toBN(minLpAmountOut),
       oraclePrices: null,
       multiOraclePrices: null,
     },
@@ -873,8 +893,8 @@ export async function buildRemoveLiquidity(
 
   const ix = buildInstruction(program, 'removeLiquidity', [
     {
-      lpAmountIn,
-      minAmountOut,
+      lpAmountIn: toBN(lpAmountIn),
+      minAmountOut: toBN(minAmountOut),
       oraclePrices: null,
       multiOraclePrices: null,
     },
@@ -933,8 +953,8 @@ export async function buildSwap(
 
   const ix = buildInstruction(program, 'swap', [
     {
-      amountIn: amountRaw,
-      minAmountOut,
+      amountIn: toBN(amountRaw),
+      minAmountOut: toBN(minAmountOut),
       oraclePrices: null,
       multiOraclePrices: null,
     },
@@ -1043,7 +1063,7 @@ export async function buildAddLiquidStake(
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
 
   const ix = buildInstruction(program, 'addLiquidStake', [
-    { amount },
+    { amount: toBN(amount) },
   ], {
     owner,
     fundingAccount,
@@ -1108,7 +1128,7 @@ export async function buildRemoveLiquidStake(
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
 
   const ix = buildInstruction(program, 'removeLiquidStake', [
-    { amount },
+    { amount: toBN(amount) },
   ], {
     owner,
     stakedTokenAccount,
@@ -1171,7 +1191,7 @@ export async function buildAddLockedStake(
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
 
   const ix = buildInstruction(program, 'addLockedStake', [
-    { amount, lockedDays },
+    { amount: toBN(amount), lockedDays },
   ], {
     owner,
     fundingAccount,
@@ -1381,8 +1401,8 @@ async function buildOpenPositionLongInternal(
 
   const ix = buildInstruction(program, ixName, [
     {
-      price: priceRaw,
-      collateral: collateralRaw,
+      price: toBN(priceRaw),
+      collateral: toBN(collateralRaw),
       leverage,
       oraclePrices: null,
       multiOraclePrices: null,
@@ -1436,10 +1456,10 @@ async function buildClosePositionLongInternal(
 
   const ix = buildInstruction(program, ixName, [
     {
-      price: price ?? null,
+      price: toBNOrNull(price),
       oraclePrices: null,
       multiOraclePrices: null,
-      percentage,
+      percentage: toBN(percentage),
     },
   ], {
     caller: owner,

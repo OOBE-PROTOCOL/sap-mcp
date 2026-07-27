@@ -1905,7 +1905,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
   };
 
   registerTool(server, 'sap_perp_builder_status', {
-    description: 'Free readiness check for perps execution. Returns whether SAP MCP has a configured hosted unsigned transaction builder for perp orders. If builderAvailable is false, agents must stop before execution and must not route direct signer-only perps tools through x402 paid-call replay.',
+    description: 'Free readiness check for perps execution. Returns whether SAP MCP has native Adrena perps builders (available since 0.9.38) or a configured hosted unsigned transaction builder. If builderAvailable is false, agents must stop before execution and must not route direct signer-only perps tools through x402 paid-call replay.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const perps = getPerpsConfig(context);
@@ -1915,7 +1915,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
       venue,
       marketsProviderConfigured: Boolean(perps.marketsUrl),
       positionsProviderConfigured: Boolean(perps.positionsUrl),
-      builderAvailable: Boolean(perps.builderUrl),
+      builderAvailable: true,
       adrenaProgramId: perps.adrenaProgramId,
       rpcScanMode: 'anchor-discriminator-getProgramAccounts',
       scanDiscriminators: {
@@ -1971,12 +1971,8 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
         signerPolicy: 'All builder tools return unsigned base64 transactions. Sign locally via sap_payments_finalize_transaction. SAP MCP never signs user-owned Adrena transactions.',
       },
       signerPolicy: 'Use sap_adrena_build_* tools to construct unsigned transactions, then sign locally with sap_payments_finalize_transaction.',
-      paymentPolicy: perps.builderUrl
-        ? 'Calling sap_perp_build_order_transaction is a paid builder call; finalization happens locally without exposing keypair bytes.'
-        : 'No x402 payment is required to learn that perps execution is unavailable.',
-      nextAction: perps.builderUrl
-        ? 'Use sap_perp_trade_plan, then sap_perp_build_order_transaction, then sap_payments_finalize_transaction with submit:true after user confirmation.'
-        : 'Use sap_perp_trade_plan and chart tools for analysis only. Configure SAP_MCP_PERPS_BUILDER_URL only when the provider returns complete unsigned Solana transactions for local finalization.',
+      paymentPolicy: 'Adrena builder tools (sap_adrena_build_*) are paid builder calls at $0.006 each. Data API tools (sap_adrena_get_*) are micro-read at $0.001 each. Finalization via sap_payments_finalize_transaction is free.',
+      nextAction: 'Use sap_adrena_get_pool_info + sap_adrena_get_trading_prices for market data, then sap_adrena_build_open_long (or short), then sap_payments_finalize_transaction with submit:true after user confirmation.',
     }, null, 2));
   });
 }
