@@ -59,15 +59,15 @@ const autoStartedSessions = new Set<string>();
  * @param sessionId - Active premium session id.
  * @internal
  */
-async function autoStartDelivery(sessionId: string): Promise<void> {
-  if (autoStartedSessions.has(sessionId)) return;
+async function autoStartDelivery(sessionId: string): Promise<boolean> {
+  if (autoStartedSessions.has(sessionId)) return false;
 
   const session = getPremiumSession(sessionId);
-  if (!session || session.status !== 'active') return;
+  if (!session || session.status !== 'active') return false;
 
   // Look up the capability to determine its type.
   const resolved = findPremiumCapability(session.pluginId, session.capabilityId);
-  if (!resolved) return;
+  if (!resolved) return false;
 
   autoStartedSessions.add(sessionId);
 
@@ -94,7 +94,7 @@ async function autoStartDelivery(sessionId: string): Promise<void> {
     } else if (resolved.capability.type === 'webhook') {
       // Register a relay (buffer-only) subscription and start the delivery loop.
       const eventTypes = resolved.capability.delivery?.events ?? [];
-      if (eventTypes.length === 0) return;
+      if (eventTypes.length === 0) return false;
 
       const sub = await registerWebhookRelay(sessionId, eventTypes);
       if (sub) {
@@ -109,6 +109,8 @@ async function autoStartDelivery(sessionId: string): Promise<void> {
     // Best-effort: if auto-start fails, the poll still returns existing events.
     // The agent can retry on the next poll.
   }
+
+  return true;
 }
 
 function readString(value: unknown): string | undefined {
@@ -1204,7 +1206,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       // Auto-start the provider delivery loop if not already running.
       // This eliminates the need for the agent to call sap_premium_webhook_relay
       // or open an SSE connection before polling.
-      await autoStartDelivery(sessionId);
+      const wasAutoStarted = await autoStartDelivery(sessionId);
 
       const maxEvents = Math.min(Math.max(readNumber(raw.maxEvents, 10), 1), 100);
       const sinceEventId = readString(raw.sinceEventId);
@@ -1243,6 +1245,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         hasMore,
         sessionStatus: session.status,
         unitsRemaining: session.requestedUnits,
+        ...(wasAutoStarted && batch.length === 0
+          ? { hint: 'Delivery loop auto-started. Provider events may take 10-60 seconds to arrive. Keep polling at 10-30 second intervals.' }
+          : {}),
       });
     },
   );
