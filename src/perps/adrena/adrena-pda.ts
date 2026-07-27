@@ -106,8 +106,8 @@ export function deriveUserProfilePda(owner: PublicKey): PublicKey {
 }
 
 /**
- * Derive a Position PDA: [Buffer.from("position"), owner, pool, custody, side].
- * The side byte is 0 for long, 1 for short.
+ * Derive a Position PDA: [Buffer.from("position"), owner, pool, custody, side_byte].
+ * Side enum: Long = 1, Short = 2 (NOT 0/1 — see Adrena types.rs Side enum).
  * @param owner — Owner wallet public key.
  * @param pool — Pool public key.
  * @param custody — Custody (principal) public key.
@@ -120,7 +120,7 @@ export function derivePositionPda(
   custody: PublicKey,
   side: 'long' | 'short',
 ): PublicKey {
-  const sideByte = Buffer.from([side === 'long' ? 0 : 1]);
+  const sideByte = Buffer.from([side === 'long' ? 1 : 2]);
   const [pda] = PublicKey.findProgramAddressSync(
     [Buffer.from('position', 'ascii'), owner.toBuffer(), pool.toBuffer(), custody.toBuffer(), sideByte],
     PROGRAM,
