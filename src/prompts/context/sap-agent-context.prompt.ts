@@ -297,7 +297,9 @@ Use the exact names returned by \`tools/list\`. Do not replace hyphens with unde
 | SOL/SPL balances and transfers | \`sol_get_balance\`, \`spl-token_getBalance\`, \`spl-token_getTokenAccounts\`, \`spl-token_transfer\`, \`spl-token_transferSol\` |
 | Jupiter swaps and quotes | \`jupiter_getQuote\`, \`jupiter_swap\`, \`jupiter_swapInstructions\`, \`jupiter_smartSwap\`, \`jupiter_getOrder\`, \`jupiter_executeOrder\` |
 | Jupiter token intelligence | \`jupiter_searchTokens\`, \`jupiter_getTokenInfo\`, \`jupiter_getTokenList\`, \`jupiter_shield\`, \`jupiter_getHoldings\` |
-| DEX, perps, liquidity | \`sap_perp_trade_plan\`, \`sap_perp_markets\`, \`sap_perp_position_info\`, \`sap_perp_liquidation_zones\`, \`sap_chart_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
+| DEX, perps, liquidity | \`sap_perp_trade_plan\`, \`sap_adrena_get_markets\`, \`sap_adrena_get_pool_info\`, \`sap_adrena_get_trading_prices\`, \`sap_perp_position_info\`, \`sap_perp_liquidation_zones\`, \`sap_chart_*\`, \`orca_*\`, \`raydium-pools_*\`, \`meteora_*\`, \`openbook_*\`, \`manifest_*\` |
+| Adrena perps trading | \`sap_adrena_build_open_long\`, \`sap_adrena_build_open_short\`, \`sap_adrena_build_close_long\`, \`sap_adrena_build_close_short\`, \`sap_adrena_build_set_stop_loss\`, \`sap_adrena_build_set_take_profit\`, \`sap_adrena_build_add_liquidity\`, \`sap_adrena_build_swap\`, \`sap_adrena_build_add_limit_order\` |
+| Adrena commodities | \`sap_adrena_build_open_commodity_long\`, \`sap_adrena_build_open_commodity_short\`, \`sap_adrena_build_close_commodity_long\`, \`sap_adrena_build_close_commodity_short\` |
 | Price and market data | \`jupiter_getPrice\`, \`pyth_getPrice\`, \`coingecko_getTokenPrice\`, \`pyth_getPriceHistory\`, \`pyth_listPriceFeeds\`, \`coingecko_getTokenInfo\` |
 | NFTs and domains | \`metaplex-nft_*\`, \`3land_*\`, \`sap_sns_*\`, \`sns_*\`, \`alldomains_*\` |
 | Bridges, staking, actions | \`bridging_*\`, \`staking_*\`, \`jito_*\`, \`blinks_*\`, \`lulo_*\` |
@@ -312,6 +314,15 @@ Use the exact names returned by \`tools/list\`. Do not replace hyphens with unde
 - SNS domain registration fees are paid in **USDC** (not SOL). SOL is still required for rent-exempt accounts and transaction fees.
 
 For transactions, preview first with \`sap_preview_transaction\`; sign only with \`sap_sign_transaction\` after policy checks and user approval when required.
+
+### 📊 Adrena Perps Trading Flow
+- **Pre-trade (free + paid reads):** Call \`sap_adrena_get_markets\` to verify \`allowTrade: true\` and check max leverage. Call \`sap_adrena_get_pool_info\` to check pool health (AUM, LP price). Call \`sol_get_balance\` (free) for SOL gas and \`spl_token_getBalance\` (free) for collateral balance.
+- **Build (paid):** Call \`sap_adrena_build_open_short\` or \`sap_adrena_build_open_long\` with \`owner\`, \`principalToken\`, \`collateralToken\`, \`collateralAmount\`, \`leverage\`. The builder response includes a \`balanceCheck\` object with all wallet token balances and a \`warning\` field if collateral is insufficient. **Do not submit if \`balanceCheck.sufficient\` is false.**
+- **Sign + submit:** Call \`sap_payments_finalize_transaction\` with \`transactionBase64\`, \`submit: true\`, \`confirm: true\`. The finalize tool **automatically refreshes the blockhash** before signing and **auto-re-submits** if the first attempt expires.
+- **Leverage:** Pass human-readable leverage (e.g. \`3\` for 3x). The builder encodes it as BPS (30000) internally.
+- **Shorts require USDC collateral.** Longs require collateral matching the principal token. Commodities (XAU/XAG/WTI) always use USDC collateral.
+- **Closing:** Call \`sap_adrena_build_close_short\` (or long) with \`percentage: 1000000\` for 100% close, then finalize.
+- **Adrena error codes in simulation logs:** 6029=MinLeverage, 6071=InsufficientCollateral, 6088=MissingOraclePrice, 6090=CustodyBelowMinimum. If logs are empty, use \`skipPreflight: true\` and the submit tool will auto-retry on expire.
 
 ### ⚡ x402 Hosted Payment Fast Path
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
