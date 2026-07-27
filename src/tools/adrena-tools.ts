@@ -86,7 +86,7 @@ import {
   type PositionSide,
   type AdrenaPool,
 } from '../perps/adrena/index.js';
-import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS } from '../perps/adrena/adrena-constants.js';
+import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../perps/adrena/adrena-constants.js';
 
 /* ═══════════════════════════════════════════════════════════════════
  *  JSON Schema types
@@ -916,7 +916,7 @@ function registerAdrenaStakingTools(server: Server, context: SapMcpContext): voi
  * @description Register Adrena Data API (REST) tools for market data and analytics.
  * @internal
  */
-function registerAdrenaDataApiTools(server: Server): void {
+function registerAdrenaDataApiTools(server: Server, context: SapMcpContext): void {
   // Get positions
   registerTool(server, 'sap_adrena_get_positions', {
     description: 'Fetch position history for a wallet from the Adrena Data API. Returns closed and open positions with P&L, entry/exit prices, and status.',
@@ -940,23 +940,69 @@ function registerAdrenaDataApiTools(server: Server): void {
     return createTextResponse(JSON.stringify({ wallet, positions, count: positions.length }, null, 2));
   });
 
-  // Get pool info
+  // Get pool info — reads directly from on-chain Pool account (Data API endpoint is broken)
   registerTool(server, 'sap_adrena_get_pool_info', {
-    description: 'Fetch latest pool statistics from the Adrena Data API. Returns TVL, AUM, LP token price, volume, fees, and open interest.',
+    description: 'Read Adrena pool statistics directly from the on-chain Pool account. Returns TVL (AUM), LP token price, pool name, custody list, trade/swap flags, and fees debt. This bypasses the broken datapi.adrena.trade REST endpoint and reads real data from Solana mainnet. Use this before opening positions to check pool health and available custodies.',
     inputSchema: {
       type: 'object',
       properties: {
-        poolName: { type: 'string', description: 'Optional pool name filter.' },
+        poolName: { type: 'string', description: 'Pool name. Supported: main-pool (default), commodities-pool.', enum: ['main-pool', 'commodities-pool'] },
       },
       additionalProperties: false,
     },
   }, async (args: Record<string, unknown>) => {
-    const poolName = typeof args['poolName'] === 'string' ? args['poolName'] : undefined;
-    const pool = await adrenaDataApi.getPoolInfo(poolName);
-    if (pool === null) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to fetch pool info from Adrena Data API' }), { isError: true });
+    try {
+      const poolName = args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool';
+      const connection = getConnection(context);
+      const poolAddress = poolName === 'commodities-pool'
+        ? ADRENA_COMMODITIES_POOL_ADDRESS
+        : ADRENA_MAIN_POOL_ADDRESS;
+      const accountInfo = await connection.getAccountInfo(new PublicKey(poolAddress), 'confirmed');
+      if (!accountInfo || !accountInfo.data || accountInfo.data.length < 48) {
+        return createTextResponse(JSON.stringify({ error: `Pool account ${poolAddress} not found or too small` }), { isError: true });
+      }
+      const d = accountInfo.data;
+      // Pool layout (release/39): 8 disc + 1 bump + 1 lpBump + 1 nbStable + 1 init + 1 allowTrade + 1 allowSwap + 1 liqState + 1 custodyCount + 32 name + 256 custodies(8×32) + ...
+      const allowTrade = d[12] === 1;
+      const allowSwap = d[13] === 1;
+      const custodyCount = d[15];
+      // Name is a LimitedString at offset 16 (31 bytes + 1 length byte at offset 47)
+      const nameLen = d[47];
+      const name = d.subarray(16, 16 + Math.min(nameLen, 31)).toString('utf8').replace(/\0/g, '');
+      // Custodies array at offset 48 (8 × 32 bytes = 256 bytes)
+      const custodies: string[] = [];
+      for (let i = 0; i < Math.min(custodyCount, 8); i++) {
+        const off = 48 + i * 32;
+        if (off + 32 > d.length) break;
+        custodies.push(new PublicKey(d.subarray(off, off + 32)).toBase58());
+      }
+      // LP token price at offset 328 (u64, USD 6 decimals)
+      const lpTokenPriceUsd = Number(d.readBigUInt64LE(328)) / 1e6;
+      // AUM at offset 448 (u64, USD 6 decimals)
+      const aumUsd = Number(d.readBigUInt64LE(448)) / 1e6;
+      // Fees debt at offset 304 (u64)
+      const feesDebtUsd = Number(d.readBigUInt64LE(304)) / 1e6;
+      // Referrers fee debt at offset 312
+      const referrersFeeDebtUsd = Number(d.readBigUInt64LE(312)) / 1e6;
+
+      return createTextResponse(JSON.stringify({
+        poolName: name || poolName,
+        poolAddress,
+        allowTrade,
+        allowSwap,
+        custodyCount,
+        custodies,
+        lpTokenPriceUsd,
+        aumUsd,
+        tvlUsd: aumUsd,
+        feesDebtUsd,
+        referrersFeeDebtUsd,
+        dataLength: d.length,
+        source: 'on-chain-rpc',
+      }, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to read pool info from on-chain account', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
     }
-    return createTextResponse(JSON.stringify(pool, null, 2));
   });
 
   // Get custody info
@@ -1354,7 +1400,7 @@ export function registerAdrenaTools(server: Server, context: SapMcpContext): voi
   registerAdrenaStakingTools(server, context);
 
   // Data API tools
-  registerAdrenaDataApiTools(server);
+  registerAdrenaDataApiTools(server, context);
 
   // On-chain markets reader
   registerAdrenaGetMarketsTool(server, context);

@@ -22,6 +22,7 @@ import {
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
 import BN from 'bn.js';
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { logger } from '../../core/logger.js';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,
@@ -568,6 +569,23 @@ async function serializeUnsignedTx(
     feePayer,
   });
   tx.add(...instructions);
+
+  // Simulate the transaction to extract program logs before serializing.
+  // This helps diagnose failures (e.g. InsufficientCollateral, MinLeverage)
+  // without needing to sign and submit.
+  try {
+    const simulation = await connection.simulateTransaction(tx);
+    if (simulation.value.logs && simulation.value.logs.length > 0) {
+      logger.debug('Adrena builder simulation logs', {
+        logs: simulation.value.logs,
+        unitsConsumed: simulation.value.unitsConsumed,
+        err: simulation.value.err,
+      });
+    }
+  } catch {
+    // Simulation is best-effort — don't fail the build if simulation fails.
+  }
+
   return tx.serialize({
     requireAllSignatures: false,
     verifySignatures: false,

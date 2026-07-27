@@ -7,6 +7,7 @@ import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionIns
 import bs58 from 'bs58';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { logger } from '../core/logger.js';
 import type { SapMcpContext } from '../core/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
@@ -279,16 +280,40 @@ export async function submitSignedTransactionWithLifecycle(
 
   const signature = await context.connection.sendRawTransaction(rawTransaction, {
     skipPreflight: input.skipPreflight,
-    maxRetries: input.maxRetries ?? context.config.maxRetries,
+    maxRetries: input.maxRetries ?? context.config.maxRetries ?? 3,
+    preflightCommitment: 'confirmed',
   });
   const confirmationTimeoutMs = boundConfirmationTimeout(input.confirmationTimeoutMs);
   const desiredCommitment = input.commitment ?? 'confirmed';
-  const confirmation = await waitForSignatureStatus(
+  let confirmation = await waitForSignatureStatus(
     context,
     signature,
     confirmationTimeoutMs,
     desiredCommitment,
   );
+
+  // If the transaction expired or didn't land (common with heavy Adrena txs on
+  // public RPC), re-submit once with the same signed bytes. Validators may
+  // accept it if the blockhash is still valid. This helps with transactions
+  // that are too large for a single slot but valid.
+  if (!confirmation.success && confirmation.retrySafe) {
+    logger.debug('Transaction expired, re-submitting', { signature });
+    try {
+      await context.connection.sendRawTransaction(rawTransaction, {
+        skipPreflight: true,
+        maxRetries: 3,
+        preflightCommitment: 'confirmed',
+      });
+      confirmation = await waitForSignatureStatus(
+        context,
+        signature,
+        Math.min(confirmationTimeoutMs, 60_000),
+        desiredCommitment,
+      );
+    } catch {
+      // Re-submit failed — keep original confirmation result.
+    }
+  }
 
   return {
     success: confirmation.success,
