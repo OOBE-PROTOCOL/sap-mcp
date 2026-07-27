@@ -275,7 +275,9 @@ export function deriveStakingLmRewardTokenVaultPda(staking: PublicKey): PublicKe
 
 /**
  * Derive the associated token account address for a wallet and mint.
- * Uses the SPL Associated Token Account program.
+ * Uses the SPL Associated Token Account program with the standard seed layout:
+ *   [owner, TOKEN_PROGRAM_ID, mint]
+ * (No "AssociatedTokenAddress" prefix — that was an incorrect assumption.)
  * @param owner — Wallet public key.
  * @param mint — Token mint public key.
  * @returns ATA public key.
@@ -286,7 +288,7 @@ export function deriveAta(owner: PublicKey, mint: PublicKey): PublicKey {
   );
   const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
   const [pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('AssociatedTokenAddress', 'ascii'), owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), mint.toBuffer()],
+    [owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM,
   );
   return pda;

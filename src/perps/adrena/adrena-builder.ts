@@ -21,6 +21,7 @@ import {
 } from '@solana/web3.js';
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
 import BN from 'bn.js';
+import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,
@@ -163,17 +164,8 @@ function getMintPublicKey(symbol: string): PublicKey {
   return new PublicKey(mint);
 }
 
-/** Solana Associated Token Program ID constant. */
-const ASSOCIATED_TOKEN_PROGRAM = new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID);
-
-/** Solana Token Program ID constant. */
-const TOKEN_PROGRAM = new PublicKey(TOKEN_PROGRAM_ID);
-
-/** Solana System Program ID constant. */
-const SYSTEM_PROGRAM = new PublicKey(SYSTEM_PROGRAM_ID);
-
 /**
- * Build a CreateAssociatedTokenAccountIdempotent instruction.
+ * Build a CreateAssociatedTokenAccountIdempotent instruction using @solana/spl-token.
  * This instruction creates the ATA if it doesn't exist, and is a no-op if it does.
  *
  * @param owner — Wallet public key that will own the ATA.
@@ -182,28 +174,13 @@ const SYSTEM_PROGRAM = new PublicKey(SYSTEM_PROGRAM_ID);
  * @returns TransactionInstruction for CreateAssociatedTokenAccountIdempotent.
  */
 function createAtaIdempotentIx(owner: PublicKey, mint: PublicKey, payer: PublicKey): TransactionInstruction {
-  const ata = deriveAta(owner, mint);
-  return new TransactionInstruction({
-    programId: ASSOCIATED_TOKEN_PROGRAM,
-    keys: [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: ata, isSigner: false, isWritable: true },
-      { pubkey: owner, isSigner: false, isWritable: false },
-      { pubkey: mint, isSigner: false, isWritable: false },
-      { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
-    ],
-    // SPL Associated Token Account program instruction index 1 = CreateAssociatedTokenAccountIdempotent.
-    // The ATA program uses simple instruction indices, not Anchor discriminators.
-    data: Buffer.from([0x01]),
-  });
+  const ata = getAssociatedTokenAddressSync(mint, owner);
+  return createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint);
 }
 
 /**
  * Always return a CreateAssociatedTokenAccountIdempotent instruction.
  * The instruction is a no-op if the ATA already exists, so it's safe to always include.
- * This avoids the AccountNotInitialized error when the wallet doesn't have a standard ATA,
- * and avoids RPC-dependent getAccountInfo checks that may fail on different RPC providers.
  *
  * @param _connection — Unused (kept for API compatibility).
  * @param owner — Wallet public key.
