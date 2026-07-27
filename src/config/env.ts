@@ -128,7 +128,7 @@ export const envSchema = z.object({
 
   // Hosted gateway provider keys. These are server-side only and must never be
   // written into client MCP configs, public metadata, or tool responses.
-  SAP_MCP_JUPITER_API_BASE_URL: z.string().url().default('https://api.jup.ag'),
+  SAP_MCP_JUPITER_API_BASE_URL: z.string().url().default('https://lite-api.jup.ag'),
   SAP_MCP_JUPITER_TOKENS_API_BASE_URL: z.string().url().optional(),
   SAP_MCP_JUPITER_API_KEY: z.string().optional(),
   JUPITER_API_KEY: z.string().optional(),
@@ -657,7 +657,7 @@ function getDefaultEnvConfig(): Partial<SapEnvConfig> {
     SAP_RATE_LIMIT_PER_MINUTE: 60,
     SAP_MCP_MONETIZATION_ENABLED: false,
     SAP_MCP_MONETIZATION_PROVIDER: 'x402',
-    SAP_MCP_JUPITER_API_BASE_URL: 'https://api.jup.ag',
+    SAP_MCP_JUPITER_API_BASE_URL: 'https://lite-api.jup.ag',
     SAP_MCP_JUPITER_TIMEOUT_MS: 30000,
     SAP_MCP_PERPS_TIMEOUT_MS: 8000,
     SAP_MCP_X402_MAX_TIMEOUT_SECONDS: 120,

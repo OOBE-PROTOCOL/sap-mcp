@@ -36,7 +36,7 @@ interface JupiterGatewayConfig {
 }
 
 const DEFAULT_JUPITER_GATEWAY_CONFIG: JupiterGatewayConfig = {
-  apiBaseUrl: 'https://api.jup.ag',
+  apiBaseUrl: 'https://lite-api.jup.ag',
   apiKeyConfigured: false,
   timeoutMs: 30000,
 };
