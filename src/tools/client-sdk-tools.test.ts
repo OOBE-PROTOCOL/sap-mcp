@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeAgentKitToolInput, normalizeJupiterProtocolToolInput } from './client-sdk-tools.js';
+import {
+  normalizeAgentKitToolInput,
+  normalizeJupiterBaseUrl,
+  normalizeJupiterProtocolToolInput,
+} from './client-sdk-tools.js';
 
 describe('AgentKit tool input normalization', () => {
   it('accepts common wallet aliases for SPL token account reads', () => {
@@ -46,5 +50,12 @@ describe('AgentKit tool input normalization', () => {
       mint: 'WrongMint111111111111111111111111111111111',
       ids: ['RightMint111111111111111111111111111111111'],
     });
+  });
+
+  it('normalizes pasted Jupiter product endpoints back to the API root', () => {
+    expect(normalizeJupiterBaseUrl('https://api.jup.ag/swap/v1')).toBe('https://api.jup.ag');
+    expect(normalizeJupiterBaseUrl('https://api.jup.ag/swap/v1/quote')).toBe('https://api.jup.ag');
+    expect(normalizeJupiterBaseUrl('https://api.jup.ag/price/v3?x=1')).toBe('https://api.jup.ag');
+    expect(normalizeJupiterBaseUrl('https://lite-api.jup.ag/ultra/v1/')).toBe('https://lite-api.jup.ag');
   });
 });

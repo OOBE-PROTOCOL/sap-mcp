@@ -60,7 +60,52 @@ Do not commit:
 
 Use server-side secret management or private deployment files outside the public repo.
 
-## 10.5 Release Packaging
+## 10.5 Hosted Provider Keys
+
+Provider keys belong only on the hosted SAP MCP gateway. Never place them in
+Codex, Hermes, Claude, OpenClaw, Smithery, MCP registry metadata, or public
+wizard snippets.
+
+For Jupiter, configure the API root, not a product endpoint:
+
+```bash
+SAP_MCP_JUPITER_API_BASE_URL=https://api.jup.ag
+SAP_MCP_JUPITER_API_KEY=<server-side-jupiter-key>
+SAP_MCP_JUPITER_TIMEOUT_MS=30000
+```
+
+Do not configure `/swap/v1`, `/swap/v1/quote`, `/price/v3`, or `/ultra/v1` as
+the base URL. The gateway normalizes common pasted product URLs, but the
+production env should stay on the root so the Client SDK can append the correct
+paths.
+
+Perps market data uses on-chain Adrena decoding by default. Hosted operators
+should set the Adrena program ID and use an indexed/full-history RPC that
+supports `getProgramAccounts` over Anchor account discriminators:
+
+```bash
+SAP_MCP_PERPS_ADRENA_PROGRAM_ID=13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet
+SAP_MCP_PERPS_TIMEOUT_MS=8000
+```
+
+Optional perps providers can enrich market data or provide IDL-backed unsigned
+transaction builders:
+
+```bash
+# SAP_MCP_PERPS_MARKETS_URL=https://provider.example/perps/markets
+# SAP_MCP_PERPS_BUILDER_URL=https://provider.example/perps/build-order
+# SAP_MCP_PERPS_API_KEY=<server-side-perps-provider-key>
+```
+
+If `SAP_MCP_PERPS_BUILDER_URL` is unset, `sap_perp_build_order_transaction` is
+not registered and agents must stop at analysis/planning. Do not expose a
+builder until it returns complete unsigned Solana transactions for local
+finalization. `adrena-sdk@beta` / `adrena-sdk-ts@beta` were inspected during
+0.9.38 work; the published npm tarballs include type declarations but are
+missing the JavaScript runtime files required by their entrypoints, so SAP MCP
+does not rely on them for production transaction construction yet.
+
+## 10.6 Release Packaging
 
 Recommended release model:
 
@@ -69,7 +114,7 @@ Recommended release model:
 3. GitHub releases for signed artifacts and changelog.
 4. Private infrastructure repo or private environment store for production secrets.
 
-## 10.6 Changelog Discipline
+## 10.7 Changelog Discipline
 
 Each release should document:
 
@@ -83,9 +128,9 @@ Each release should document:
 8. Migration notes.
 9. Verification commands and results.
 
-## 10.7 Current Release Notes
+## 10.8 Current Release Notes
 
-Version `0.2.0` includes:
+Version `0.9.38` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.
@@ -98,5 +143,8 @@ Version `0.2.0` includes:
 9. SAP SDK, SNS, Synapse AgentKit, Solana, profile, transaction, skill, chat, and payment tools.
 10. Policy engine support with local, Bento, and hybrid modes.
 11. Security guardrails for private key exposure and unsafe actions.
-12. Clean `pnpm audit --audit-level moderate` dependency graph.
-13. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
+12. Streamable HTTP cleanup bypasses for `DELETE`, `OPTIONS`, and `HEAD`.
+13. Canonical x402 estimate/challenge pricing.
+14. Jupiter endpoint normalization for server-side provider keys.
+15. Perps provider readiness and optional unsigned builder registration.
+16. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.

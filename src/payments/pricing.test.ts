@@ -344,6 +344,13 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
+  it('keeps perps execution readiness free and unsigned perps builders paid only when registered', () => {
+    expect(classifyTool('sap_perp_builder_status')).toBe('free');
+    expect(classifyTool('sap_perp_builder_status', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_perp_build_order_transaction')).toBe('builder');
+    expect(classifyTool('sap_perp_build_order_transaction', { strictTools: true })).toBe('builder');
+  });
+
   it('prices single SNS availability checks as micro-reads in default and strict mode', () => {
     expect(classifyTool('sap_sns_check_domain')).toBe('micro-read');
     expect(classifyTool('sap_sns_check_domain', { strictTools: true })).toBe('micro-read');

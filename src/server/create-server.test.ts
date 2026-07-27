@@ -108,7 +108,7 @@ describe('createSapMcpServer', () => {
     const server = registeredServer(await createSapMcpServer(baseConfig()));
     const names = (server.tools ?? []).map((tool) => tool.name);
 
-    expect(names).toHaveLength(328);
+    expect(names).toHaveLength(361);
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('sap_quick_context');
     expect(names).toContain('sol_get_balance');
@@ -206,6 +206,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_perp_markets');
     expect(names).toContain('sap_perp_position_info');
     expect(names).toContain('sap_perp_liquidation_zones');
+    expect(names).toContain('sap_perp_builder_status');
     const disabledPerpBuilderPrefix = ['sap', 'perp', 'build'].join('_');
     expect(names).not.toContain(`${disabledPerpBuilderPrefix}_open`);
     expect(names).not.toContain(`${disabledPerpBuilderPrefix}_close`);

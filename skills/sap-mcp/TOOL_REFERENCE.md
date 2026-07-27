@@ -220,7 +220,42 @@ Social, Blinks, bounties, gaming:
 `gibwork_createBounty`, `gibwork_listBounties`, `gibwork_submitWork`,
 `send-arcade_listGames`, `send-arcade_playGame`.
 
-Perps note: SAP MCP hosted supports perps analytics and trader-grade planning,
-not direct hosted Adrena execution. If direct Adrena signer tools are visible in
-a local runtime, use them only with that local runtime's signer path and policy.
-Do not route direct Adrena writes through hosted x402 paid-call replay.
+Perps note: SAP MCP 0.9.38+ includes a full native Adrena integration with
+32 tools. All 22 builder operations construct unsigned Solana transactions
+locally using the vendored Adrena Anchor IDL (release/39) via
+`@coral-xyz/anchor`, then return `transactionBase64` for local signing via
+`sap_payments_finalize_transaction`. No external builder URL is required.
+
+Adrena trading builders: `sap_adrena_build_open_long`,
+`sap_adrena_build_open_short`, `sap_adrena_build_close_long`,
+`sap_adrena_build_close_short`, `sap_adrena_build_set_stop_loss`,
+`sap_adrena_build_set_take_profit`, `sap_adrena_build_cancel_stop_loss`,
+`sap_adrena_build_cancel_take_profit`, `sap_adrena_build_add_limit_order`,
+`sap_adrena_build_cancel_limit_order`.
+
+Commodity builders (XAU, XAG, WTI): `sap_adrena_build_open_commodity_long`,
+`sap_adrena_build_open_commodity_short`, `sap_adrena_build_close_commodity_long`,
+`sap_adrena_build_close_commodity_short`.
+
+Liquidity & swap: `sap_adrena_build_add_liquidity`,
+`sap_adrena_build_remove_liquidity`, `sap_adrena_build_swap`.
+
+Staking: `sap_adrena_build_init_user_staking`, `sap_adrena_build_add_liquid_stake`,
+`sap_adrena_build_remove_liquid_stake`, `sap_adrena_build_add_locked_stake`,
+`sap_adrena_build_claim_stakes`.
+
+Data API (datapi.adrena.trade): `sap_adrena_get_positions`,
+`sap_adrena_get_pool_info`, `sap_adrena_get_custody_info`,
+`sap_adrena_get_trader_info`, `sap_adrena_get_trader_leaderboard`,
+`sap_adrena_get_mutagen`, `sap_adrena_get_mutagen_leaderboard`,
+`sap_adrena_get_prices`, `sap_adrena_get_trading_prices`,
+`sap_adrena_get_position_status`.
+
+Legacy perps analytics remain available: `sap_perp_markets`,
+`sap_perp_position_info`, `sap_perp_funding_history`,
+`sap_perp_liquidation_zones`, `sap_perp_trade_plan`, `sap_perp_builder_status`,
+`sap_chart_ohlc`, `sap_chart_long_term`, `sap_chart_volume_profile`.
+
+Collateral rules: longs require collateral = principal token; shorts require
+USDC collateral; commodities always use USDC. Supported main-pool assets:
+JITOSOL, WBTC, BONK. Supported commodities: XAU, XAG, WTI.

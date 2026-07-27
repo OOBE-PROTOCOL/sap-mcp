@@ -131,7 +131,18 @@ export const envSchema = z.object({
   SAP_MCP_JUPITER_API_BASE_URL: z.string().url().default('https://api.jup.ag'),
   SAP_MCP_JUPITER_TOKENS_API_BASE_URL: z.string().url().optional(),
   SAP_MCP_JUPITER_API_KEY: z.string().optional(),
+  JUPITER_API_KEY: z.string().optional(),
+  JUP_API_KEY: z.string().optional(),
   SAP_MCP_JUPITER_TIMEOUT_MS: z.coerce.number().positive().default(30000),
+
+  // Hosted perps provider hooks. Optional by design: SAP MCP should expose
+  // analytics without pretending a venue execution builder exists.
+  SAP_MCP_PERPS_MARKETS_URL: z.string().url().optional(),
+  SAP_MCP_PERPS_POSITIONS_URL: z.string().url().optional(),
+  SAP_MCP_PERPS_BUILDER_URL: z.string().url().optional(),
+  SAP_MCP_PERPS_API_KEY: z.string().optional(),
+  SAP_MCP_PERPS_ADRENA_PROGRAM_ID: z.string().default('13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet'),
+  SAP_MCP_PERPS_TIMEOUT_MS: z.coerce.number().positive().default(8000),
 
   // Remote MCP monetization. Applies only when explicitly enabled by hosted HTTP deployments.
   SAP_MCP_MONETIZATION_ENABLED: booleanEnvSchema.default(false),
@@ -200,6 +211,14 @@ export interface SapMcpConfig {
   jupiter: {
     apiBaseUrl: string;
     tokensApiBaseUrl?: string;
+    apiKeyConfigured: boolean;
+    timeoutMs: number;
+  };
+  perps: {
+    marketsUrl?: string;
+    positionsUrl?: string;
+    builderUrl?: string;
+    adrenaProgramId: string;
     apiKeyConfigured: boolean;
     timeoutMs: number;
   };
@@ -638,6 +657,9 @@ function getDefaultEnvConfig(): Partial<SapEnvConfig> {
     SAP_RATE_LIMIT_PER_MINUTE: 60,
     SAP_MCP_MONETIZATION_ENABLED: false,
     SAP_MCP_MONETIZATION_PROVIDER: 'x402',
+    SAP_MCP_JUPITER_API_BASE_URL: 'https://api.jup.ag',
+    SAP_MCP_JUPITER_TIMEOUT_MS: 30000,
+    SAP_MCP_PERPS_TIMEOUT_MS: 8000,
     SAP_MCP_X402_MAX_TIMEOUT_SECONDS: 120,
     SAP_MCP_PRICE_MICRO_READ_USD: 0.001,
     SAP_MCP_PRICE_READ_PREMIUM_USD: 0.002,
@@ -705,8 +727,20 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
     jupiter: {
       apiBaseUrl: env.SAP_MCP_JUPITER_API_BASE_URL,
       tokensApiBaseUrl: env.SAP_MCP_JUPITER_TOKENS_API_BASE_URL,
-      apiKeyConfigured: Boolean(env.SAP_MCP_JUPITER_API_KEY?.trim()),
+      apiKeyConfigured: Boolean(
+        env.SAP_MCP_JUPITER_API_KEY?.trim()
+        || env.JUPITER_API_KEY?.trim()
+        || env.JUP_API_KEY?.trim()
+      ),
       timeoutMs: env.SAP_MCP_JUPITER_TIMEOUT_MS,
+    },
+    perps: {
+      marketsUrl: env.SAP_MCP_PERPS_MARKETS_URL,
+      positionsUrl: env.SAP_MCP_PERPS_POSITIONS_URL,
+      builderUrl: env.SAP_MCP_PERPS_BUILDER_URL,
+      adrenaProgramId: env.SAP_MCP_PERPS_ADRENA_PROGRAM_ID,
+      apiKeyConfigured: Boolean(env.SAP_MCP_PERPS_API_KEY?.trim()),
+      timeoutMs: env.SAP_MCP_PERPS_TIMEOUT_MS,
     },
     bento: {
       enabled: effectiveBentoEnabled,

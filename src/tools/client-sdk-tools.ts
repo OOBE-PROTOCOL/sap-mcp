@@ -374,25 +374,50 @@ function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): v
 function buildClientSdkCacheKey(rpcUrl: string, jupiter: JupiterGatewayConfig): string {
   return JSON.stringify({
     rpcUrl,
-    jupiterApiBaseUrl: jupiter.apiBaseUrl,
-    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? null,
+    jupiterApiBaseUrl: normalizeJupiterBaseUrl(jupiter.apiBaseUrl),
+    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ? normalizeJupiterBaseUrl(jupiter.tokensApiBaseUrl) : null,
     jupiterApiKeyConfigured: jupiter.apiKeyConfigured,
     jupiterTimeoutMs: jupiter.timeoutMs,
   });
 }
 
 function normalizeJupiterGatewayConfig(jupiter?: Partial<JupiterGatewayConfig>): JupiterGatewayConfig {
+  const apiKeyConfigured = jupiter?.apiKeyConfigured ?? Boolean(readJupiterApiKey());
   return {
-    apiBaseUrl: jupiter?.apiBaseUrl ?? DEFAULT_JUPITER_GATEWAY_CONFIG.apiBaseUrl,
-    tokensApiBaseUrl: jupiter?.tokensApiBaseUrl,
-    apiKeyConfigured: jupiter?.apiKeyConfigured ?? Boolean(process.env.SAP_MCP_JUPITER_API_KEY?.trim()),
+    apiBaseUrl: normalizeJupiterBaseUrl(jupiter?.apiBaseUrl ?? DEFAULT_JUPITER_GATEWAY_CONFIG.apiBaseUrl),
+    tokensApiBaseUrl: jupiter?.tokensApiBaseUrl ? normalizeJupiterBaseUrl(jupiter.tokensApiBaseUrl) : undefined,
+    apiKeyConfigured,
     timeoutMs: jupiter?.timeoutMs ?? DEFAULT_JUPITER_GATEWAY_CONFIG.timeoutMs,
   };
 }
 
 function readJupiterApiKey(): string | undefined {
-  const apiKey = process.env.SAP_MCP_JUPITER_API_KEY?.trim();
+  const apiKey = process.env.SAP_MCP_JUPITER_API_KEY?.trim()
+    || process.env.JUPITER_API_KEY?.trim()
+    || process.env.JUP_API_KEY?.trim();
   return apiKey ? apiKey : undefined;
+}
+
+/**
+ * @name normalizeJupiterBaseUrl
+ * @description Keeps Jupiter API config pointed at the API root. Operators
+ * sometimes paste a product endpoint such as /swap/v1 or /price/v3 into the
+ * env var; the Client SDK appends its own route paths, so endpoint paths here
+ * create 404/401 noise even when the API key is valid.
+ */
+export function normalizeJupiterBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(trimmed);
+    url.pathname = url.pathname
+      .replace(/\/(?:price|swap|ultra|trigger|recurring)\/v\d+(?:\/.*)?$/i, '')
+      .replace(/\/+$/, '');
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return trimmed;
+  }
 }
 
 async function initializeClientSdk(rpcUrl: string, jupiter: JupiterGatewayConfig): Promise<void> {

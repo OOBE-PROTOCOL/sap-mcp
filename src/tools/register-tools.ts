@@ -20,6 +20,7 @@ import { registerEstimateToolCost } from './estimate-tool-cost.js';
 import { registerQuickContextTool } from './quick-context-tool.js';
 import { registerPremiumTools } from './premium-tools.js';
 import { registerPerpTools } from './perp-tools.js';
+import { registerAdrenaTools } from './adrena-tools.js';
 
 /**
  * Register all tools with the MCP server.
@@ -82,6 +83,10 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
 
   // Register perp trading and chart analysis tools (Adrena + DexScreener + DeFiLlama).
   registerPerpTools(server, context);
+
+  // Register Adrena perps protocol tools: local builders + Data API.
+  // 32 tools: trading, SL/TP, limit orders, commodities, liquidity, swap, staking, data API.
+  registerAdrenaTools(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);

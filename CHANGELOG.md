@@ -2,6 +2,64 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.38 - 2026-07-27
+
+### Added — Native Adrena Perps Builder + Data API
+
+- **32 new Adrena tools** that let agents trade, manage liquidity, stake, and
+  read market data from the Adrena protocol entirely on-chain:
+  - **Trading builders (10):** `sap_adrena_build_open_long`,
+    `sap_adrena_build_open_short`, `sap_adrena_build_close_long`,
+    `sap_adrena_build_close_short`, `sap_adrena_build_set_stop_loss`,
+    `sap_adrena_build_set_take_profit`, `sap_adrena_build_cancel_stop_loss`,
+    `sap_adrena_build_cancel_take_profit`, `sap_adrena_build_add_limit_order`,
+    `sap_adrena_build_cancel_limit_order`.
+  - **Commodity builders (4):** `sap_adrena_build_open_commodity_long`,
+    `sap_adrena_build_open_commodity_short`,
+    `sap_adrena_build_close_commodity_long`,
+    `sap_adrena_build_close_commodity_short` for synthetic perps (XAU, XAG,
+    WTI).
+  - **Liquidity & Swap (3):** `sap_adrena_build_add_liquidity`,
+    `sap_adrena_build_remove_liquidity`, `sap_adrena_build_swap`.
+  - **Staking (5):** `sap_adrena_build_init_user_staking`,
+    `sap_adrena_build_add_liquid_stake`,
+    `sap_adrena_build_remove_liquid_stake`,
+    `sap_adrena_build_add_locked_stake`, `sap_adrena_build_claim_stakes`.
+  - **Data API (10):** `sap_adrena_get_positions`,
+    `sap_adrena_get_pool_info`, `sap_adrena_get_custody_info`,
+    `sap_adrena_get_trader_info`, `sap_adrena_get_trader_leaderboard`,
+    `sap_adrena_get_mutagen`, `sap_adrena_get_mutagen_leaderboard`,
+    `sap_adrena_get_prices`, `sap_adrena_get_trading_prices`,
+    `sap_adrena_get_position_status`.
+
+- All builder tools construct **unsigned Solana transactions locally** using
+  the vendored Adrena Anchor IDL (release/39) via `@coral-xyz/anchor`. The
+  agent signs locally via `sap_payments_finalize_transaction` — SAP MCP never
+  signs user-owned Adrena transactions. No external builder URL is required.
+
+- Vendored the official Adrena IDL (`adrena-idl.json`, 131 instructions) from
+  `AdrenaFoundation/adrena-abi` at `src/perps/adrena/`.
+
+- New module `src/perps/adrena/` with:
+  - `adrena-constants.ts` — program ID, PDA seeds, custody addresses, token
+    mints, pool addresses.
+  - `adrena-pda.ts` — 20 PDA derivation helpers (Cortex, Pool, Custody,
+    Position, UserProfile, LimitOrderBook, CollateralEscrow, Staking, etc.).
+  - `adrena-builder.ts` — 22 builder functions that produce unsigned base64
+    transactions for every Adrena operation.
+  - `adrena-data-api.ts` — REST client for `datapi.adrena.trade` (positions,
+    pool/custody stats, trader leaderboards, mutagen points, oracle prices).
+
+- The `adrena-sdk@beta` npm package was inspected and found to ship only
+  `.d.ts` files without runtime `.js` — the package is broken on npm. We
+  therefore used the official IDL directly with `@coral-xyz/anchor` instead
+  of depending on the SDK.
+
+- `sap_perp_builder_status` now reports `nativeAdrenaBuilder.available: true`
+  for all local builder operations. No `SAP_MCP_PERPS_BUILDER_URL` is needed.
+
+- Tool count updated from 329 to 361. Server metadata categories updated.
+
 ## 0.9.37 - 2026-07-27
 
 ### Fixed — Hosted Gateway Pricing And Transport Friction
@@ -17,6 +75,33 @@ All notable changes to this project are documented in this file.
   `jupiter_getPrice` now accepts common agent inputs like `mint`, `id`,
   `token`, or `address` and maps them to canonical `ids[]`, while preserving
   canonical schemas and not overriding explicit `ids`.
+- Normalized configured Jupiter base URLs back to the API root when operators
+  paste product endpoints such as `/swap/v1`, `/swap/v1/quote`, `/price/v3`,
+  or `/ultra/v1`. The hosted gateway now works with server-side Jupiter keys
+  without accidentally double-appending SDK routes.
+- Added explicit perps readiness. `sap_perp_markets` now decodes Adrena
+  Pool/Custody accounts directly from Solana RPC when no enrichment provider is
+  configured, and `sap_perp_builder_status` tells agents whether perps
+  execution is available before any paid execution attempt.
+- Fixed the on-chain perps account scan to encode Anchor discriminators as raw
+  8-byte base58 values instead of coercing them into Solana public keys. This
+  fixes false-empty Adrena market scans on indexed/full-history RPCs.
+- Replaced heuristic Adrena offset scanning with native release/39 ABI decoders
+  for Pool, Custody, and Position accounts, including the correct Position owner
+  memcmp offset (`16`) and explicit `markPrice: null` when custody data does not
+  contain a live mark price.
+- Added `SAP_MCP_PERPS_ADRENA_PROGRAM_ID` so hosted operators can update the
+  scanned perps program without changing client/runtime configs.
+- Added an optional hosted unsigned perps builder surface,
+  `sap_perp_build_order_transaction`, registered only when
+  `SAP_MCP_PERPS_BUILDER_URL` is configured. Until then, agents are instructed
+  to stop at analysis and avoid temporary signing scripts or direct wallet
+  reads.
+- Documented why Adrena execution builders remain disabled by default:
+  inspected `adrena-sdk@beta` / `adrena-sdk-ts@beta` npm tarballs expose type
+  declarations but lack the JavaScript runtime files needed by their package
+  entrypoints, so SAP MCP will wait for a verified runtime SDK, vendored codegen,
+  or signed-off unsigned builder provider before exposing perps execution.
 
 ## 0.9.36 - 2026-07-27
 

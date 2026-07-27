@@ -129,6 +129,7 @@ const FREE_TOOLS = new Set([
   'sap_premium_webhook_relay_status',
   'sap_premium_metrics',
   'sap_quick_context',
+  'sap_perp_builder_status',
   // Payment readiness and single-asset price checks stay free so agents can
   // decide whether a user wallet needs SOL/USDC before any paid attempt.
   'sol_get_balance',
@@ -205,6 +206,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_premium_webhook_relay_status',
   'sap_premium_metrics',
   'sap_quick_context',
+  'sap_perp_builder_status',
   // Payment readiness and single-asset price checks stay free in strict mode too.
   'sol_get_balance',
   'spl-token_getBalance',
@@ -318,6 +320,7 @@ const BUILDER_TOOLS = new Set([
   'sap_x402_build_headers_from_escrow',
   'sap_build_sol_transfer',
   'sap_build_spl_transfer',
+  'sap_perp_build_order_transaction',
   'jupiter_swapInstructions',
   'magicblock_deposit',
   'magicblock_transfer',
@@ -451,7 +454,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.builderUsd, config),
         pricingRule: 'Flat builder fee for unsigned transaction builders, batched domain checks, payment-header builders, routing builders, and complex pre-execution preparation.',
-        examples: ['sap_escrow_build_create_transaction', 'sap_sns_build_manage_record_transaction', 'jupiter_swapInstructions'],
+        examples: ['sap_escrow_build_create_transaction', 'sap_sns_build_manage_record_transaction', 'sap_perp_build_order_transaction', 'jupiter_swapInstructions'],
       },
       'value-action': {
         paymentRequired: true,
@@ -484,6 +487,7 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'Use sap_estimate_tool_cost before any paid tool call to know the exact tier, estimated USD cost, and recommended maxPriceUsd. This avoids silent cap aborts and failed x402 attempts on local-signer-only tools.',
       'Call sap_agent_next_action before retrying payment_required, hosted_local_signer_required, transient RPC failures, missing sap_payments, or submitted signatures that have not confirmed.',
       'Call sap_prepare_action before swaps, registry writes, escrow, external x402 calls, premium streams, or transaction finalization. It returns the fresh-data requirements, local/hosted route, confirmation policy, retry rules, and proof-tape shape without charging x402.',
+      'Call sap_perp_builder_status before any perps execution request. Perps analytics can run from hosted data/RPC, but sap_perp_build_order_transaction is registered only when a real unsigned builder provider is configured.',
       'Use session memory for operational context and audit only. Never use memory as cached truth for token prices, Jupiter quotes/orders, balances, blockhashes, simulations, liquidity, routes, or agent account state.',
       `sap_list_agents compact pages with limit <= ${FREE_DIRECTORY_LIMIT} are micro-read. Larger pages, full hydration, sap_discover_agents, and sap_list_all_agents are read-premium.`,
       'Use sap_payments_call_paid_tool for hosted paid tools when the runtime does not replay x402 natively.',
