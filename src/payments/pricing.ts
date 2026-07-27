@@ -264,6 +264,17 @@ const MICRO_READ_TOOLS = new Set([
   'sap_chart_ohlc',
   'sap_chart_long_term',
   'sap_chart_volume_profile',
+  // Adrena Data API — lightweight REST reads from datapi.adrena.trade.
+  'sap_adrena_get_positions',
+  'sap_adrena_get_pool_info',
+  'sap_adrena_get_custody_info',
+  'sap_adrena_get_trader_info',
+  'sap_adrena_get_trader_leaderboard',
+  'sap_adrena_get_mutagen',
+  'sap_adrena_get_mutagen_leaderboard',
+  'sap_adrena_get_prices',
+  'sap_adrena_get_trading_prices',
+  'sap_adrena_get_position_status',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -327,6 +338,29 @@ const BUILDER_TOOLS = new Set([
   'magicblock_withdraw',
   'magicblock_initializeMint',
   'magicblock_requestRandomness',
+  // Adrena perps protocol — local unsigned transaction builders.
+  'sap_adrena_build_open_long',
+  'sap_adrena_build_open_short',
+  'sap_adrena_build_close_long',
+  'sap_adrena_build_close_short',
+  'sap_adrena_build_set_stop_loss',
+  'sap_adrena_build_set_take_profit',
+  'sap_adrena_build_cancel_stop_loss',
+  'sap_adrena_build_cancel_take_profit',
+  'sap_adrena_build_add_limit_order',
+  'sap_adrena_build_cancel_limit_order',
+  'sap_adrena_build_open_commodity_long',
+  'sap_adrena_build_open_commodity_short',
+  'sap_adrena_build_close_commodity_long',
+  'sap_adrena_build_close_commodity_short',
+  'sap_adrena_build_add_liquidity',
+  'sap_adrena_build_remove_liquidity',
+  'sap_adrena_build_swap',
+  'sap_adrena_build_init_user_staking',
+  'sap_adrena_build_add_liquid_stake',
+  'sap_adrena_build_remove_liquid_stake',
+  'sap_adrena_build_add_locked_stake',
+  'sap_adrena_build_claim_stakes',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([
