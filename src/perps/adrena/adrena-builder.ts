@@ -22,6 +22,7 @@ import {
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
 import BN from 'bn.js';
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { AdrenaDataApiClient, type AdrenaTradingPrice } from './adrena-data-api.js';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,
@@ -175,6 +176,33 @@ function getMintPublicKey(symbol: string): PublicKey {
 function createAtaIdempotentIx(owner: PublicKey, mint: PublicKey, payer: PublicKey): TransactionInstruction {
   const ata = getAssociatedTokenAddressSync(mint, owner);
   return createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint);
+}
+
+/**
+ * Read the current oracle price for a token from the Adrena Data API.
+ * Returns the price as a BigInt scaled by 10^10 (PRICE_DECIMALS).
+ *
+ * @param principalToken — Token symbol (SOL, BONK, BTC, etc.)
+ * @returns Price as BigInt scaled by 10^10, or BigInt(0) if fetch fails.
+ */
+async function fetchOraclePrice(principalToken: string): Promise<bigint> {
+  try {
+    const client = new AdrenaDataApiClient();
+    const prices = await client.getLastTradingPrices();
+    if (!prices) return BigInt(0);
+    const tokenUpper = principalToken.toUpperCase();
+    const priceEntry = prices.find(
+      (p: AdrenaTradingPrice) => p.symbol.toUpperCase() === tokenUpper,
+    );
+    if (priceEntry && priceEntry.priceUsd > 0) {
+      // Price from API is a float USD value. Scale to 10^10 (PRICE_DECIMALS).
+      const scaled = Math.floor(priceEntry.priceUsd * Math.pow(10, 10));
+      return BigInt(scaled);
+    }
+  } catch {
+    // Data API unavailable — return 0 and let the program handle it.
+  }
+  return BigInt(0);
 }
 
 /**
@@ -418,7 +446,7 @@ export async function buildOpenPositionLong(
   const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
-  const priceRaw = price ?? BigInt(0);
+  const priceRaw = price ?? await fetchOraclePrice(principalToken);
 
   // Ensure the funding ATA exists before the Adrena instruction.
   const collateralMint = getMintPublicKey(collateralToken);
@@ -495,7 +523,7 @@ export async function buildOpenPositionShort(
   const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
-  const priceRaw = price ?? BigInt(0);
+  const priceRaw = price ?? await fetchOraclePrice(principalToken);
 
   // Ensure the funding ATA exists before the Adrena instruction.
   const collateralMint = getMintPublicKey(collateralToken);
@@ -1551,7 +1579,7 @@ async function buildOpenPositionLongInternal(
   const referrerProfile = null;
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
-  const priceRaw = price ?? BigInt(0);
+  const priceRaw = price ?? await fetchOraclePrice(principalToken);
 
   // Ensure the funding ATA exists before the Adrena instruction.
   const collateralMint = getMintPublicKey(collateralToken);
