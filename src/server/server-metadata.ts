@@ -56,8 +56,21 @@ export const SERVER_METADATA = {
  *
  * @usedBy `server/index.ts`, monitoring and health endpoints.
  */
+/**
+ * @name CAPABILITIES
+ * @description Summary of registered MCP capabilities and their category counts.
+ *
+ * `tools.count` is a static fallback used when the server is not yet
+ * initialized. For the real count, use `getDynamicToolCount(server)`.
+ *
+ * @property tools.count       — Total number of registered tools (static fallback).
+ * @property tools.categories  — Tool counts by category (sap, sns, agentKit, etc.).
+ *
+ * @usedBy `server/index.ts`, monitoring and health endpoints.
+ */
 export const CAPABILITIES = {
   tools: {
+    /** Static fallback count. Use getDynamicToolCount() for the real count. */
     count: 362,
     categories: {
       sap: 75,
@@ -72,7 +85,7 @@ export const CAPABILITIES = {
       premium: 17,
       quickContext: 1,
       perps: 9,
-      adrena: 32,
+      adrena: 33,
     },
   },
 };

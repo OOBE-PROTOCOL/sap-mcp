@@ -275,21 +275,10 @@ export function deriveStakingLmRewardTokenVaultPda(staking: PublicKey): PublicKe
 
 /**
  * Derive the associated token account address for a wallet and mint.
- * Uses the SPL Associated Token Account program with the standard seed layout:
- *   [owner, TOKEN_PROGRAM_ID, mint]
- * (No "AssociatedTokenAddress" prefix — that was an incorrect assumption.)
+ * Re-exported from the shared `solana/ata-utils` module for backward compat.
+ * New code should import from `solana/ata-utils.ts` directly.
  * @param owner — Wallet public key.
  * @param mint — Token mint public key.
  * @returns ATA public key.
  */
-export function deriveAta(owner: PublicKey, mint: PublicKey): PublicKey {
-  const ASSOCIATED_TOKEN_PROGRAM = new PublicKey(
-    'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
-  );
-  const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-  const [pda] = PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), mint.toBuffer()],
-    ASSOCIATED_TOKEN_PROGRAM,
-  );
-  return pda;
-}
+export { deriveAtaAddress as deriveAta } from '../../solana/ata-utils.js';

@@ -995,37 +995,16 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         const destOwnerKey = new PublicKey(destinationOwner);
         const mintKey = new PublicKey(mint);
 
-        // Derive Associated Token Account addresses using the standard SPL
-        // seed layout: [owner, TOKEN_PROGRAM_ID, mint] — NO string prefix.
-        // The Associated Token Account program does NOT use a "AssociatedTokenAddress"
-        // prefix in its PDA seeds. Using one produces a wrong ATA address.
-        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        // Derive ATA addresses using the shared helper for consistency.
+        const { deriveAtaAddress, createAtaIdempotentIx } = await import('../solana/ata-utils.js');
+        const sourceAta = deriveAtaAddress(sourceOwnerKey, mintKey);
+        const destAta = deriveAtaAddress(destOwnerKey, mintKey);
 
-        const [sourceAta] = PublicKey.findProgramAddressSync(
-          [sourceOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-        );
-        const [destAta] = PublicKey.findProgramAddressSync(
-          [destOwnerKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintKey.toBuffer()],
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-        );
-
-        // CreateAssociatedTokenAccountIdempotent instruction (index 1).
-        const createAtaInstruction = new TransactionInstruction({
-          programId: ASSOCIATED_TOKEN_PROGRAM_ID,
-          keys: [
-            { pubkey: sourceOwnerKey, isSigner: true, isWritable: true },
-            { pubkey: destAta, isSigner: false, isWritable: true },
-            { pubkey: destOwnerKey, isSigner: false, isWritable: false },
-            { pubkey: mintKey, isSigner: false, isWritable: false },
-            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-            { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-          ],
-          data: Buffer.from([0x01]), // CreateAssociatedTokenAccountIdempotent instruction index = 1
-        });
+        // Use the official @solana/spl-token instruction instead of manual construction.
+        const createAtaInstruction = createAtaIdempotentIx(sourceOwnerKey, destOwnerKey, mintKey);
 
         // Token Transfer instruction (0x03 + 64-bit amount in little-endian).
+        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
         const transferData = Buffer.alloc(9);
         transferData.writeUInt8(3, 0); // Transfer instruction discriminator
         transferData.writeBigUInt64LE(BigInt(amount), 1);
