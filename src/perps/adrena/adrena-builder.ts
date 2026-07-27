@@ -163,6 +163,69 @@ function getMintPublicKey(symbol: string): PublicKey {
   return new PublicKey(mint);
 }
 
+/** Solana Associated Token Program ID constant. */
+const ASSOCIATED_TOKEN_PROGRAM = new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID);
+
+/** Solana Token Program ID constant. */
+const TOKEN_PROGRAM = new PublicKey(TOKEN_PROGRAM_ID);
+
+/** Solana System Program ID constant. */
+const SYSTEM_PROGRAM = new PublicKey(SYSTEM_PROGRAM_ID);
+
+/**
+ * Build a CreateAssociatedTokenAccountIdempotent instruction.
+ * This instruction creates the ATA if it doesn't exist, and is a no-op if it does.
+ * Used before Adrena instructions to ensure the funding/receiving account exists.
+ *
+ * @param owner — Wallet public key that will own the ATA.
+ * @param mint — Token mint public key.
+ * @param payer — Fee payer public key (usually the owner).
+ * @returns TransactionInstruction for CreateAssociatedTokenAccountIdempotent.
+ */
+function createAtaIdempotentIx(owner: PublicKey, mint: PublicKey, payer: PublicKey): TransactionInstruction {
+  const ata = deriveAta(owner, mint);
+  return new TransactionInstruction({
+    programId: ASSOCIATED_TOKEN_PROGRAM,
+    keys: [
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: ata, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: false, isWritable: false },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: SYSTEM_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.from([0x1e]), // CreateAssociatedTokenAccountIdempotent instruction discriminator
+  });
+}
+
+/**
+ * Check if an ATA exists on-chain. If it does, return an empty array.
+ * If it doesn't, return a CreateAssociatedTokenAccountIdempotent instruction.
+ *
+ * @param connection — Solana RPC connection.
+ * @param owner — Wallet public key.
+ * @param mint — Token mint public key.
+ * @param payer — Fee payer public key.
+ * @returns Array of instructions (empty if ATA exists, or [createATAIx] if not).
+ */
+async function ensureAtaInstructions(
+  connection: Connection,
+  owner: PublicKey,
+  mint: PublicKey,
+  payer: PublicKey,
+): Promise<TransactionInstruction[]> {
+  const ata = deriveAta(owner, mint);
+  try {
+    const accountInfo = await connection.getAccountInfo(ata);
+    if (accountInfo && accountInfo.data.length > 0) {
+      return []; // ATA exists, no instruction needed.
+    }
+  } catch {
+    // Account check failed — include create instruction as safety.
+  }
+  return [createAtaIdempotentIx(owner, mint, payer)];
+}
+
 /**
  * Create an Anchor Program instance from the vendored IDL.
  * @param connection — Solana RPC connection.
@@ -298,6 +361,10 @@ export async function buildOpenPositionLong(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
+  // Ensure the funding ATA exists before the Adrena instruction.
+  const collateralMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionLong', [
     {
       price: toBN(priceRaw),
@@ -325,7 +392,7 @@ export async function buildOpenPositionLong(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position);
 }
 
@@ -367,6 +434,10 @@ export async function buildOpenPositionShort(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
+  // Ensure the funding ATA exists before the Adrena instruction.
+  const collateralMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
+
   const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [
     {
       price: toBN(priceRaw),
@@ -394,7 +465,7 @@ export async function buildOpenPositionShort(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position);
 }
 
@@ -429,6 +500,10 @@ export async function buildClosePositionLong(
   const receivingAccount = deriveAta(owner, getMintPublicKey(principalToken));
   const referrerProfile = PublicKey.default;
 
+  // Ensure the receiving ATA exists before closing.
+  const receivingMint = getMintPublicKey(principalToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
+
   const ix = await buildInstruction(program, 'closePositionLong', [
     {
       price: toBNOrNull(price),
@@ -455,7 +530,7 @@ export async function buildClosePositionLong(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, ['closePositionLong'], position);
 }
 
@@ -492,6 +567,10 @@ export async function buildClosePositionShort(
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
+  // Ensure the receiving ATA exists before closing.
+  const receivingMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
+
   const ix = await buildInstruction(program, 'closePositionShort', [
     {
       price: toBNOrNull(price),
@@ -518,7 +597,7 @@ export async function buildClosePositionShort(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, ['closePositionShort'], position);
 }
 
@@ -1399,6 +1478,10 @@ async function buildOpenPositionLongInternal(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
+  // Ensure the funding ATA exists before the Adrena instruction.
+  const collateralMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, collateralMint, owner);
+
   const ix = await buildInstruction(program, ixName, [
     {
       price: toBN(priceRaw),
@@ -1426,7 +1509,7 @@ async function buildOpenPositionLongInternal(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, [ixName], position);
 }
 
@@ -1454,6 +1537,10 @@ async function buildClosePositionLongInternal(
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
+  // Ensure the receiving ATA exists before closing.
+  const receivingMint = getMintPublicKey(collateralToken);
+  const preInstructions = await ensureAtaInstructions(connection, owner, receivingMint, owner);
+
   const ix = await buildInstruction(program, ixName, [
     {
       price: toBNOrNull(price),
@@ -1480,7 +1567,7 @@ async function buildClosePositionLongInternal(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...preInstructions, ix]);
   return buildResult(transactionBase64, owner, [ixName], position);
 }
 
