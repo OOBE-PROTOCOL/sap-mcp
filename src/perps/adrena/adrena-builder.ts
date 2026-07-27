@@ -184,16 +184,16 @@ function createAdrenaProgram(connection: Connection): Program {
  * @param accounts — Account public keys by name.
  * @returns web3.js TransactionInstruction.
  */
-function buildInstruction(
+async function buildInstruction(
   program: Program,
   ixName: string,
   args: unknown[],
   accounts: Record<string, PublicKey>,
-): TransactionInstruction {
-  // Anchor v0.30 exposes methods via program.methods
-  // We use the lower-level approach: program.instruction[ixName](args, { accounts })
+): Promise<TransactionInstruction> {
+  // Anchor v0.30 exposes methods via program.methods.
+  // .instruction() is async and returns a Promise<TransactionInstruction>.
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
-    accounts: (accs: Record<string, PublicKey>) => { instruction: () => TransactionInstruction };
+    accounts: (accs: Record<string, PublicKey>) => { instruction: () => Promise<TransactionInstruction> };
   }>;
 
   const ixBuilder = methods[ixName];
@@ -203,7 +203,7 @@ function buildInstruction(
 
   const ixWithArgs = ixBuilder(...args);
   const ixWithAccounts = ixWithArgs.accounts(accounts);
-  return ixWithAccounts.instruction();
+  return await ixWithAccounts.instruction();
 }
 
 /**
@@ -298,7 +298,7 @@ export async function buildOpenPositionLong(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
-  const ix = buildInstruction(program, 'openOrIncreasePositionLong', [
+  const ix = await buildInstruction(program, 'openOrIncreasePositionLong', [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
@@ -367,7 +367,7 @@ export async function buildOpenPositionShort(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
-  const ix = buildInstruction(program, 'openOrIncreasePositionShort', [
+  const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
@@ -429,7 +429,7 @@ export async function buildClosePositionLong(
   const receivingAccount = deriveAta(owner, getMintPublicKey(principalToken));
   const referrerProfile = PublicKey.default;
 
-  const ix = buildInstruction(program, 'closePositionLong', [
+  const ix = await buildInstruction(program, 'closePositionLong', [
     {
       price: toBNOrNull(price),
       oraclePrices: null,
@@ -492,7 +492,7 @@ export async function buildClosePositionShort(
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
-  const ix = buildInstruction(program, 'closePositionShort', [
+  const ix = await buildInstruction(program, 'closePositionShort', [
     {
       price: toBNOrNull(price),
       oraclePrices: null,
@@ -551,7 +551,7 @@ export async function buildSetStopLoss(
   const position = derivePositionPda(owner, pool, custody, side);
   const ixName = side === 'long' ? 'setStopLossLong' : 'setStopLossShort';
 
-  const ix = buildInstruction(program, ixName, [
+  const ix = await buildInstruction(program, ixName, [
     {
       stopLossLimitPrice: toBN(stopLossLimitPrice),
       closePositionPrice: toBNOrNull(closePositionPrice),
@@ -594,7 +594,7 @@ export async function buildSetTakeProfit(
   const position = derivePositionPda(owner, pool, custody, side);
   const ixName = side === 'long' ? 'setTakeProfitLong' : 'setTakeProfitShort';
 
-  const ix = buildInstruction(program, ixName, [
+  const ix = await buildInstruction(program, ixName, [
     {
       takeProfitLimitPrice: toBN(takeProfitLimitPrice),
     },
@@ -632,7 +632,7 @@ export async function buildCancelStopLoss(
   const cortex = deriveCortexPda();
   const position = derivePositionPda(owner, pool, custody, side);
 
-  const ix = buildInstruction(program, 'cancelStopLoss', [], {
+  const ix = await buildInstruction(program, 'cancelStopLoss', [], {
     owner,
     cortex,
     pool,
@@ -666,7 +666,7 @@ export async function buildCancelTakeProfit(
   const cortex = deriveCortexPda();
   const position = derivePositionPda(owner, pool, custody, side);
 
-  const ix = buildInstruction(program, 'cancelTakeProfit', [], {
+  const ix = await buildInstruction(program, 'cancelTakeProfit', [], {
     owner,
     cortex,
     pool,
@@ -720,7 +720,7 @@ export async function buildAddLimitOrder(
 
   const amountRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
 
-  const ix = buildInstruction(program, 'addLimitOrder', [
+  const ix = await buildInstruction(program, 'addLimitOrder', [
     {
       triggerPrice: toBN(triggerPrice),
       limitPrice: toBNOrNull(limitPrice),
@@ -774,7 +774,7 @@ export async function buildCancelLimitOrder(
   const collateralCustodyMint = getMintPublicKey(collateralToken);
   const receivingAccount = deriveAta(owner, collateralCustodyMint);
 
-  const ix = buildInstruction(program, 'cancelLimitOrder', [
+  const ix = await buildInstruction(program, 'cancelLimitOrder', [
     {
       id: toBN(orderId),
     },
@@ -833,7 +833,7 @@ export async function buildAddLiquidity(
 
   const amountRaw = BigInt(Math.floor(amountIn * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
 
-  const ix = buildInstruction(program, 'addLiquidity', [
+  const ix = await buildInstruction(program, 'addLiquidity', [
     {
       amountIn: toBN(amountRaw),
       minLpAmountOut: toBN(minLpAmountOut),
@@ -891,7 +891,7 @@ export async function buildRemoveLiquidity(
   const lpTokenAccount = deriveAta(owner, lpTokenMint);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
 
-  const ix = buildInstruction(program, 'removeLiquidity', [
+  const ix = await buildInstruction(program, 'removeLiquidity', [
     {
       lpAmountIn: toBN(lpAmountIn),
       minAmountOut: toBN(minAmountOut),
@@ -951,7 +951,7 @@ export async function buildSwap(
 
   const amountRaw = BigInt(Math.floor(amountIn * Math.pow(10, ADRENA_CUSTODIES[fromToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
 
-  const ix = buildInstruction(program, 'swap', [
+  const ix = await buildInstruction(program, 'swap', [
     {
       amountIn: toBN(amountRaw),
       minAmountOut: toBN(minAmountOut),
@@ -1006,7 +1006,7 @@ export async function buildInitUserStaking(
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
   const transferAuthority = deriveTransferAuthorityPda();
 
-  const ix = buildInstruction(program, 'initUserStaking', [], {
+  const ix = await buildInstruction(program, 'initUserStaking', [], {
     caller: owner,
     payer: owner,
     owner,
@@ -1062,7 +1062,7 @@ export async function buildAddLiquidStake(
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
 
-  const ix = buildInstruction(program, 'addLiquidStake', [
+  const ix = await buildInstruction(program, 'addLiquidStake', [
     { amount: toBN(amount) },
   ], {
     owner,
@@ -1127,7 +1127,7 @@ export async function buildRemoveLiquidStake(
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
 
-  const ix = buildInstruction(program, 'removeLiquidStake', [
+  const ix = await buildInstruction(program, 'removeLiquidStake', [
     { amount: toBN(amount) },
   ], {
     owner,
@@ -1190,7 +1190,7 @@ export async function buildAddLockedStake(
   const stakingStakedTokenVault = deriveStakingStakedTokenVaultPda(staking);
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
 
-  const ix = buildInstruction(program, 'addLockedStake', [
+  const ix = await buildInstruction(program, 'addLockedStake', [
     { amount: toBN(amount), lockedDays },
   ], {
     owner,
@@ -1248,7 +1248,7 @@ export async function buildClaimStakes(
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
   const stakingLmRewardTokenVault = deriveStakingLmRewardTokenVaultPda(staking);
 
-  const ix = buildInstruction(program, 'claimStakes', [
+  const ix = await buildInstruction(program, 'claimStakes', [
     {
       lockedStakeIndexes: lockedStakeIndexes
         ? Buffer.from(lockedStakeIndexes.flatMap((i) => [i & 0xff, (i >> 8) & 0xff, (i >> 16) & 0xff, (i >> 24) & 0xff]))
@@ -1399,7 +1399,7 @@ async function buildOpenPositionLongInternal(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? BigInt(0);
 
-  const ix = buildInstruction(program, ixName, [
+  const ix = await buildInstruction(program, ixName, [
     {
       price: toBN(priceRaw),
       collateral: toBN(collateralRaw),
@@ -1454,7 +1454,7 @@ async function buildClosePositionLongInternal(
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
-  const ix = buildInstruction(program, ixName, [
+  const ix = await buildInstruction(program, ixName, [
     {
       price: toBNOrNull(price),
       oraclePrices: null,
