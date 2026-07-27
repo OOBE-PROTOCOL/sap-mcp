@@ -117,19 +117,40 @@ export const ADRENA_CUSTODIES = {
   WTI: { address: 'De21TFyUPHkvFsWAt6xJLBBXGp636VuL5cKk2DvfbHiR', pool: ADRENA_COMMODITIES_POOL_ADDRESS, symbol: 'WTI', decimals: 6, kind: 'synthetic-perp' },
 } as const;
 
-/** Adrena token mint addresses by symbol. */
+/**
+ * Adrena token mint addresses by symbol.
+ * These are read directly from the on-chain custody accounts (mint field at
+ * byte offset 48) — NOT hardcoded guesses. Synthetic commodities (XAU, XAG,
+ * WTI) use the System Program address (111...111) because they have no SPL
+ * token; they are price-oracle-only assets.
+ *
+ * Verified on 2025-07-27 against mainnet custody accounts.
+ */
 export const ADRENA_TOKEN_MINTS: Record<string, string> = {
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-  JITOSOL: 'J1toso1uCk3RLmjorhT3VnYEXW1yC7KqkKJZkFJQqLp',
-  WBTC: '3NZ9JMVBm1E9dBE3leTet7Lkf3M2kKq3xZ2nEF3fGwxb',
+  JITOSOL: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
+  WBTC: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh',
   BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
 };
 
-/** Adrena fee redistribution mint (ADX). */
-export const ADRENA_FEE_REDISTRIBUTION_MINT = '2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6';
+/**
+ * Adrena fee redistribution mint (ADX — governance token).
+ * This is the PDA-derived governance token mint: [Buffer.from("governance_token_mint")].
+ * Verified on-chain: supply 1.53B, 6 decimals, mint authority = Adrena program.
+ *
+ * Was previously a hardcoded placeholder with non-base58 characters that caused
+ * "Non-base58 character" errors in PublicKey construction.
+ */
+export const ADRENA_FEE_REDISTRIBUTION_MINT = 'G3T7ZLw2UHLejCQe3LxdUgme7kqRrNq379sLd95iJdEv';
 
 /** Adrena Data API base URL. */
 export const ADRENA_DATA_API_BASE_URL = 'https://datapi.adrena.trade';
 
-/** Adrena lookup table address (for Jito bundles — not required for unsigned tx building). */
-export const ADRENA_LOOKUP_TABLE_ADDRESS = 'AuY9PZk8k2y7Fw3k4LqM3vN8o1xJ5rW2hY6tZ9bC4sD';
+/**
+ * Adrena lookup table address for Jito bundles.
+ * This is NOT required for unsigned transaction building — the builder
+ * constructs standard legacy transactions. If Jito bundle support is needed
+ * in the future, fetch the real LUT address from the Adrena program at
+ * runtime rather than hardcoding a placeholder.
+ */
+export const ADRENA_LOOKUP_TABLE_ADDRESS: string | null = null;

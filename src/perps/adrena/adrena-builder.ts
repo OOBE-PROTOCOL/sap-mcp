@@ -29,6 +29,7 @@ import {
   ADRENA_COMMODITIES_POOL_ADDRESS,
   ADRENA_CUSTODIES,
   ADRENA_TOKEN_MINTS,
+  ADRENA_FEE_REDISTRIBUTION_MINT,
   TOKEN_PROGRAM_ID,
   SYSTEM_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -1582,7 +1583,7 @@ export async function buildInitUserStaking(
   const staking = deriveStakingPda(lpTokenMint);
   const userStaking = deriveUserStakingPda(owner, staking);
   const lmTokenMint = deriveLmTokenMintPda();
-  const feeRedistributionMint = new PublicKey('2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6');
+  const feeRedistributionMint = new PublicKey(ADRENA_FEE_REDISTRIBUTION_MINT);
   const rewardTokenAccount = deriveAta(owner, feeRedistributionMint);
   const lmTokenAccount = deriveAta(owner, lmTokenMint);
   const stakingRewardTokenVault = deriveStakingRewardTokenVaultPda(staking);
@@ -1655,7 +1656,7 @@ export async function buildAddLiquidStake(
   const lmTokenTreasury = deriveLmTokenTreasuryPda(cortex);
   const lmTokenMint = deriveLmTokenMintPda();
   const governanceTokenMint = deriveGovernanceTokenMintPda();
-  const feeRedistributionMint = new PublicKey('2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6');
+  const feeRedistributionMint = new PublicKey(ADRENA_FEE_REDISTRIBUTION_MINT);
   const transferAuthority = deriveTransferAuthorityPda();
   const fundingAccount = deriveAta(owner, lpTokenMint);
   const rewardTokenAccount = deriveAta(owner, feeRedistributionMint);
@@ -1739,7 +1740,7 @@ export async function buildRemoveLiquidStake(
   const lmTokenTreasury = deriveLmTokenTreasuryPda(cortex);
   const lmTokenMint = deriveLmTokenMintPda();
   const governanceTokenMint = deriveGovernanceTokenMintPda();
-  const feeRedistributionMint = new PublicKey('2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6');
+  const feeRedistributionMint = new PublicKey(ADRENA_FEE_REDISTRIBUTION_MINT);
   const transferAuthority = deriveTransferAuthorityPda();
   const stakedTokenAccount = deriveAta(owner, lpTokenMint);
   const lmTokenAccount = deriveAta(owner, lmTokenMint);
@@ -1823,7 +1824,7 @@ export async function buildAddLockedStake(
   const userStaking = deriveUserStakingPda(owner, staking);
   const lmTokenMint = deriveLmTokenMintPda();
   const governanceTokenMint = deriveGovernanceTokenMintPda();
-  const feeRedistributionMint = new PublicKey('2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6');
+  const feeRedistributionMint = new PublicKey(ADRENA_FEE_REDISTRIBUTION_MINT);
   const transferAuthority = deriveTransferAuthorityPda();
   const fundingAccount = deriveAta(owner, lpTokenMint);
   const rewardTokenAccount = deriveAta(owner, feeRedistributionMint);
@@ -1900,7 +1901,7 @@ export async function buildClaimStakes(
   const genesisLock = deriveGenesisLockPda(pool);
   const lmTokenTreasury = deriveLmTokenTreasuryPda(cortex);
   const lmTokenMint = deriveLmTokenMintPda();
-  const feeRedistributionMint = new PublicKey('2zqtcQy7oc9Wf7TncsKQw1vq5gk6kG6r6wG6r6wG6r6');
+  const feeRedistributionMint = new PublicKey(ADRENA_FEE_REDISTRIBUTION_MINT);
   const transferAuthority = deriveTransferAuthorityPda();
   const rewardTokenAccount = deriveAta(owner, feeRedistributionMint);
   const lmTokenAccount = deriveAta(owner, lmTokenMint);
