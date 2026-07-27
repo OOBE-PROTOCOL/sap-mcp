@@ -20,9 +20,6 @@ import {
   Connection,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,
@@ -33,6 +30,7 @@ import {
   SYSTEM_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from './adrena-constants.js';
+import { ADRENA_IDL } from './adrena-idl.js';
 import {
   deriveCortexPda,
   deriveOraclePda,
@@ -57,23 +55,20 @@ import {
 
 // ─── IDL Loading ──────────────────────────────────────────────────────────────
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-/** Path to the vendored Adrena IDL JSON. */
-const IDL_PATH = join(__dirname, 'adrena-idl.json');
-
 /** Cached parsed IDL object. */
 let cachedIdl: Idl | null = null;
 
 /**
  * Load the vendored Adrena IDL.
+ * The IDL is embedded as a TypeScript module so `tsc` includes it in the
+ * compiled output without requiring a separate file copy step.
  * @returns Parsed Anchor IDL.
  */
 function loadAdrenaIdl(): Idl {
   if (cachedIdl) return cachedIdl;
-  const raw = readFileSync(IDL_PATH, 'utf-8');
-  cachedIdl = JSON.parse(raw) as Idl;
+  // The IDL is imported as a typed constant from adrena-idl.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cachedIdl = ADRENA_IDL as unknown as Idl;
   return cachedIdl;
 }
 

@@ -9,3 +9,4 @@ export * from './adrena-constants.js';
 export * from './adrena-pda.js';
 export * from './adrena-builder.js';
 export * from './adrena-data-api.js';
+export { ADRENA_IDL } from './adrena-idl.js';
