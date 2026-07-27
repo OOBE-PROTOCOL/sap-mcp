@@ -39,7 +39,6 @@ import {
   deriveTransferAuthorityPda,
   deriveUserProfilePda,
   derivePositionPda,
-  deriveCustodyTokenAccountPda,
   deriveLimitOrderBookPda,
   deriveCollateralEscrowPda,
   deriveLpTokenMintPda,
@@ -176,6 +175,30 @@ function getMintPublicKey(symbol: string): PublicKey {
 function createAtaIdempotentIx(owner: PublicKey, mint: PublicKey, payer: PublicKey): TransactionInstruction {
   const ata = getAssociatedTokenAddressSync(mint, owner);
   return createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint);
+}
+
+/**
+ * Read the collateral custody token account address from the on-chain custody account.
+ * The custody account stores the tokenAccount at byte offset 80 (after the 8-byte
+ * Anchor discriminator + 2 boolean flags + 1 decimal byte + 5 padding + 32 pool).
+ *
+ * This is more reliable than PDA derivation because the seed layout may differ
+ * from what the IDL declares.
+ *
+ * @param connection — Solana RPC connection.
+ * @param custodyAddress — The custody PDA public key.
+ * @returns The token account public key stored in the custody account.
+ */
+async function readCustodyTokenAccount(
+  connection: Connection,
+  custodyAddress: PublicKey,
+): Promise<PublicKey> {
+  const accountInfo = await connection.getAccountInfo(custodyAddress);
+  if (!accountInfo || accountInfo.data.length < 112) {
+    throw new Error(`Custody account ${custodyAddress.toBase58()} not found or too small`);
+  }
+  // tokenAccount is at offset 80 (32 bytes)
+  return new PublicKey(accountInfo.data.subarray(80, 112));
 }
 
 /**
@@ -325,7 +348,7 @@ export async function buildOpenPositionLong(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, 'long');
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
@@ -398,7 +421,7 @@ export async function buildOpenPositionShort(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, 'short');
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
@@ -467,7 +490,7 @@ export async function buildClosePositionLong(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, 'long');
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(principalToken));
   const referrerProfile = PublicKey.default;
 
@@ -534,7 +557,7 @@ export async function buildClosePositionShort(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, 'short');
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
@@ -877,7 +900,7 @@ export async function buildAddLiquidity(
   const transferAuthority = deriveTransferAuthorityPda();
   const lpTokenMint = deriveLpTokenMintPda(pool);
   const lpStaking = deriveStakingPda(lpTokenMint);
-  const custodyTokenAccount = deriveCustodyTokenAccountPda(custody);
+  const custodyTokenAccount = await readCustodyTokenAccount(connection, custody);
   const lpTokenAccount = deriveAta(owner, lpTokenMint);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
 
@@ -937,7 +960,7 @@ export async function buildRemoveLiquidity(
   const oracle = deriveOraclePda();
   const transferAuthority = deriveTransferAuthorityPda();
   const lpTokenMint = deriveLpTokenMintPda(pool);
-  const custodyTokenAccount = deriveCustodyTokenAccountPda(custody);
+  const custodyTokenAccount = await readCustodyTokenAccount(connection, custody);
   const lpTokenAccount = deriveAta(owner, lpTokenMint);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
 
@@ -994,8 +1017,8 @@ export async function buildSwap(
   const cortex = deriveCortexPda();
   const oracle = deriveOraclePda();
   const transferAuthority = deriveTransferAuthorityPda();
-  const receivingCustodyTokenAccount = deriveCustodyTokenAccountPda(receivingCustody);
-  const dispensingCustodyTokenAccount = deriveCustodyTokenAccountPda(dispensingCustody);
+  const receivingCustodyTokenAccount = await readCustodyTokenAccount(connection, receivingCustody);
+  const dispensingCustodyTokenAccount = await readCustodyTokenAccount(connection, dispensingCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(fromToken));
   const receivingAccount = deriveAta(owner, getMintPublicKey(toToken));
 
@@ -1442,7 +1465,7 @@ async function buildOpenPositionLongInternal(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, side);
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
@@ -1504,7 +1527,7 @@ async function buildClosePositionLongInternal(
   const transferAuthority = deriveTransferAuthorityPda();
   const userProfile = deriveUserProfilePda(owner);
   const position = derivePositionPda(owner, pool, custody, side);
-  const collateralCustodyTokenAccount = deriveCustodyTokenAccountPda(collateralCustody);
+  const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const receivingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = PublicKey.default;
 
@@ -1558,7 +1581,6 @@ export {
   deriveTransferAuthorityPda,
   deriveUserProfilePda,
   derivePositionPda,
-  deriveCustodyTokenAccountPda,
   deriveLimitOrderBookPda,
   deriveCollateralEscrowPda,
   deriveLpTokenMintPda,
