@@ -29,6 +29,7 @@ import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
 import { hashPaymentRequest, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
 import { isTransientRpcError } from './facilitator-rpc-fallback.js';
+import { PrepaidCreditStore, setGlobalPrepaidStore } from './prepaid-credit-store.js';
 
 /**
  * @name McpRequestHandler
@@ -122,6 +123,8 @@ export class McpMonetizationGate {
   private readonly monetization: SapMcpMonetizationConfig;
   private readonly httpResourceServer: x402HTTPResourceServer;
   private readonly usageLedger: UsageLedger;
+  /** Prepaid credit store for session-based payments (x402 Lifecycle Hooks grantAccess). */
+  private readonly prepaidStore: PrepaidCreditStore;
 
   /**
    * @description x402 idempotency cache — prevents double-charge on retry.
@@ -145,11 +148,13 @@ export class McpMonetizationGate {
     appConfig: SapMcpConfig,
     httpResourceServer: x402HTTPResourceServer,
     usageLedger = new UsageLedger(),
+    prepaidStore = new PrepaidCreditStore(),
   ) {
     this.appConfig = appConfig;
     this.monetization = appConfig.monetization;
     this.httpResourceServer = httpResourceServer;
     this.usageLedger = usageLedger;
+    this.prepaidStore = prepaidStore;
   }
 
   /**
@@ -198,7 +203,12 @@ export class McpMonetizationGate {
       payShCheckoutUrl: appConfig.monetization.payShCheckoutUrl,
     });
 
-    return new McpMonetizationGate(appConfig, httpResourceServer, await UsageLedger.createFromEnv());
+    const gate = new McpMonetizationGate(appConfig, httpResourceServer, await UsageLedger.createFromEnv());
+    // Share the gate's PrepaidCreditStore with the global singleton so that
+    // hosted tools (sap_payments_fund_prepaid) can access the same store
+    // instance without a direct reference to the gate.
+    setGlobalPrepaidStore(gate.prepaidCreditStore);
+    return gate;
   }
 
   /**
@@ -290,6 +300,11 @@ export class McpMonetizationGate {
     }
   }
 
+  /** Prepaid credit store for session-based payments. */
+  public get prepaidCreditStore(): PrepaidCreditStore {
+    return this.prepaidStore;
+  }
+
   /**
    * @name handle
    * @description Authorizes a request via x402 when required, then forwards it to MCP and settles on success.
@@ -369,6 +384,31 @@ export class McpMonetizationGate {
     const requestHash = hashPaymentRequest(rawBody, parsedBody);
     const virtualPath = buildPaidVirtualPath(decision, requestHash);
     const metadata = buildRequestMetadata(request, requestHash, virtualPath);
+
+    // ── Prepaid session bypass (x402 Lifecycle Hooks grantAccess) ──────────
+    // If the client sends an X-SAP-Prepaid-Session header with a valid
+    // session ID that has sufficient balance, grant access without a 402
+    // challenge. This is the standard x402 onProtectedRequest → grantAccess
+    // pattern documented in the Lifecycle Hooks docs.
+    const prepaidSessionId = request.headers['x-sap-prepaid-session'] as string | undefined;
+    if (prepaidSessionId && typeof prepaidSessionId === 'string') {
+      const prepaidResult = this.prepaidStore.checkAndDeduct(prepaidSessionId, requiredDecision.priceUsd);
+      if (prepaidResult.hasCredit) {
+        logger.info('Prepaid session granted access', {
+          sessionId: prepaidSessionId,
+          remainingUsd: prepaidResult.remainingUsd,
+          toolNames: decision.toolNames,
+        });
+        await next(request, response, parsedBody);
+        return;
+      }
+      // Prepaid session not found/expired/insufficient — fall through to
+      // normal 402 challenge so the client can pay per-call.
+      logger.debug('Prepaid session not valid, falling through to 402', {
+        sessionId: prepaidSessionId,
+        reason: prepaidResult.reason,
+      });
+    }
 
     // Standard x402 scanners and non-MCP HTTP clients must see a normal HTTP
     // 402 challenge before MCP transport/session validation runs. MCP SDK

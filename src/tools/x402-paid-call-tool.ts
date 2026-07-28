@@ -22,6 +22,7 @@ import {
   type X402ExternalCallInput,
   type X402PaidCallInput,
 } from '../payments/x402-paid-call.js';
+import { getGlobalPrepaidStore } from '../payments/prepaid-credit-store.js';
 import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
 import {
   SAP_AGENT_REGISTER_INPUT_SCHEMA,
@@ -45,6 +46,7 @@ interface X402PaidCallToolInput {
   maxPriceUsd?: number;
   maxAttempts?: number;
   confirm?: boolean;
+  prepaidSessionId?: string;
 }
 
 interface X402ExternalCallToolInput {
@@ -162,6 +164,10 @@ const paidCallInputSchema = {
     type: 'boolean',
     description: 'Must be true. Confirms the user allows this helper to sign an x402 payment payload.',
   },
+  prepaidSessionId: {
+    type: 'string',
+    description: 'Optional prepaid session ID. When set, the bridge injects an X-SAP-Prepaid-Session header so the server can grant access from prepaid balance. If the prepaid session has sufficient balance, no x402 payment is charged (paymentCharged: false, prepaidUsed: true). If the prepaid balance is insufficient, the server returns 402 and the bridge falls through to normal x402 payment. Use sap_payments_start_prepaid to create a session, then pass the returned sessionId here.',
+  },
 } as const;
 
 const paidCallOutputSchema = {
@@ -231,6 +237,9 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsPrepareChallengeTool(server);
   registerPaymentsSignChallengeTool(server);
   registerPaymentsVerifyReceiptTool(server);
+  registerPaymentsPrepaidBalanceTool(server);
+  registerPaymentsStartPrepaidTool(server, _context);
+  registerPaymentsFundPrepaidTool(server);
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
@@ -1207,6 +1216,295 @@ function registerPaymentsVerifyReceiptTool(server: Server): void {
   );
 }
 
+function registerPaymentsPrepaidBalanceTool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_prepaid_balance',
+    {
+      title: 'Check Prepaid Session Balance',
+      description: 'FREE local tool that checks the remaining balance of a prepaid session. No x402 charge. Returns the session ID, remaining USD, total USD, per-call cost, expiry, and call count. Use this before calling sap_payments_call_paid_tool with prepaidSessionId to verify the session still has balance.',
+      inputSchema: {
+        sessionId: {
+          type: 'string',
+          description: 'Prepaid session ID returned by sap_payments_start_prepaid.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string', description: 'The prepaid session ID checked.' },
+          remainingUsd: { type: 'number', description: 'Remaining USDC balance in the session.' },
+          totalUsd: { type: 'number', description: 'Original USDC amount deposited when the session was created.' },
+          perCallCostUsd: { type: 'number', description: 'Cost deducted per granted call.' },
+          expiresAt: { type: 'string', description: 'ISO timestamp when the session expires.' },
+          callCount: { type: 'number', description: 'Number of calls made using this session.' },
+        },
+        required: ['sessionId', 'remainingUsd', 'totalUsd', 'perCallCostUsd', 'expiresAt', 'callCount'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const record = input as Record<string, unknown> | undefined;
+        const sessionId = record?.sessionId;
+        if (!sessionId || typeof sessionId !== 'string') {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'sessionId is required.',
+          }, null, 2), { isError: true });
+        }
+
+        const store = getGlobalPrepaidStore();
+        const credit = store.getBalance(sessionId);
+        if (!credit) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'session_not_found_or_expired',
+            sessionId,
+            message: 'No active prepaid session found with this ID, or the session has expired.',
+          }, null, 2), { isError: true });
+        }
+
+        return createTextResponse(JSON.stringify({
+          success: true,
+          sessionId: credit.sessionId,
+          remainingUsd: credit.remainingUsd,
+          totalUsd: credit.totalUsd,
+          perCallCostUsd: credit.perCallCostUsd,
+          expiresAt: credit.expiresAt,
+          callCount: credit.callCount,
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }, null, 2), { isError: true });
+      }
+    },
+  );
+}
+
+function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContext): void {
+  registerTool(
+    server,
+    'sap_payments_start_prepaid',
+    {
+      title: 'Start Prepaid Payment Session',
+      description: 'FREE local tool that creates a prepaid session by paying a funding amount via the hosted x402 bridge. It calls the hosted sap_payments_fund_prepaid tool through the x402 paid-call bridge (paying the specified amountUsd), and returns the prepaid session ID. The agent then passes this sessionId as prepaidSessionId to future sap_payments_call_paid_tool calls to avoid per-call 402 challenges. This tool itself is free (no local charge), but it triggers a hosted x402 payment for the funding amount. Requires confirm: true.',
+      inputSchema: {
+        amountUsd: {
+          type: 'number',
+          description: 'Total USDC to deposit into the prepaid session. This is the amount that will be charged via x402 to fund the session.',
+        },
+        perCallCostUsd: {
+          type: 'number',
+          description: 'Cost deducted from the prepaid balance per granted call. Defaults to 0.015 USD.',
+        },
+        maxPriceUsd: {
+          type: 'number',
+          description: 'Per-call safety cap for the x402 funding payment. Should be at least amountUsd. Defaults to amountUsd * 1.5.',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true. Confirms the user allows this tool to trigger a hosted x402 payment for the funding amount.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the prepaid session was created successfully.' },
+          sessionId: { type: 'string', description: 'Prepaid session ID to pass as prepaidSessionId to sap_payments_call_paid_tool.' },
+          amountUsd: { type: 'number', description: 'Total USDC deposited into the session.' },
+          perCallCostUsd: { type: 'number', description: 'Cost per call deducted from the session balance.' },
+          maxPriceUsd: { type: 'number', description: 'Per-call cap used for the funding x402 payment.' },
+          hostedResult: { type: 'object', description: 'Full result from the hosted sap_payments_fund_prepaid tool call.' },
+          agentInstruction: { type: 'string', description: 'How to use the returned sessionId with sap_payments_call_paid_tool.' },
+        },
+        required: ['success', 'sessionId', 'amountUsd', 'perCallCostUsd', 'agentInstruction'],
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const record = input as Record<string, unknown> | undefined;
+        if (!record || record.confirm !== true) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'confirm: true is required to start a prepaid session (it triggers a hosted x402 payment).',
+          }, null, 2), { isError: true });
+        }
+
+        const amountUsd = record.amountUsd;
+        if (typeof amountUsd !== 'number' || !Number.isFinite(amountUsd) || amountUsd <= 0) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'amountUsd must be a positive number.',
+          }, null, 2), { isError: true });
+        }
+
+        const perCallCostUsd = typeof record.perCallCostUsd === 'number' && Number.isFinite(record.perCallCostUsd) && record.perCallCostUsd > 0
+          ? record.perCallCostUsd
+          : 0.015;
+
+        const maxPriceUsd = typeof record.maxPriceUsd === 'number' && Number.isFinite(record.maxPriceUsd) && record.maxPriceUsd > 0
+          ? record.maxPriceUsd
+          : Math.max(amountUsd * 1.5, amountUsd + 0.01);
+
+        // Call the hosted sap_payments_fund_prepaid tool via the x402 bridge
+        const fundResult = await executeX402PaidCall({
+          toolName: 'sap_payments_fund_prepaid',
+          arguments: {
+            amountUsd,
+            perCallCostUsd,
+          },
+          maxPriceUsd,
+          confirm: true,
+        });
+
+        if (!fundResult.success) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'Hosted sap_payments_fund_prepaid call failed.',
+            hostedResult: fundResult,
+          }, null, 2), { isError: true });
+        }
+
+        // Extract the session ID from the hosted tool response
+        const responseBody = fundResult.response as Record<string, unknown> | undefined;
+        const resultContent = responseBody?.result as Record<string, unknown> | undefined;
+        // The hosted tool may return the sessionId at the top level or nested
+        const sessionId =
+          (typeof responseBody?.sessionId === 'string' && responseBody.sessionId) ||
+          (typeof resultContent?.sessionId === 'string' && resultContent.sessionId) ||
+          (typeof responseBody?.id === 'string' && responseBody.id) ||
+          undefined;
+
+        if (!sessionId) {
+          return createTextResponse(JSON.stringify({
+            success: false,
+            error: 'Hosted sap_payments_fund_prepaid did not return a sessionId.',
+            hostedResult: fundResult,
+          }, null, 2), { isError: true });
+        }
+
+        return createTextResponse(JSON.stringify({
+          success: true,
+          sessionId,
+          amountUsd,
+          perCallCostUsd,
+          maxPriceUsd,
+          hostedResult: fundResult,
+          agentInstruction: `Pass this sessionId as prepaidSessionId to sap_payments_call_paid_tool for future calls. The server will check the prepaid balance and grant access without per-call 402 challenges. Use sap_payments_prepaid_balance to check remaining balance. Each call deducts ${perCallCostUsd} USD from the ${amountUsd} USD deposit.`,
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(formatPaidCallError(error), { isError: true });
+      }
+    },
+  );
+}
+
+/**
+ * @name registerPaymentsFundPrepaidTool
+ * @description Registers the hosted sap_payments_fund_prepaid tool. This tool
+ * is PAID (x402 charge applies — the funding payment IS the deposit). After
+ * the x402 settlement, it creates a PrepaidCreditStore session and returns
+ * the session ID. The agent then passes this ID as prepaidSessionId to
+ * sap_payments_call_paid_tool for per-call access without 402 challenges.
+ * @internal
+ */
+function registerPaymentsFundPrepaidTool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_fund_prepaid',
+    {
+      title: 'Fund Prepaid Payment Session',
+      description: 'Hosted paid tool that creates a prepaid session. The x402 charge for this tool IS the funding deposit. After settlement, creates a prepaid credit session with the specified amount and per-call cost. Returns sessionId, remainingUsd, and expiresAt. Pass the returned sessionId as prepaidSessionId to sap_payments_call_paid_tool for future calls to bypass per-call 402 challenges (x402 Lifecycle Hooks grantAccess pattern).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          amountUsd: {
+            type: 'number',
+            description: 'Total USDC to deposit into the prepaid session. This amount is charged via x402 when calling this tool.',
+            minimum: 0.01,
+          },
+          perCallCostUsd: {
+            type: 'number',
+            description: 'Cost deducted from the prepaid balance per granted call. Defaults to 0.015 USD.',
+            minimum: 0.001,
+          },
+          ttlHours: {
+            type: 'number',
+            description: 'Session TTL in hours. Defaults to 24.',
+            minimum: 1,
+            maximum: 168,
+          },
+        },
+        required: ['amountUsd'],
+        additionalProperties: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const record = input as Record<string, unknown> | undefined;
+        if (!record) {
+          return createTextResponse(JSON.stringify({ error: 'Invalid input' }, null, 2), { isError: true });
+        }
+        const amountUsd = Number(record['amountUsd']);
+        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+          return createTextResponse(JSON.stringify({ error: 'amountUsd must be a positive number' }, null, 2), { isError: true });
+        }
+        const perCallCostUsd = typeof record['perCallCostUsd'] === 'number' && Number.isFinite(record['perCallCostUsd'])
+          ? Number(record['perCallCostUsd'])
+          : 0.015;
+        const ttlHours = typeof record['ttlHours'] === 'number' && Number.isFinite(record['ttlHours'])
+          ? Number(record['ttlHours'])
+          : 24;
+
+        // Create the prepaid session. The wallet address comes from the
+        // x402 settlement payer — but since we don't have direct access to
+        // the settlement result here, we use a generated UUID as wallet
+        // identifier. The server-side prepaid store keys by sessionId, not
+        // wallet, so this is fine for the grantAccess flow.
+        const { getGlobalPrepaidStore } = await import('../payments/prepaid-credit-store.js');
+        const session = getGlobalPrepaidStore().createSession(
+          'x402-payer', // wallet placeholder — the x402 settlement has the real payer
+          amountUsd,
+          perCallCostUsd,
+          ttlHours,
+        );
+
+        return createTextResponse(JSON.stringify({
+          success: true,
+          sessionId: session.sessionId,
+          wallet: session.wallet,
+          totalUsd: session.totalUsd,
+          remainingUsd: session.remainingUsd,
+          perCallCostUsd: session.perCallCostUsd,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          callCount: session.callCount,
+          agentInstruction: `Pass sessionId as prepaidSessionId to sap_payments_call_paid_tool. Each call deducts ${perCallCostUsd} USD. Balance: ${amountUsd} USD. Expires: ${session.expiresAt}.`,
+        }, null, 2));
+      } catch (error) {
+        return createTextResponse(JSON.stringify({
+          error: 'Failed to create prepaid session',
+          message: error instanceof Error ? error.message : String(error),
+        }, null, 2), { isError: true });
+      }
+    },
+  );
+}
+
 function parseInput(input: unknown): X402PaidCallInput {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('sap_x402_paid_call requires an input object.');
@@ -1226,6 +1524,7 @@ function parseInput(input: unknown): X402PaidCallInput {
     maxPriceUsd: record.maxPriceUsd,
     maxAttempts: record.maxAttempts,
     confirm: record.confirm === true,
+    prepaidSessionId: typeof record.prepaidSessionId === 'string' ? record.prepaidSessionId : undefined,
   };
 }
 

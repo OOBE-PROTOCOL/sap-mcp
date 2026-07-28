@@ -41,6 +41,10 @@ export interface X402PaidCallInput {
   maxPriceUsd: number;
   maxAttempts?: number;
   confirm: boolean;
+  /** Prepaid session ID. When set, the bridge injects an X-SAP-Prepaid-Session
+   * header into both the unpaid probe and paid retry. If the server grants
+   * access via prepaid balance (HTTP 200), no x402 payment is charged. */
+  prepaidSessionId?: string;
 }
 
 /**
@@ -220,6 +224,16 @@ export interface X402PaidCallResult {
   /** True when the payment was charged but the upstream failed. Agent should
    * not retry with the same parameters — the failure is upstream, not local. */
   paymentChargedButUpstreamFailed?: boolean;
+  /** True when an x402 payment was actually charged (signed and settled).
+   * False when the call was granted via prepaid session balance or when no
+   * payment was needed. Agents can use this to distinguish prepaid vs paid. */
+  paymentCharged?: boolean;
+  /** True when a prepaid session was used to grant access without x402
+   * payment. The prepaidSessionId field identifies which session was used. */
+  prepaidUsed?: boolean;
+  /** The prepaid session ID used for this call, if any. Present when
+   * prepaidUsed is true. */
+  prepaidSessionId?: string;
   audit: X402PaidCallAudit;
 }
 
@@ -376,6 +390,7 @@ export async function executeX402PaidCall(input: X402PaidCallInput): Promise<X40
         maxPriceUsd: input.maxPriceUsd,
         attempt,
         transientRetries,
+        prepaidSessionId: input.prepaidSessionId,
       });
     } catch (error) {
       const retry = classifyPaidCallRetry(error);
@@ -802,8 +817,14 @@ async function executePaidAttempt(options: {
   attempt: number;
   transientRetries: readonly string[];
   sessionRefreshAttempted?: boolean;
+  prepaidSessionId?: string;
 }): Promise<X402PaidCallResult> {
-  const unpaid = await postMcp(options.endpoint, options.requestBody, options.sessionId);
+  // Build prepaid header if a prepaid session ID was provided
+  const prepaidHeaders: Record<string, string> = options.prepaidSessionId
+    ? { 'X-SAP-Prepaid-Session': options.prepaidSessionId }
+    : {};
+
+  const unpaid = await postMcp(options.endpoint, options.requestBody, options.sessionId, prepaidHeaders);
 
   // If the cached session expired server-side, invalidate and re-initialize once
   if (unpaid.response.status === 404 || isSessionNotFound(unpaid.body)) {
@@ -815,6 +836,58 @@ async function executePaidAttempt(options: {
     return executePaidAttempt({ ...options, sessionId: freshSession, sessionRefreshAttempted: true });
   }
 
+  // ── Prepaid session bypass ──────────────────────────────────────────────
+  // If the server returned 200 (not 402), the prepaid session had sufficient
+  // balance and granted access. Return the result directly without x402 payment.
+  if (options.prepaidSessionId && unpaid.response.status === 200) {
+    if (isJsonRpcError(unpaid.body)) {
+      throw new Error(`Paid MCP call returned JSON-RPC error: ${JSON.stringify((unpaid.body as { error: unknown }).error)}`);
+    }
+
+    const toolName = extractToolName(options.requestBody);
+    const audit: X402PaidCallAudit = {
+      intentId: buildIntentId(options.requestBody, options.sessionId),
+      profileName: options.profileName,
+      signerAddress: options.signerAddress,
+      endpoint: options.endpoint,
+      ...(toolName ? { toolName } : {}),
+      requestMethod: options.requestBody.method,
+      payment: {
+        amountUsd: 0,
+        network: 'prepaid',
+        asset: 'prepaid-session',
+        payTo: 'prepaid-session',
+      },
+      receipt: {
+        present: false,
+      },
+      attempts: options.attempt,
+      transientRetries: options.transientRetries,
+      secretMaterial: 'keypair-bytes-never-returned',
+    };
+
+    return {
+      success: true,
+      endpoint: options.endpoint,
+      sessionId: options.sessionId,
+      signerAddress: options.signerAddress,
+      payment: {
+        amountUsd: 0,
+        network: 'prepaid',
+        asset: 'prepaid-session',
+        payTo: 'prepaid-session',
+      },
+      response: unpaid.body,
+      attempts: options.attempt,
+      transientRetries: options.transientRetries,
+      paymentCharged: false,
+      prepaidUsed: true,
+      prepaidSessionId: options.prepaidSessionId,
+      audit,
+    };
+  }
+
+  // ── Normal x402 flow: 402 challenge → sign → paid retry ───────────────────
   const paymentRequired = getPaymentRequiredResponse(options.httpClient, unpaid.response, unpaid.body);
   const selectedRequirements = selectSingleRequirement(paymentRequired, options.maxPriceUsd);
   const amountUsd = paymentRequirementsAmountUsd(selectedRequirements);
@@ -824,7 +897,13 @@ async function executePaidAttempt(options: {
     accepts: [selectedRequirements],
   });
   const paymentHeaders = options.httpClient.encodePaymentSignatureHeader(paymentPayload);
-  const paid = await postMcp(options.endpoint, options.requestBody, options.sessionId, paymentHeaders);
+  // Merge prepaid header with payment header for the paid retry
+  const paid = await postMcp(
+    options.endpoint,
+    options.requestBody,
+    options.sessionId,
+    { ...prepaidHeaders, ...paymentHeaders },
+  );
   const paymentResult = await options.httpClient.processPaymentResult(
     paymentPayload,
     name => paid.response.headers.get(name),
@@ -880,6 +959,7 @@ async function executePaidAttempt(options: {
       transientRetries: options.transientRetries,
       upstreamHttpStatus: paid.response.status,
       paymentChargedButUpstreamFailed: true,
+      paymentCharged: true,
       audit,
     };
   }
@@ -930,6 +1010,7 @@ async function executePaidAttempt(options: {
     response: paid.body,
     attempts: options.attempt,
     transientRetries: options.transientRetries,
+    paymentCharged: true,
     audit,
   };
 }

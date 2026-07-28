@@ -471,6 +471,9 @@ describe('createSapMcpServer', () => {
         'sap_payments_prepare_challenge',
         'sap_payments_sign_challenge',
         'sap_payments_verify_receipt',
+        'sap_payments_prepaid_balance',
+        'sap_payments_start_prepaid',
+        'sap_payments_fund_prepaid',
         'sap_x402_paid_call',
       ]);
       expect(names).not.toContain('jupiter_swap');

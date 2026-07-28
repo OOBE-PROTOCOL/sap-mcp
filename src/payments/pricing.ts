@@ -379,6 +379,7 @@ const VALUE_ACTION_TOOLS = new Set([
   'sap_x402_prepare_payment',
   'sap_x402_settle',
   'sap_x402_settle_batch',
+  'sap_payments_fund_prepaid',
 ]);
 
 const HEAVY_VALUE_ACTION_TOOLS = new Set([
