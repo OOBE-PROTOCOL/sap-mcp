@@ -670,7 +670,7 @@ async function wizardSetupPath(): Promise<WizardSetupPath> {
     0,
     [
       'Creates or updates a SAP profile, wallet/signing boundary, policy limits, hosted MCP config, and local sap_payments bridge.',
-      'Keeps the active SAP profile and only fixes OOBE SAP MCP runtime entries for Codex, Claude, Hermes, and OpenClaw.',
+      'Keeps the active SAP profile and only fixes OOBE SAP MCP runtime entries for Codex, Claude, Hermes, OpenClaw, and ClawPump.',
       'Does not write files. Use this when configuring an unsupported runtime by hand.',
     ]
   );
@@ -1191,7 +1191,7 @@ function printX402PaidCallAddonSnippets(titleFilter?: (title: string) => boolean
  * Installs hosted SAP MCP plus local sap_payments bridge configs for the normal hosted path.
  */
 function installRecommendedPaymentBridgeConfigs(): void {
-  const runtimeIds: McpClientId[] = ['codex', 'claude', 'hermes', 'openclaw'];
+  const runtimeIds: McpClientId[] = ['codex', 'claude', 'hermes', 'openclaw', 'clawpump'];
   const results = installHostedPaymentBridgeConfigs(runtimeIds);
   if (results.length === 0) {
     printWarning('No supported MCP client config target was detected or createable on this machine.');

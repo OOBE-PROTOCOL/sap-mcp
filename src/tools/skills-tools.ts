@@ -21,7 +21,7 @@ import { createStructuredJsonResponse, createTextResponse } from '../adapters/mc
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 
-type AgentTarget = 'claude' | 'codex' | 'hermes' | 'openclaw' | 'custom';
+type AgentTarget = 'claude' | 'codex' | 'hermes' | 'openclaw' | 'clawpump' | 'custom';
 
 interface SkillToolInput {
   agent?: AgentTarget;
@@ -59,7 +59,7 @@ function parseInput(input: unknown): SkillToolInput {
   const record = input as Record<string, unknown>;
   const agent = record.agent;
   return {
-    agent: agent === 'claude' || agent === 'codex' || agent === 'hermes' || agent === 'openclaw' || agent === 'custom'
+    agent: agent === 'claude' || agent === 'codex' || agent === 'hermes' || agent === 'openclaw' || agent === 'clawpump' || agent === 'custom'
       ? agent
       : undefined,
     targetDir: typeof record.targetDir === 'string' ? record.targetDir : undefined,
@@ -94,6 +94,8 @@ function getDefaultTargetDir(agent: AgentTarget | undefined): string | undefined
       return join(homedir(), '.hermes', 'skills');
     case 'openclaw':
       return join(homedir(), '.openclaw', 'skills');
+    case 'clawpump':
+      return join(homedir(), '.clawpump', 'skills');
     case 'custom':
     case undefined:
       return undefined;
@@ -110,6 +112,7 @@ function getAgentTargetDirs(): Record<Exclude<AgentTarget, 'custom'>, string> {
     codex: join(homedir(), '.codex', 'skills'),
     hermes: join(homedir(), '.hermes', 'skills'),
     openclaw: join(homedir(), '.openclaw', 'skills'),
+    clawpump: join(homedir(), '.clawpump', 'skills'),
   };
 }
 
@@ -437,7 +440,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
       title: 'Install SAP MCP Skills',
       description: 'Install bundled SAP MCP skills into a local agent skill directory. Requires confirm: true.',
       inputSchema: {
-        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'custom'] },
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'clawpump', 'custom'] },
         targetDir: { type: 'string' },
         skills: { type: 'array', items: { type: 'string' } },
         confirm: { type: 'boolean' },
@@ -496,7 +499,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
       title: 'Plan SAP MCP Skills Upgrade',
       description: 'Free helper that returns exact latest-release commands and target directories for upgrading SAP MCP skills. Hosted mode returns a local action plan; local mode can then use sap_skills_install to write files.',
       inputSchema: {
-        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'custom'], description: 'Optional target runtime whose default skill directory should be used.' },
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'clawpump', 'custom'], description: 'Optional target runtime whose default skill directory should be used.' },
         targetDir: { type: 'string', description: 'Optional explicit local skill directory.' },
         skills: { type: 'array', description: 'Optional subset of bundled skill names to upgrade.', items: { type: 'string' } },
       },
@@ -565,7 +568,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
       title: 'Plan SAP Runtime Repair',
       description: 'Free helper that returns the pinned latest-release repair command for hosted SAP MCP plus local sap_payments bridge setup. Use this before asking users to manually edit runtime config.',
       inputSchema: {
-        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'custom'], description: 'Optional runtime to focus repair instructions on.' },
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'clawpump', 'custom'], description: 'Optional runtime to focus repair instructions on.' },
       },
       outputSchema: {
         type: 'object',

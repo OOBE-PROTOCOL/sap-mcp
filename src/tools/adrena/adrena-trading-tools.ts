@@ -82,6 +82,7 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       collateralAmount: { type: 'number', description: 'Collateral amount in human-readable units (e.g. 10 = 10 JITOSOL).', minimum: 0 },
       leverage: { type: 'number', description: 'Leverage multiplier (e.g. 3 = 3x).', minimum: 1, maximum: 100 },
       priceUsd: { type: 'number', description: 'Optional limit price in USD. Omit for market order.', minimum: 0 },
+      stopLossPriceUsd: { type: 'number', description: 'Optional stop-loss price in USD. When provided, the policy engine treats this trade as having a stop loss. Omit to skip the SL requirement (if policy requires SL, this field must be present).', minimum: 0 },
     },
     required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage'],
     additionalProperties: false,
@@ -98,10 +99,12 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       const collateralAmount = Number(args['collateralAmount']);
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
+      const stopLossPriceUsd = args['stopLossPriceUsd'] !== undefined ? Number(args['stopLossPriceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       // Policy validation before building.
-      const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, false);
+      const hasStopLoss = stopLossPriceUsd !== null;
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, hasStopLoss);
       if (violation) {
         return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
       }
@@ -131,6 +134,7 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       collateralAmount: { type: 'number', description: 'Collateral (USDC) amount in human-readable units.', minimum: 0 },
       leverage: { type: 'number', description: 'Leverage multiplier.', minimum: 1, maximum: 100 },
       priceUsd: { type: 'number', description: 'Optional limit price in USD. Omit for market order.', minimum: 0 },
+      stopLossPriceUsd: { type: 'number', description: 'Optional stop-loss price in USD. When provided, the policy engine treats this trade as having a stop loss. Omit to skip the SL requirement (if policy requires SL, this field must be present).', minimum: 0 },
     },
     required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage'],
     additionalProperties: false,
@@ -147,10 +151,12 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       const collateralAmount = Number(args['collateralAmount']);
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
+      const stopLossPriceUsd = args['stopLossPriceUsd'] !== undefined ? Number(args['stopLossPriceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       // Policy validation before building.
-      const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, false);
+      const hasStopLoss = stopLossPriceUsd !== null;
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, hasStopLoss);
       if (violation) {
         return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
       }

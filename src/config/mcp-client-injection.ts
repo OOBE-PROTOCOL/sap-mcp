@@ -7,7 +7,7 @@ import { MCP_SERVER_VERSION } from '../core/constants.js';
  * @name McpClientId
  * @description Supported local MCP clients that can receive SAP MCP server config.
  */
-export type McpClientId = 'claude' | 'hermes' | 'openclaw' | 'codex';
+export type McpClientId = 'claude' | 'hermes' | 'openclaw' | 'codex' | 'clawpump';
 
 /**
  * @name McpClientConfigFormat
@@ -395,6 +395,36 @@ export function createManualMcpJsonSnippets(
       ].join('\n'),
     },
     {
+      title: 'Hosted SAP MCP YAML (ClawPump Agent config)',
+      description:
+        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and uses the same YAML config shape.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${yamlScalar(hostedUrl)}`,
+        `    transport: ${yamlScalar('streamable-http')}`,
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'Local SAP MCP YAML (ClawPump Agent + payment bridge)',
+      description:
+        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${yamlScalar(hostedUrl)}`,
+        `    transport: ${yamlScalar('streamable-http')}`,
+        `  ${SAP_PAYMENT_BRIDGE_SERVER_NAME}:`,
+        `    command: ${yamlScalar(createNpxPaymentBridgeServerConfig().command)}`,
+        `    args: [${createNpxPaymentBridgeServerConfig().args.map(shellQuote).join(', ')}]`,
+        `    env:`,
+        `      SAP_MCP_PAYMENTS_BRIDGE_ONLY: "true"`,
+        `      SAP_LOG_LEVEL: "info"`,
+        '',
+      ].join('\n'),
+    },
+    {
       title: 'Local SAP MCP JSON',
       description: 'Use this when the agent runs SAP MCP locally and follows ~/.config/mcp-sap/.active-profile.',
       content: formatJson({
@@ -723,6 +753,13 @@ export function getKnownClientTargets(homeDir = homedir(), platform: SupportedPl
       label: 'OpenClaw MCP',
       path: join(homeDir, '.openclaw', 'mcp.json'),
       format: 'json',
+      exists: false,
+    },
+    {
+      id: 'clawpump',
+      label: 'ClawPump Agent',
+      path: join(homeDir, '.clawpump', 'config.yaml'),
+      format: 'yaml',
       exists: false,
     },
   ];

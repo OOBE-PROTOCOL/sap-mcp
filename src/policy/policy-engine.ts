@@ -241,7 +241,7 @@ export class PolicyEngine {
       maxLeverage: this.config.maxLeverage ?? 100,
       maxOpenPositions: this.config.maxOpenPositions ?? 3,
       allowedMarkets: this.config.allowedMarkets ?? ['BONK', 'JITOSOL', 'WBTC', 'USDC', 'XAU', 'XAG', 'WTI'],
-      stopLossRequired: this.config.stopLossRequired ?? true,
+      stopLossRequired: this.config.stopLossRequired ?? false,
       maxSlippageBps: this.config.maxSlippageBps ?? 500,
       requireHumanAckAboveUsd: this.config.requireHumanAckAboveUsd ?? 30,
     };
