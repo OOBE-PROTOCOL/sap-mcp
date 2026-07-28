@@ -220,14 +220,15 @@ Social, Blinks, bounties, gaming:
 `gibwork_createBounty`, `gibwork_listBounties`, `gibwork_submitWork`,
 `send-arcade_listGames`, `send-arcade_playGame`.
 
-Perps note: SAP MCP 0.9.38+ includes a full native Adrena integration with
-32 tools. All 22 builder operations construct unsigned Solana transactions
+Perps note: SAP MCP 0.9.51+ includes a full native Adrena integration with
+32 tools. All builder operations construct unsigned Solana transactions
 locally using the vendored Adrena Anchor IDL (release/39) via
 `@coral-xyz/anchor`, then return `transactionBase64` for local signing via
 `sap_payments_finalize_transaction`. No external builder URL is required.
 
 Adrena trading builders: `sap_adrena_build_open_long`,
-`sap_adrena_build_open_short`, `sap_adrena_build_close_long`,
+`sap_adrena_build_open_short`, `sap_adrena_build_position_package` (atomic
+open + SL + TP in 1 transaction), `sap_adrena_build_close_long`,
 `sap_adrena_build_close_short`, `sap_adrena_build_set_stop_loss`,
 `sap_adrena_build_set_take_profit`, `sap_adrena_build_cancel_stop_loss`,
 `sap_adrena_build_cancel_take_profit`, `sap_adrena_build_add_limit_order`,
