@@ -638,8 +638,10 @@ export async function buildInstruction(
 ): Promise<TransactionInstruction> {
   // Anchor v0.30 exposes methods via program.methods.
   // .instruction() is async and returns a Promise<TransactionInstruction>.
-  // For optional accounts (null values), Anchor handles them internally
-  // when passed as null in the accounts object.
+  // For optional accounts (null values), we omit the key entirely from the
+  // accounts object so Anchor does not include a placeholder account in the
+  // instruction. Passing null or PublicKey.default for optional accounts
+  // without PDA seeds causes Anchor to resolve a wrong address (error 3007).
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
     accounts: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
   }>;
@@ -649,8 +651,16 @@ export async function buildInstruction(
     throw new Error(`Adrena instruction not found in IDL: ${ixName}`);
   }
 
+  // Strip null entries so Anchor omits optional accounts entirely.
+  const filteredAccounts: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(accounts)) {
+    if (value !== null) {
+      filteredAccounts[key] = value;
+    }
+  }
+
   const ixWithArgs = ixBuilder(...args);
-  const ixWithAccounts = ixWithArgs.accounts(accounts as Record<string, unknown>);
+  const ixWithAccounts = ixWithArgs.accounts(filteredAccounts);
   return await ixWithAccounts.instruction();
 }
 
