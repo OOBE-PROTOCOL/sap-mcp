@@ -49,7 +49,6 @@ let cachedIdl: Idl | null = null;
 function loadAdrenaIdl(): Idl {
   if (cachedIdl) return cachedIdl;
   // The IDL is imported as a typed constant from adrena-idl.ts.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cachedIdl = ADRENA_IDL as unknown as Idl;
   return cachedIdl;
 }

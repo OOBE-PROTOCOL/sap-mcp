@@ -89,7 +89,7 @@ export function registerAdrenaMarketSnapshotTool(server: Server, context: SapMcp
       const connection = getConnection(context);
 
       // Fetch prices from the Adrena Data API.
-      let prices: Record<string, number> = {};
+      const prices: Record<string, number> = {};
       try {
         const tradingPrices = await adrenaDataApi.getLastTradingPrices();
         if (tradingPrices && Array.isArray(tradingPrices)) {

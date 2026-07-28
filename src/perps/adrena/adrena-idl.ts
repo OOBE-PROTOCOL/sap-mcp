@@ -10,7 +10,6 @@
  * @module perps/adrena/adrena-idl
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const ADRENA_IDL = {
 "address": "13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet",
 "metadata": {
