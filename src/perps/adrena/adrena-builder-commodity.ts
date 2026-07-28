@@ -207,7 +207,8 @@ async function buildOpenPositionLongInternal(
     referrerProfile,
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check (commodity positions use USDC collateral).
   const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
@@ -278,7 +279,8 @@ async function buildClosePositionLongInternal(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees (close returns tokens, doesn't require collateral).
   const balances = await getWalletTokenBalances(connection, owner);

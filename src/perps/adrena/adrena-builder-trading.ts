@@ -245,7 +245,8 @@ export async function buildOpenPositionLong(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata);
 }
 
@@ -337,7 +338,8 @@ export async function buildOpenPositionShort(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
   return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata);
 }
 
@@ -406,7 +408,8 @@ export async function buildClosePositionLong(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -496,7 +499,8 @@ export async function buildClosePositionShort(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -562,7 +566,8 @@ export async function buildSetStopLoss(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -623,7 +628,8 @@ export async function buildSetTakeProfit(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -676,7 +682,8 @@ export async function buildCancelStopLoss(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -729,7 +736,8 @@ export async function buildCancelTakeProfit(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -817,7 +825,8 @@ export async function buildAddLimitOrder(
     associatedTokenProgram: new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
   const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
@@ -875,7 +884,8 @@ export async function buildCancelLimitOrder(
     associatedTokenProgram: new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -1037,6 +1047,7 @@ export async function buildPositionPackage(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, instructions);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, instructions);
+  const transactionBase64 = _serializeResult.transactionBase64;
   return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning);
 }

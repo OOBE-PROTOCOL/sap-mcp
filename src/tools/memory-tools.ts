@@ -46,6 +46,9 @@ export function registerMemoryTools(server: Server, _context: SapMcpContext): vo
   registerAuditStatsTool(server);
   registerHermesSearchTool(server);
   registerHermesRecentTool(server);
+  registerStrategyExecuteTool(server, _context);
+  registerTradeJournalAppendTool(server);
+  registerTradeJournalQueryTool(server);
 }
 
 // ── Memory Recording & Search ──────────────────────────────────────────────
@@ -553,6 +556,177 @@ function registerHermesRecentTool(server: Server): void {
         typeof raw['limit'] === 'number' ? raw['limit'] : 3,
       );
       return createTextResponse(JSON.stringify({ sessions, count: sessions.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
+    } catch (error) {
+      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+    }
+  });
+}
+
+// ── Strategy Execution ──────────────────────────────────────────────────────
+
+function registerStrategyExecuteTool(server: Server, context: SapMcpContext): void {
+  registerTool(server, 'sap_strategy_execute', {
+    title: 'Execute Strategy',
+    description: 'Free local tool. Loads a saved strategy by category and name, resolves trading parameters, validates against trading policy, and returns either a dry-run simulation or a ready-to-sign transaction. When dryRun is true, returns resolved params only. When dryRun is false, builds a transactionBase64. No x402 charge for this tool itself.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Strategy category (e.g. "trading").' },
+        name: { type: 'string', description: 'Strategy name (e.g. "bonk-short-v1").' },
+        dryRun: { type: 'boolean', description: 'When true, simulate only. When false, build tx. Default true.' },
+        adjustCollateralUsd: { type: 'number', description: 'Override collateral USD.' },
+        adjustLeverage: { type: 'number', description: 'Override leverage.' },
+      },
+      required: ['category', 'name'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async (input: unknown) => {
+    try {
+      const raw = input as Record<string, unknown>;
+      const { loadStrategy } = await import('../strategies/strategy-store.js');
+      const strategy = loadStrategy(String(raw['category']), String(raw['name']));
+      if (!strategy) {
+        return createTextResponse(JSON.stringify({ error: 'Strategy not found', category: raw['category'], name: raw['name'] }), { isError: true });
+      }
+
+      let config: Record<string, unknown>;
+      try {
+        config = JSON.parse(strategy.config);
+      } catch {
+        return createTextResponse(JSON.stringify({ error: 'Strategy config is not valid JSON' }), { isError: true });
+      }
+
+      const market = String(config['market'] ?? '').toUpperCase();
+      const side = String(config['side'] ?? 'short') as 'long' | 'short';
+      const collateralUsd = typeof raw['adjustCollateralUsd'] === 'number' ? raw['adjustCollateralUsd'] : Number(config['collateralUsd'] ?? 10);
+      const leverage = typeof raw['adjustLeverage'] === 'number' ? raw['adjustLeverage'] : Number(config['leverage'] ?? 3);
+      const stopLossPct = config['stopLossPct'] !== undefined ? Number(config['stopLossPct']) : null;
+      const takeProfitPct = config['takeProfitPct'] !== undefined ? Number(config['takeProfitPct']) : null;
+      const owner = String(config['owner'] ?? '');
+      const dryRun = raw['dryRun'] !== false;
+
+      if (!market || !owner) {
+        return createTextResponse(JSON.stringify({ error: 'Strategy config missing required fields: market, owner' }), { isError: true });
+      }
+
+      try {
+        const violation = context.policyEngine.validateTradingPolicy({ market, side, collateralUsd, leverage, hasStopLoss: stopLossPct !== null });
+        if (!violation.allowed) {
+          return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        }
+      } catch { /* policy not available — proceed */ }
+
+      if (dryRun) {
+        return createTextResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, stopLossPct, takeProfitPct, owner }, dryRun: true, message: 'Set dryRun: false to build a ready-to-sign transaction.' }, null, 2));
+      }
+
+      const { buildPositionPackage } = await import('../perps/adrena/adrena-builder-trading.js');
+      const { fetchOraclePrice } = await import('../perps/adrena/adrena-builder-core.js');
+      const { getConnection } = await import('./adrena/adrena-helpers.js');
+      const { PublicKey } = await import('@solana/web3.js');
+      const connection = getConnection(context);
+      const ownerPk = new PublicKey(owner);
+      const oraclePrice = await fetchOraclePrice(market, side);
+      const priceUsd = Number(oraclePrice) / Math.pow(10, 10);
+      const collateralToken = side === 'short' ? 'USDC' : market;
+      const collateralAmount = side === 'short' ? collateralUsd : collateralUsd / priceUsd;
+      let stopLossPriceUsd: number | null = null;
+      let takeProfitPriceUsd: number | null = null;
+      if (stopLossPct !== null) stopLossPriceUsd = side === 'long' ? priceUsd * (1 - stopLossPct / 100) : priceUsd * (1 + stopLossPct / 100);
+      if (takeProfitPct !== null) takeProfitPriceUsd = side === 'long' ? priceUsd * (1 + takeProfitPct / 100) : priceUsd * (1 - takeProfitPct / 100);
+      const result = await buildPositionPackage(connection, ownerPk, market, collateralToken, collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, null);
+      return createTextResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, oraclePriceUsd: priceUsd }, dryRun: false, transaction: result }, null, 2));
+    } catch (error) {
+      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+    }
+  });
+}
+
+// ── Trade Journal ────────────────────────────────────────────────────────────
+
+function registerTradeJournalAppendTool(server: Server): void {
+  registerTool(server, 'sap_trade_journal', {
+    title: 'Append Trade Journal Entry',
+    description: 'Free local tool. Appends a trade entry to the journal. Call after every trade open/close/SL/TP/liquidation for tracking and P&L analysis. No x402 charge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['open', 'close', 'liquidation', 'sl_triggered', 'tp_triggered'], description: 'Trade event type.' },
+        market: { type: 'string', description: 'Market symbol.' },
+        side: { type: 'string', enum: ['long', 'short'], description: 'Position side.' },
+        collateralUsd: { type: 'number', description: 'Collateral in USD.' },
+        leverage: { type: 'number', description: 'Leverage multiplier.' },
+        priceUsd: { type: 'number', description: 'Entry or exit price.' },
+        stopLossUsd: { type: 'number', description: 'Stop loss price.' },
+        takeProfitUsd: { type: 'number', description: 'Take profit price.' },
+        txSignature: { type: 'string', description: 'Transaction signature.' },
+        positionAddress: { type: 'string', description: 'Position PDA address.' },
+        feesPaidUsd: { type: 'number', description: 'Fees paid in USD.' },
+        status: { type: 'string', enum: ['open', 'closed', 'liquidated'], description: 'Position status.' },
+        pnlUsd: { type: 'number', description: 'P&L in USD.' },
+        notes: { type: 'string', description: 'Optional notes.' },
+      },
+      required: ['type', 'market', 'side', 'collateralUsd', 'leverage', 'priceUsd', 'feesPaidUsd', 'status'],
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, async (input: unknown) => {
+    try {
+      const raw = input as Record<string, unknown>;
+      const { appendTradeEntry } = await import('../strategies/trade-journal.js');
+      const entry = {
+        timestamp: new Date().toISOString(),
+        type: raw['type'] as 'open' | 'close' | 'liquidation' | 'sl_triggered' | 'tp_triggered',
+        market: String(raw['market']),
+        side: raw['side'] as 'long' | 'short',
+        collateralUsd: Number(raw['collateralUsd']),
+        leverage: Number(raw['leverage']),
+        priceUsd: Number(raw['priceUsd']),
+        stopLossUsd: raw['stopLossUsd'] !== undefined ? Number(raw['stopLossUsd']) : undefined,
+        takeProfitUsd: raw['takeProfitUsd'] !== undefined ? Number(raw['takeProfitUsd']) : undefined,
+        txSignature: raw['txSignature'] !== undefined ? String(raw['txSignature']) : undefined,
+        positionAddress: raw['positionAddress'] !== undefined ? String(raw['positionAddress']) : undefined,
+        feesPaidUsd: Number(raw['feesPaidUsd']),
+        status: raw['status'] as 'open' | 'closed' | 'liquidated',
+        pnlUsd: raw['pnlUsd'] !== undefined ? Number(raw['pnlUsd']) : undefined,
+        notes: raw['notes'] !== undefined ? String(raw['notes']) : undefined,
+      };
+      const result = appendTradeEntry(entry);
+      return createTextResponse(JSON.stringify({ ...result, ok: true }));
+    } catch (error) {
+      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+    }
+  });
+}
+
+function registerTradeJournalQueryTool(server: Server): void {
+  registerTool(server, 'sap_trade_journal_query', {
+    title: 'Query Trade Journal',
+    description: 'Free local tool. Queries the trade journal with filters. Returns matching entries with count and total P&L. No x402 charge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        market: { type: 'string', description: 'Filter by market.' },
+        type: { type: 'string', enum: ['open', 'close', 'liquidation', 'sl_triggered', 'tp_triggered'], description: 'Filter by type.' },
+        status: { type: 'string', enum: ['open', 'closed', 'liquidated'], description: 'Filter by status.' },
+        from: { type: 'string', description: 'Start date ISO 8601.' },
+        to: { type: 'string', description: 'End date ISO 8601.' },
+        limit: { type: 'number', description: 'Max results. Default 100.' },
+      },
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  }, async (input: unknown) => {
+    try {
+      const raw = input as Record<string, unknown>;
+      const { queryTradeJournal } = await import('../strategies/trade-journal.js');
+      const result = queryTradeJournal({
+        market: raw['market'] !== undefined ? String(raw['market']) : undefined,
+        type: raw['type'] !== undefined ? raw['type'] as 'open' | 'close' | 'liquidation' | 'sl_triggered' | 'tp_triggered' : undefined,
+        status: raw['status'] !== undefined ? raw['status'] as 'open' | 'closed' | 'liquidated' : undefined,
+        from: raw['from'] !== undefined ? String(raw['from']) : undefined,
+        to: raw['to'] !== undefined ? String(raw['to']) : undefined,
+        limit: typeof raw['limit'] === 'number' ? raw['limit'] : 100,
+      });
+      return createTextResponse(JSON.stringify(result, null, 2));
     } catch (error) {
       return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }

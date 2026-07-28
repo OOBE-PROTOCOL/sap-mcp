@@ -42,6 +42,7 @@ import {
   registerChartLongTermTool,
   registerChartVolumeProfileTool,
 } from './chart-tools.js';
+import { registerChartMultiOhlcTool, registerChartIndicatorsTool } from './chart-indicators.js';
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Tool 1: sap_perp_markets
@@ -935,6 +936,8 @@ export function registerPerpTools(server: Server, context: SapMcpContext): void 
   registerChartOhlcTool(server, context);
   registerChartLongTermTool(server, context);
   registerChartVolumeProfileTool(server, context);
+  registerChartMultiOhlcTool(server, context);
+  registerChartIndicatorsTool(server, context);
   registerPerpLiquidationZonesTool(server, context);
   registerPerpTradePlanTool(server);
   registerPerpBuilderStatusTool(server, context);

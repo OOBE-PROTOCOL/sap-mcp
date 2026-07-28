@@ -100,7 +100,8 @@ export async function buildAddLiquidity(
     adrenaProgram: new PublicKey(ADRENA_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
   const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, amountIn);
@@ -166,7 +167,8 @@ export async function buildRemoveLiquidity(
     adrenaProgram: new PublicKey(ADRENA_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees (removeLiquidity burns LP tokens).
   const balances = await getWalletTokenBalances(connection, owner);
@@ -247,7 +249,8 @@ export async function buildSwap(
     adrenaProgram: new PublicKey(ADRENA_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
   const balanceCheck = await checkSufficientBalance(connection, owner, fromToken, amountIn);

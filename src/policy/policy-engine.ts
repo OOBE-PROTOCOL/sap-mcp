@@ -229,4 +229,89 @@ export class PolicyEngine {
     this.policies.set(policy.id, policy);
     logger.info('Policy added', { policyId: policy.id });
   }
+
+  /**
+   * @name TradingPolicy
+   * @description Trading-specific policy limits enforced at the builder level.
+   * Prevents catastrophic loss from agent parameter errors.
+   */
+  getTradingPolicy(): TradingPolicy {
+    return {
+      maxCollateralUsdPerTrade: this.config.maxCollateralUsdPerTrade ?? 50,
+      maxLeverage: this.config.maxLeverage ?? 100,
+      maxOpenPositions: this.config.maxOpenPositions ?? 3,
+      allowedMarkets: this.config.allowedMarkets ?? ['BONK', 'JITOSOL', 'WBTC', 'USDC', 'XAU', 'XAG', 'WTI'],
+      stopLossRequired: this.config.stopLossRequired ?? true,
+      maxSlippageBps: this.config.maxSlippageBps ?? 500,
+      requireHumanAckAboveUsd: this.config.requireHumanAckAboveUsd ?? 30,
+    };
+  }
+
+  /**
+   * @name validateTradingPolicy
+   * @description Validate trading parameters against policy limits.
+   * Called by Adrena builders before constructing the transaction.
+   */
+  validateTradingPolicy(params: TradingPolicyParams): PolicyViolationResult {
+    const policy = this.getTradingPolicy();
+
+    if (params.leverage > policy.maxLeverage) {
+      return { allowed: false, violation: 'leverage_exceeded', message: `Leverage ${params.leverage} exceeds max ${policy.maxLeverage}`, field: 'leverage', max: policy.maxLeverage, received: params.leverage };
+    }
+
+    if (params.collateralUsd > policy.maxCollateralUsdPerTrade) {
+      return { allowed: false, violation: 'collateral_exceeded', message: `Collateral $${params.collateralUsd} exceeds max $${policy.maxCollateralUsdPerTrade}`, field: 'collateralUsd', max: policy.maxCollateralUsdPerTrade, received: params.collateralUsd };
+    }
+
+    if (policy.allowedMarkets.length > 0 && !policy.allowedMarkets.includes(params.market)) {
+      return { allowed: false, violation: 'market_not_allowed', message: `Market ${params.market} not in allowed list: ${policy.allowedMarkets.join(', ')}`, field: 'market', allowed_list: policy.allowedMarkets };
+    }
+
+    if (policy.stopLossRequired && !params.hasStopLoss) {
+      return { allowed: false, violation: 'stop_loss_required', message: 'Stop loss is required by policy but none was provided', field: 'stopLoss' };
+    }
+
+    if (params.slippageBps !== undefined && params.slippageBps > policy.maxSlippageBps) {
+      return { allowed: false, violation: 'slippage_exceeded', message: `Slippage ${params.slippageBps} bps exceeds max ${policy.maxSlippageBps} bps`, field: 'slippageBps', max: policy.maxSlippageBps, received: params.slippageBps };
+    }
+
+    if (policy.requireHumanAckAboveUsd > 0 && params.collateralUsd > policy.requireHumanAckAboveUsd) {
+      return { allowed: false, violation: 'human_ack_required', message: `Collateral $${params.collateralUsd} exceeds human acknowledgment threshold $${policy.requireHumanAckAboveUsd}. User must confirm.`, field: 'collateralUsd', threshold: policy.requireHumanAckAboveUsd, received: params.collateralUsd };
+    }
+
+    return { allowed: true };
+  }
+}
+
+/** Trading-specific policy limits. */
+export interface TradingPolicy {
+  maxCollateralUsdPerTrade: number;
+  maxLeverage: number;
+  maxOpenPositions: number;
+  allowedMarkets: string[];
+  stopLossRequired: boolean;
+  maxSlippageBps: number;
+  requireHumanAckAboveUsd: number;
+}
+
+/** Parameters for trading policy validation. */
+export interface TradingPolicyParams {
+  market: string;
+  side: string;
+  collateralUsd: number;
+  leverage: number;
+  hasStopLoss: boolean;
+  slippageBps?: number;
+}
+
+/** Result of trading policy validation. */
+export interface PolicyViolationResult {
+  allowed: boolean;
+  violation?: string;
+  message?: string;
+  field?: string;
+  max?: number;
+  received?: number;
+  threshold?: number;
+  allowed_list?: string[];
 }

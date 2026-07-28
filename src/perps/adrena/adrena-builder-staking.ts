@@ -92,7 +92,8 @@ export async function buildInitUserStaking(
     tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -176,7 +177,8 @@ export async function buildAddLiquidStake(
     tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees (LP token balance is not in standard token mints).
   const balances = await getWalletTokenBalances(connection, owner);
@@ -260,7 +262,8 @@ export async function buildRemoveLiquidStake(
     tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -338,7 +341,8 @@ export async function buildAddLockedStake(
     tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);
@@ -417,7 +421,8 @@ export async function buildClaimStakes(
     tokenProgram: new PublicKey(TOKEN_PROGRAM_ID),
   });
 
-  const transactionBase64 = await serializeUnsignedTx(connection, owner, [ix]);
+  const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
   const balances = await getWalletTokenBalances(connection, owner);

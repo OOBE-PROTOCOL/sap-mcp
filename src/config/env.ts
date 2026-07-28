@@ -144,6 +144,12 @@ export const envSchema = z.object({
   SAP_MCP_PERPS_ADRENA_PROGRAM_ID: z.string().default('13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet'),
   SAP_MCP_PERPS_TIMEOUT_MS: z.coerce.number().positive().default(8000),
 
+  // Priority fee for Adrena perps transactions. When > 0, a
+  // ComputeBudgetProgram.setComputeUnitPrice instruction is prepended to every
+  // unsigned transaction built by the Adrena builder. Value is in micro-lamports.
+  // Default 0 (disabled) — zero behavior change for existing users.
+  SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS: z.coerce.number().nonnegative().default(0),
+
   // Remote MCP monetization. Applies only when explicitly enabled by hosted HTTP deployments.
   SAP_MCP_MONETIZATION_ENABLED: booleanEnvSchema.default(false),
   SAP_MCP_MONETIZATION_PROVIDER: monetizationProviderSchema.default('x402'),
@@ -222,6 +228,22 @@ export interface SapMcpConfig {
     apiKeyConfigured: boolean;
     timeoutMs: number;
   };
+  /** Priority fee in micro-lamports prepended to Adrena perps transactions (0 = disabled). */
+  priorityFeeMicroLamports: number;
+  /** Trading policy: max collateral in USD per single trade. */
+  maxCollateralUsdPerTrade?: number;
+  /** Trading policy: max leverage allowed. */
+  maxLeverage?: number;
+  /** Trading policy: max simultaneous open positions. */
+  maxOpenPositions?: number;
+  /** Trading policy: allowed market symbols. Empty = all markets. */
+  allowedMarkets?: string[];
+  /** Trading policy: require stop loss on position open. */
+  stopLossRequired?: boolean;
+  /** Trading policy: max slippage in basis points. */
+  maxSlippageBps?: number;
+  /** Trading policy: require human acknowledgment above this USD amount. */
+  requireHumanAckAboveUsd?: number;
   bento?: {
     enabled: boolean;
     apiKey?: string;
@@ -660,6 +682,7 @@ function getDefaultEnvConfig(): Partial<SapEnvConfig> {
     SAP_MCP_JUPITER_API_BASE_URL: 'https://lite-api.jup.ag',
     SAP_MCP_JUPITER_TIMEOUT_MS: 30000,
     SAP_MCP_PERPS_TIMEOUT_MS: 8000,
+    SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS: 0,
     SAP_MCP_X402_MAX_TIMEOUT_SECONDS: 120,
     SAP_MCP_PRICE_MICRO_READ_USD: 0.001,
     SAP_MCP_PRICE_READ_PREMIUM_USD: 0.002,
@@ -742,6 +765,7 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
       apiKeyConfigured: Boolean(env.SAP_MCP_PERPS_API_KEY?.trim()),
       timeoutMs: env.SAP_MCP_PERPS_TIMEOUT_MS,
     },
+    priorityFeeMicroLamports: env.SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS,
     bento: {
       enabled: effectiveBentoEnabled,
       apiKey: process.env.SAP_MCP_BENTO_API_KEY || asOptionalString(bentoConfig.apiKey),

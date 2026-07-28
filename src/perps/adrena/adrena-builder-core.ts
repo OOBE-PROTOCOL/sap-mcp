@@ -14,6 +14,7 @@ import {
   Transaction,
   TransactionInstruction,
   Connection,
+  ComputeBudgetProgram,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
 import BN from 'bn.js';
@@ -168,6 +169,14 @@ export interface UnsignedTransactionResult {
   poolMetadata?: PoolMetadata;
   /** Warning message if balance is insufficient or other pre-flight concern. */
   warning?: string;
+  /** Pre-submit simulation logs from the builder (when available). */
+  simulationLogs?: string[];
+  /** Pre-submit simulation error (when simulation fails). */
+  simulationError?: string;
+  /** Compute units consumed (from simulation). */
+  simulationUnitsConsumed?: number;
+  /** Priority fee in micro-lamports applied to this transaction (0 = none). */
+  priorityFeeMicroLamports?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -653,38 +662,69 @@ export async function buildInstruction(
  * @param instructions — Transaction instructions.
  * @returns Base64-serialized unsigned transaction.
  */
+/** Result of serializeUnsignedTx — includes the base64 transaction and simulation metadata. */
+export interface SerializeResult {
+  transactionBase64: string;
+  simulationLogs?: string[];
+  simulationError?: string;
+  simulationUnitsConsumed?: number;
+  priorityFeeMicroLamports?: number;
+}
+
 export async function serializeUnsignedTx(
   connection: Connection,
   feePayer: PublicKey,
   instructions: TransactionInstruction[],
-): Promise<string> {
+): Promise<SerializeResult> {
   const blockhash = await connection.getLatestBlockhash();
+
+  // Priority fee: prepend ComputeBudgetProgram.setComputeUnitPrice when
+  // SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS > 0. Default 0 = disabled.
+  const PRIORITY_FEE_MICRO_LAMPORTS = Number(process.env['SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS'] ?? '0');
+  const allInstructions = PRIORITY_FEE_MICRO_LAMPORTS > 0
+    ? [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE_MICRO_LAMPORTS }), ...instructions]
+    : instructions;
+
   const tx = new Transaction({
     recentBlockhash: blockhash.blockhash,
     feePayer,
   });
-  tx.add(...instructions);
+  tx.add(...allInstructions);
 
   // Simulate the transaction to extract program logs before serializing.
   // This helps diagnose failures (e.g. InsufficientCollateral, MinLeverage)
   // without needing to sign and submit.
+  let simulationLogs: string[] | undefined;
+  let simulationError: string | undefined;
+  let simulationUnitsConsumed: number | undefined;
   try {
     const simulation = await connection.simulateTransaction(tx);
     if (simulation.value.logs && simulation.value.logs.length > 0) {
+      simulationLogs = simulation.value.logs;
       logger.debug('Adrena builder simulation logs', {
         logs: simulation.value.logs,
         unitsConsumed: simulation.value.unitsConsumed,
         err: simulation.value.err,
       });
     }
+    if (simulation.value.err !== null && simulation.value.err !== undefined) {
+      simulationError = JSON.stringify(simulation.value.err);
+    }
+    simulationUnitsConsumed = simulation.value.unitsConsumed ?? undefined;
   } catch {
     // Simulation is best-effort — don't fail the build if simulation fails.
   }
 
-  return tx.serialize({
-    requireAllSignatures: false,
-    verifySignatures: false,
-  }).toString('base64');
+  return {
+    transactionBase64: tx.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false,
+    }).toString('base64'),
+    simulationLogs,
+    simulationError,
+    simulationUnitsConsumed,
+    priorityFeeMicroLamports: PRIORITY_FEE_MICRO_LAMPORTS > 0 ? PRIORITY_FEE_MICRO_LAMPORTS : undefined,
+  };
 }
 
 /**

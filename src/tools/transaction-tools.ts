@@ -97,6 +97,17 @@ export interface TransactionSubmitLifecycleResult {
     retrySafe: boolean;
     rule: string;
   };
+  /** Pre-submit simulation result (when submit is attempted). */
+  simulationResult?: { passed: boolean; computeUnitsConsumed?: number; logs?: string[]; error?: string };
+}
+
+/** Result when pre-submit simulation fails and the transaction is NOT submitted. */
+export interface SimulationFailedResult {
+  success: false;
+  submitted: false;
+  confirmationStatus: 'simulation_failed';
+  retrySafe: true;
+  simulationResult: { passed: boolean; computeUnitsConsumed?: number; logs?: string[]; error?: string };
 }
 
 interface RelaySubmitInput extends TransactionSubmitLifecycleInput {
@@ -271,12 +282,52 @@ export function serializeTransaction(transaction: SolanaTransaction): string {
 export async function submitSignedTransactionWithLifecycle(
   context: SapMcpContext,
   input: TransactionSubmitLifecycleInput,
-): Promise<TransactionSubmitLifecycleResult> {
+): Promise<TransactionSubmitLifecycleResult | SimulationFailedResult> {
   const signedTransaction = input.signedTransaction;
   const encoding = input.encoding ?? 'base64';
   const rawTransaction = decodeInputBytes(signedTransaction, encoding);
 
   await assertTransactionPolicy(context, deserializeTransaction(signedTransaction, encoding));
+
+  // ── Mandatory pre-submit simulation ────────────────────────────────────
+  // Simulate the signed transaction before submitting. If simulation fails,
+  // return the logs without submitting — saving a blockhash and giving the
+  // agent actionable feedback. This runs AFTER signing, BEFORE submit.
+  let simulationResult: { passed: boolean; computeUnitsConsumed?: number; logs?: string[]; error?: string } | undefined;
+  try {
+    const txForSimulation = deserializeTransaction(signedTransaction, encoding);
+    // simulateTransaction has separate overloads for Transaction (no config)
+    // and VersionedTransaction (with config). Narrow the union type.
+    const simResp = txForSimulation instanceof VersionedTransaction
+      ? await context.connection.simulateTransaction(txForSimulation, { replaceRecentBlockhash: false, sigVerify: true })
+      : await context.connection.simulateTransaction(txForSimulation);
+    const simValue = simResp.value;
+    const passed = simValue.err === null || simValue.err === undefined;
+    simulationResult = {
+      passed,
+      computeUnitsConsumed: simValue.unitsConsumed ?? undefined,
+      logs: simValue.logs ?? undefined,
+      error: passed ? undefined : JSON.stringify(simValue.err),
+    };
+    if (!passed) {
+      logger.info('Pre-submit simulation failed — not submitting', {
+        error: simulationResult.error,
+        logs: simulationResult.logs,
+      });
+      return {
+        success: false,
+        submitted: false,
+        confirmationStatus: 'simulation_failed',
+        retrySafe: true,
+        simulationResult,
+      };
+    }
+    logger.debug('Pre-submit simulation passed', { units: simulationResult.computeUnitsConsumed });
+  } catch (simError) {
+    // If simulation itself throws (network issue, deserialization), log and
+    // proceed with submit — the RPC preflight will catch issues.
+    logger.warn('Pre-submit simulation threw, proceeding to submit', { error: simError instanceof Error ? simError.message : String(simError) });
+  }
 
   const signature = await context.connection.sendRawTransaction(rawTransaction, {
     skipPreflight: input.skipPreflight,
@@ -659,17 +710,24 @@ export async function finalizeTransactionWithLocalSigner(
 
     result.success = submitResult.success;
     result.submitted = submitResult.submitted;
-    result.signature = submitResult.signature;
+    if ('signature' in submitResult) {
+      result.signature = submitResult.signature;
+      result.explorerUrl = submitResult.explorerUrl;
+    }
     result.confirmationStatus = submitResult.confirmationStatus;
     result.retrySafe = submitResult.retrySafe;
-    result.explorerUrl = submitResult.explorerUrl;
-    result.audit = {
-      ...(result.audit as Record<string, unknown>),
-      ...submitResult.audit,
-      submitted: submitResult.submitted,
-      signature: submitResult.signature,
-      transactionLanded: submitResult.success,
-    };
+    if ('audit' in submitResult) {
+      result.audit = {
+        ...(result.audit as Record<string, unknown>),
+        ...submitResult.audit,
+        submitted: submitResult.submitted,
+        signature: 'signature' in submitResult ? submitResult.signature : undefined,
+        transactionLanded: submitResult.success,
+      };
+    }
+    if ('simulationResult' in submitResult && submitResult.simulationResult) {
+      result.simulationResult = submitResult.simulationResult;
+    }
   }
 
   return result;

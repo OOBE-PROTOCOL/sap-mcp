@@ -35,6 +35,33 @@ import {
   parsePublicKey,
   type JsonSchema,
 } from './adrena-helpers.js';
+import type { PolicyViolationResult } from '../../policy/policy-engine.js';
+
+/**
+ * @name validateTradingPolicyFromContext
+ * @description Validate trading parameters against the policy engine.
+ * Returns null if allowed, or a PolicyViolationResult if rejected.
+ * @internal
+ */
+function validateTradingPolicyFromContext(
+  context: SapMcpContext,
+  market: string,
+  side: string,
+  collateralUsd: number,
+  leverage: number,
+  hasStopLoss: boolean,
+  slippageBps?: number,
+): PolicyViolationResult | null {
+  try {
+    const result = context.policyEngine.validateTradingPolicy({
+      market, side, collateralUsd, leverage, hasStopLoss, slippageBps,
+    });
+    return result.allowed ? null : result;
+  } catch {
+    // Policy engine not available or misconfigured — allow by default.
+    return null;
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Trading Builders
@@ -72,6 +99,12 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
+
+      // Policy validation before building.
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, false);
+      if (violation) {
+        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+      }
 
       const result = await buildOpenPositionLong(
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, price,
@@ -115,6 +148,12 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
+
+      // Policy validation before building.
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, false);
+      if (violation) {
+        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+      }
 
       const result = await buildOpenPositionShort(
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, price,
@@ -439,6 +478,13 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
+      // Policy validation before building.
+      const hasStopLoss = stopLossPriceUsd !== null;
+      const violation = validateTradingPolicyFromContext(context, principalToken, side, collateralAmount, leverage, hasStopLoss);
+      if (violation) {
+        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+      }
+
       const result = await buildPositionPackage(
         getConnection(context), owner, principalToken, collateralToken,
         collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, price,
@@ -515,6 +561,13 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
 
       // Resolve collateral token: USDC for shorts, match market for longs
       const collateralToken = side === 'short' ? 'USDC' : market;
+
+      // Policy validation before building.
+      const hasStopLoss = stopLossPct !== null;
+      const violation = validateTradingPolicyFromContext(context, market, side, collateralUsd, leverage, hasStopLoss);
+      if (violation) {
+        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+      }
 
       // Get oracle price to convert USD → token amount
       const oraclePrice = await fetchOraclePrice(market, side);

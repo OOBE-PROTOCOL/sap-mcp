@@ -21,6 +21,7 @@ import { registerAdrenaCancelTakeProfitTool } from './adrena-trading-tools.js';
 import { registerAdrenaSimulatePositionTool } from './adrena-trading-tools.js';
 import { registerAdrenaPositionPackageTool } from './adrena-trading-tools.js';
 import { registerAdrenaTradeIntentTool } from './adrena-trading-tools.js';
+import { registerAdrenaMarketSnapshotTool } from './adrena-snapshot-tools.js';
 import { registerAdrenaAddLimitOrderTool } from './adrena-limit-order-tools.js';
 import { registerAdrenaCancelLimitOrderTool } from './adrena-limit-order-tools.js';
 import { registerAdrenaCommodityTools } from './adrena-commodity-tools.js';
@@ -65,6 +66,9 @@ export function registerAdrenaTools(server: Server, context: SapMcpContext): voi
 
   // Intent-level trading API (resolves mint, leverage, collateral automatically)
   registerAdrenaTradeIntentTool(server, context);
+
+  // Market snapshot with TTL cache (reduces polling costs 20x)
+  registerAdrenaMarketSnapshotTool(server, context);
 
   // Limit order builders
   registerAdrenaAddLimitOrderTool(server, context);
