@@ -584,7 +584,7 @@ function registerPerpTradePlanTool(server: Server): void {
       },
       entryPrice: {
         type: 'number',
-        description: 'Reference entry price in USD used for risk math.',
+        description: 'Reference entry price in USD used for risk math. Required. Get the current price from sap_adrena_get_trading_prices or sap_adrena_get_prices before calling this tool.',
         minimum: 0,
       },
       stopLossPrice: {
@@ -623,7 +623,7 @@ function registerPerpTradePlanTool(server: Server): void {
   };
 
   registerTool(server, 'sap_perp_trade_plan', {
-    description: 'Create a trader-grade perpetual futures plan from a simple intent. Returns notional size, stop risk, reward/risk, liquidation estimate, preflight checklist, and the exact SAP MCP read tools to call next. This is analysis-only: SAP MCP does not expose Adrena execution builders until they are IDL-backed and locally finalizable.',
+    description: 'Create a trader-grade perpetual futures plan from a simple intent. Returns notional size, stop risk, reward/risk, liquidation estimate, preflight checklist, and the exact SAP MCP read tools to call next. This is analysis-only: SAP MCP does not expose Adrena execution builders until they are IDL-backed and locally finalizable. Required fields: market, side, collateralAmountUsd, leverage, entryPrice. Get entryPrice from sap_adrena_get_trading_prices or sap_adrena_get_prices before calling this tool.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const market = String(args['market'] ?? '').trim().toUpperCase();

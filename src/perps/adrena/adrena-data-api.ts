@@ -133,9 +133,14 @@ export class AdrenaDataApiClient {
 
       clearTimeout(timeout);
 
-      if (!response.ok) return null;
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        console.error(`[adrena-data-api] ${url.pathname} HTTP ${response.status}: ${body.slice(0, 200)}`);
+        return null;
+      }
       return await response.json() as T;
-    } catch {
+    } catch (error) {
+      console.error(`[adrena-data-api] ${path} fetch failed:`, error instanceof Error ? error.message : String(error));
       return null;
     }
   }
