@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.57 - 2026-07-29
+
+### Fixed
+
+- Made hosted prepaid sessions reliable across MCP runtimes by resolving payment and prepaid headers case-insensitively, including `X-SAP-Prepaid-Session` and x402 payment aliases.
+- Restored Adrena simulation compatibility when optional accounts such as `referrerProfile` are omitted by retrying with explicit null optional accounts only when the IDL builder requires them.
+- Centralized Adrena leverage encoding with explicit `adrena_bps_1e4` audit metadata so agents can distinguish requested leverage from protocol-side effective leverage.
+- Updated `sap_perp_signal_score` funding reads to use the shared Adrena custody decoder instead of stale binary offsets.
+- Prevented tiny-token ATR values from rounding to zero by using significant-digit rounding in signal scoring.
+
+### Tests
+
+- Added coverage for case-insensitive prepaid session headers, prepaid gate bypass behavior, Adrena leverage encoding, and optional-account instruction building.
+- Verified with typecheck, lint, build, targeted regression tests, and the full Vitest suite.
+
 ## 0.9.56 - 2026-07-29
 
 ### Fixed

@@ -127,6 +127,17 @@ export interface PoolMetadata {
 }
 
 /**
+ * Encode a human leverage multiplier into Adrena's 1e4 BPS wire format.
+ * Example: 3x => 30000, 100x => 1000000.
+ */
+export function encodeAdrenaLeverage(leverage: number): number {
+  if (!Number.isFinite(leverage) || leverage <= 0) {
+    throw new Error(`Invalid leverage ${leverage}; expected a positive finite multiplier such as 3 for 3x.`);
+  }
+  return Math.round(leverage * 10_000);
+}
+
+/**
  * Result of simulating a position open without building or serializing a transaction.
  * Free dry-run — no x402 charge, no transaction bytes returned.
  */
@@ -166,6 +177,12 @@ export interface UnsignedTransactionResult {
   balanceCheck?: BalanceCheck;
   /** Pool/custody metadata (present for open-position builders). */
   poolMetadata?: PoolMetadata;
+  /** Requested leverage metadata for Adrena open-position builders. */
+  requestedLeverage?: {
+    multiplier: number;
+    encodedBps: number;
+    scale: 'adrena_bps_1e4';
+  };
   /** Warning message if balance is insufficient or other pre-flight concern. */
   warning?: string;
   /** Pre-submit simulation logs from the builder (when available). */
@@ -399,7 +416,7 @@ export function validateLeverage(
   maxInitialLeverageBps: number,
   principalToken: string,
 ): void {
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
   if (leverageBps > maxInitialLeverageBps) {
     const maxLeverage = maxInitialLeverageBps / 10000;
     const suggested = Math.floor(maxLeverage * 100) / 100; // round down to 2 decimals
@@ -644,6 +661,7 @@ export async function buildInstruction(
   // resolve or pass a real account where Adrena expects "not provided".
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
     accounts: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
+    accountsPartial?: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
   }>;
 
   const ixBuilder = methods[ixName];
@@ -660,8 +678,28 @@ export async function buildInstruction(
   }
 
   const ixWithArgs = ixBuilder(...args);
-  const ixWithAccounts = ixWithArgs.accounts(filteredAccounts);
-  return await ixWithAccounts.instruction();
+  const bindAccounts = ixWithArgs.accountsPartial ?? ixWithArgs.accounts;
+
+  try {
+    const ixWithAccounts = bindAccounts.call(ixWithArgs, filteredAccounts);
+    return await ixWithAccounts.instruction();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.toLowerCase().includes('not provided')) {
+      throw error;
+    }
+
+    logger.debug('Retrying Adrena instruction build with explicit optional account nulls', {
+      ixName,
+      omittedAccounts: Object.entries(accounts)
+        .filter(([, value]) => value === null)
+        .map(([key]) => key),
+      error: message,
+    });
+
+    const ixWithAccounts = ixWithArgs.accounts(accounts);
+    return await ixWithAccounts.instruction();
+  }
 }
 
 /**
@@ -755,7 +793,12 @@ export function buildResult(
   balanceCheck?: BalanceCheck,
   warning?: string,
   poolMetadata?: PoolMetadata,
+  requestedLeverage?: number,
 ): UnsignedTransactionResult {
+  const encodedLeverageBps = requestedLeverage !== undefined
+    ? encodeAdrenaLeverage(requestedLeverage)
+    : undefined;
+
   return {
     transactionBase64,
     encoding: 'base64',
@@ -769,6 +812,13 @@ export function buildResult(
     },
     ...(balanceCheck ? { balanceCheck } : {}),
     ...(poolMetadata ? { poolMetadata } : {}),
+    ...(requestedLeverage !== undefined && encodedLeverageBps !== undefined ? {
+      requestedLeverage: {
+        multiplier: requestedLeverage,
+        encodedBps: encodedLeverageBps,
+        scale: 'adrena_bps_1e4' as const,
+      },
+    } : {}),
     ...(warning ? { warning } : {}),
   };
 }

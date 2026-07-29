@@ -910,4 +910,77 @@ describe('MCP monetization gate readiness', () => {
       }
     }
   });
+
+  it('honors prepaid session headers case-insensitively before returning x402', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-prepaid-test-'));
+
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      if (String(input).endsWith('/supported')) {
+        return new Response(JSON.stringify({
+          kinds: [{
+            x402Version: 2,
+            scheme: 'exact',
+            network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+            extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+          }],
+          signers: {
+            'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1': ['FeePayer111111111111111111111111111111111'],
+          },
+          extensions: [],
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+      const prepaid = gate.prepaidCreditStore.createSession('payer-address', 0.01, 0.002);
+      const body = Buffer.from(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 44,
+        method: 'tools/call',
+        params: {
+          name: 'sap_list_all_agents',
+          arguments: { limit: 5 },
+        },
+      }));
+      const response = createResponse();
+      const next = vi.fn(async (_request: IncomingMessage, mcpResponse: ServerResponse) => {
+        mcpResponse.writeHead(200, { 'Content-Type': 'application/json' });
+        mcpResponse.end(JSON.stringify({ jsonrpc: '2.0', id: 44, result: { ok: true } }));
+      });
+
+      await gate.handle(
+        createRequest(body, {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'X-SAP-Prepaid-Session': prepaid.sessionId,
+        }),
+        response.response,
+        next,
+        {
+          validatePaidRequest: () => ({
+            code: -32010,
+            message: 'mcp_session_required',
+          }),
+        },
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('"ok":true');
+      expect(response.headers['payment-required']).toBeUndefined();
+      expect(gate.prepaidCreditStore.getBalance(prepaid.sessionId)?.remainingUsd).toBeLessThan(0.01);
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
 });

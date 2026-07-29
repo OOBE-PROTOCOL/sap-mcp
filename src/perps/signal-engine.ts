@@ -27,9 +27,7 @@ import {
   type OhlcCandle,
   type JsonSchema,
 } from './perp-constants.js';
-import { getConnection } from '../tools/adrena/adrena-helpers.js';
-import { ADRENA_PROGRAM_ID } from './adrena/adrena-constants.js';
-import { PublicKey } from '@solana/web3.js';
+import { readAdrenaMarketsByCustody } from './perp-decoders.js';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -160,6 +158,12 @@ function computeAtr(candles: OhlcCandle[], period: number = 14): number | null {
   return atr;
 }
 
+function roundSignificant(value: number, digits = 6): number {
+  if (!Number.isFinite(value) || value === 0) return 0;
+  const scale = 10 ** (digits - 1 - Math.floor(Math.log10(Math.abs(value))));
+  return Math.round(value * scale) / scale;
+}
+
 // ─── Synthetic OHLC from DexScreener ────────────────────────────────────────
 
 function deriveOhlcFromPair(pair: DexScreenerPair, resolution: string): OhlcCandle {
@@ -285,28 +289,18 @@ async function readFundingRate(
   market: string,
 ): Promise<number | null> {
   try {
-    const connection = getConnection(context);
-    const programId = new PublicKey(ADRENA_PROGRAM_ID);
+    const normalizedMarket = market.toUpperCase().replace(/-PERP$/, '');
+    const markets = await readAdrenaMarketsByCustody(context);
 
-    // Adrena custody discriminator (8 bytes).
-    const discriminator = Buffer.from([1, 184, 48, 81, 93, 131, 63, 145]);
-    const accounts = await connection.getProgramAccounts(programId, {
-      filters: [{ memcmp: { offset: 0, bytes: discriminator.toString('base64') } }],
-    });
-
-    for (const account of accounts) {
-      const data = account.account.data;
-      if (data.length < 184) continue;
-
-      // Read symbol (offset 8, 16 bytes, null-terminated).
-      const symbolBytes = data.subarray(8, 24);
-      const symbol = symbolBytes.toString('utf8').replace(/\0/g, '').trim().toUpperCase();
-
-      if (symbol === market.toUpperCase()) {
-        // Funding rate is at offset 168 (u32, little-endian, in basis points).
-        const fundingRateBps = data.readUInt32LE(168);
-        return fundingRateBps;
+    for (const decoded of markets.values()) {
+      const decodedMarket = decoded.market.toUpperCase().replace(/-PERP$/, '');
+      const decodedSymbol = decoded.symbol.toUpperCase();
+      if (decodedMarket !== normalizedMarket && decodedSymbol !== normalizedMarket) {
+        continue;
       }
+
+      const raw = Number(decoded.funding.currentRateLongToShortRaw);
+      return Number.isFinite(raw) ? raw : null;
     }
     return null;
   } catch {
@@ -467,7 +461,7 @@ export function registerSignalScoreTool(server: Server, context: SapMcpContext):
             ema50: ema50 !== null ? Math.round(ema50 * 1000000) / 1000000 : null,
             macd,
             bollinger,
-            atr: atr !== null ? Math.round(atr * 1000000) / 1000000 : null,
+            atr: atr !== null ? roundSignificant(atr, 6) : null,
           },
           fundingRateBps,
           liquidationDistancePct: null, // Would need position info — left null for now

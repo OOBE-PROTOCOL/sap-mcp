@@ -10,6 +10,39 @@ import type { HTTPAdapter } from '@x402/core/server';
 const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 /**
+ * @name getHttpHeader
+ * @description Return the first value for an HTTP header using case-insensitive lookup.
+ *
+ * Node normalizes incoming headers to lowercase, but MCP clients, test
+ * harnesses, and replayed requests may preserve original casing. x402 prepaid
+ * and payment headers must work across all of them.
+ */
+export function getHttpHeader(
+  headers: http.IncomingHttpHeaders,
+  name: string,
+): string | undefined {
+  const normalizedName = name.toLowerCase();
+  const aliases = normalizedName === 'payment-signature' ? ['x-payment'] : [];
+  const names = [normalizedName, ...aliases];
+
+  for (const candidate of names) {
+    const direct = headers[candidate];
+    if (direct !== undefined) {
+      return Array.isArray(direct) ? direct[0] : direct;
+    }
+  }
+
+  for (const [headerName, value] of Object.entries(headers)) {
+    const headerNameLower = headerName.toLowerCase();
+    if (names.includes(headerNameLower)) {
+      return Array.isArray(value) ? value[0] : value;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * @name NativeHttpAdapterOptions
  * @description Adapter inputs required by x402's framework-agnostic HTTP server.
  */
@@ -39,16 +72,7 @@ export class NativeHttpAdapter implements HTTPAdapter {
    * @description Returns a case-insensitive HTTP header value.
    */
   public getHeader(name: string): string | undefined {
-    const normalizedName = name.toLowerCase();
-    const header = this.request.headers[normalizedName] ?? (
-      normalizedName === 'payment-signature'
-        ? this.request.headers['x-payment']
-        : undefined
-    );
-    if (Array.isArray(header)) {
-      return header[0];
-    }
-    return header;
+    return getHttpHeader(this.request.headers, name);
   }
 
   /**

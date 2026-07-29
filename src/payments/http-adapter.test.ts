@@ -1,7 +1,7 @@
 import { PassThrough } from 'stream';
 import type { IncomingMessage } from 'http';
 import { describe, expect, it } from 'vitest';
-import { NativeHttpAdapter } from './http-adapter.js';
+import { getHttpHeader, NativeHttpAdapter } from './http-adapter.js';
 
 function requestWithHeaders(headers: IncomingMessage['headers']): IncomingMessage {
   const request = new PassThrough() as IncomingMessage;
@@ -32,5 +32,11 @@ describe('NativeHttpAdapter', () => {
     });
 
     expect(adapter.getHeader('payment-signature')).toBe('canonical-signature');
+  });
+
+  it('reads non-normalized runtime headers case-insensitively', () => {
+    expect(getHttpHeader({
+      'X-SAP-Prepaid-Session': 'prepaid-session-id',
+    }, 'x-sap-prepaid-session')).toBe('prepaid-session-id');
   });
 });
