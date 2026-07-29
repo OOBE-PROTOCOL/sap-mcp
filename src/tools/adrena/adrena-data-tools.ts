@@ -53,7 +53,7 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
 
   // Get pool info — reads directly from on-chain Pool account (Data API endpoint is broken)
   registerTool(server, 'sap_adrena_get_pool_info', {
-    description: 'Read Adrena pool statistics directly from the on-chain Pool account. Returns TVL (AUM), LP token price, pool name, custody list, trade/swap flags, and fees debt. This bypasses the broken datapi.adrena.trade REST endpoint and reads real data from Solana mainnet. Use this before opening positions to check pool health and available custodies.',
+    description: 'Read Adrena pool statistics directly from the on-chain Pool account. Returns TVL (AUM), LP token price, pool name, custody list, trade/swap flags, and fees debt. Reads from Solana mainnet via RPC. Use this before opening positions to check pool health and available custodies.',
     inputSchema: {
       type: 'object',
       properties: {

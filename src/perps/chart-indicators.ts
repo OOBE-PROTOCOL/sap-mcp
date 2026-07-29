@@ -2,9 +2,8 @@
  * @name perps/chart-indicators
  * @description Multi-timeframe OHLC batch and technical indicator calculations.
  *
- * All indicator math is implemented from scratch — RSI (Wilder's smoothing),
- * EMA, MACD (12-26-9), Bollinger Bands (20, 2σ), and ATR (14-period).
- * No external libraries, no mocks, no placeholders.
+ * All indicator math is implemented from scratch: RSI (Wilder's smoothing),
+ * EMA, MACD (12-26-9), Bollinger Bands (20, 2 sigma), and ATR (14-period).
  *
  * @module perps/chart-indicators
  */
@@ -316,7 +315,7 @@ export function registerChartMultiOhlcTool(server: Server, _context: SapMcpConte
 /**
  * @name registerChartIndicatorsTool
  * @description Register sap_chart_indicators — compute RSI, EMA, MACD, Bollinger,
- * and ATR from DexScreener price data. All indicator math is real — no mocks.
+ * and ATR from DexScreener price data.
  * @internal
  */
 export function registerChartIndicatorsTool(server: Server, _context: SapMcpContext): void {
@@ -336,7 +335,7 @@ export function registerChartIndicatorsTool(server: Server, _context: SapMcpCont
   };
 
   registerTool(server, 'sap_chart_indicators', {
-    description: 'Compute technical indicators (RSI, EMA-20, EMA-50, MACD, Bollinger Bands, ATR) from DexScreener price data. Returns pre-calculated values with trend/momentum/volatility signals. Real indicator math — no mocks. Reduces analysis time by 5-10 tool calls.',
+    description: 'Compute technical indicators (RSI, EMA-20, EMA-50, MACD, Bollinger Bands, ATR) from DexScreener price data. Returns pre-calculated values with trend/momentum/volatility signals. Reduces analysis time by 5-10 tool calls.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const mint = typeof args['mint'] === 'string' ? args['mint'] as string : '';
