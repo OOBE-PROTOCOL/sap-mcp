@@ -233,7 +233,7 @@ export const logger = {
     `.trim();
     
     console.error(banner);
-    console.error(`Version: ${config.version || '0.9.53'}`);
+    console.error(`Version: ${config.version || '0.9.54'}`);
     console.error(`Mode: ${config.mode}`);
     console.error(`RPC: ${redactSensitiveString(config.rpcUrl)}`);
     console.error(`Program: ${config.programId}`);

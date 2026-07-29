@@ -21,6 +21,9 @@ import { registerQuickContextTool } from './quick-context-tool.js';
 import { registerPremiumTools } from './premium-tools.js';
 import { registerPerpTools } from './perp-tools.js';
 import { registerAdrenaTools } from './adrena-tools.js';
+import { registerRiskCheckTool, registerPortfolioRiskTool } from '../perps/risk-engine.js';
+import { registerSignalScoreTool } from '../perps/signal-engine.js';
+import { registerFearGreedTool } from '../perps/market-intelligence.js';
 
 /**
  * Register all tools with the MCP server.
@@ -87,6 +90,12 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Register Adrena perps protocol tools: local builders + Data API.
   // 32 tools: trading, SL/TP, limit orders, commodities, liquidity, swap, staking, data API.
   registerAdrenaTools(server, context);
+
+  // Register perps risk engine + signal score + market intelligence (Sprint 1-3).
+  registerRiskCheckTool(server, context);
+  registerSignalScoreTool(server, context);
+  registerPortfolioRiskTool(server, context);
+  registerFearGreedTool(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);
