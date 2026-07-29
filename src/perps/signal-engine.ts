@@ -105,17 +105,21 @@ function computeEmaSeries(values: number[], period: number): number[] | null {
   return result;
 }
 
-function computeMacd(closes: number[]): { macd: number; signal: number; histogram: number } | null {
-  if (closes.length < 35) return null;
-  const ema12 = computeEmaSeries(closes, 12);
-  const ema26 = computeEmaSeries(closes, 26);
-  if (!ema12 || !ema26) return null;
-  const minLen = Math.min(ema12.length, ema26.length);
+/**
+ * Short-period MACD for limited data series (5-3-2 instead of 12-26-9).
+ * Works with as few as 6 data points.
+ */
+function computeMacdShort(closes: number[]): { macd: number; signal: number; histogram: number } | null {
+  if (closes.length < 6) return null;
+  const ema5 = computeEmaSeries(closes, 5);
+  const ema3 = computeEmaSeries(closes, 3);
+  if (!ema5 || !ema3) return null;
+  const minLen = Math.min(ema5.length, ema3.length);
   const macdLine: number[] = [];
   for (let i = 1; i <= minLen; i++) {
-    macdLine.unshift(ema12[ema12.length - i] - ema26[ema26.length - i]);
+    macdLine.unshift(ema5[ema5.length - i] - ema3[ema3.length - i]);
   }
-  const signal = computeEma(macdLine, 9);
+  const signal = computeEma(macdLine, 2);
   if (signal === null) return null;
   const macdValue = macdLine[macdLine.length - 1];
   const histogram = macdValue - signal;
@@ -381,18 +385,19 @@ export function registerSignalScoreTool(server: Server, context: SapMcpContext):
           (res) => deriveOhlcFromPair(pair, res),
         );
 
-        // For indicators, we need a series of closes. Since DexScreener only
-        // gives us 4 timeframes, we create a synthetic series by interpolating
-        // from the 4 candles (close prices oldest to newest).
+        // For indicators, we need a series of closes. DexScreener gives 4
+        // timeframes. We derive a longer synthetic series by interpolating
+        // between open/close for each timeframe (8 points). To make RSI and
+        // Bollinger work with this limited data, we use shorter periods.
         const closes = [candles[0].open, candles[0].close, candles[1].open, candles[1].close, candles[2].open, candles[2].close, candles[3].open, candles[3].close];
 
-        // 3. Compute indicators.
-        const rsi = computeRsi(closes);
-        const ema20 = computeEma(closes, 7); // Shorter period due to limited data
-        const ema50 = computeEma(closes, 8);
-        const macd = computeMacd(closes);
-        const bollinger = computeBollinger(closes, 8);
-        const atr = computeAtr(candles);
+        // 3. Compute indicators with periods adapted to the 8-point series.
+        const rsi = computeRsi(closes, 5);       // RSI-5 (needs 6 points)
+        const ema20 = computeEma(closes, 5);      // EMA-5 (fast)
+        const ema50 = computeEma(closes, 8);      // EMA-8 (slow, uses all data)
+        const macd = computeMacdShort(closes);    // Short MACD (5-3-2)
+        const bollinger = computeBollinger(closes, 6, 2); // BB-6 (needs 6 points)
+        const atr = computeAtr(candles, 3);       // ATR-3 (needs 4 candles)
 
         // 4. Read on-chain funding rate.
         const fundingRateBps = await readFundingRate(context, market);

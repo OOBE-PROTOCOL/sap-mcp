@@ -161,6 +161,17 @@ const FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+  // Sprint 1-3 tools — free because they read local data or free external APIs.
+  'sap_perp_risk_check',
+  'sap_perp_portfolio_risk',
+  'sap_perp_fear_greed',
+  'sap_adrena_simulate_position',
+  'sap_strategy_execute',
+  'sap_trade_journal',
+  'sap_trade_journal_query',
+  'sap_payments_start_prepaid',
+  'sap_payments_prepaid_balance',
+  'sap_payments_fund_prepaid',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -237,6 +248,17 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+  // Sprint 1-3 tools — free in strict mode too.
+  'sap_perp_risk_check',
+  'sap_perp_portfolio_risk',
+  'sap_perp_fear_greed',
+  'sap_adrena_simulate_position',
+  'sap_strategy_execute',
+  'sap_trade_journal',
+  'sap_trade_journal_query',
+  'sap_payments_start_prepaid',
+  'sap_payments_prepaid_balance',
+  'sap_payments_fund_prepaid',
 ]);
 
 const MICRO_READ_TOOLS = new Set([
@@ -275,6 +297,12 @@ const MICRO_READ_TOOLS = new Set([
   'sap_adrena_get_prices',
   'sap_adrena_get_trading_prices',
   'sap_adrena_get_position_status',
+  // Sprint 1-3 tools — micro-read because they aggregate data in 1 call.
+  'sap_perp_signal_score',
+  'sap_adrena_get_markets',
+  'sap_market_snapshot',
+  'sap_chart_indicators',
+  'sap_chart_multi_ohlc',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -361,6 +389,11 @@ const BUILDER_TOOLS = new Set([
   'sap_adrena_build_remove_liquid_stake',
   'sap_adrena_build_add_locked_stake',
   'sap_adrena_build_claim_stakes',
+  // Sprint 1-3 tools — builders that construct unsigned transactions.
+  'sap_adrena_build_position_package',
+  'sap_adrena_build_trailing_stop',
+  'sap_adrena_build_modify_position',
+  'sap_adrena_trade_intent',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([
