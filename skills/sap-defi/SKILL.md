@@ -46,7 +46,7 @@ bridges, and staking protocols.
 
 ## Adrena Perps Protocol (32 tools)
 
-SAP MCP 0.9.51+ includes a full native Adrena integration: local unsigned
+SAP MCP 0.9.55+ includes a full native Adrena integration: local unsigned
 transaction builders for every Adrena operation plus a REST Data API client.
 All builders use the vendored official Adrena IDL (release/39) via
 `@coral-xyz/anchor` and produce unsigned base64 transactions for local
@@ -65,6 +65,11 @@ signing via `sap_payments_finalize_transaction`.
 - `sap_adrena_build_cancel_take_profit` — Cancel take profit
 - `sap_adrena_build_add_limit_order` — Place a limit order
 - `sap_adrena_build_cancel_limit_order` — Cancel a limit order
+
+### Advanced Builders
+
+- `sap_adrena_build_trailing_stop` — Set a trailing stop loss that follows the oracle price. Reads the current oracle price and computes the stop at a specified percentage distance. For longs: SL below price. For shorts: SL above price. Call repeatedly to keep the stop trailing
+- `sap_adrena_build_modify_position` — Add collateral to an existing position via openOrIncreasePosition. Optionally change leverage to adjust position risk
 
 ### Commodity Builders (synthetic perps: XAU, XAG, WTI)
 
@@ -100,6 +105,19 @@ signing via `sap_payments_finalize_transaction`.
 - `sap_adrena_get_trading_prices` — Latest oracle prices for all assets
 - `sap_adrena_get_position_status` — Live position P&L from Adrena Data API. If the Data API is unavailable, fall back to `sap_perp_position_info` which reads the on-chain Position account directly via Solana RPC
 
+### Risk Engine
+
+- `sap_perp_risk_check` — Pre-trade dynamic risk gate. Reads the trade journal to compute daily P&L, drawdown, and cooldown status. Returns a risk score (0-1) with PROCEED/WAIT/BLOCK recommendation. Call this before `sap_adrena_build_open_long` or `sap_adrena_build_open_short`
+- `sap_perp_portfolio_risk` — Aggregate portfolio risk score from open positions. Returns total exposure, weighted leverage, diversification score, and SAFE/MODERATE/HIGH/CRITICAL recommendation
+
+### Signal Engine
+
+- `sap_perp_signal_score` — Aggregate technical signal score (0-1) from RSI, EMA, MACD, Bollinger Bands, price action, and on-chain funding rate. Returns LONG/SHORT/WAIT with confidence and reasons. Replaces 5-7 individual indicator calls with 1
+
+### Market Intelligence
+
+- `sap_perp_fear_greed` — Crypto Fear & Greed Index from alternative.me (free, no API key). Returns current value (0-100), classification, historical values, and risk_on/risk_off recommendation
+
 ## Flow
 
 1. Use quote/read tools first.
@@ -130,11 +148,17 @@ planning tools before any value-moving action:
 4. Call `sap_chart_ohlc`, `sap_chart_long_term`, or
    `sap_chart_volume_profile` for trend, timeframe, and liquidity context.
 5. Call `sap_perp_liquidation_zones` to understand liquidation distance.
-6. Call `sap_perp_trade_plan` with market, side, collateral amount, leverage,
+6. Call `sap_perp_signal_score` to get an aggregate technical signal score
+   (0-1) with LONG/SHORT/WAIT recommendation. This replaces 5-7 individual
+   indicator calls with 1.
+7. Call `sap_perp_risk_check` with market, side, collateral, and leverage
+   to verify the trade passes dynamic risk gates (daily loss, drawdown,
+   cooldown). Returns PROCEED/WAIT/BLOCK.
+8. Call `sap_perp_trade_plan` with market, side, collateral amount, leverage,
    entry price (required, fetch from `sap_adrena_get_trading_prices` first),
    stop loss, take profit, max slippage, and max account-risk policy.
-7. Call `sap_perp_builder_status` to confirm which Adrena operations are
-   available. As of 0.9.51, all builder operations and Data API tools
+9. Call `sap_perp_builder_status` to confirm which Adrena operations are
+   available. As of 0.9.55, all builder operations and Data API tools
    are available natively.
 
 ### Execution Flow (Adrena)
@@ -168,7 +192,7 @@ planning tools before any value-moving action:
 ### Policy: stop_loss_required
 
 The SAP MCP policy engine has a `stopLossRequired` flag (default: false
-as of 0.9.51). When enabled in the profile config, `sap_adrena_build_open_long`
+as of 0.9.55). When enabled in the profile config, `sap_adrena_build_open_long`
 and `sap_adrena_build_open_short` require `stopLossPriceUsd` to be set.
 If omitted, the builder returns `PolicyViolation: stop_loss_required`.
 Pass `stopLossPriceUsd` or use `sap_adrena_build_position_package` which

@@ -220,11 +220,11 @@ Social, Blinks, bounties, gaming:
 `gibwork_createBounty`, `gibwork_listBounties`, `gibwork_submitWork`,
 `send-arcade_listGames`, `send-arcade_playGame`.
 
-Perps note: SAP MCP 0.9.51+ includes a full native Adrena integration with
-32 tools. All builder operations construct unsigned Solana transactions
+Perps note: SAP MCP 0.9.55+ includes a full native Adrena integration with
+38 tools. All builder operations construct unsigned Solana transactions
 locally using the vendored Adrena Anchor IDL (release/39) via
 `@coral-xyz/anchor`, then return `transactionBase64` for local signing via
-`sap_payments_finalize_transaction`. No external builder URL is required.
+`sap_payments_finalize_transaction`.
 
 Adrena trading builders: `sap_adrena_build_open_long`,
 `sap_adrena_build_open_short`, `sap_adrena_build_position_package` (atomic
@@ -232,7 +232,8 @@ open + SL + TP in 1 transaction), `sap_adrena_build_close_long`,
 `sap_adrena_build_close_short`, `sap_adrena_build_set_stop_loss`,
 `sap_adrena_build_set_take_profit`, `sap_adrena_build_cancel_stop_loss`,
 `sap_adrena_build_cancel_take_profit`, `sap_adrena_build_add_limit_order`,
-`sap_adrena_build_cancel_limit_order`.
+`sap_adrena_build_cancel_limit_order`, `sap_adrena_build_trailing_stop`,
+`sap_adrena_build_modify_position`.
 
 Commodity builders (XAU, XAG, WTI): `sap_adrena_build_open_commodity_long`,
 `sap_adrena_build_open_commodity_short`, `sap_adrena_build_close_commodity_long`,
@@ -256,6 +257,16 @@ Legacy perps analytics remain available: `sap_perp_markets`,
 `sap_perp_position_info`, `sap_perp_funding_history`,
 `sap_perp_liquidation_zones`, `sap_perp_trade_plan`, `sap_perp_builder_status`,
 `sap_chart_ohlc`, `sap_chart_long_term`, `sap_chart_volume_profile`.
+
+Risk engine: `sap_perp_risk_check` (pre-trade dynamic risk gate with daily
+loss, drawdown, cooldown, risk score 0-1), `sap_perp_portfolio_risk` (portfolio
+risk score with exposure, leverage, diversification, SAFE/MODERATE/HIGH/CRITICAL).
+
+Signal engine: `sap_perp_signal_score` (aggregate technical signal score 0-1
+from RSI, EMA, MACD, Bollinger Bands, funding rate, LONG/SHORT/WAIT).
+
+Market intelligence: `sap_perp_fear_greed` (Crypto Fear & Greed Index from
+alternative.me, risk_on/risk_off recommendation).
 
 Collateral rules: longs require collateral = principal token; shorts require
 USDC collateral; commodities always use USDC. Supported main-pool assets:
