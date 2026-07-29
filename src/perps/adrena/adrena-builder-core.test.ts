@@ -14,6 +14,18 @@ function emptyIx(): TransactionInstruction {
   });
 }
 
+function ixWithKeys(keys: PublicKey[]): TransactionInstruction {
+  return new TransactionInstruction({
+    keys: keys.map(pubkey => ({
+      pubkey,
+      isSigner: false,
+      isWritable: true,
+    })),
+    programId: PublicKey.default,
+    data: Buffer.alloc(0),
+  });
+}
+
 describe('Adrena builder core', () => {
   it('encodes human leverage into Adrena BPS format', () => {
     expect(encodeAdrenaLeverage(1)).toBe(10_000);
@@ -67,5 +79,63 @@ describe('Adrena builder core', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]).toEqual({ owner: PublicKey.default });
     expect(calls[1]).toEqual({ owner: PublicKey.default, referrerProfile: null });
+  });
+
+  it('removes a materialized null referrerProfile meta from open-position instructions', async () => {
+    const owner = new PublicKey('11111111111111111111111111111112');
+    const referrer = new PublicKey('11111111111111111111111111111113');
+    const program = {
+      idl: {
+        instructions: [{
+          name: 'open_or_increase_position_short',
+          accounts: [
+            { name: 'owner' },
+            { name: 'referrer_profile', optional: true },
+          ],
+        }],
+      },
+      methods: {
+        openOrIncreasePositionShort: () => ({
+          accounts: () => ({ instruction: async () => ixWithKeys([owner, referrer]) }),
+          accountsPartial: () => ({ instruction: async () => ixWithKeys([owner, referrer]) }),
+        }),
+      },
+    } as unknown as Program;
+
+    const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [], {
+      owner,
+      referrerProfile: null,
+    });
+
+    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58()]);
+  });
+
+  it('keeps an explicit referrerProfile meta when the caller provides one', async () => {
+    const owner = new PublicKey('11111111111111111111111111111112');
+    const referrer = new PublicKey('11111111111111111111111111111113');
+    const program = {
+      idl: {
+        instructions: [{
+          name: 'open_or_increase_position_short',
+          accounts: [
+            { name: 'owner' },
+            { name: 'referrer_profile', optional: true },
+          ],
+        }],
+      },
+      methods: {
+        openOrIncreasePositionShort: () => ({
+          accounts: () => ({ instruction: async () => ixWithKeys([owner, referrer]) }),
+          accountsPartial: () => ({ instruction: async () => ixWithKeys([owner, referrer]) }),
+        }),
+      },
+    } as unknown as Program;
+
+    const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [], {
+      owner,
+      referrerProfile: referrer,
+    });
+
+    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58(), referrer.toBase58()]);
   });
 });

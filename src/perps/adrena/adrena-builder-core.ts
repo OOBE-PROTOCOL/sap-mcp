@@ -626,6 +626,79 @@ export async function ensureAtaInstructions(
   return [createAtaIdempotentIx(owner, mint, payer)];
 }
 
+interface AdrenaIdlAccountMeta {
+  name: string;
+  optional?: boolean;
+}
+
+interface AdrenaIdlInstructionMeta {
+  name: string;
+  accounts?: AdrenaIdlAccountMeta[];
+}
+
+function camelToSnake(value: string): string {
+  return value.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+function snakeToCamel(value: string): string {
+  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+function getIdlInstructionAccounts(program: Program, ixName: string): AdrenaIdlAccountMeta[] {
+  const idl = (program as unknown as { idl?: { instructions?: AdrenaIdlInstructionMeta[] } }).idl;
+  const snakeName = camelToSnake(ixName);
+  const instruction = idl?.instructions?.find(candidate =>
+    candidate.name === ixName || candidate.name === snakeName,
+  );
+  return instruction?.accounts ?? [];
+}
+
+/**
+ * Anchor 0.30 can still materialize optional accounts after a retry with
+ * explicit nulls. For Adrena, a phantom referrer profile is worse than no
+ * referrer: the on-chain program rejects open-position transactions with
+ * privilege/escalation errors. If the caller intentionally passed
+ * `referrerProfile: null`, remove the corresponding optional IDL account from
+ * the final instruction before simulation/serialization.
+ */
+function sanitizeNullOptionalAdrenaAccounts(
+  program: Program,
+  ixName: string,
+  accounts: Record<string, PublicKey | null>,
+  ix: TransactionInstruction,
+): TransactionInstruction {
+  const idlAccounts = getIdlInstructionAccounts(program, ixName);
+  if (idlAccounts.length === 0 || ix.keys.length < idlAccounts.length) {
+    return ix;
+  }
+
+  const removalIndexes = new Set<number>();
+  for (const [index, accountMeta] of idlAccounts.entries()) {
+    if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
+      continue;
+    }
+    const camelName = snakeToCamel(accountMeta.name);
+    if (Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null) {
+      removalIndexes.add(index);
+    }
+  }
+
+  if (removalIndexes.size === 0) {
+    return ix;
+  }
+
+  logger.debug('Removed null optional Adrena accounts from built instruction', {
+    ixName,
+    removedAccounts: Array.from(removalIndexes).map(index => idlAccounts[index]?.name ?? `#${index}`),
+  });
+
+  return new TransactionInstruction({
+    programId: ix.programId,
+    keys: ix.keys.filter((_, index) => !removalIndexes.has(index)),
+    data: ix.data,
+  });
+}
+
 /**
  * Create an Anchor Program instance from the vendored IDL.
  * @param connection — Solana RPC connection.
@@ -682,7 +755,8 @@ export async function buildInstruction(
 
   try {
     const ixWithAccounts = bindAccounts.call(ixWithArgs, filteredAccounts);
-    return await ixWithAccounts.instruction();
+    const ix = await ixWithAccounts.instruction();
+    return sanitizeNullOptionalAdrenaAccounts(program, ixName, accounts, ix);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.toLowerCase().includes('not provided')) {
@@ -698,7 +772,8 @@ export async function buildInstruction(
     });
 
     const ixWithAccounts = ixWithArgs.accounts(accounts);
-    return await ixWithAccounts.instruction();
+    const ix = await ixWithAccounts.instruction();
+    return sanitizeNullOptionalAdrenaAccounts(program, ixName, accounts, ix);
   }
 }
 

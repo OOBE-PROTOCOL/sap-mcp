@@ -251,6 +251,44 @@ describe('MCP client injection', () => {
     expect(built.nextContent).not.toContain('SAP_WALLET_PATH');
   });
 
+  it('repairs only SAP Codex namespaces while preserving third-party MCP servers', () => {
+    const content = [
+      '[mcp_servers.github]',
+      'command = "npx"',
+      'args = ["-y", "@modelcontextprotocol/server-github"]',
+      '',
+      '[mcp_servers.sap]',
+      'command = "npx.cmd"',
+      'args = ["-y", "mcp-remote@latest", "https://mcp.sap.oobeprotocol.ai/mcp"]',
+      '',
+      '[mcp_servers.sap_payments]',
+      'command = "npx.cmd"',
+      'args = ["--yes", "--package", "@oobe-protocol-labs/sap-mcp-server@0.9.1", "sap-mcp-server"]',
+      '',
+      '[mcp_servers.sap_payments.env]',
+      'SAP_ALLOWED_TOOLS = "sap_payments_call_paid_tool"',
+      'SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"',
+    ].join('\n');
+
+    const resolved = resolveHostedPaymentBridgeContent({
+      id: 'codex',
+      label: 'Codex',
+      path: '/tmp/config.toml',
+      format: 'toml',
+      exists: true,
+    }, content, 'win32');
+
+    expect(resolved.nextContent).toContain('[mcp_servers.github]');
+    expect(resolved.nextContent).toContain('@modelcontextprotocol/server-github');
+    expect(resolved.nextContent).toContain('[mcp_servers.sap]');
+    expect(resolved.nextContent).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(resolved.nextContent).toContain('[mcp_servers.sap_payments]');
+    expect(resolved.nextContent).toContain(`@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`);
+    expect(resolved.nextContent).toContain('SAP_ALLOWED_TOOLS = "all"');
+    expect(resolved.nextContent).not.toContain('mcp-remote');
+    expect(resolved.nextContent).not.toContain('@oobe-protocol-labs/sap-mcp-server@0.9.1');
+  });
+
   it('validates Codex hosted MCP plus local payment bridge config', () => {
     const targetConfig: McpClientTarget = {
       id: 'codex',

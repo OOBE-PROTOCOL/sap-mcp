@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.58 - 2026-07-29
+
+### Fixed
+
+- Hardened Adrena open-position builders by removing any materialized null
+  `referrerProfile` optional account from the final instruction before
+  simulation or serialization. This applies the same no-referrer behavior to
+  open long/short flows that already made close-position flows safe.
+- Added a Codex repair regression test proving stale SAP `mcp-remote` blocks
+  and stale `sap_payments` allow-lists are replaced without touching
+  third-party MCP servers.
+
+### Tests
+
+- Added targeted coverage for Adrena optional referrer account sanitization and
+  Codex namespace repair safety.
+
 ## 0.9.57 - 2026-07-29
 
 ### Fixed
