@@ -229,10 +229,10 @@ describe('Adrena builder core', () => {
       cortexAndDefaultReferrer.toBase58(),
       userProfile.toBase58(),
     ]);
-    expect(ix.keys.map(key => key.isWritable)).toEqual([false, true, false, true]);
+    expect(ix.keys.map(key => key.isWritable)).toEqual([false, true, true, true]);
   });
 
-  it('marks Adrena cortex readonly when it is the only default-referrer pubkey left', async () => {
+  it('marks Adrena open-position cortex writable when it is the only default-referrer pubkey left', async () => {
     const owner = new PublicKey('11111111111111111111111111111112');
     const payer = owner;
     const fundingAccount = new PublicKey('11111111111111111111111111111113');
@@ -336,7 +336,7 @@ describe('Adrena builder core', () => {
     });
 
     const cortexMeta = ix.keys.find(key => key.pubkey.equals(cortex));
-    expect(cortexMeta?.isWritable).toBe(false);
+    expect(cortexMeta?.isWritable).toBe(true);
     expect(ix.keys.map(key => key.isWritable)).toEqual([
       false,
       true,
@@ -346,7 +346,7 @@ describe('Adrena builder core', () => {
       true,
       true,
       false,
-      false,
+      true,
       true,
       true,
       false,

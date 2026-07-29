@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.62 - 2026-07-30
+
+### Fixed
+
+- Fixed the remaining Adrena open-position account-meta blocker. Live Anchor
+  instructions can leave a trailing optional-referrer placeholder, so the
+  filtered account list no longer aligns 1:1 with the vendored IDL. For
+  `open_or_increase_position_long` and `open_or_increase_position_short`,
+  SAP MCP now treats any remaining `Dhz8Ta79...` key as the Adrena `cortex`
+  PDA and marks it writable, matching the on-chain CPI requirement instead of
+  trusting the stale readonly IDL flag. Local simulation now passes the
+  `PrivilegeEscalation` stage and reaches real Adrena validation errors such
+  as `InsufficientCollateral`.
+
+### Tests
+
+- Updated Adrena builder regressions for the concrete account-list shape seen
+  in hosted simulations: duplicate default-referrer removal plus writable
+  `cortex` preservation when the same public key has both roles.
+
 ## 0.9.61 - 2026-07-30
 
 ### Fixed

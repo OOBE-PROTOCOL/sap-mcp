@@ -677,13 +677,35 @@ function getFinalIdlAccounts(
 }
 
 function normalizeAdrenaAccountMetas(
+  ixName: string,
   idlAccounts: AdrenaIdlAccountMeta[],
   accounts: Record<string, PublicKey | null>,
   ix: TransactionInstruction,
 ): TransactionInstruction {
   const finalIdlAccounts = getFinalIdlAccounts(idlAccounts, accounts);
+  const isOpenPositionInstruction =
+    ixName === 'openOrIncreasePositionLong' || ixName === 'openOrIncreasePositionShort';
+
   if (finalIdlAccounts.length === 0 || finalIdlAccounts.length !== ix.keys.length) {
-    return ix;
+    if (!isOpenPositionInstruction) {
+      return ix;
+    }
+
+    const keys = ix.keys.map(key => ({
+      ...key,
+      // Anchor can leave a trailing placeholder account for the omitted
+      // optional referrer, which makes the concrete account list longer than
+      // the filtered IDL account list. In open-position instructions any
+      // remaining Dhz8... account is the cortex PDA, and Adrena's CPI path
+      // requires it writable.
+      isWritable: key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY) ? true : key.isWritable,
+    }));
+
+    return new TransactionInstruction({
+      programId: ix.programId,
+      keys,
+      data: ix.data,
+    });
   }
 
   const keys = ix.keys.map((key, index) => {
@@ -692,10 +714,19 @@ function normalizeAdrenaAccountMetas(
       return key;
     }
 
+    const openPositionNeedsWritableCortex =
+      accountMeta.name === 'cortex' &&
+      isOpenPositionInstruction;
+
     return {
       ...key,
       isSigner: accountMeta.signer === true,
-      isWritable: accountMeta.writable === true,
+      // Adrena's on-chain open-position path performs an internal CPI that
+      // expects cortex to be writable even though the vendored IDL marks
+      // cortex readonly for open_or_increase_position_{long,short}. If we
+      // follow the IDL literally, simulation fails with:
+      // "Dhz8Ta79... writable privilege escalated".
+      isWritable: openPositionNeedsWritableCortex || accountMeta.writable === true,
     };
   });
 
@@ -766,7 +797,7 @@ function sanitizeNullOptionalAdrenaAccounts(
   }
 
   if (removalIndexes.size === 0) {
-    return normalizeAdrenaAccountMetas(idlAccounts, accounts, ix);
+    return normalizeAdrenaAccountMetas(ixName, idlAccounts, accounts, ix);
   }
 
   logger.debug('Removed null optional Adrena accounts from built instruction', {
@@ -780,7 +811,7 @@ function sanitizeNullOptionalAdrenaAccounts(
     data: ix.data,
   });
 
-  return normalizeAdrenaAccountMetas(idlAccounts, accounts, filteredIx);
+  return normalizeAdrenaAccountMetas(ixName, idlAccounts, accounts, filteredIx);
 }
 
 /**
