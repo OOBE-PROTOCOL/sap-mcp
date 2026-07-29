@@ -681,22 +681,42 @@ function sanitizeNullOptionalAdrenaAccounts(
   const idlAccounts = getIdlInstructionAccounts(program, ixName);
   const removalIndexes = new Set<number>();
 
-  if (idlAccounts.length > 0 && ix.keys.length >= idlAccounts.length) {
-    for (const [index, accountMeta] of idlAccounts.entries()) {
-      if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
-        continue;
-      }
-      const camelName = snakeToCamel(accountMeta.name);
-      if (Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null) {
-        removalIndexes.add(index);
-      }
+  const defaultReferrerIndexes = ix.keys
+    .map((key, index) => ({ key, index }))
+    .filter(({ key }) => key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY))
+    .map(({ index }) => index);
+  const idlHasCortexAccount = idlAccounts.some(accountMeta => accountMeta.name === 'cortex');
+
+  for (const [index, accountMeta] of idlAccounts.entries()) {
+    if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
+      continue;
+    }
+
+    const camelName = snakeToCamel(accountMeta.name);
+    const referrerWasExplicitlyNull =
+      Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null;
+    if (!referrerWasExplicitlyNull) {
+      continue;
+    }
+
+    // Adrena's cortex PDA is the same public key as the default referrer
+    // profile. Removing every matching pubkey corrupts the account order and
+    // makes the program read the next account as `cortex` (Anchor 3002).
+    // Only remove the default-referrer key when it is in the IDL referrer slot.
+    if (ix.keys[index]?.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY)) {
+      removalIndexes.add(index);
     }
   }
 
-  for (const [index, key] of ix.keys.entries()) {
-    if (key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY)) {
+  if (removalIndexes.size === 0 && defaultReferrerIndexes.length > 1) {
+    // When Anchor returns a compact account list and cannot be aligned to the
+    // full IDL index map, keep the first default-referrer pubkey as cortex and
+    // remove later duplicate materializations as optional referrer accounts.
+    for (const index of defaultReferrerIndexes.slice(1)) {
       removalIndexes.add(index);
     }
+  } else if (removalIndexes.size === 0 && defaultReferrerIndexes.length === 1 && !idlHasCortexAccount) {
+    removalIndexes.add(defaultReferrerIndexes[0]!);
   }
 
   if (removalIndexes.size === 0) {

@@ -82,7 +82,7 @@ describe('Adrena builder core', () => {
     expect(calls[1]).toEqual({ owner: PublicKey.default, referrerProfile: null });
   });
 
-  it('removes a materialized null referrerProfile meta from open-position instructions', async () => {
+  it('does not remove an arbitrary account at the referrerProfile IDL slot', async () => {
     const owner = new PublicKey('11111111111111111111111111111112');
     const referrer = new PublicKey('11111111111111111111111111111113');
     const program = {
@@ -108,7 +108,7 @@ describe('Adrena builder core', () => {
       referrerProfile: null,
     });
 
-    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58()]);
+    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58(), referrer.toBase58()]);
   });
 
   it('keeps an explicit referrerProfile meta when the caller provides one', async () => {
@@ -171,5 +171,63 @@ describe('Adrena builder core', () => {
     });
 
     expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58(), userProfile.toBase58()]);
+  });
+
+  it('keeps the first Adrena default-referrer pubkey as cortex and removes only the duplicate referrer', async () => {
+    const owner = new PublicKey('11111111111111111111111111111112');
+    const fundingAccount = new PublicKey('11111111111111111111111111111113');
+    const userProfile = new PublicKey('11111111111111111111111111111114');
+    const cortexAndDefaultReferrer = new PublicKey(ADRENA_DEFAULT_REFERRER_PROFILE);
+    const program = {
+      idl: {
+        instructions: [{
+          name: 'open_or_increase_position_short',
+          accounts: [
+            { name: 'owner' },
+            { name: 'funding_account' },
+            { name: 'cortex' },
+            { name: 'user_profile', optional: true },
+            { name: 'referrer_profile', optional: true },
+          ],
+        }],
+      },
+      methods: {
+        openOrIncreasePositionShort: () => ({
+          accounts: () => ({
+            instruction: async () => ixWithKeys([
+              owner,
+              fundingAccount,
+              cortexAndDefaultReferrer,
+              userProfile,
+              cortexAndDefaultReferrer,
+            ]),
+          }),
+          accountsPartial: () => ({
+            instruction: async () => ixWithKeys([
+              owner,
+              fundingAccount,
+              cortexAndDefaultReferrer,
+              userProfile,
+              cortexAndDefaultReferrer,
+            ]),
+          }),
+        }),
+      },
+    } as unknown as Program;
+
+    const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [], {
+      owner,
+      fundingAccount,
+      cortex: cortexAndDefaultReferrer,
+      userProfile,
+      referrerProfile: null,
+    });
+
+    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([
+      owner.toBase58(),
+      fundingAccount.toBase58(),
+      cortexAndDefaultReferrer.toBase58(),
+      userProfile.toBase58(),
+    ]);
   });
 });

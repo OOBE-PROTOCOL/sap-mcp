@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.60 - 2026-07-30
+
+### Fixed
+
+- Fixed Adrena open-position account sanitization for the `cortex` PDA. Adrena
+  uses the same public key for the `cortex` PDA and its default referrer
+  profile, so removing every matching default-referrer pubkey corrupted the
+  instruction account order and surfaced Anchor `AccountDiscriminatorMismatch`
+  on `cortex`. SAP MCP now keeps the first occurrence as `cortex` and removes
+  only the duplicated optional referrer meta when agents request
+  `referrerProfile: null`.
+
+### Tests
+
+- Added regression coverage proving Adrena builders preserve the `cortex`
+  account while removing only the duplicated default-referrer optional account.
+
 ## 0.9.59 - 2026-07-29
 
 ### Fixed
