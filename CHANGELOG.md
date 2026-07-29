@@ -2,6 +2,90 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.55 - 2026-07-28
+
+### Added - Sprint 1-3: Risk Engine, Signal Score, Advanced Builders, Market Intelligence
+
+- **6 new perps tools** for professional autonomous trading:
+  - `sap_perp_risk_check` - Pre-trade dynamic risk gate. Reads the trade journal to compute daily P&L, drawdown, cooldown status. Returns risk score (0-1) with PROCEED/WAIT/BLOCK recommendation.
+  - `sap_perp_signal_score` - Aggregate technical signal score (0-1) from RSI, EMA, MACD, Bollinger Bands, price action, and on-chain funding rate. Returns LONG/SHORT/WAIT with confidence. Replaces 5-7 individual indicator calls with 1.
+  - `sap_adrena_build_trailing_stop` - Trailing stop loss builder. Reads the current oracle price and computes the stop at a specified percentage distance. For longs: SL below price. For shorts: SL above price.
+  - `sap_adrena_build_modify_position` - Add collateral to an existing position via openOrIncreasePosition. Optionally change leverage to adjust position risk.
+  - `sap_perp_fear_greed` - Crypto Fear & Greed Index from alternative.me (free, no API key). Returns current value (0-100), classification, historical values, and risk_on/risk_off recommendation.
+  - `sap_perp_portfolio_risk` - Aggregate portfolio risk score from open positions. Returns total exposure, weighted leverage, diversification score, and SAFE/MODERATE/HIGH/CRITICAL recommendation.
+
+- Extended `TradingPolicy` interface with `dailyLossLimitUsd`, `maxDrawdownPct`, `cooldownMinutes` (all optional, typed defaults: $10, 30%, 15 min).
+- Extended `SapMcpConfig` with the same three optional fields for profile-level configuration.
+
+### Changed
+
+- Professional Perps Flow updated to include `sap_perp_signal_score` (step 6) and `sap_perp_risk_check` (step 7) before `sap_perp_trade_plan`.
+- `sap-agent-context.prompt.ts` updated with Risk and signal table row, trailing_stop and modify_position in Adrena perps trading table, and Risk gate + Signal score steps in the Adrena Perps Trading Flow.
+- All skills, TOOL_REFERENCE, and prompts updated to version 0.9.55.
+- All npm package references in USER_DOCS and docs updated to 0.9.55.
+
+### Documentation
+
+- Removed informal language ("no mocks", "no placeholders", "real indicator math", "bypasses the broken endpoint") from tool descriptions and module comments.
+- `sap-defi/SKILL.md` updated with Advanced Builders, Risk Engine, Signal Engine, and Market Intelligence sections.
+- `TOOL_REFERENCE.md` updated with all 6 new tools, tool count 38.
+
+## 0.9.54 - 2026-07-28
+
+### Fixed
+
+- **Adrena close builder error 3007** - `buildInstruction` was passing `null` for optional accounts (referrerProfile) to Anchor. Anchor v0.30 resolves `null` for optional accounts without PDA seeds to a wrong address, causing on-chain error 3007 (account owned by different program). Fix: strip `null` entries from the accounts object before passing to Anchor, so optional accounts are omitted entirely from the instruction. This affected `closePositionShort`, `closePositionLong`, and all builders that pass `referrerProfile = null`.
+
+## 0.9.52 - 2026-07-28
+
+### Added - ClawPump Runtime Partnership
+
+- **ClawPump Agent** is now a natively supported runtime in SAP MCP, alongside Hermes, Codex, Claude, and OpenClaw.
+  - `McpClientId` type extended with `'clawpump'`.
+  - `AgentTarget` type extended with `'clawpump'`.
+  - Skill directory `~/.clawpump/skills/` added to `getDefaultTargetDir` and `getAgentTargetDirs`.
+  - Wizard `runtimeIds` array includes `'clawpump'`.
+  - Config target `~/.clawpump/config.yaml` (YAML, same format as Hermes) added to `getKnownClientTargets`.
+  - Manual snippets for hosted SAP MCP + local payment bridge added to `createManualMcpJsonSnippets`.
+- **sap-clawpump-bridge** bundled skill with dual-payment model documentation (x402 Classic vs Escrow V2 vs Subscription) and decision matrix.
+- Integration files for external PR to Clawpump/claw-agent:
+  - `integration/clawpump/optional-mcps/sap-mcp/manifest.yaml` - MCP catalog entry.
+  - `integration/clawpump/scripts/sap-mcp-setup.sh` - Setup wizard helper.
+
+### Fixed
+
+- **PolicyViolation: stop_loss_required** - `stopLossRequired` default changed from `true` to `false` in `policy-engine.ts`. The previous default blocked all Adrena trades because `open_long` and `open_short` passed `hasStopLoss = false` hardcoded. Now `hasStopLoss` is computed dynamically from `stopLossPriceUsd !== null`, and `stopLossPriceUsd` is an optional field in both builder schemas.
+- **Adrena Data API error logging** - `fetchJson` in `adrena-data-api.ts` now logs HTTP status and response body when the API fails, instead of silently returning `null`. Agents can diagnose API failures via `pm2 logs`.
+- **sap_perp_trade_plan entryPrice** - Tool description and schema field description now explicitly state that `entryPrice` is required and should be fetched from `sap_adrena_get_trading_prices` or `sap_adrena_get_prices` first.
+
+## 0.9.50 - 2026-07-27
+
+### Added
+
+- **Policy engine** with 3 guard rails: `collateral_exceeded`, `leverage_exceeded`, `market_not_allowed`. Enforced at the builder level before constructing Adrena transactions.
+- **Mandatory pre-submit simulation** in `submitSignedTransactionWithLifecycle`. Simulates the signed transaction before submitting. If simulation fails, returns logs without submitting.
+- **Priority fee** support via `SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS` env var. Prepended to Adrena perps transactions.
+- **Market snapshot** with 30s TTL cache. Reduces polling costs 20x for repeated market data reads.
+- **Multi-chart** OHLC batch tool `sap_chart_multi_ohlc` - fetch OHLC for multiple resolutions in a single DexScreener call.
+- **Technical indicators** tool `sap_chart_indicators` - RSI, EMA-20, EMA-50, MACD, Bollinger Bands, ATR from DexScreener price data.
+- **Strategy execute** tool `sap_strategy_execute` - load a saved strategy and build a ready-to-sign transaction.
+- **Trade journal** - `sap_trade_journal` (append) and `sap_trade_journal_query` (query) for automatic trade tracking.
+
+### Fixed
+
+- **Adrena builder improvements**: pre-flight balance check on all builders, real on-chain mint addresses replacing placeholder values, leverage pre-validation against custody maxInitialLeverage.
+- **Blockhash refresh** before signing in `finalizeTransactionWithLocalSigner` and sign tools.
+- **Jupiter Ultra API** default to `lite-api.jup.ag` for Ultra API endpoints.
+- **SPL transfer** correct ATA seed derivation (removed incorrect 'AssociatedTokenAddress' prefix).
+- **On-chain pool info** reads directly from the Pool account instead of the broken Data API endpoint.
+- **Transaction retry** for heavy Adrena transactions (17+ accounts) that expire on public RPC.
+- **Simulation logs** returned in builder responses for debugging.
+- **Commodity builders** fixed (XAU, XAG, WTI now work with USDC collateral).
+- **Batch position builder** `sap_adrena_build_position_package` - open + set SL + set TP atomically in 1 transaction.
+- **Intent-level trading API** `sap_adrena_trade_intent` - resolves mint, decimals, max leverage, collateral token automatically. Reduces 5 tool calls to 1.
+- **Prepaid session** payment via x402 Lifecycle Hooks `grantAccess`. 6x faster, 6x cheaper than per-call payment.
+- **Dry-run simulation** `sap_adrena_simulate_position` - test leverage/collateral combinations without paying.
+
 ## 0.9.38 - 2026-07-27
 
 ### Added — Native Adrena Perps Builder + Data API
