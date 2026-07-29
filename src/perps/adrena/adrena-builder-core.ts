@@ -629,6 +629,8 @@ export async function ensureAtaInstructions(
 
 interface AdrenaIdlAccountMeta {
   name: string;
+  writable?: boolean;
+  signer?: boolean;
   optional?: boolean;
 }
 
@@ -658,6 +660,50 @@ const DEFAULT_REFERRER_PROFILE_PUBKEY = new PublicKey(ADRENA_DEFAULT_REFERRER_PR
 
 function callerRequestedNullReferrer(accounts: Record<string, PublicKey | null>): boolean {
   return Object.prototype.hasOwnProperty.call(accounts, 'referrerProfile') && accounts['referrerProfile'] === null;
+}
+
+function getFinalIdlAccounts(
+  idlAccounts: AdrenaIdlAccountMeta[],
+  accounts: Record<string, PublicKey | null>,
+): AdrenaIdlAccountMeta[] {
+  return idlAccounts.filter(accountMeta => {
+    if (!accountMeta.optional) {
+      return true;
+    }
+
+    const camelName = snakeToCamel(accountMeta.name);
+    return !(Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null);
+  });
+}
+
+function normalizeAdrenaAccountMetas(
+  idlAccounts: AdrenaIdlAccountMeta[],
+  accounts: Record<string, PublicKey | null>,
+  ix: TransactionInstruction,
+): TransactionInstruction {
+  const finalIdlAccounts = getFinalIdlAccounts(idlAccounts, accounts);
+  if (finalIdlAccounts.length === 0 || finalIdlAccounts.length !== ix.keys.length) {
+    return ix;
+  }
+
+  const keys = ix.keys.map((key, index) => {
+    const accountMeta = finalIdlAccounts[index];
+    if (!accountMeta) {
+      return key;
+    }
+
+    return {
+      ...key,
+      isSigner: accountMeta.signer === true,
+      isWritable: accountMeta.writable === true,
+    };
+  });
+
+  return new TransactionInstruction({
+    programId: ix.programId,
+    keys,
+    data: ix.data,
+  });
 }
 
 /**
@@ -720,7 +766,7 @@ function sanitizeNullOptionalAdrenaAccounts(
   }
 
   if (removalIndexes.size === 0) {
-    return ix;
+    return normalizeAdrenaAccountMetas(idlAccounts, accounts, ix);
   }
 
   logger.debug('Removed null optional Adrena accounts from built instruction', {
@@ -728,11 +774,13 @@ function sanitizeNullOptionalAdrenaAccounts(
     removedAccounts: Array.from(removalIndexes).map(index => idlAccounts[index]?.name ?? ix.keys[index]?.pubkey.toBase58() ?? `#${index}`),
   });
 
-  return new TransactionInstruction({
+  const filteredIx = new TransactionInstruction({
     programId: ix.programId,
     keys: ix.keys.filter((_, index) => !removalIndexes.has(index)),
     data: ix.data,
   });
+
+  return normalizeAdrenaAccountMetas(idlAccounts, accounts, filteredIx);
 }
 
 /**

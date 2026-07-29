@@ -184,10 +184,10 @@ describe('Adrena builder core', () => {
           name: 'open_or_increase_position_short',
           accounts: [
             { name: 'owner' },
-            { name: 'funding_account' },
+            { name: 'funding_account', writable: true },
             { name: 'cortex' },
-            { name: 'user_profile', optional: true },
-            { name: 'referrer_profile', optional: true },
+            { name: 'user_profile', writable: true, optional: true },
+            { name: 'referrer_profile', writable: true, optional: true },
           ],
         }],
       },
@@ -228,6 +228,131 @@ describe('Adrena builder core', () => {
       fundingAccount.toBase58(),
       cortexAndDefaultReferrer.toBase58(),
       userProfile.toBase58(),
+    ]);
+    expect(ix.keys.map(key => key.isWritable)).toEqual([false, true, false, true]);
+  });
+
+  it('marks Adrena cortex readonly when it is the only default-referrer pubkey left', async () => {
+    const owner = new PublicKey('11111111111111111111111111111112');
+    const payer = owner;
+    const fundingAccount = new PublicKey('11111111111111111111111111111113');
+    const oracle = new PublicKey('11111111111111111111111111111114');
+    const custody = new PublicKey('11111111111111111111111111111115');
+    const collateralCustody = new PublicKey('11111111111111111111111111111116');
+    const collateralCustodyTokenAccount = new PublicKey('11111111111111111111111111111117');
+    const transferAuthority = new PublicKey('11111111111111111111111111111118');
+    const cortex = new PublicKey(ADRENA_DEFAULT_REFERRER_PROFILE);
+    const pool = new PublicKey('11111111111111111111111111111119');
+    const position = new PublicKey('1111111111111111111111111111111A');
+    const systemProgram = new PublicKey('11111111111111111111111111111111');
+    const tokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const adrenaProgram = new PublicKey('13gDzEXCdocbj8jSqy5beXCnLff8Z3SWzvkD7oqLZ9t6');
+    const userProfile = new PublicKey('1111111111111111111111111111111B');
+    const program = {
+      idl: {
+        instructions: [{
+          name: 'open_or_increase_position_short',
+          accounts: [
+            { name: 'owner', signer: true },
+            { name: 'payer', writable: true, signer: true },
+            { name: 'funding_account', writable: true },
+            { name: 'oracle', writable: true },
+            { name: 'custody', writable: true },
+            { name: 'collateral_custody', writable: true },
+            { name: 'collateral_custody_token_account', writable: true },
+            { name: 'transfer_authority' },
+            { name: 'cortex' },
+            { name: 'pool', writable: true },
+            { name: 'position', writable: true },
+            { name: 'system_program' },
+            { name: 'token_program' },
+            { name: 'adrena_program' },
+            { name: 'user_profile', writable: true, optional: true },
+            { name: 'referrer_profile', writable: true, optional: true },
+          ],
+        }],
+      },
+      methods: {
+        openOrIncreasePositionShort: () => ({
+          accounts: () => ({
+            instruction: async () => ixWithKeys([
+              owner,
+              payer,
+              fundingAccount,
+              oracle,
+              custody,
+              collateralCustody,
+              collateralCustodyTokenAccount,
+              transferAuthority,
+              cortex,
+              pool,
+              position,
+              systemProgram,
+              tokenProgram,
+              adrenaProgram,
+              userProfile,
+            ]),
+          }),
+          accountsPartial: () => ({
+            instruction: async () => ixWithKeys([
+              owner,
+              payer,
+              fundingAccount,
+              oracle,
+              custody,
+              collateralCustody,
+              collateralCustodyTokenAccount,
+              transferAuthority,
+              cortex,
+              pool,
+              position,
+              systemProgram,
+              tokenProgram,
+              adrenaProgram,
+              userProfile,
+            ]),
+          }),
+        }),
+      },
+    } as unknown as Program;
+
+    const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [], {
+      owner,
+      payer,
+      fundingAccount,
+      oracle,
+      custody,
+      collateralCustody,
+      collateralCustodyTokenAccount,
+      transferAuthority,
+      cortex,
+      pool,
+      position,
+      systemProgram,
+      tokenProgram,
+      adrenaProgram,
+      userProfile,
+      referrerProfile: null,
+    });
+
+    const cortexMeta = ix.keys.find(key => key.pubkey.equals(cortex));
+    expect(cortexMeta?.isWritable).toBe(false);
+    expect(ix.keys.map(key => key.isWritable)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
     ]);
   });
 });

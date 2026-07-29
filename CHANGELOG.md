@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.61 - 2026-07-30
+
+### Fixed
+
+- Normalized Adrena unsigned-builder account metas against the vendored IDL
+  after optional referrer cleanup. This keeps `cortex` readonly for
+  `open_or_increase_position_short` while still removing duplicated null
+  `referrerProfile` metas, preventing the `Dhz8Ta79... writable privilege
+  escalated` failure that remained after v0.9.60.
+
+### Tests
+
+- Added regression coverage for the exact live case where `Dhz8Ta79...` is the
+  only remaining default-referrer pubkey and must be treated as Adrena `cortex`
+  with `isWritable: false`.
+
 ## 0.9.60 - 2026-07-30
 
 ### Fixed
