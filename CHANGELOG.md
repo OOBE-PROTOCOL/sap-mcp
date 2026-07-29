@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.59 - 2026-07-29
+
+### Fixed
+
+- Hardened Adrena open-position builders against Anchor-materialized default
+  referrer profile metas. When agents request no referrer
+  (`referrerProfile: null`), SAP MCP now removes both the optional IDL
+  `referrer_profile` meta and the observed Adrena default referrer profile
+  account before simulation or serialization, preventing the BONK open-short
+  `PrivilegeEscalation` failure class.
+- Made the local `sap_payments_call_paid_tool` bridge tolerant of free hosted
+  tools. If the hosted SAP MCP returns `200 OK` before issuing an x402
+  challenge, the bridge now returns the tool response with
+  `paymentCharged:false` and `freeToolBypass:true` instead of failing with
+  `Invalid payment required response`.
+
+### Tests
+
+- Added regression coverage for Adrena default referrer profile removal when
+  optional `user_profile` and `referrer_profile` accounts are materialized in
+  open-position instructions.
+
 ## 0.9.58 - 2026-07-29
 
 ### Fixed

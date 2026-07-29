@@ -122,6 +122,12 @@ SAP MCP `sap_payments` bridge is already configured. The legacy
 `sap_x402_paid_call` alias is acceptable only when a runtime has not refreshed
 to the new tool name.
 
+If an agent accidentally routes a free hosted tool through
+`sap_payments_call_paid_tool`, the bridge returns the normal tool response with
+`paymentCharged:false` and `freeToolBypass:true`. This is not an error and no
+USDC was spent. For speed, still call known free tools directly through hosted
+`sap` when possible.
+
 For external x402 agents discovered through SAP registry metadata, do not
 hand-roll HTTP payment scripts. Call `sap_payments_call_external_x402` with
 `url`, `method`, optional JSON `body`, `maxPriceUsd`, `maxAttempts`, and

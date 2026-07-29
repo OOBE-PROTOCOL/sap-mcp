@@ -26,6 +26,7 @@ import {
   ADRENA_DATA_API_BASE_URL,
   ADRENA_COMMODITIES_POOL_ADDRESS,
   ADRENA_CUSTODIES,
+  ADRENA_DEFAULT_REFERRER_PROFILE,
   ADRENA_TOKEN_MINTS,
   SYSTEM_PROGRAM_ID,
 } from './adrena-constants.js';
@@ -653,6 +654,12 @@ function getIdlInstructionAccounts(program: Program, ixName: string): AdrenaIdlA
   return instruction?.accounts ?? [];
 }
 
+const DEFAULT_REFERRER_PROFILE_PUBKEY = new PublicKey(ADRENA_DEFAULT_REFERRER_PROFILE);
+
+function callerRequestedNullReferrer(accounts: Record<string, PublicKey | null>): boolean {
+  return Object.prototype.hasOwnProperty.call(accounts, 'referrerProfile') && accounts['referrerProfile'] === null;
+}
+
 /**
  * Anchor 0.30 can still materialize optional accounts after a retry with
  * explicit nulls. For Adrena, a phantom referrer profile is worse than no
@@ -667,18 +674,27 @@ function sanitizeNullOptionalAdrenaAccounts(
   accounts: Record<string, PublicKey | null>,
   ix: TransactionInstruction,
 ): TransactionInstruction {
-  const idlAccounts = getIdlInstructionAccounts(program, ixName);
-  if (idlAccounts.length === 0 || ix.keys.length < idlAccounts.length) {
+  if (!callerRequestedNullReferrer(accounts)) {
     return ix;
   }
 
+  const idlAccounts = getIdlInstructionAccounts(program, ixName);
   const removalIndexes = new Set<number>();
-  for (const [index, accountMeta] of idlAccounts.entries()) {
-    if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
-      continue;
+
+  if (idlAccounts.length > 0 && ix.keys.length >= idlAccounts.length) {
+    for (const [index, accountMeta] of idlAccounts.entries()) {
+      if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
+        continue;
+      }
+      const camelName = snakeToCamel(accountMeta.name);
+      if (Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null) {
+        removalIndexes.add(index);
+      }
     }
-    const camelName = snakeToCamel(accountMeta.name);
-    if (Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null) {
+  }
+
+  for (const [index, key] of ix.keys.entries()) {
+    if (key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY)) {
       removalIndexes.add(index);
     }
   }
@@ -689,7 +705,7 @@ function sanitizeNullOptionalAdrenaAccounts(
 
   logger.debug('Removed null optional Adrena accounts from built instruction', {
     ixName,
-    removedAccounts: Array.from(removalIndexes).map(index => idlAccounts[index]?.name ?? `#${index}`),
+    removedAccounts: Array.from(removalIndexes).map(index => idlAccounts[index]?.name ?? ix.keys[index]?.pubkey.toBase58() ?? `#${index}`),
   });
 
   return new TransactionInstruction({

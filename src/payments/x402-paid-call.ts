@@ -231,6 +231,10 @@ export interface X402PaidCallResult {
   /** True when a prepaid session was used to grant access without x402
    * payment. The prepaidSessionId field identifies which session was used. */
   prepaidUsed?: boolean;
+  /** True when the hosted tool was free or otherwise did not require an x402
+   * challenge. This lets agents safely route mixed free/paid tools through the
+   * bridge without treating HTTP 200 as a malformed payment response. */
+  freeToolBypass?: boolean;
   /** The prepaid session ID used for this call, if any. Present when
    * prepaidUsed is true. */
   prepaidSessionId?: string;
@@ -836,15 +840,31 @@ async function executePaidAttempt(options: {
     return executePaidAttempt({ ...options, sessionId: freshSession, sessionRefreshAttempted: true });
   }
 
-  // ── Prepaid session bypass ──────────────────────────────────────────────
-  // If the server returned 200 (not 402), the prepaid session had sufficient
-  // balance and granted access. Return the result directly without x402 payment.
-  if (options.prepaidSessionId && unpaid.response.status === 200) {
+  // ── No-payment bypass ───────────────────────────────────────────────────
+  // If the server returned 200 (not 402), there is no challenge to sign. This
+  // can happen for prepaid sessions and for genuinely free tools routed
+  // through the bridge by an agent. Return the result directly without x402
+  // payment instead of treating the response as a malformed challenge.
+  if (unpaid.response.status === 200) {
     if (isJsonRpcError(unpaid.body)) {
       throw new Error(`Paid MCP call returned JSON-RPC error: ${JSON.stringify((unpaid.body as { error: unknown }).error)}`);
     }
 
     const toolName = extractToolName(options.requestBody);
+    const prepaidUsed = Boolean(options.prepaidSessionId);
+    const payment = prepaidUsed
+      ? {
+          amountUsd: 0,
+          network: 'prepaid',
+          asset: 'prepaid-session',
+          payTo: 'prepaid-session',
+        }
+      : {
+          amountUsd: 0,
+          network: 'free',
+          asset: 'free-tool',
+          payTo: 'free-tool',
+        };
     const audit: X402PaidCallAudit = {
       intentId: buildIntentId(options.requestBody, options.sessionId),
       profileName: options.profileName,
@@ -852,12 +872,7 @@ async function executePaidAttempt(options: {
       endpoint: options.endpoint,
       ...(toolName ? { toolName } : {}),
       requestMethod: options.requestBody.method,
-      payment: {
-        amountUsd: 0,
-        network: 'prepaid',
-        asset: 'prepaid-session',
-        payTo: 'prepaid-session',
-      },
+      payment,
       receipt: {
         present: false,
       },
@@ -871,18 +886,14 @@ async function executePaidAttempt(options: {
       endpoint: options.endpoint,
       sessionId: options.sessionId,
       signerAddress: options.signerAddress,
-      payment: {
-        amountUsd: 0,
-        network: 'prepaid',
-        asset: 'prepaid-session',
-        payTo: 'prepaid-session',
-      },
+      payment,
       response: unpaid.body,
       attempts: options.attempt,
       transientRetries: options.transientRetries,
       paymentCharged: false,
-      prepaidUsed: true,
-      prepaidSessionId: options.prepaidSessionId,
+      prepaidUsed,
+      freeToolBypass: !prepaidUsed,
+      ...(options.prepaidSessionId ? { prepaidSessionId: options.prepaidSessionId } : {}),
       audit,
     };
   }

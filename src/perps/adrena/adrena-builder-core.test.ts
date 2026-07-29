@@ -5,6 +5,7 @@ import {
   buildInstruction,
   encodeAdrenaLeverage,
 } from './adrena-builder-core.js';
+import { ADRENA_DEFAULT_REFERRER_PROFILE } from './adrena-constants.js';
 
 function emptyIx(): TransactionInstruction {
   return new TransactionInstruction({
@@ -137,5 +138,38 @@ describe('Adrena builder core', () => {
     });
 
     expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58(), referrer.toBase58()]);
+  });
+
+  it('removes Adrena default referrer profile when Anchor materializes it for a null referrer', async () => {
+    const owner = new PublicKey('11111111111111111111111111111112');
+    const userProfile = new PublicKey('11111111111111111111111111111114');
+    const defaultReferrer = new PublicKey(ADRENA_DEFAULT_REFERRER_PROFILE);
+    const program = {
+      idl: {
+        instructions: [{
+          name: 'open_or_increase_position_short',
+          accounts: [
+            { name: 'owner' },
+            { name: 'payer' },
+            { name: 'user_profile', optional: true },
+            { name: 'referrer_profile', optional: true },
+          ],
+        }],
+      },
+      methods: {
+        openOrIncreasePositionShort: () => ({
+          accounts: () => ({ instruction: async () => ixWithKeys([owner, userProfile, defaultReferrer]) }),
+          accountsPartial: () => ({ instruction: async () => ixWithKeys([owner, userProfile, defaultReferrer]) }),
+        }),
+      },
+    } as unknown as Program;
+
+    const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [], {
+      owner,
+      userProfile,
+      referrerProfile: null,
+    });
+
+    expect(ix.keys.map(key => key.pubkey.toBase58())).toEqual([owner.toBase58(), userProfile.toBase58()]);
   });
 });

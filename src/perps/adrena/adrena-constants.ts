@@ -148,6 +148,16 @@ export const ADRENA_FEE_REDISTRIBUTION_MINT = 'G3T7ZLw2UHLejCQe3LxdUgme7kqRrNq37
 export const ADRENA_DATA_API_BASE_URL = 'https://datapi.adrena.trade';
 
 /**
+ * Adrena default referrer profile account observed when Anchor materializes a
+ * nullable `referrerProfile` optional account for open-position instructions.
+ * When SAP MCP is building a no-referrer transaction, this account must not be
+ * included in the final instruction metas: Adrena rejects it with a privilege
+ * escalation error because the protocol expects the optional referrer to be
+ * absent, not writable.
+ */
+export const ADRENA_DEFAULT_REFERRER_PROFILE = 'Dhz8Ta79hgyUbaRcu7qHMnqMfY47kQHfHt2s42D9dC4e';
+
+/**
  * Adrena lookup table address for Jito bundles.
  * This is NOT required for unsigned transaction building — the builder
  * constructs standard legacy transactions. If Jito bundle support is needed
