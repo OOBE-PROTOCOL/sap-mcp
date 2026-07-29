@@ -473,9 +473,9 @@ describe('createSapMcpServer', () => {
         'sap_payments_verify_receipt',
         'sap_payments_prepaid_balance',
         'sap_payments_start_prepaid',
-        'sap_payments_fund_prepaid',
         'sap_x402_paid_call',
       ]);
+      expect(names).not.toContain('sap_payments_fund_prepaid');
       expect(names).not.toContain('jupiter_swap');
       expect(names).not.toContain('sap_register_agent');
       expect(names).not.toContain('sol_get_balance');
@@ -486,6 +486,21 @@ describe('createSapMcpServer', () => {
         process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY = previous;
       }
     }
+  });
+
+  it('exposes only hosted prepaid store helpers on accountless hosted servers', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig({
+      mode: 'hosted-api',
+      walletPath: undefined,
+    })));
+    const names = (server.tools ?? []).map((tool) => tool.name);
+
+    expect(names).toContain('sap_payments_fund_prepaid');
+    expect(names).toContain('sap_payments_prepaid_balance');
+    expect(names).not.toContain('sap_payments_call_paid_tool');
+    expect(names).not.toContain('sap_payments_start_prepaid');
+    expect(names).not.toContain('sap_payments_register_agent');
+    expect(names).not.toContain('sap_payments_finalize_transaction');
   });
 
   it('lets hosted users register SAP agents through the local sap_payments bridge', async () => {

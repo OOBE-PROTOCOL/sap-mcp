@@ -46,7 +46,7 @@ bridges, and staking protocols.
 
 ## Adrena Perps Protocol (32 tools)
 
-SAP MCP 0.9.55+ includes a full native Adrena integration: local unsigned
+Current SAP MCP builds include a full native Adrena integration: local unsigned
 transaction builders for every Adrena operation plus a REST Data API client.
 All builders use the vendored official Adrena IDL (release/39) via
 `@coral-xyz/anchor` and produce unsigned base64 transactions for local
@@ -158,7 +158,7 @@ planning tools before any value-moving action:
    entry price (required, fetch from `sap_adrena_get_trading_prices` first),
    stop loss, take profit, max slippage, and max account-risk policy.
 9. Call `sap_perp_builder_status` to confirm which Adrena operations are
-   available. As of 0.9.55, all builder operations and Data API tools
+   available. Current builder operations and Data API tools
    are available natively.
 
 ### Execution Flow (Adrena)
@@ -192,7 +192,7 @@ planning tools before any value-moving action:
 ### Policy: stop_loss_required
 
 The SAP MCP policy engine has a `stopLossRequired` flag (default: false
-as of 0.9.55). When enabled in the profile config, `sap_adrena_build_open_long`
+in current releases). When enabled in the profile config, `sap_adrena_build_open_long`
 and `sap_adrena_build_open_short` require `stopLossPriceUsd` to be set.
 If omitted, the builder returns `PolicyViolation: stop_loss_required`.
 Pass `stopLossPriceUsd` or use `sap_adrena_build_position_package` which

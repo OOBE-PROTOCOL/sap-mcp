@@ -638,10 +638,10 @@ export async function buildInstruction(
 ): Promise<TransactionInstruction> {
   // Anchor v0.30 exposes methods via program.methods.
   // .instruction() is async and returns a Promise<TransactionInstruction>.
-  // For optional accounts (null values), we omit the key entirely from the
-  // accounts object so Anchor does not include a placeholder account in the
-  // instruction. Passing null or PublicKey.default for optional accounts
-  // without PDA seeds causes Anchor to resolve a wrong address (error 3007).
+  // For optional accounts (null values), omit the key entirely so Anchor does
+  // not include a placeholder account in the instruction. Passing null or
+  // PublicKey.default for optional accounts without PDA seeds can make Anchor
+  // resolve or pass a real account where Adrena expects "not provided".
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
     accounts: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
   }>;

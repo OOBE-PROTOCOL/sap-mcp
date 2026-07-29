@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.56 - 2026-07-29
+
+### Fixed
+
+- Corrected hosted prepaid funding monetization: `sap_payments_fund_prepaid` is now exact-priced from `amountUsd`, so the x402 settlement amount matches the hosted prepaid credit granted to the session.
+- Kept `sap_payments_start_prepaid` and `sap_payments_prepaid_balance` free on the local bridge, while exposing only the hosted prepaid fund/balance tools on accountless hosted servers.
+- Made prepaid session parsing robust for MCP text-content responses, structured content, and direct JSON results.
+- Restored Adrena optional account handling so nullable accounts are omitted instead of being sent as `PublicKey.default`.
+- Removed unsupported numeric performance claims from prepaid guidance; prompts now describe the real x402 lifecycle-hook benefit: fewer repeated challenge round-trips with hosted ledger accounting preserved.
+
+### Tests
+
+- Added coverage for exact prepaid funding prices and hosted/local prepaid tool exposure.
+- Verified with typecheck, lint, build, targeted prepaid/server tests, and the full Vitest suite.
+
 ## 0.9.55 - 2026-07-28
 
 ### Added - Sprint 1-3: Risk Engine, Signal Score, Advanced Builders, Market Intelligence

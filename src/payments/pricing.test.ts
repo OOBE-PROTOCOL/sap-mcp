@@ -462,6 +462,39 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_preview_transaction')).toBe('free');
   });
 
+  it('prices hosted prepaid funding as the exact requested deposit', () => {
+    expect(classifyTool('sap_payments_start_prepaid')).toBe('free');
+    expect(classifyTool('sap_payments_prepaid_balance')).toBe('free');
+    expect(classifyTool('sap_payments_fund_prepaid')).toBe('value-action');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_payments_fund_prepaid',
+        arguments: { amountUsd: 0.25, perCallCostUsd: 0.005 },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, {
+      ...monetizationConfig,
+      prices: {
+        ...monetizationConfig.prices,
+        valueFixedUsd: 0.06,
+        maxUsd: 0.09,
+      },
+    });
+
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('value-action');
+      expect(decision.priceUsd).toBe(0.25);
+      expect(decision.price).toBe('$0.25');
+      expect(decision.toolPricings[0]?.reason).toContain('exact prepaid funding deposit');
+    }
+  });
+
   it('prices SNS batch checks as builder calls', () => {
     const parsed = parseJsonRpcBody({
       jsonrpc: '2.0',

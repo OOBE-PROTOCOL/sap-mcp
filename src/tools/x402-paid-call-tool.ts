@@ -8,6 +8,7 @@ import type { PaymentRequired } from '@x402/core/types';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
+import { logger } from '../core/logger.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { setValidationServer, validateToolArguments } from '../payments/schema-validation.js';
 import {
@@ -219,6 +220,19 @@ function networkFromRpcUrl(value: string | undefined): string | undefined {
 }
 
 /**
+ * @name registerHostedPrepaidTools
+ * @description Registers only the prepaid fund + balance tools on the hosted server.
+ * The hosted server owns the PrepaidCreditStore that grantAccess checks against.
+ * The bridge calls sap_payments_fund_prepaid via x402 to create a session here,
+ * then passes the sessionId back as X-SAP-Prepaid-Session header for grantAccess.
+ */
+export function registerHostedPrepaidTools(server: Server): void {
+  registerPaymentsFundPrepaidTool(server);
+  registerPaymentsPrepaidBalanceTool(server);
+  logger.info('Hosted prepaid tools registered (fund + balance)');
+}
+
+/**
  * @name registerX402PaidCallTool
  * @description Registers local hosted-payment tools for agents that need to resolve x402-gated SAP MCP calls.
  */
@@ -239,7 +253,6 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsVerifyReceiptTool(server);
   registerPaymentsPrepaidBalanceTool(server);
   registerPaymentsStartPrepaidTool(server, _context);
-  registerPaymentsFundPrepaidTool(server);
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
@@ -1379,15 +1392,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
           }, null, 2), { isError: true });
         }
 
-        // Extract the session ID from the hosted tool response
-        const responseBody = fundResult.response as Record<string, unknown> | undefined;
-        const resultContent = responseBody?.result as Record<string, unknown> | undefined;
-        // The hosted tool may return the sessionId at the top level or nested
-        const sessionId =
-          (typeof responseBody?.sessionId === 'string' && responseBody.sessionId) ||
-          (typeof resultContent?.sessionId === 'string' && resultContent.sessionId) ||
-          (typeof responseBody?.id === 'string' && responseBody.id) ||
-          undefined;
+        const sessionId = extractHostedPrepaidSessionId(fundResult.response);
 
         if (!sessionId) {
           return createTextResponse(JSON.stringify({
@@ -1411,6 +1416,60 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
       }
     },
   );
+}
+
+function extractHostedPrepaidSessionId(response: unknown): string | undefined {
+  const direct = extractSessionIdFromRecord(response);
+  if (direct) return direct;
+
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+
+  const record = response as Record<string, unknown>;
+  const result = record['result'];
+  const resultDirect = extractSessionIdFromRecord(result);
+  if (resultDirect) return resultDirect;
+
+  const structuredContent = result && typeof result === 'object'
+    ? (result as Record<string, unknown>)['structuredContent']
+    : undefined;
+  const structuredDirect = extractSessionIdFromRecord(structuredContent);
+  if (structuredDirect) return structuredDirect;
+
+  const content = result && typeof result === 'object'
+    ? (result as Record<string, unknown>)['content']
+    : undefined;
+  if (Array.isArray(content)) {
+    for (const item of content) {
+      if (!item || typeof item !== 'object') continue;
+      const text = (item as Record<string, unknown>)['text'];
+      if (typeof text !== 'string') continue;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        const parsedSessionId = extractSessionIdFromRecord(parsed);
+        if (parsedSessionId) return parsedSessionId;
+      } catch {
+        // Non-JSON text content is normal for some MCP tools.
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function extractSessionIdFromRecord(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of ['sessionId', 'id']) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 /**

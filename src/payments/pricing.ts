@@ -22,6 +22,7 @@ export interface ToolPricing {
   tier: PaymentTier;
   priceUsd: number;
   reason: string;
+  exactPrice?: boolean;
 }
 
 /**
@@ -171,7 +172,6 @@ const FREE_TOOLS = new Set([
   'sap_trade_journal_query',
   'sap_payments_start_prepaid',
   'sap_payments_prepaid_balance',
-  'sap_payments_fund_prepaid',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -258,7 +258,6 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_trade_journal_query',
   'sap_payments_start_prepaid',
   'sap_payments_prepaid_balance',
-  'sap_payments_fund_prepaid',
 ]);
 
 const MICRO_READ_TOOLS = new Set([
@@ -527,8 +526,15 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'value-action': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.valueFixedUsd, config),
-        pricingRule: `Standard value-action calls are fixed at ${formatUsdPrice(config.prices.valueFixedUsd)}. Heavy execution paths are fixed at ${formatUsdPrice(config.prices.heavyValueUsd)}. Optional notional bps is ${config.prices.valueBps}, then clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
-        examples: ['jupiter_getOrder', 'jupiter_swap', 'magicblock_swap', 'sap_create_escrow_v2', 'sap_submit_signed_transaction'],
+        pricingRule: `Standard value-action calls are fixed at ${formatUsdPrice(config.prices.valueFixedUsd)}. Heavy execution paths are fixed at ${formatUsdPrice(config.prices.heavyValueUsd)}. Optional notional bps is ${config.prices.valueBps}, then clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}. sap_payments_fund_prepaid is exact-priced: the x402 charge equals amountUsd because it becomes hosted prepaid credit.`,
+        examples: [
+          'jupiter_getOrder',
+          'jupiter_swap',
+          'magicblock_swap',
+          'sap_create_escrow_v2',
+          'sap_submit_signed_transaction',
+          'sap_payments_fund_prepaid amountUsd=0.25',
+        ],
       },
       batch: {
         paymentRequired: true,
@@ -598,10 +604,13 @@ export function resolvePaymentDecision(
     };
   }
 
-  const priceUsd = clampPrice(
-    paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0),
-    config,
-  );
+  const exactPrice = paidPricings.some(pricing => pricing.exactPrice);
+  const priceUsd = exactPrice
+    ? paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0)
+    : clampPrice(
+      paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0),
+      config,
+    );
 
   return {
     required: true,
@@ -629,6 +638,10 @@ export function priceToolCall(
   toolCall: McpToolCall,
   config: SapMcpMonetizationConfig,
 ): ToolPricing {
+  if (toolCall.toolName === 'sap_payments_fund_prepaid') {
+    return pricePrepaidFundingToolCall(toolCall, config);
+  }
+
   if (isConditionalMicroReadToolCall(toolCall)) {
     return {
       toolName: toolCall.toolName,
@@ -688,6 +701,32 @@ export function priceToolCall(
       isHeavyValueActionTool(toolCall.toolName) ? 'heavy value-changing action fixed fee' : 'value-changing action fixed fee',
       variableUsd > 0 ? 'plus configured basis-points fee' : undefined,
     ].filter(Boolean).join(' '),
+  };
+}
+
+function pricePrepaidFundingToolCall(
+  toolCall: McpToolCall,
+  config: SapMcpMonetizationConfig,
+): ToolPricing {
+  const amountUsd = isRecord(toolCall.arguments)
+    ? readOptionalNumber(toolCall.arguments['amountUsd'])
+    : undefined;
+  if (amountUsd === undefined || amountUsd <= 0) {
+    return {
+      toolName: toolCall.toolName,
+      tier: 'value-action',
+      priceUsd: Math.max(config.prices.minUsd, 0),
+      reason: 'prepaid funding deposit missing amountUsd; minimum x402 guard price applies',
+      exactPrice: true,
+    };
+  }
+
+  return {
+    toolName: toolCall.toolName,
+    tier: 'value-action',
+    priceUsd: Math.max(amountUsd, config.prices.minUsd),
+    reason: 'exact prepaid funding deposit; x402 charge equals credited session balance',
+    exactPrice: true,
   };
 }
 

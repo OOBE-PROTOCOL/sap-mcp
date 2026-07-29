@@ -12,7 +12,7 @@ import { registerTransactionTools } from './transaction-tools.js';
 import { registerProfileTools } from './profile-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
-import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
+import { registerX402PaidCallTool, registerHostedPrepaidTools } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
 import { registerMemoryTools } from './memory-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
@@ -64,6 +64,11 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Hosted non-custodial servers must not advertise a remote signer helper.
   if (context.config.mode !== 'hosted-api' || context.config.walletPath) {
     registerX402PaidCallTool(server, context);
+  } else {
+    // Hosted server: register only the prepaid fund + balance tools so that
+    // the bridge can create prepaid sessions on the hosted server (where the
+    // PrepaidCreditStore lives and grantAccess is checked).
+    registerHostedPrepaidTools(server);
   }
 
   // Register profile tools with redacted signer metadata and live runtime reload.
