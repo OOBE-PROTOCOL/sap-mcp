@@ -220,9 +220,9 @@ export function registerRiskCheckTool(server: Server, context: SapMcpContext): v
 
         // Read dynamic risk config from policy or defaults.
         const policy = context.policyEngine.getTradingPolicy();
-        const dailyLossLimitUsd = (policy as unknown as { dailyLossLimitUsd?: number }).dailyLossLimitUsd ?? DEFAULT_DAILY_LOSS_LIMIT_USD;
-        const maxDrawdownPct = (policy as unknown as { maxDrawdownPct?: number }).maxDrawdownPct ?? DEFAULT_MAX_DRAWDOWN_PCT;
-        const cooldownMinutes = (policy as unknown as { cooldownMinutes?: number }).cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES;
+        const dailyLossLimitUsd = policy.dailyLossLimitUsd ?? DEFAULT_DAILY_LOSS_LIMIT_USD;
+        const maxDrawdownPct = policy.maxDrawdownPct ?? DEFAULT_MAX_DRAWDOWN_PCT;
+        const cooldownMinutes = policy.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES;
 
         // Compute dynamic risk metrics.
         const dailyPnl = computeDailyPnl();

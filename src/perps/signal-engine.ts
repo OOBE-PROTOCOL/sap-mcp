@@ -343,8 +343,9 @@ export function registerSignalScoreTool(server: Server, context: SapMcpContext):
         'Aggregate technical signal score (0-1) from RSI, EMA, MACD, Bollinger Bands, price action, and on-chain funding rate. Returns a single score with LONG/SHORT/WAIT recommendation and confidence. Replaces 5-7 individual indicator calls with 1 aggregation call. Use this before opening a position to get a quantitative decision baseline.',
       inputSchema: schema,
     },
-    async (args: Record<string, unknown>) => {
+    async (rawInput: unknown) => {
       try {
+        const args = rawInput as Record<string, unknown>;
         const mint = String(args['mint'] ?? '').trim();
         const market = String(args['market'] ?? '').trim().toUpperCase();
 

@@ -244,6 +244,12 @@ export interface SapMcpConfig {
   maxSlippageBps?: number;
   /** Trading policy: require human acknowledgment above this USD amount. */
   requireHumanAckAboveUsd?: number;
+  /** Trading policy: daily loss limit in USD. New trades blocked when exceeded. */
+  dailyLossLimitUsd?: number;
+  /** Trading policy: max drawdown percentage before blocking new trades. */
+  maxDrawdownPct?: number;
+  /** Trading policy: cooldown in minutes after a losing trade. */
+  cooldownMinutes?: number;
   bento?: {
     enabled: boolean;
     apiKey?: string;
