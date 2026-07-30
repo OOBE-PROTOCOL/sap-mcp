@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.63 - 2026-07-30
+
+### Added
+
+- Added a runtime-scoped `sap_payments` process lock keyed by active SAP
+  profile and agent runtime id. This prevents duplicate local payment bridges
+  inside the same runtime/profile while still allowing Codex, Hermes, Claude,
+  and OpenClaw to run their own bridges safely.
+- Added the free `sap_payments_process_status` diagnostic tool. Agents can now
+  inspect local bridge PID, runtime/profile scope, stale locks, and possible
+  duplicate SAP MCP processes before retrying stuck x402/write flows.
+
+### Fixed
+
+- Hardened stdio shutdown handling for local payment bridges. The bridge now
+  releases local caches and runtime locks on stdin close/end, process
+  disconnect, SIGINT, SIGTERM, uncaught exceptions, and unhandled rejections.
+- Updated runtime repair output, desktop wizard next steps, and x402 skills so
+  agents diagnose bridge process issues instead of killing node/npx processes
+  mid-session.
+
 ## 0.9.62 - 2026-07-30
 
 ### Fixed

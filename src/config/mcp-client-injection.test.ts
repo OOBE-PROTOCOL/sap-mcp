@@ -285,6 +285,7 @@ describe('MCP client injection', () => {
     expect(resolved.nextContent).toContain('[mcp_servers.sap_payments]');
     expect(resolved.nextContent).toContain(`@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`);
     expect(resolved.nextContent).toContain('SAP_ALLOWED_TOOLS = "all"');
+    expect(resolved.nextContent).toContain('SAP_MCP_RUNTIME_ID = "codex"');
     expect(resolved.nextContent).not.toContain('mcp-remote');
     expect(resolved.nextContent).not.toContain('@oobe-protocol-labs/sap-mcp-server@0.9.1');
   });
@@ -392,6 +393,7 @@ describe('MCP client injection', () => {
     });
     expect(parsed.mcpServers.sap_payments.command).toMatch(/^npx/);
     expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcpServers.sap_payments.env.SAP_MCP_RUNTIME_ID).toBe('claude');
     expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
     expect(parsed.mcpServers.filesystem).toEqual({
       command: 'npx',
@@ -593,6 +595,7 @@ describe('MCP client injection', () => {
       transport: 'streamable-http',
     });
     expect(parsed.mcp.servers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcp.servers.sap_payments.env.SAP_MCP_RUNTIME_ID).toBe('openclaw');
     expect(parsed.mcp.servers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
     expect(parsed.mcpServers.keep.command).toBe('keep');
     expect(parsed.mcpServers.sap).toBeUndefined();
@@ -609,7 +612,9 @@ describe('MCP client injection', () => {
 
     expect(results.map((result) => result.target.id)).toEqual(expect.arrayContaining(['codex', 'hermes']));
     expect(codex).toContain('[mcp_servers.sap_payments]');
+    expect(codex).toContain('SAP_MCP_RUNTIME_ID = "codex"');
     expect(hermes.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(hermes.sap_payments.env.SAP_MCP_RUNTIME_ID).toBe('hermes');
     expect(hermes.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
   });
 
@@ -665,6 +670,7 @@ describe('MCP client injection', () => {
     expect(written).toContain('startup_timeout_sec = 300');
     expect(written).toContain('tool_timeout_sec = 300');
     expect(written).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(written).toContain('SAP_MCP_RUNTIME_ID = "codex"');
     expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('SAP_WALLET_PATH');
     expect(written).not.toContain('SAP_MCP_RPC_URL');
@@ -685,6 +691,7 @@ describe('MCP client injection', () => {
     expect(written).toContain('[mcp_servers.sap]');
     expect(written).toContain('[mcp_servers.sap_payments]');
     expect(written).toContain('SAP_MCP_PAYMENTS_BRIDGE_ONLY = "true"');
+    expect(written).toContain('SAP_MCP_RUNTIME_ID = "codex"');
     expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('command = "old"');
   });

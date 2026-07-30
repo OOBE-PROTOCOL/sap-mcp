@@ -8,6 +8,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_x402_prepare_payment`
 - `sap_x402_get_balance`
 - `sap_payments_profile_current`
+- `sap_payments_process_status`
 - `sap_payments_call_paid_tool`
 - `sap_payments_call_external_x402`
 - `sap_payments_register_agent`
@@ -121,6 +122,13 @@ receipt. Do not ask the user to install a separate x402 plugin when the local
 SAP MCP `sap_payments` bridge is already configured. The legacy
 `sap_x402_paid_call` alias is acceptable only when a runtime has not refreshed
 to the new tool name.
+
+If the local bridge feels stuck, paid calls start timing out, or the runtime
+reports `ClosedResourceError`, call `sap_payments_process_status` before
+retrying. It reports the bridge PID, parent runtime, profile/runtime lock, and
+possible duplicate SAP MCP processes. Do not kill bridge processes during an
+active MCP session; fully quit and reopen the agent runtime so stdio reconnects
+cleanly.
 
 If an agent accidentally routes a free hosted tool through
 `sap_payments_call_paid_tool`, the bridge returns the normal tool response with

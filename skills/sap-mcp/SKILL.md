@@ -176,6 +176,10 @@ external signer to sign the x402 payment payload, retry the hosted tool call,
 and return the receipt.
 `sap_x402_paid_call` is a backward-compatible alias only for older runtime
 snippets. Neither helper must be treated as a remote hosted signing service.
+If paid-call settlement stalls, the runtime reports `ClosedResourceError`, or
+multiple sessions seem to fight over the bridge, call
+`sap_payments_process_status` and ask the user to fully quit/reopen the runtime
+instead of killing node/npx processes mid-session.
 
 When connected to hosted SAP MCP, `signerConfigured: false` on the remote
 server means the hosted server is non-custodial. It does not mean the remote

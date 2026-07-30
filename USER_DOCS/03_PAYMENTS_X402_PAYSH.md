@@ -60,6 +60,7 @@ Most agent runtimes can connect to hosted SAP MCP directly, but not every runtim
 
 ```txt
 sap_payments_readiness
+sap_payments_process_status
 sap_payments_call_paid_tool
 sap_payments_call_external_x402
 sap_payments_register_agent
@@ -71,6 +72,11 @@ sap_payments_finalize_transaction
 active profile, signer public key, SOL/USDC balance, and local commerce policy
 limits before the agent attempts a paid/write flow. It never returns keypair
 bytes.
+
+`sap_payments_process_status` is free. Use it before retrying when paid calls
+feel stuck or a runtime reports `ClosedResourceError`; it shows the bridge PID,
+parent runtime, profile/runtime lock, and possible duplicate SAP MCP processes
+without killing anything.
 
 The standalone CLI helper remains available as a terminal/custom-wrapper fallback:
 

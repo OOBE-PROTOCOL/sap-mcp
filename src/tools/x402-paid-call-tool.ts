@@ -32,6 +32,7 @@ import {
   parseUpdateAgentArgs,
 } from './sap-sdk-tools.js';
 import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '../core/constants.js';
+import { getPaymentBridgeProcessStatus } from '../runtime/payment-bridge-process.js';
 
 interface X402PaidCallToolInput {
   endpoint?: string;
@@ -243,6 +244,7 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   setValidationServer(server);
   registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsReadinessTool(server);
+  registerPaymentsProcessStatusTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
   registerPaymentsCallExternalX402Tool(server);
   registerPaymentsRegisterAgentTool(server, _context);
@@ -1034,6 +1036,40 @@ function registerPaymentsReadinessTool(server: Server): void {
       const result = await getX402PaymentReadiness(profileName, endpoint);
       return createTextResponse(JSON.stringify(result, null, 2));
     },
+  );
+}
+
+function registerPaymentsProcessStatusTool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_process_status',
+    {
+      title: 'Inspect Local Payment Bridge Process',
+      description: 'Free local diagnostic for sap_payments process health. Shows the current bridge PID, profile/runtime lock, possible duplicate SAP MCP processes, and safe next action. Use this when paid-call settlement is slow, the bridge disappears, or an agent suspects stale/zombie bridge processes. This tool never kills processes and never reads keypair bytes.',
+      inputSchema: {},
+      outputSchema: {
+        type: 'object',
+        properties: {
+          pid: { type: 'number', description: 'Current sap_payments bridge process id.' },
+          ppid: { type: 'number', description: 'Parent process id, usually the agent runtime that spawned the stdio bridge.' },
+          version: { type: 'string', description: 'SAP MCP package version running in this bridge.' },
+          bridgeOnly: { type: 'boolean', description: 'Whether this process is running in sap_payments bridge-only mode.' },
+          profileName: { type: 'string', description: 'Active or requested SAP MCP profile used for process lock scoping.' },
+          runtimeId: { type: 'string', description: 'Runtime scope such as codex, hermes, claude, openclaw, or parent pid fallback.' },
+          lock: { type: 'object', description: 'Profile/runtime process lock path and ownership status.' },
+          processes: { type: 'object', description: 'Best-effort local process list for SAP MCP-looking node/npx processes.' },
+          nextAction: { type: 'string', description: 'Safe operational next step for the agent.' },
+        },
+        required: ['pid', 'ppid', 'version', 'bridgeOnly', 'profileName', 'runtimeId', 'lock', 'processes', 'nextAction'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => createTextResponse(JSON.stringify(getPaymentBridgeProcessStatus(), null, 2)),
   );
 }
 

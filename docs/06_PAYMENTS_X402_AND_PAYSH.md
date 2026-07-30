@@ -139,6 +139,7 @@ has a user-controlled wallet profile:
 | Tool | Purpose |
 | --- | --- |
 | `sap_payments_readiness` | Free local readiness check for hosted MCP, active profile, signer, SOL/USDC balance, and commerce policy limits. Call this first for paid/write workflows. |
+| `sap_payments_process_status` | Free local bridge process diagnostic. Shows the bridge PID, parent runtime, profile/runtime lock, and possible duplicate SAP MCP processes without killing anything. |
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
 | `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
 | `sap_payments_register_agent` | Local non-custodial SAP agent registration for hosted users when `sap_register_agent` returns `hosted_local_signer_required`. |

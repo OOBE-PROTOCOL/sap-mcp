@@ -533,5 +533,6 @@ function buildReadinessNextSteps(
   if (nextSteps.length === 0) {
     nextSteps.push('Restart the selected agent runtime so it reloads hosted sap plus local sap_payments.');
   }
+  nextSteps.push('If paid calls feel stuck, ask the agent to call sap_payments.sap_payments_process_status before retrying.');
   return nextSteps;
 }

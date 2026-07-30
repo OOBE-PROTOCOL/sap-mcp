@@ -34,6 +34,7 @@ import {
   type McpClientTarget,
 } from './mcp-client-injection.js';
 import { listProfiles } from './profiles.js';
+import { getPaymentBridgeProcessStatus } from '../runtime/payment-bridge-process.js';
 
 type WizardLogLevel = WizardSetupInput['logLevel'];
 type WizardSetupPath = 'full-hosted' | 'repair-payments' | 'manual-snippets';
@@ -1254,6 +1255,36 @@ function printProfileHygieneSummary(): void {
 }
 
 /**
+ * @name printPaymentBridgeProcessSummary
+ * @description Prints non-destructive local process diagnostics after repair.
+ */
+function printPaymentBridgeProcessSummary(): void {
+  const status = getPaymentBridgeProcessStatus();
+  printLabel('Local sap_payments process check');
+  printBullet(`Runtime scope: ${status.runtimeId}`);
+  printBullet(`Profile scope: ${status.profileName}`);
+  printBullet(`Lock path: ${status.lock.path}`);
+
+  if (!status.processes.supported) {
+    printInfo(status.processes.warning ?? 'Process listing is not supported on this platform.');
+    return;
+  }
+
+  const count = status.processes.possibleSapMcpProcesses.length;
+  printBullet(`Possible SAP MCP processes: ${count}`);
+  if (count <= 1) {
+    printSuccess('No duplicate SAP MCP process pattern detected.');
+    return;
+  }
+
+  printWarning(status.processes.warning ?? 'Multiple SAP MCP-looking processes are running.');
+  for (const proc of status.processes.possibleSapMcpProcesses.slice(0, 6)) {
+    printBullet(`pid ${proc.pid}${proc.ppid ? ` ppid ${proc.ppid}` : ''}${proc.elapsed ? ` uptime ${proc.elapsed}` : ''}: ${proc.command.slice(0, 96)}`);
+  }
+  printInfo('Do not kill bridge processes during an active MCP session. Fully quit and reopen the agent runtime so stdio resources reconnect cleanly.');
+}
+
+/**
  * Repairs hosted SAP MCP plus local sap_payments runtime configuration without changing the active SAP profile.
  */
 export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void {
@@ -1283,11 +1314,14 @@ export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void 
   installRecommendedPaymentBridgeConfigs();
   console.log('');
   printProfileHygieneSummary();
+  console.log('');
+  printPaymentBridgeProcessSummary();
 
   console.log('');
   printSuccess('Repair complete.');
   printLabel('Next step');
   printBullet('Restart the agent runtime completely.');
+  printBullet(`Ask the agent to call ${paint('sap_payments.sap_payments_process_status', 'aqua')} if paid calls feel stuck or duplicate bridges are suspected.`);
   printBullet(`Ask the agent to call ${paint('sap_payments.sap_payments_readiness', 'aqua')}.`);
   printBullet(`Use ${paint('sap_payments.sap_payments_call_paid_tool', 'aqua')} for hosted paid tools.`);
   printBullet(`Use ${paint('sap_payments.sap_payments_finalize_transaction', 'aqua')} when a hosted builder returns an unsigned transaction.`);

@@ -33,6 +33,7 @@ import { startStdioTransport } from './transports/stdio.js';
 import { startHttpTransport } from './transports/http.js';
 import { logger, initLogger } from './core/logger.js';
 import { MCP_SERVER_VERSION } from './core/constants.js';
+import { acquirePaymentBridgeProcessLock, releasePaymentBridgeProcessLock } from './runtime/payment-bridge-process.js';
 
 // Parse CLI arguments
 const args = process.argv.slice(2);
@@ -236,6 +237,8 @@ async function main() {
 
   // Handle start command (default, also covers 'http' via --http flag)
   if (command === 'start' || command === 'http') {
+    const useHttp = isHttpMode || command === 'http';
+
     // Load and validate configuration
     const config = await loadConfig();
     
@@ -256,32 +259,43 @@ async function main() {
       rpcUrl: config.rpcUrl,
       programId: config.programId,
     });
-    
-    // Create server instance
-    const server = await createSapMcpServer(config);
-    
-    // Determine transport
-    const useHttp = isHttpMode || command === 'http';
-    
-    if (useHttp) {
-      // Start HTTP transport
-      await startHttpTransport(server, {
-        port: parseInt(process.env.SAP_MCP_PORT || '3000', 10),
-        host: process.env.SAP_MCP_HOST || '0.0.0.0',
-        apiKey: resolveHttpApiKey(),
-        corsOrigins: config.httpCorsOrigins,
-        rateLimitPerMinute: config.enableRateLimit ? config.rateLimitPerMinute : 0,
-        appConfig: config,
-      });
 
-      logger.info('SAP MCP Server started with HTTP transport', {
-        port: process.env.SAP_MCP_PORT || '3000',
+    if (!useHttp && process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY === 'true') {
+      const lock = acquirePaymentBridgeProcessLock();
+      logger.info('sap_payments process lock acquired', {
+        profileName: lock?.profileName,
+        runtimeId: lock?.runtimeId,
+        lockPath: lock?.lockPath,
       });
-    } else {
-      // Start stdio transport (default)
-      await startStdioTransport(server);
-      
-      logger.info('SAP MCP Server started with stdio transport');
+    }
+
+    try {
+      // Create server instance
+      const server = await createSapMcpServer(config);
+
+      if (useHttp) {
+        // Start HTTP transport
+        await startHttpTransport(server, {
+          port: parseInt(process.env.SAP_MCP_PORT || '3000', 10),
+          host: process.env.SAP_MCP_HOST || '0.0.0.0',
+          apiKey: resolveHttpApiKey(),
+          corsOrigins: config.httpCorsOrigins,
+          rateLimitPerMinute: config.enableRateLimit ? config.rateLimitPerMinute : 0,
+          appConfig: config,
+        });
+
+        logger.info('SAP MCP Server started with HTTP transport', {
+          port: process.env.SAP_MCP_PORT || '3000',
+        });
+      } else {
+        // Start stdio transport (default)
+        await startStdioTransport(server);
+
+        logger.info('SAP MCP Server started with stdio transport');
+      }
+    } catch (error) {
+      releasePaymentBridgeProcessLock();
+      throw error;
     }
     
     return; // Server runs indefinitely

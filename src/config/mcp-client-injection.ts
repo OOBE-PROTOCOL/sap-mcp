@@ -474,15 +474,15 @@ function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): Mcp
  * @name createNpxPaymentBridgeServerConfig
  * @description Builds a portable local stdio MCP config that exposes only x402 payment helper tools.
  */
-export function createNpxPaymentBridgeServerConfig(): McpServerInjectionConfig {
-  return createNpxPaymentBridgeServerConfigForPlatform(process.platform);
+export function createNpxPaymentBridgeServerConfig(runtimeId = 'manual'): McpServerInjectionConfig {
+  return createNpxPaymentBridgeServerConfigForPlatform(process.platform, runtimeId);
 }
 
 /**
  * @name createNpxPaymentBridgeServerConfigForPlatform
  * @description Builds the local sap_payments bridge command for a specific host platform.
  */
-function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
+function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform, runtimeId = 'manual'): McpServerInjectionConfig {
   const command = getNpxCommand(platform);
   return {
     command,
@@ -495,6 +495,7 @@ function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatfo
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_MCP_PAYMENTS_BRIDGE_ONLY: 'true',
+      SAP_MCP_RUNTIME_ID: runtimeId,
       SAP_ALLOWED_TOOLS: 'all',
       SAP_LOG_LEVEL: 'info',
     },
@@ -908,7 +909,7 @@ function buildHostedPaymentBridgeJsonContent(
 ): { nextContent: string; hadSapConfig: boolean } {
   const parsed: unknown = content.trim() ? JSON.parse(content) : {};
   const root = isRecord(parsed) ? parsed : {};
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, target.id);
 
   if (target.id === 'openclaw') {
     return buildOpenClawHostedPaymentBridgeJsonContent(root, paymentBridge);
@@ -1132,9 +1133,10 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
 function replaceYamlHostedPaymentBridgeBlocks(
   content: string,
   platform: SupportedPlatform,
+  target: Pick<McpClientTarget, 'id'>,
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, target.id);
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
@@ -1186,7 +1188,7 @@ function replaceOpenClawYamlHostedPaymentBridgeBlocks(
   platform: SupportedPlatform,
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, 'openclaw');
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 4),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4),
@@ -1348,6 +1350,9 @@ export function validateHostedPaymentBridgeContent(
     || content.includes('SAP_MCP_PAYMENTS_BRIDGE_ONLY: true');
   if (!bridgeOnlyEnabled) {
     issues.push('Missing SAP_MCP_PAYMENTS_BRIDGE_ONLY=true for the local payment bridge process.');
+  }
+  if (!content.includes('SAP_MCP_RUNTIME_ID')) {
+    issues.push('Missing SAP_MCP_RUNTIME_ID in local bridge env; duplicate bridge detection needs the runtime scope.');
   }
   if (!content.includes('SAP_ALLOWED_TOOLS')) {
     issues.push('Missing SAP_ALLOWED_TOOLS allow-list for the local payment bridge.');
@@ -1522,7 +1527,7 @@ export function buildCodexHostedPaymentBridgeContent(
   const nextContent = [
       prefix,
       hostedTomlServerBlock(hosted).trimEnd(),
-      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfigForPlatform(platform)).trimEnd(),
+      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfigForPlatform(platform, 'codex')).trimEnd(),
     ].filter(Boolean).join('\n\n');
 
   return {
@@ -1590,7 +1595,7 @@ export function buildHostedPaymentBridgeContent(
     return replaceOpenClawYamlHostedPaymentBridgeBlocks(content, platform);
   }
 
-  return replaceYamlHostedPaymentBridgeBlocks(content, platform);
+  return replaceYamlHostedPaymentBridgeBlocks(content, platform, target);
 }
 
 /**

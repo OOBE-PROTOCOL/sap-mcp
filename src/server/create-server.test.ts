@@ -463,6 +463,7 @@ describe('createSapMcpServer', () => {
       expect(names).toEqual([
         'sap_payments_profile_current',
         'sap_payments_readiness',
+        'sap_payments_process_status',
         'sap_payments_call_paid_tool',
         'sap_payments_call_external_x402',
         'sap_payments_register_agent',
