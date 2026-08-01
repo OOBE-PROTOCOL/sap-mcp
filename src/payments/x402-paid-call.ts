@@ -4,7 +4,7 @@
  * @description Local helper for paying and retrying hosted SAP MCP x402 tool calls with a user-controlled SAP profile signer.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
@@ -16,6 +16,7 @@ import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { getPreferredConfigDir } from '../config/paths.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
+import { buildWalletGuardSummary, type WalletGuardSummary } from '../signer/wallet-guard.js';
 import { getCachedSession, cacheSession, invalidateSession } from './mcp-session-cache.js';
 
 export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
@@ -179,6 +180,7 @@ export interface X402PaymentReadinessResult {
     agentPubkey?: string;
     secretMaterial: 'keypair-bytes-never-returned';
   };
+  walletGuard: WalletGuardSummary;
   balances: {
     checked: boolean;
     sol?: number;
@@ -665,14 +667,16 @@ export async function getX402PaymentReadiness(
     issues.push(`balance_check_degraded: ${balances.error}`);
   }
 
-  const walletFileExists = Boolean(config?.walletPath && existsSync(config.walletPath));
-  if (config?.walletPath && !walletFileExists) {
+  const walletGuard = buildWalletGuardSummary(config, { activeProfile, signerPublicKey: signerAddress });
+  const walletFileExists = walletGuard.wallet.exists;
+  const walletStorageMissing = Boolean(config?.walletPath && !walletFileExists);
+  if (walletStorageMissing) {
     issues.push('wallet_file_missing');
   }
 
   const canPayX402 = Boolean(signerAddress && balances.payerBalanceEnoughForAutoPay !== false);
   const canExecuteWriteTools = Boolean(signerAddress && config?.mode !== 'readonly');
-  const status = !config || !signerAddress || !walletFileExists
+  const status = !config || !signerAddress || walletStorageMissing
     ? 'not-ready'
     : issues.length > 0
       ? 'degraded'
@@ -704,6 +708,7 @@ export async function getX402PaymentReadiness(
       ...(config?.agentPubkey ? { agentPubkey: config.agentPubkey } : {}),
       secretMaterial: 'keypair-bytes-never-returned',
     },
+    walletGuard,
     balances,
     policy,
     readiness: {

@@ -18,9 +18,9 @@ Agents should:
 
 1. Treat `Start SAP MCP`, `Initialize SAP MCP`, `Load SAP`, and `SAP mode` as activation phrases.
 2. Call `sap_agent_start` first when it is exposed, then load `sap_skills_bundle` with `includeContents: true`.
-3. Call profile/context tools before claiming the current network.
+3. Call `sap_agent_runtime_status`, `sap_prepare_action`, and when standards/interoperability matters, `sap_agent_standard_context` before claiming the current network or supported routes.
 4. For hosted remote MCP, describe the remote server as accountless and non-custodial; do not call `default` the user's local profile.
-5. Use local `sap_payments_profile_current` and `sap_payments_readiness` when the `sap_payments` bridge is visible.
+5. Use local `sap_payments_wallet_guard`, `sap_payments_profile_current`, and `sap_payments_readiness` when the `sap_payments` bridge is visible.
 6. Respect the active profile's `rpcUrl`, `programId`, and `mode`.
 7. Prefer SAP SDK docs and skills when explaining SAP Protocol semantics.
 8. Answer in the user's language unless the user asks otherwise.
@@ -41,6 +41,13 @@ Agents should:
 14. Call `sap_agent_next_action` before retrying after `payment_required`,
     `hosted_local_signer_required`, transient RPC errors, missing local bridge
     tools, or submitted signatures that did not confirm.
+15. Call `sap_prepare_mandate` before bounded agent-commerce workflows that
+    need spend caps, tool/protocol allow-lists, confirmation thresholds,
+    expiry, and proof-tape fields. Treat the result as an unsigned planning
+    artifact, not a wallet signature or payment authorization.
+16. Call `sap_export_agent_oasf` when a known owner wallet needs an
+    OASF-style machine-readable identity/capability/pricing export for
+    directories or cross-agent discovery.
 
 The intended user command is short:
 
@@ -64,11 +71,15 @@ SAP MCP exposes a free startup path:
 1. `sap_agent_start` returns the machine-readable agent playbook.
 2. `sap_agent_runtime_status` returns the hosted/accountless/local-bridge routing table.
 3. `sap_prepare_action` returns the intent-level route, fresh-data requirements, confirmation policy, retry rules, and proof-tape fields before paid calls, swaps, registry writes, Escrow V2, external x402 agents, premium streams, or transaction finalization.
-4. `sap_agent_context` returns compact micro-read SAP agent context before broad discovery.
-5. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
-6. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
-7. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
-8. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
+4. `sap_agent_standard_context` returns conservative MCP/x402/pay.sh, A2A-style, OASF-style, AP2-style, UI/runtime, and public-claim boundaries.
+5. `sap_prepare_mandate` returns an unsigned AP2-style mandate draft with constraints and proof-tape fields.
+6. `sap_agent_context` returns compact micro-read SAP agent context before broad discovery.
+7. `sap_export_agent_oasf` exports a known owner-wallet SAP profile into an OASF-style shape.
+8. `sap_agent_next_action` classifies SAP MCP errors and tells the agent whether a retry is safe.
+9. `sap-agent-start` is the matching MCP prompt for runtimes that prefer prompts.
+10. `sap_skills_bundle` returns the bundled SAP MCP skills so the agent can load tool routing, x402, SNS, registry, chat, and Solana protocol guidance.
+11. `sap_payments_wallet_guard` returns capability-only local signer guardrails without exposing wallet paths or keypair bytes.
+12. `sap_payments_readiness` checks the local non-custodial payment bridge before paid/write hosted calls.
 
 These calls are free. Paid tools should only start after the agent has loaded
 skills and, when needed, verified the local `sap_payments` bridge.

@@ -60,6 +60,7 @@ Most agent runtimes can connect to hosted SAP MCP directly, but not every runtim
 
 ```txt
 sap_payments_readiness
+sap_payments_wallet_guard
 sap_payments_process_status
 sap_payments_call_paid_tool
 sap_payments_call_external_x402
@@ -67,6 +68,11 @@ sap_payments_register_agent
 sap_payments_update_agent
 sap_payments_finalize_transaction
 ```
+
+`sap_payments_wallet_guard` is free. It returns the active local SAP profile,
+signer public key, redacted wallet storage status, permission hints, local
+signing capabilities, and forbidden agent actions. It never returns wallet
+paths, keypair bytes, seed phrases, or private config secrets.
 
 `sap_payments_readiness` is free. It verifies the hosted endpoint, local bridge,
 active profile, signer public key, SOL/USDC balance, and local commerce policy

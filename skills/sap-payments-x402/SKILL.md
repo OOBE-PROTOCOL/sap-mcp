@@ -8,6 +8,7 @@ workflows, and hosted SAP MCP x402/pay.sh monetization.
 - `sap_x402_prepare_payment`
 - `sap_x402_get_balance`
 - `sap_payments_profile_current`
+- `sap_payments_wallet_guard`
 - `sap_payments_process_status`
 - `sap_payments_call_paid_tool`
 - `sap_payments_call_external_x402`
@@ -74,7 +75,15 @@ signature, call `sap_agent_next_action`. Use its `safeToRetryNow`, `nextTool`,
 and `paymentCharged` fields as the retry guard.
 
 Before starting a paid or value-moving workflow, call the free hosted
-`sap_prepare_action` planner with the closest intent. It returns:
+`sap_prepare_action` planner with the closest intent and the local
+`sap_payments_wallet_guard` guard when the `sap_payments` namespace is visible.
+The wallet guard returns the active profile, signer public key, wallet storage
+class, permission hints, allowed local signing capabilities, and forbidden
+actions. It never returns a wallet path, keypair bytes, seed phrase, or private
+material. Treat local signing as a capability exposed through `sap_payments`,
+not as a file the agent can inspect.
+
+The planner returns:
 
 - fresh data that must be fetched again before payment/signing;
 - whether to use hosted `sap`, local `sap_payments`, or a hosted unsigned
@@ -129,6 +138,12 @@ retrying. It reports the bridge PID, parent runtime, profile/runtime lock, and
 possible duplicate SAP MCP processes. Do not kill bridge processes during an
 active MCP session; fully quit and reopen the agent runtime so stdio reconnects
 cleanly.
+
+For wallet/profile questions, prefer `sap_payments_wallet_guard` plus
+`sap_payments_profile_current` over shell commands. The agent may report the
+active profile name and signer public key, but must not read local wallet files,
+print keypair paths, create `.js`/`.mjs` signing scripts, or infer a private key
+location from runtime config.
 
 If an agent accidentally routes a free hosted tool through
 `sap_payments_call_paid_tool`, the bridge returns the normal tool response with

@@ -9,9 +9,11 @@ safe signing behavior.
 If the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or "SAP
 mode", treat it as the activation command. Call `sap_agent_start` when it is
 available, then call `sap_agent_runtime_status` with the closest intent and
-`sap_prepare_action` when the request is more than a status check. Then call
-`sap_skills_bundle` with `includeContents: true`. Load the returned SAP MCP
-skill contents into context before selecting advanced tools.
+`sap_prepare_action` when the request is more than a status check. For cross-agent,
+marketplace, identity, payment, or standards-interoperability work, also call
+`sap_agent_standard_context`. Then call `sap_skills_bundle` with
+`includeContents: true`. Load the returned SAP MCP skill contents into context
+before selecting advanced tools.
 
 If the MCP runtime exposes prompts, use `sap-agent-intent-router` as the compact
 decision prompt before paid calls, registry writes, escrow flows, identity
@@ -24,18 +26,21 @@ Always inspect runtime context through MCP tools, not by reading config files:
 1. `sap_agent_start`
 2. `sap_agent_runtime_status` with `intent: "connection"`, `"paid-call"`, `"registry-write"`, `"transaction-finalize"`, `"escrow"`, `"identity"`, or `"general"`
 3. `sap_prepare_action` with the closest intent before paid calls, swaps, registry writes, identity updates, Escrow V2, external x402 agents, premium streams, or transaction finalization
-4. `sap_agent_context` for compact micro-read agent/directory orientation before broad discovery
-5. `sap_skills_bundle` with `includeContents: true`
-6. `sap_pricing_catalog` before estimating hosted paid call tiers
-7. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
-8. `sap_skills_upgrade_plan` when local skills are missing or stale
-9. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
-10. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
-11. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
-12. `sap_profile_current`
-13. `sap_profile_list`
-14. `sap_profile_public_key`
-15. `sap_network_stats`
+4. `sap_agent_standard_context` when the workflow touches MCP/x402/pay.sh, A2A-style discovery, OASF-style exports, AP2-style mandates, marketplace publication, or public claims
+5. `sap_prepare_mandate` before bounded agent-commerce workflows that need spend caps, allowed tools/protocols, confirmation thresholds, and proof-tape fields. This returns an unsigned planning artifact, not a wallet authorization.
+6. `sap_agent_context` for compact micro-read agent/directory orientation before broad discovery
+7. `sap_export_agent_oasf` when a known owner wallet needs an OASF-style profile export for directories or agent networks
+8. `sap_skills_bundle` with `includeContents: true`
+9. `sap_pricing_catalog` before estimating hosted paid call tiers
+10. `sap_agent_next_action` before retrying after any SAP MCP error or partial write result
+11. `sap_skills_upgrade_plan` when local skills are missing or stale
+12. `sap_runtime_repair_plan` when hosted tools are connected but `sap_payments` is missing
+13. `sap_protocol_invariants` before SAP registry writes or when treasury, protocol fee, hosted write routing, or local signer routing is unclear
+14. `sap_agent_identity_plan` before agent registration, profile-image updates, Metaplex identity, SNS linking, or full identity setup
+15. `sap_profile_current`
+16. `sap_profile_list`
+17. `sap_profile_public_key`
+18. `sap_network_stats`
 
 For simple "are you connected?" checks, do not dump tool counts or inspect
 local files. Use `sap_agent_runtime_status` first and answer with the hosted
@@ -108,11 +113,13 @@ Use the bundled routing map for local MCP tool selection:
 
 SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
 `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
-`sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`,
+`sap_prepare_action`, `sap_agent_standard_context`, `sap_prepare_mandate`,
+`sap_export_agent_oasf`, `sap_agent_next_action`, `sap_pricing_catalog`,
 `sap_skills_list`, `sap_skills_bundle`, `sap_skills_upgrade_plan`,
 `sap_runtime_repair_plan`, and local `sap_skills_install` directly. Do not
-route startup, runtime status, pricing catalog, skill listing, bundling,
-upgrade planning, runtime repair planning, or installation through
+route startup, runtime status, standards context, mandate planning, OASF export,
+pricing catalog, skill listing, bundling, upgrade planning, runtime repair
+planning, or installation through
 `sap_x402_paid_call` or `sap_payments_call_paid_tool`. On hosted remote MCP, use
 `sap_skills_bundle` to download skill contents; the hosted server cannot
 install files onto the caller's local machine. Local installation belongs to the
@@ -168,12 +175,14 @@ actions. The hosted MCP server is not a wallet custodian.
 For hosted paid tools, use the native x402 flow. If the client runtime cannot
 attach `PAYMENT-SIGNATURE` itself, use the local SAP MCP `sap_payments` bridge.
 Call `sap_agent_runtime_status` first for routing, then
+`sap_payments_wallet_guard` to inspect capability-only local signer guardrails
+without exposing wallet paths or keypair bytes. Then call
 `sap_payments_readiness` to verify the active profile, signer, SOL/USDC
-balance, policy limits, and bridge status. Then call `sap_payments_call_paid_tool`
-for the hosted paid tool. This is not a separate hosted signing plugin: it is
-the local SAP MCP process using the user's configured SAP profile wallet or
-external signer to sign the x402 payment payload, retry the hosted tool call,
-and return the receipt.
+balance, policy limits, and bridge status. Then call
+`sap_payments_call_paid_tool` for the hosted paid tool. This is not a separate
+hosted signing plugin: it is the local SAP MCP process using the user's
+configured SAP profile wallet or external signer to sign the x402 payment
+payload, retry the hosted tool call, and return the receipt.
 `sap_x402_paid_call` is a backward-compatible alias only for older runtime
 snippets. Neither helper must be treated as a remote hosted signing service.
 If paid-call settlement stalls, the runtime reports `ClosedResourceError`, or
@@ -192,9 +201,11 @@ Hosted remote is accountless. If `sap_profile_current` returns
 `accountModel: hosted-remote-accountless`, do not describe `default` as the
 user's profile and do not infer the user's wallet from the hosted server. To
 inspect the local user profile, wallet, signer status, and payment policy, call
-the local `sap_payments.sap_payments_readiness` bridge when it is configured.
+the local `sap_payments.sap_payments_wallet_guard` and
+`sap_payments.sap_payments_readiness` bridge tools when they are configured.
 Use `sap_payments.sap_payments_profile_current` only as a narrower compatibility
-profile check.
+profile check. Agents may report the active profile and signer public key, but
+must not read or print wallet paths.
 
 Basic wallet and price-readiness checks are free hosted reads. Call
 `sol_get_balance`, `spl-token_getBalance`, `spl-token_getTokenAccounts`,
@@ -367,6 +378,16 @@ Check wallet status without printing keypair bytes:
 npx sap-mcp-config wallet
 ```
 
+For MCP-native checks, call:
+
+```text
+sap_payments.sap_payments_wallet_guard
+sap_payments.sap_payments_readiness
+```
+
+These return signer capability and readiness state without returning local
+wallet paths or private material.
+
 Update safe scalar settings:
 
 ```bash
@@ -480,6 +501,9 @@ for local execution or the client cannot perform remote Streamable HTTP/x402.
 ## Signing Rules
 
 - Do not read wallet/keypair files.
+- Do not print local wallet paths from runtime config.
+- Do not create temporary `.js`/`.mjs` signing scripts.
+- Treat `sap_payments` as a signer capability surface, not direct keypair access.
 - Do not ask the user to paste private key bytes.
 - Use `sap_preview_transaction` before any signing.
 - Use `sap_sign_transaction` only after preview and policy checks.

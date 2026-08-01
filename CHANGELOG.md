@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.64 - 2026-08-01
+
+### Added
+
+- Added the free local `sap_payments_wallet_guard` tool. It exposes the active
+  SAP profile, signer public key, wallet storage class, permission hints,
+  allowed local signing capabilities, and forbidden agent actions without
+  returning wallet paths, keypair bytes, seed phrases, or private config.
+- Added a reusable signer wallet-guard module so local signing is presented to
+  agents as a capability surface, not filesystem keypair access.
+
+### Changed
+
+- `sap_payments_profile_current` now returns redacted wallet status and
+  `walletGuard` metadata instead of a raw local wallet path.
+- `sap_payments_readiness`, `sap_agent_runtime_status`,
+  `sap_agent_standard_context`, and mandate planners now route agents through
+  `sap_payments_wallet_guard` before paid/write flows.
+- Reworded local signer logs from scary hot-key warnings to capability-only
+  local signer status while preserving the non-custodial security boundary.
+- Updated docs and skills so agents use `sap_payments` tools for local signing,
+  never inspect keypair files, and never create temporary signing scripts.
+
+### Tests
+
+- Added coverage proving local payment profile/guard outputs do not leak local
+  keypair paths or filenames.
+- Added pricing coverage proving `sap_payments_wallet_guard` is always free.
+
 ## 0.9.63 - 2026-07-30
 
 ### Added

@@ -113,6 +113,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_runtime_status')).toBe('free');
     expect(classifyTool('sap_agent_next_action')).toBe('free');
     expect(classifyTool('sap_prepare_action')).toBe('free');
+    expect(classifyTool('sap_agent_standard_context')).toBe('free');
+    expect(classifyTool('sap_prepare_mandate')).toBe('free');
+    expect(classifyTool('sap_export_agent_oasf')).toBe('free');
     expect(classifyTool('sap_pricing_catalog')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
@@ -387,6 +390,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_prepare_action', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_standard_context', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_prepare_mandate', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_export_agent_oasf', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('micro-read');
     expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
@@ -455,6 +461,7 @@ describe('SAP MCP monetization pricing', () => {
 
   it('keeps SAP payment readiness and transaction preflight free', () => {
     expect(classifyTool('sap_x402_estimate_cost')).toBe('free');
+    expect(classifyTool('sap_payments_wallet_guard')).toBe('free');
     expect(classifyTool('sap_payments_readiness')).toBe('free');
     expect(classifyTool('sap_payments_register_agent')).toBe('free');
     expect(classifyTool('sap_payments_update_agent')).toBe('free');
@@ -545,6 +552,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(catalog.toolSets.microRead).toContain('sap_agent_context');
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
     expect(catalog.toolSets.free).toContain('sap_prepare_action');
+    expect(catalog.toolSets.free).toContain('sap_agent_standard_context');
+    expect(catalog.toolSets.free).toContain('sap_prepare_mandate');
+    expect(catalog.toolSets.free).toContain('sap_export_agent_oasf');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
     expect(catalog.toolSets.free).toContain('sol_get_balance');
     expect(catalog.toolSets.free).toContain('spl-token_getTokenAccounts');

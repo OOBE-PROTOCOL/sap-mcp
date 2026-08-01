@@ -125,6 +125,9 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_agent_context');
     expect(names).toContain('sap_agent_next_action');
     expect(names).toContain('sap_prepare_action');
+    expect(names).toContain('sap_agent_standard_context');
+    expect(names).toContain('sap_prepare_mandate');
+    expect(names).toContain('sap_export_agent_oasf');
     expect(names).toContain('sap_premium_plugin_catalog');
     expect(names).toContain('sap_stream_catalog');
     expect(names).toContain('sap_webhook_catalog');
@@ -174,6 +177,7 @@ describe('createSapMcpServer', () => {
     expect(names).toContain('sap_skills_install');
     expect(names).toContain('sap_x402_estimate_cost');
     expect(names).toContain('sap_payments_profile_current');
+    expect(names).toContain('sap_payments_wallet_guard');
     expect(names).toContain('sap_payments_readiness');
     expect(names).toContain('sap_payments_call_paid_tool');
     expect(names).toContain('sap_payments_call_external_x402');
@@ -234,6 +238,51 @@ describe('createSapMcpServer', () => {
     expect(server._instructions).toContain('Escrow writes are V2-only');
     expect(server._instructions).not.toContain('280 tools');
     expect(server._instructions).not.toContain('248 tools');
+  });
+
+  it('exposes standards context and mandate planning as free control-plane tools', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const toolsByName = new Map((server.tools ?? []).map((tool) => [tool.name, tool]));
+    const standardContextTool = toolsByName.get('sap_agent_standard_context');
+    const mandateTool = toolsByName.get('sap_prepare_mandate');
+    const oasfTool = toolsByName.get('sap_export_agent_oasf');
+
+    expect(standardContextTool?.description).toContain('OASF-style');
+    expect(standardContextTool?.description).toContain('AP2-style');
+    expect(mandateTool?.description).toContain('does not sign');
+    expect(mandateTool?.inputSchema?.properties).toHaveProperty('maxX402Usd');
+    expect(mandateTool?.inputSchema?.properties).toHaveProperty('allowedTools');
+    expect(oasfTool?.description).toContain('OASF-style');
+    expect(oasfTool?.inputSchema?.properties).toHaveProperty('wallet');
+
+    const standardResponse = await server.toolHandlers?.sap_agent_standard_context({
+      intent: 'registry-write',
+    });
+    const mandateResponse = await server.toolHandlers?.sap_prepare_mandate({
+      intent: 'Register Solking with bounded local signing and x402 spend',
+      operationType: 'registry-write',
+      maxX402Usd: 0.02,
+      allowedProtocols: ['sap', 'mcp', 'x402'],
+      allowedTools: ['sap_payments_register_agent'],
+    });
+    const standardPayload = JSON.parse(standardResponse?.content[0]?.text ?? '{}');
+    const mandatePayload = JSON.parse(mandateResponse?.content[0]?.text ?? '{}');
+
+    expect(standardPayload.standards.x402PaySh.status).toBe('production');
+    expect(standardPayload.standards.ap2Mandates.plannerTool).toBe('sap_prepare_mandate');
+    expect(standardPayload.trustBoundary.canHostedSeeUserKeypair).toBe(false);
+    expect(mandatePayload.mandate.status).toBe('unsigned_planning_artifact');
+    expect(mandatePayload.mandate.notPaymentAuthorization).toBe(true);
+    expect(mandatePayload.route.localTool).toContain('sap_payments_register_agent');
+    expect(mandatePayload.forbiddenActions).toContain('Do not read or print keypair JSON.');
+
+    const inferredMandateResponse = await server.toolHandlers?.sap_prepare_mandate({
+      intent: 'Update Solking agent metadata and picture without exposing the keypair',
+      maxX402Usd: 0.01,
+    });
+    const inferredMandatePayload = JSON.parse(inferredMandateResponse?.content[0]?.text ?? '{}');
+    expect(inferredMandatePayload.mandate.operationType).toBe('registry-write');
+    expect(inferredMandatePayload.route.localTool).toContain('sap_payments_register_agent');
   });
 
   it('keeps every root input parameter described for agent-safe schema use', async () => {
@@ -462,6 +511,7 @@ describe('createSapMcpServer', () => {
 
       expect(names).toEqual([
         'sap_payments_profile_current',
+        'sap_payments_wallet_guard',
         'sap_payments_readiness',
         'sap_payments_process_status',
         'sap_payments_call_paid_tool',
@@ -971,6 +1021,42 @@ describe('createSapMcpServer', () => {
     } finally {
       process.env = originalEnv;
       rmSync(configHome, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes sap_payments wallet guard without leaking local keypair paths', async () => {
+    const originalEnv = { ...process.env };
+    const configHome = mkdtempSync(join(tmpdir(), 'sap-mcp-wallet-guard-'));
+    const keypair = Keypair.generate();
+    const walletPath = join(mkdtempSync(join(tmpdir(), 'sap-mcp-wallet-guard-keypair-')), 'agent-keypair.json');
+    writeFileSync(walletPath, JSON.stringify(Array.from(keypair.secretKey)), 'utf-8');
+
+    try {
+      const configDir = join(configHome, 'mcp-sap');
+      mkdirSync(configDir, { recursive: true });
+      process.env.XDG_CONFIG_HOME = configHome;
+      process.env.SAP_MCP_PROFILE = 'default';
+      process.env.SAP_MCP_CONFIG_PATH = join(configDir, 'config.json');
+
+      const server = registeredServer(await createSapMcpServer(baseConfig({
+        mode: 'local-dev-keypair',
+        walletPath,
+      })));
+
+      const profile = await server.toolHandlers?.sap_payments_profile_current({});
+      const guard = await server.toolHandlers?.sap_payments_wallet_guard({});
+      const text = `${profile?.content[0]?.text ?? ''}\n${guard?.content[0]?.text ?? ''}`;
+
+      expect(text).toContain('capability-only-local-signer');
+      expect(text).toContain('keypair-bytes-never-returned');
+      expect(text).toContain('do not read or print keypair JSON files');
+      expect(text).not.toContain(walletPath);
+      expect(text).not.toContain('agent-keypair.json');
+      expect(text).not.toContain('secretKey');
+    } finally {
+      process.env = originalEnv;
+      rmSync(configHome, { recursive: true, force: true });
+      rmSync(walletPath, { force: true });
     }
   });
 

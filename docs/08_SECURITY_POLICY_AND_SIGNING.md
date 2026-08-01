@@ -65,7 +65,48 @@ Recommended flow:
 4. Local signer signs through `POST /sign/<profile>`.
 5. The signed transaction returns to the caller without exposing keypair bytes.
 
-## 08.4 Policy Layers
+## 08.4 Wallet Guard Capability Surface
+
+Agent runtimes must treat local signing as a capability exposed by the
+`sap_payments` bridge, not as filesystem access.
+
+Use the free local tool:
+
+```text
+sap_payments_wallet_guard
+```
+
+It returns:
+
+1. Active SAP profile name.
+2. Signer public key when available.
+3. Redacted wallet storage class and permission status.
+4. Allowed local signing/payment capabilities.
+5. Forbidden agent actions.
+
+It never returns:
+
+1. Keypair bytes.
+2. Seed phrases.
+3. Raw wallet paths.
+4. Private config secrets.
+
+Recommended hosted workflow:
+
+1. `sap_agent_runtime_status` on hosted SAP MCP.
+2. `sap_payments_wallet_guard` on local `sap_payments`.
+3. `sap_payments_readiness` on local `sap_payments`.
+4. `sap_payments_call_paid_tool` for hosted x402 tool calls.
+5. `sap_payments_finalize_transaction` for hosted unsigned transactions.
+6. `sap_payments_register_agent` or `sap_payments_update_agent` for SAP registry writes.
+
+Agents must not create temporary signing scripts, inspect local keypair files,
+or infer wallet paths from runtime configuration. If a runtime needs a more
+secure production custody model, use `external-signer`, hardware wallet flows,
+or delegated session policies instead of exposing a raw keypair file to the
+runtime process.
+
+## 08.5 Policy Layers
 
 SAP MCP supports:
 
@@ -78,7 +119,7 @@ SAP MCP supports:
 7. Unsafe action guard.
 8. Private-key guard.
 
-## 08.5 Bento Policy
+## 08.6 Bento Policy
 
 Bento can be enabled by profile:
 
@@ -103,7 +144,7 @@ Production recommendation:
 3. Log policy decisions without logging secrets.
 4. Test denied, allowed, and degraded Bento paths before launch.
 
-## 08.6 Transaction Safety
+## 08.7 Transaction Safety
 
 Before signing or submitting transactions, enforce:
 
@@ -118,7 +159,7 @@ Before signing or submitting transactions, enforce:
 
 Agents must ask for approval before value-moving operations when policy requires it.
 
-## 08.7 Remote Hosted Safety
+## 08.8 Remote Hosted Safety
 
 For `mcp.sap.oobeprotocol.ai`:
 

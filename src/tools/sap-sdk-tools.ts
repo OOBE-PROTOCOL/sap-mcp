@@ -1055,6 +1055,191 @@ async function buildSapAgentContext(input: JsonRecord, client: SapClient): Promi
   };
 }
 
+async function buildOasfAgentExport(input: JsonRecord, client: SapClient): Promise<JsonRecord> {
+  const wallet = requiredPublicKey(input, 'wallet');
+  const walletBase58 = wallet.toBase58();
+  const agentPda = client.agent.deriveAgent(wallet)[0].toBase58();
+  const includeSourceFragments = input.includeSourceFragments === true;
+  const [agent, active, profile, stats] = await Promise.all([
+    client.agent.fetchNullable(wallet),
+    client.discovery.isAgentActive(wallet).catch(() => false),
+    client.discovery.getAgentProfile(wallet).catch((error) => ({
+      unavailable: true,
+      reason: error instanceof Error ? error.message : 'profile_fetch_failed',
+    })),
+    client.agent.fetchStatsNullable(new PublicKey(agentPda)).catch(() => null),
+  ]);
+
+  const agentRecord = toPlainRecord(agent);
+  const profileRecord = toPlainRecord(profile);
+  const statsRecord = toPlainRecord(stats);
+  const identitySource = profileRecord.profile && typeof profileRecord.profile === 'object'
+    ? profileRecord.profile as JsonRecord
+    : profileRecord;
+  const agentSource = Object.keys(agentRecord).length > 0 ? agentRecord : identitySource;
+  const capabilities = normalizeOasfCapabilities(readAnyArray(agentSource.capabilities) ?? readAnyArray(identitySource.capabilities));
+  const pricing = normalizeOasfPricing(readAnyArray(agentSource.pricing) ?? readAnyArray(identitySource.pricing));
+  const protocols = normalizeStringList(readAnyArray(agentSource.protocols) ?? readAnyArray(identitySource.protocols));
+  const metadataUri = readStringFromAny(agentSource, ['agentUri', 'agent_uri', 'metadataUri', 'metadata_uri'])
+    ?? readStringFromAny(identitySource, ['agentUri', 'agent_uri', 'metadataUri', 'metadata_uri']);
+  const x402Endpoint = readStringFromAny(agentSource, ['x402Endpoint', 'x402_endpoint'])
+    ?? readStringFromAny(identitySource, ['x402Endpoint', 'x402_endpoint']);
+
+  return {
+    schema: {
+      name: 'oasf-compatible-agent-profile',
+      version: '0.1',
+      source: 'sap-mcp',
+      generatedAt: new Date().toISOString(),
+      note: 'OASF-style export for interoperability. It is not a claim that OASF has finalized every SAP field.',
+    },
+    identity: {
+      name: readStringFromAny(agentSource, ['name']) ?? readStringFromAny(identitySource, ['name']) ?? null,
+      description: readStringFromAny(agentSource, ['description']) ?? readStringFromAny(identitySource, ['description']) ?? null,
+      wallet: walletBase58,
+      agentPda,
+      agentId: readStringFromAny(agentSource, ['agentId', 'agent_id']) ?? readStringFromAny(identitySource, ['agentId', 'agent_id']) ?? null,
+      metadataUri: metadataUri ?? null,
+      x402Endpoint: x402Endpoint ?? null,
+      active,
+    },
+    capabilities,
+    protocols,
+    pricing,
+    payments: {
+      x402Endpoint: x402Endpoint ?? null,
+      supportedSettlementModes: Array.from(new Set(pricing.map((item) => item.settlementMode).filter(Boolean))),
+      preferredHostedPaymentTool: 'sap_payments_call_paid_tool',
+      preferredExternalPaymentTool: 'sap_payments_call_external_x402',
+    },
+    trust: {
+      network: 'mainnet-beta',
+      programId: DEFAULT_SAP_PROGRAM_ID,
+      agentPda,
+      active,
+      stats: summarizeOasfStats(statsRecord),
+      verification: {
+        source: 'SAP on-chain AgentAccount/Profile reads',
+        requiresFreshFetch: true,
+        privateKeyMaterialIncluded: false,
+      },
+    },
+    links: {
+      hostedMcp: 'https://mcp.sap.oobeprotocol.ai/mcp',
+      profileTool: 'sap_get_agent_profile',
+      contextTool: 'sap_agent_context',
+      standardsTool: 'sap_agent_standard_context',
+    },
+    sourceFragments: includeSourceFragments ? {
+      agent: agentRecord,
+      profile: profileRecord,
+      stats: statsRecord,
+    } : undefined,
+  };
+}
+
+function toPlainRecord(value: unknown): JsonRecord {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+  try {
+    return JSON.parse(JSON.stringify(value, (_key, nested) => {
+      if (typeof nested === 'bigint') {
+        return nested.toString();
+      }
+      if (nested instanceof PublicKey) {
+        return nested.toBase58();
+      }
+      if (BN.isBN(nested)) {
+        return nested.toString();
+      }
+      if (nested && typeof nested === 'object' && typeof (nested as { toBase58?: unknown }).toBase58 === 'function') {
+        return (nested as { toBase58: () => string }).toBase58();
+      }
+      return nested;
+    })) as JsonRecord;
+  } catch {
+    return {};
+  }
+}
+
+function readStringFromAny(record: JsonRecord, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function readAnyArray(value: unknown): unknown[] | undefined {
+  return Array.isArray(value) ? value : undefined;
+}
+
+function normalizeStringList(values: unknown[] | undefined): string[] {
+  return (values ?? [])
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim());
+}
+
+function normalizeOasfCapabilities(values: unknown[] | undefined): JsonRecord[] {
+  return (values ?? []).map((item) => {
+    if (typeof item === 'string') {
+      return { id: item, protocol: item.includes(':') ? item.split(':')[0] : null, description: null, version: null };
+    }
+    const record = toPlainRecord(item);
+    const id = readStringFromAny(record, ['id', 'capabilityId', 'capability_id']) ?? 'unknown';
+    return {
+      id,
+      protocol: readStringFromAny(record, ['protocolId', 'protocol_id', 'protocol']) ?? (id.includes(':') ? id.split(':')[0] : null),
+      description: readStringFromAny(record, ['description']) ?? null,
+      version: readStringFromAny(record, ['version']) ?? null,
+    };
+  });
+}
+
+function normalizeOasfPricing(values: unknown[] | undefined): JsonRecord[] {
+  return (values ?? []).map((item) => {
+    const record = toPlainRecord(item);
+    return {
+      tierId: readStringFromAny(record, ['tierId', 'tier_id']) ?? 'default',
+      pricePerCall: stringifyOasfValue(record.pricePerCall),
+      minPricePerCall: stringifyOasfValue(record.minPricePerCall),
+      maxPricePerCall: stringifyOasfValue(record.maxPricePerCall),
+      tokenType: readStringFromAny(record, ['tokenType', 'token_type']) ?? null,
+      tokenMint: readStringFromAny(record, ['tokenMint', 'token_mint']) ?? null,
+      settlementMode: readStringFromAny(record, ['settlementMode', 'settlement_mode']) ?? null,
+      rateLimit: typeof record.rateLimit === 'number' ? record.rateLimit : null,
+    };
+  });
+}
+
+function stringifyOasfValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (BN.isBN(value)) {
+    return value.toString();
+  }
+  return null;
+}
+
+function summarizeOasfStats(stats: JsonRecord): JsonRecord | null {
+  if (Object.keys(stats).length === 0) {
+    return null;
+  }
+  return {
+    totalCallsServed: stringifyOasfValue(stats.totalCallsServed ?? stats.callsServed),
+    reputationScore: stringifyOasfValue(stats.reputationScore ?? stats.reputation),
+    uptimePercent: stringifyOasfValue(stats.uptimePercent ?? stats.uptime),
+    averageLatencyMs: stringifyOasfValue(stats.avgLatencyMs ?? stats.averageLatencyMs),
+  };
+}
+
 function parseCapabilityMode(input: JsonRecord): 'any' | 'all' {
   const mode = optionalString(input, 'capabilityMode')?.trim().toLowerCase();
   if (!mode) {
@@ -2666,6 +2851,22 @@ const discoveryTools: ToolRegistration[] = [
       },
     },
     handler: async (input, client) => buildSapAgentContext(input, client),
+  },
+  {
+    name: 'sap_export_agent_oasf',
+    title: 'Export SAP Agent OASF Profile',
+    description: 'Export a known SAP agent into an OASF-style, machine-readable profile view for agent directories and cross-runtime discovery. This is an exact owner-wallet read: it derives the SAP agent PDA, fetches the current on-chain agent/profile/stats when available, and normalizes identity, protocols, capabilities, pricing, x402 endpoint, metadata links, and trust facts without exposing local wallet paths or keypair bytes.',
+    inputSchema: {
+      wallet: {
+        type: 'string',
+        description: 'Required owner wallet public key in base58. Use sap_discover_agents or sap_agent_context first when the wallet is unknown.',
+      },
+      includeSourceFragments: {
+        type: 'boolean',
+        description: 'Whether to include redacted source account/profile fragments for debugging directory ingestion. Defaults to false.',
+      },
+    },
+    handler: async (input, client) => buildOasfAgentExport(input, client),
   },
   {
     name: 'sap_get_agent_profile',
