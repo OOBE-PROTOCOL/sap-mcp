@@ -139,6 +139,12 @@ possible duplicate SAP MCP processes. Do not kill bridge processes during an
 active MCP session; fully quit and reopen the agent runtime so stdio reconnects
 cleanly.
 
+The bridge is expected to run as one process per SAP profile/runtime. Current
+configs set `SAP_MCP_RUNTIME_ID`; if a runtime omits it, the bridge falls back
+to a stable `default-runtime` lock rather than a parent-PID lock. A second live
+bridge for the same profile/runtime fails fast, and orphaned bridge-only
+processes exit when their parent runtime is gone.
+
 For wallet/profile questions, prefer `sap_payments_wallet_guard` plus
 `sap_payments_profile_current` over shell commands. The agent may report the
 active profile name and signer public key, but must not read local wallet files,

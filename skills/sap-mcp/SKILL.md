@@ -189,6 +189,9 @@ If paid-call settlement stalls, the runtime reports `ClosedResourceError`, or
 multiple sessions seem to fight over the bridge, call
 `sap_payments_process_status` and ask the user to fully quit/reopen the runtime
 instead of killing node/npx processes mid-session.
+The local bridge should be a singleton per SAP profile/runtime. If a runtime
+config is stale and omits `SAP_MCP_RUNTIME_ID`, SAP MCP uses a stable fallback
+lock and exits orphaned bridge-only processes when the parent runtime is gone.
 
 When connected to hosted SAP MCP, `signerConfigured: false` on the remote
 server means the hosted server is non-custodial. It does not mean the remote

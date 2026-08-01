@@ -150,6 +150,15 @@ has a user-controlled wallet profile:
 | `sap_payments_verify_receipt` | Decode a payment response/receipt header for inspection. |
 | `sap_x402_paid_call` | Backward-compatible alias for the high-level paid-call tool. |
 
+The local bridge is guarded by a profile/runtime process lock. Current configs
+set `SAP_MCP_RUNTIME_ID` for Codex, Hermes, Claude, and OpenClaw so a runtime
+restart cannot spawn a second bridge for the same SAP profile. If a client
+omits that env var, SAP MCP uses a stable `default-runtime` lock instead of a
+parent-PID lock, which prevents retry loops from creating one new bridge per
+startup attempt. Bridge-only processes also exit when their original parent
+runtime disappears, so stale orphan processes do not keep confusing later
+sessions.
+
 The public hosted server should not advertise the signing helpers in
 non-custodial mode because signing belongs on the user's machine.
 

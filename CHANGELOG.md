@@ -24,12 +24,22 @@ All notable changes to this project are documented in this file.
   local signer status while preserving the non-custodial security boundary.
 - Updated docs and skills so agents use `sap_payments` tools for local signing,
   never inspect keypair files, and never create temporary signing scripts.
+- Hardened the local `sap_payments` bridge singleton guard. Runtime configs
+  still use `SAP_MCP_RUNTIME_ID`, but stale configs now fall back to a stable
+  `default-runtime` lock instead of `parent-<pid>`, which prevents retry loops
+  from spawning duplicate bridge processes.
+- Bridge-only processes now treat live locks with dead parent runtimes as stale
+  and exit automatically when their own parent runtime disappears, reducing
+  orphaned/zombie Node processes after Hermes, Codex, Claude, or OpenClaw
+  restarts.
 
 ### Tests
 
 - Added coverage proving local payment profile/guard outputs do not leak local
   keypair paths or filenames.
 - Added pricing coverage proving `sap_payments_wallet_guard` is always free.
+- Added process-lock coverage for stable runtime fallback, duplicate bridge
+  blocking, and stale parent-runtime replacement.
 
 ## 0.9.63 - 2026-07-30
 

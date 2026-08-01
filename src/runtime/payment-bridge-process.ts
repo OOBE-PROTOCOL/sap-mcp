@@ -69,6 +69,7 @@ export class PaymentBridgeLockError extends Error {
 const LOCK_RELEASE_HANDLERS = new Set<() => void>();
 let activeLock: PaymentBridgeLockRecord | undefined;
 let exitHandlersRegistered = false;
+let orphanWatchdog: NodeJS.Timeout | undefined;
 
 function sanitizeLockPart(value: string): string {
   return value.trim().replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'default';
@@ -95,7 +96,7 @@ export function resolvePaymentBridgeRuntimeId(): string {
     return sanitizeLockPart(fromEnv);
   }
 
-  return `parent-${process.ppid || 'unknown'}`;
+  return 'default-runtime';
 }
 
 export function getPaymentBridgeLockPath(profileName = resolvePaymentBridgeProfileName(), runtimeId = resolvePaymentBridgeRuntimeId()): string {
@@ -139,6 +140,20 @@ function readLockRecord(lockPath: string): PaymentBridgeLockRecord | undefined {
   }
 }
 
+function isLockRecordStale(record: PaymentBridgeLockRecord): boolean {
+  if (!isPidAlive(record.pid)) {
+    return true;
+  }
+
+  // A live bridge whose original parent runtime is gone cannot be used by a
+  // new MCP session. Treat it as stale so the replacement bridge can start.
+  if (record.ppid > 1 && !isPidAlive(record.ppid)) {
+    return true;
+  }
+
+  return false;
+}
+
 function removeLockIfOwned(record: PaymentBridgeLockRecord): void {
   const current = readLockRecord(record.lockPath);
   if (!current || current.pid !== process.pid) {
@@ -168,6 +183,22 @@ function registerExitHandlers(): void {
   process.once('beforeExit', releaseAll);
 }
 
+function startOrphanWatchdog(parentPid: number): void {
+  if (orphanWatchdog || parentPid <= 1 || process.env.SAP_MCP_EXIT_ON_ORPHANED_BRIDGE === 'false') {
+    return;
+  }
+
+  orphanWatchdog = setInterval(() => {
+    const parentChangedToInit = process.ppid <= 1;
+    const originalParentGone = !isPidAlive(parentPid);
+    if (parentChangedToInit || originalParentGone) {
+      releasePaymentBridgeProcessLock();
+      process.exit(0);
+    }
+  }, 5000);
+  orphanWatchdog.unref();
+}
+
 export function acquirePaymentBridgeProcessLock(): PaymentBridgeLockRecord | undefined {
   if (process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY !== 'true') {
     return undefined;
@@ -180,7 +211,7 @@ export function acquirePaymentBridgeProcessLock(): PaymentBridgeLockRecord | und
 
   const existing = readLockRecord(lockPath);
   if (existing) {
-    if (existing.pid !== process.pid && isPidAlive(existing.pid)) {
+    if (existing.pid !== process.pid && !isLockRecordStale(existing)) {
       throw new PaymentBridgeLockError(
         `sap_payments bridge is already running for profile "${profileName}" in runtime "${runtimeId}" (pid ${existing.pid}). Fully quit/restart the agent runtime instead of starting a second bridge.`,
         existing,
@@ -215,6 +246,7 @@ export function acquirePaymentBridgeProcessLock(): PaymentBridgeLockRecord | und
   const release = () => removeLockIfOwned(record);
   LOCK_RELEASE_HANDLERS.add(release);
   registerExitHandlers();
+  startOrphanWatchdog(record.ppid);
 
   return record;
 }
@@ -226,6 +258,10 @@ export function releasePaymentBridgeProcessLock(): void {
 
   removeLockIfOwned(activeLock);
   activeLock = undefined;
+  if (orphanWatchdog) {
+    clearInterval(orphanWatchdog);
+    orphanWatchdog = undefined;
+  }
 }
 
 function parsePsOutput(output: string): PaymentBridgeProcessInfo[] {
@@ -292,7 +328,7 @@ export function getPaymentBridgeProcessStatus(): PaymentBridgeProcessStatus {
   const runtimeId = resolvePaymentBridgeRuntimeId();
   const lockPath = getPaymentBridgeLockPath(profileName, runtimeId);
   const record = readLockRecord(lockPath);
-  const stale = Boolean(record && !isPidAlive(record.pid));
+  const stale = Boolean(record && isLockRecordStale(record));
   const processListing = listPossibleSapMcpProcesses();
   const duplicateCount = Math.max(0, processListing.processes.length - 1);
   const warning = duplicateCount > 0
