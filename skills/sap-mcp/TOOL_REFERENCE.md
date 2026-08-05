@@ -132,9 +132,11 @@ SAP SNS and direct SNS domain workflows:
 `alldomains_registerDomain`, `alldomains_resolveDomain`.
 
 `sap_sns_register_agent_domain` is local-signer-only. Hosted accountless SAP MCP
-rejects that direct write before x402 payment. For hosted record changes, use
-`sap_sns_build_manage_record_transaction` and finalize the unsigned transaction
-locally with `sap_payments_finalize_transaction`.
+rejects that direct write before x402 payment. Current builds also disable
+`sap_sns_build_manage_record_transaction` because the historical Bonfida SNS npm
+package is no longer installable from npmjs. Use SNS tools for availability,
+resolution, ownership, records, and PDA derivation only until release notes say
+SNS write builders are enabled again.
 
 ## `sap-agentkit`
 

@@ -1,51 +1,37 @@
 /**
  * SAP SNS MCP tools.
  *
- * Wraps the SNS integration from `@oobe-protocol-labs/synapse-sap-sdk@1.0.x` and
- * `@bonfida/spl-name-service`.
+ * Wraps Solana Name Service lookups without requiring the historical Bonfida
+ * npm package, which is no longer available from the public npm registry.
  *
  * Architecture (v1.0.x — Free Choice Record System):
- * - `SnsModule` (modules/sns) is the primary SDK module for SAP agent domain operations:
- *   registration, resolution, availability, validation, PDA derivation.
- * - Bonfida SDK functions are used directly for record management and domain queries
- *   not covered by SnsModule.
- * - `sns-standalone` (SnsSdk) is deprecated and not used by SAP MCP.
+ * - Availability, PDA derivation, owner lookup, and record reads use local
+ *   Solana Name Service helpers backed only by `@solana/web3.js`.
+ * - Registration and record-write builders are fail-fast until migrated to a
+ *   current, installable SNS SDK and covered by end-to-end tests.
+ * - The old Bonfida SDK package is not imported anywhere in SAP MCP runtime.
  *
  * Tool groups:
- * - Registration: `sap_sns_register_agent_domain` (SnsModule — local signer only; signs + submits with USDC)
- * - Availability: `sap_sns_check_domain`, `sap_sns_batch_check_domains` (SnsModule)
- * - Resolution: `sap_sns_resolve_domain` (SnsModule), `sap_sns_resolve_wallet` (Bonfida)
- * - Records: `sap_sns_get_domain_records`, `sap_sns_get_record` (Bonfida)
- * - Ownership: `sap_sns_check_ownership` (Bonfida)
- * - PDA: `sap_sns_get_domain_pda`, `sap_sns_get_record_pda` (SnsModule)
- * - Validation: `sap_sns_validate_records` (SnsModule)
- * - Record management: `sap_sns_build_manage_record_transaction` (Bonfida unsigned builder)
+ * - Registration: `sap_sns_register_agent_domain` (temporarily unavailable; no hosted key custody)
+ * - Availability: `sap_sns_check_domain`, `sap_sns_batch_check_domains`
+ * - Resolution: `sap_sns_resolve_domain`, `sap_sns_resolve_wallet`
+ * - Records: `sap_sns_get_domain_records`, `sap_sns_get_record`
+ * - Ownership: `sap_sns_check_ownership`
+ * - PDA: `sap_sns_get_domain_pda`, `sap_sns_get_record_pda`
+ * - Validation: `sap_sns_validate_records`
+ * - Record management: `sap_sns_build_manage_record_transaction` (temporarily unavailable)
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { PublicKey, Transaction } from '@solana/web3.js';
-import { SnsModule, Record as SnsRecord } from '@oobe-protocol-labs/synapse-sap-sdk/modules/sns';
-import {
-  getDomainKeySync,
-  getRecordKeySync,
-  getRecord as bonfidaGetRecord,
-  getRecords as bonfidaGetRecords,
-  createRecordInstruction as bonfidaCreateRecordInstruction,
-  deleteNameRegistry,
-  getNameOwner,
-  Record as BonfidaRecord,
-} from '@bonfida/spl-name-service';
+import { createHash } from 'crypto';
+import { PublicKey, type Connection } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { loadKeypairFromFile } from '../signer/load-keypair.js';
 import { logger } from '../core/logger.js';
 
 type JsonRecord = Record<string, unknown>;
-type SnsRegistrationParams = Parameters<SnsModule['registerAgentDomain']>[0];
-type SnsRecordMap = SnsRegistrationParams['records'];
-type SnsRecordKey = keyof SnsRecordMap;
-type SnsRecordType = Parameters<SnsModule['getRecordPda']>[1];
+type SnsRecordType = string;
 type SnsToolHandler = (input: JsonRecord) => Promise<unknown>;
 
 interface SnsToolRegistration {
@@ -56,35 +42,49 @@ interface SnsToolRegistration {
   handler: SnsToolHandler;
 }
 
-const SNS_RECORD_KEYS: readonly SnsRecordKey[] = [
-  'SOL',
-  'Pic',
-  'TXT',
-  'Url',
-  'Twitter',
-  'Discord',
-  'Telegram',
-  'Github',
-  'Email',
-  'IPFS',
-  'ARWV',
-  'IPNS',
-  'ETH',
-  'BTC',
-  'BSC',
-  'Injective',
-  'LTC',
-  'DOGE',
-  'A',
-  'AAAA',
-  'CNAME',
-  'Reddit',
-  'Background',
-  'Backpack',
-  'POINT',
-  'BASE',
-  'SHDW',
-];
+const SNS_UNAVAILABLE_MESSAGE =
+  'This SNS write path is temporarily unavailable in SAP MCP because the historical ' +
+  '@bonfida/spl-name-service npm package is not installable from npmjs. SAP MCP keeps ' +
+  'read/discovery tools available without that dependency, but registration and record ' +
+  'write builders will stay disabled until a current SNS SDK path is migrated and tested.';
+
+const SNS_NAME_PROGRAM_ID = new PublicKey('namesLPneVptA9Z5rqUDD9tMTWEJwofgaYwp8cawRkX');
+const SNS_ROOT_DOMAIN_ACCOUNT = new PublicKey('58PwtjSDuFHuUkYjH9BYnnQKHfwo9reZhC2zMJv9JPkx');
+const SNS_HASH_PREFIX = 'SPL Name Service';
+const SNS_REGISTRY_HEADER_LEN = 96;
+const SNS_RECORD_V1_PREFIX = '\u0001';
+const SNS_SUBDOMAIN_PREFIX = '\u0000';
+const ZERO_PUBLIC_KEY_BUFFER = Buffer.alloc(32);
+
+const SNS_RECORD_VALUE_BY_KEY: Record<string, string> = {
+  IPFS: 'IPFS',
+  ARWV: 'ARWV',
+  SOL: 'SOL',
+  ETH: 'ETH',
+  BTC: 'BTC',
+  LTC: 'LTC',
+  DOGE: 'DOGE',
+  Email: 'email',
+  Url: 'url',
+  Discord: 'discord',
+  Github: 'github',
+  Reddit: 'reddit',
+  Twitter: 'twitter',
+  Telegram: 'telegram',
+  Pic: 'pic',
+  SHDW: 'SHDW',
+  POINT: 'POINT',
+  BSC: 'BSC',
+  Injective: 'INJ',
+  Backpack: 'backpack',
+  A: 'A',
+  AAAA: 'AAAA',
+  CNAME: 'CNAME',
+  TXT: 'TXT',
+  Background: 'background',
+  BASE: 'BASE',
+  IPNS: 'IPNS',
+};
 
 // ============================================================================
 // Serialization helpers
@@ -150,48 +150,6 @@ function requiredString(input: JsonRecord, field: string): string {
 }
 
 /**
- * @name optionalString
- * @description Reads an optional string field from MCP input.
- */
-function optionalString(input: JsonRecord, field: string): string | undefined {
-  const value = input[field];
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
-}
-
-/**
- * @name optionalBoolean
- * @description Reads an optional boolean field from MCP input.
- */
-function optionalBoolean(input: JsonRecord, field: string): boolean | undefined {
-  const value = input[field];
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (typeof value !== 'boolean') {
-    throw new Error(`${field} must be a boolean`);
-  }
-  return value;
-}
-
-/**
- * @name optionalNumber
- * @description Reads an optional finite number field from MCP input.
- */
-function optionalNumber(input: JsonRecord, field: string): number | undefined {
-  const value = input[field];
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string' && Number.isFinite(Number(value))) {
-    return Number(value);
-  }
-  throw new Error(`${field} must be a finite number`);
-}
-
-/**
  * @name requiredPublicKey
  * @description Reads a required base58 public key from MCP input.
  */
@@ -214,21 +172,6 @@ function optionalStringArray(input: JsonRecord, field: string): string[] | undef
   return value;
 }
 
-/**
- * @name optionalRecord
- * @description Reads an optional object field from MCP input.
- */
-function optionalRecord(input: JsonRecord, field: string): JsonRecord | undefined {
-  const value = input[field];
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${field} must be an object`);
-  }
-  return value as JsonRecord;
-}
-
 // ============================================================================
 // Domain and record helpers
 // ============================================================================
@@ -244,7 +187,7 @@ function normalizeDomain(domain: string): string {
 
 /**
  * @name ensureFullDomain
- * @description Ensures a domain name has the .sol suffix for Bonfida SDK calls.
+ * @description Ensures a domain name has the .sol suffix for SNS calls.
  */
 function ensureFullDomain(domain: string): string {
   const trimmed = domain.trim().toLowerCase();
@@ -253,11 +196,11 @@ function ensureFullDomain(domain: string): string {
 
 /**
  * @name parseSnsRecordType
- * @description Parses SNS record type names or values into Bonfida record enum values.
+ * @description Parses SNS record type names or values into canonical record values.
  */
 function parseSnsRecordType(input: JsonRecord, field: string): SnsRecordType {
   const raw = requiredString(input, field).toLowerCase();
-  const entries = Object.entries(SnsRecord) as Array<[string, SnsRecordType]>;
+  const entries = Object.entries(SNS_RECORD_VALUE_BY_KEY);
   const match = entries.find(([key, value]) => key.toLowerCase() === raw || String(value).toLowerCase() === raw);
   if (!match) {
     throw new Error(`${field} must be one of: ${entries.map(([key]) => key).join(', ')}`);
@@ -265,248 +208,208 @@ function parseSnsRecordType(input: JsonRecord, field: string): SnsRecordType {
   return match[1];
 }
 
-/**
- * @name parseSapData
- * @description Builds optional SAP structured data for the SNS TXT record.
- */
-function parseSapData(input: JsonRecord): JsonRecord | undefined {
-  const sapData = optionalRecord(input, 'sapData');
-  const capabilities = optionalStringArray(input, 'capabilities');
-  const protocols = optionalStringArray(input, 'protocols');
-  const x402Endpoint = optionalString(input, 'x402Endpoint');
-  const agentUri = optionalString(input, 'agentUri');
-  const metadataUri = optionalString(input, 'metadataUri');
-
-  const merged: JsonRecord = {
-    ...(sapData ?? {}),
-    ...(capabilities ? { capabilities } : {}),
-    ...(protocols ? { protocols } : {}),
-    ...(x402Endpoint ? { x402Endpoint } : {}),
-    ...(agentUri ? { agentUri } : {}),
-    ...(metadataUri ? { metadataUri } : {}),
-  };
-
-  return Object.keys(merged).length > 0 ? merged : undefined;
-}
-
-/**
- * @name assignSnsRecord
- * @description Assigns an optional SNS record field while preserving the SDK record map type.
- */
-function assignSnsRecord(records: Partial<SnsRecordMap>, key: SnsRecordKey, value: unknown): void {
-  if (typeof value === 'string' && value.trim() !== '') {
-    records[key] = value.trim();
-  }
-}
-
-/**
- * @name parseSnsRecordMap
- * @description Converts MCP input into the strongly typed SNS record map expected by the SDK.
- *
- * Note: SOL record is NOT included during registration — it requires createSolRecordInstruction
- * (with Ed25519 signature), not createRecordInstruction. Set it after registration using
- * sap_sns_build_manage_record_transaction with recordType "SOL".
- */
-function parseSnsRecordMap(input: JsonRecord): SnsRecordMap {
-  const recordsInput = optionalRecord(input, 'records');
-  const pic = optionalString(input, 'pic') ?? (recordsInput?.Pic as string | undefined);
-
-  if (!pic) {
-    throw new Error('pic or records.Pic is required because SNS core records require Pic');
-  }
-
-  const records: Partial<SnsRecordMap> = {
-    Pic: pic,
-  };
-
-  if (recordsInput) {
-    for (const key of SNS_RECORD_KEYS) {
-      // Skip SOL — set it after registration via buildManageRecordTx
-      if (key === 'SOL') continue;
-      assignSnsRecord(records, key, recordsInput[key as string]);
-    }
-  }
-
-  const sapData = parseSapData(input);
-  if (sapData) {
-    records.TXT = JSON.stringify(sapData);
-  }
-
-  assignSnsRecord(records, 'Url', optionalString(input, 'url') ?? optionalString(input, 'endpoint'));
-  assignSnsRecord(records, 'Twitter', optionalString(input, 'twitter'));
-  assignSnsRecord(records, 'Discord', optionalString(input, 'discord'));
-  assignSnsRecord(records, 'Telegram', optionalString(input, 'telegram'));
-  assignSnsRecord(records, 'Github', optionalString(input, 'github'));
-  assignSnsRecord(records, 'Email', optionalString(input, 'email'));
-  assignSnsRecord(records, 'IPFS', optionalString(input, 'ipfs'));
-  assignSnsRecord(records, 'ARWV', optionalString(input, 'arweave'));
-  assignSnsRecord(records, 'IPNS', optionalString(input, 'ipns'));
-  assignSnsRecord(records, 'ETH', optionalString(input, 'eth'));
-  assignSnsRecord(records, 'BTC', optionalString(input, 'btc'));
-  assignSnsRecord(records, 'BSC', optionalString(input, 'bsc'));
-  assignSnsRecord(records, 'Injective', optionalString(input, 'injective'));
-  assignSnsRecord(records, 'LTC', optionalString(input, 'ltc'));
-  assignSnsRecord(records, 'DOGE', optionalString(input, 'doge'));
-  assignSnsRecord(records, 'A', optionalString(input, 'a'));
-  assignSnsRecord(records, 'AAAA', optionalString(input, 'aaaa'));
-  assignSnsRecord(records, 'CNAME', optionalString(input, 'cname'));
-  assignSnsRecord(records, 'Reddit', optionalString(input, 'reddit'));
-  assignSnsRecord(records, 'Background', optionalString(input, 'background'));
-  assignSnsRecord(records, 'Backpack', optionalString(input, 'backpack'));
-  assignSnsRecord(records, 'POINT', optionalString(input, 'point'));
-  assignSnsRecord(records, 'BASE', optionalString(input, 'base'));
-  assignSnsRecord(records, 'SHDW', optionalString(input, 'shdw'));
-
-  return records as SnsRecordMap;
-}
-
 // ============================================================================
-// SDK module factory helpers
+// Solana Name Service helpers
 // ============================================================================
 
 /**
- * @name createSnsModule
- * @description Creates the SAP SNS module (modules/sns) for agent domain registration and resolution.
+ * @name snsUnavailable
+ * @description Fails unsafe SNS write paths before any payment or transaction attempt.
  */
-function createSnsModule(context: SapMcpContext): SnsModule {
-  return new SnsModule({
-    connection: context.connection,
-    sapProgramId: context.config.programId,
-    defaultCommitment: context.config.commitment,
-  });
+function snsUnavailable(): never {
+  throw new Error(SNS_UNAVAILABLE_MESSAGE);
 }
 
 /**
- * @name requireLocalRegistrationSigner
- * @description Loads the configured local keypair for SNS registration and verifies the expected wallet.
+ * @name hashSnsName
+ * @description Reproduces the SPL Name Service SHA-256 name hash.
  */
-function requireLocalRegistrationSigner(context: SapMcpContext, agentWallet: PublicKey) {
-  if (context.config.mode !== 'local-dev-keypair' || !context.config.walletPath) {
-    throw new Error('SNS direct registration requires local-dev-keypair mode and a configured SAP_WALLET_PATH');
-  }
-
-  const keypair = loadKeypairFromFile(context.config.walletPath);
-  if (!keypair.publicKey.equals(agentWallet)) {
-    throw new Error(`Configured wallet ${keypair.publicKey.toBase58()} does not match agentWallet ${agentWallet.toBase58()}`);
-  }
-
-  return keypair;
+function hashSnsName(name: string): Buffer {
+  return createHash('sha256').update(`${SNS_HASH_PREFIX}${name}`, 'utf8').digest();
 }
 
-// ============================================================================
-// Bonfida SDK helpers (for operations not available in SnsModule)
-// ============================================================================
+/**
+ * @name deriveSnsNameKey
+ * @description Derives an SPL Name Service account PDA from name hash, class, and parent.
+ */
+function deriveSnsNameKey(name: string, parent?: PublicKey, nameClass?: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [
+      hashSnsName(name),
+      nameClass?.toBuffer() ?? ZERO_PUBLIC_KEY_BUFFER,
+      parent?.toBuffer() ?? ZERO_PUBLIC_KEY_BUFFER,
+    ],
+    SNS_NAME_PROGRAM_ID,
+  )[0];
+}
 
 /**
- * @name bonfidaGetDomainRecords
- * @description Fetches all configured SNS records for a domain using Bonfida SDK directly.
- *
- * This replaces the deprecated SnsSdk.getDomainRecords() method.
+ * @name deriveSnsDomainKey
+ * @description Derives the SNS domain PDA for a .sol domain or subdomain using the legacy SPL Name Service layout.
  */
-async function bonfidaGetDomainRecords(
-  connection: SapMcpContext['connection'],
-  domain: string
-): Promise<Record<string, string>> {
-  const fullDomain = ensureFullDomain(domain);
-  const recordEntries = Object.entries(BonfidaRecord) as Array<[string, BonfidaRecord]>;
-  const recordKeys = recordEntries.map(([, value]) => value);
+function deriveSnsDomainKey(domain: string): { pubkey: PublicKey; parent?: PublicKey; isSubdomain: boolean } {
+  const bare = normalizeDomain(domain);
+  const labels = bare.split('.').filter(Boolean);
 
-  const results = await bonfidaGetRecords(connection, fullDomain, recordKeys, true);
+  if (labels.length === 0) {
+    throw new Error('domain is required');
+  }
+
+  if (labels.length === 1) {
+    return {
+      pubkey: deriveSnsNameKey(labels[0], SNS_ROOT_DOMAIN_ACCOUNT),
+      parent: SNS_ROOT_DOMAIN_ACCOUNT,
+      isSubdomain: false,
+    };
+  }
+
+  if (labels.length === 2) {
+    const root = deriveSnsNameKey(labels[1], SNS_ROOT_DOMAIN_ACCOUNT);
+    return {
+      pubkey: deriveSnsNameKey(`${SNS_SUBDOMAIN_PREFIX}${labels[0]}`, root),
+      parent: root,
+      isSubdomain: true,
+    };
+  }
+
+  throw new Error('Only .sol domains and one-level SNS subdomains are supported by this reader');
+}
+
+/**
+ * @name deriveSnsRecordKey
+ * @description Derives an SNS record PDA for a domain using the legacy V1 record namespace.
+ */
+function deriveSnsRecordKey(domain: string, recordType: SnsRecordType): PublicKey {
+  const bare = normalizeDomain(domain);
+  const labels = bare.split('.').filter(Boolean);
+
+  if (labels.length !== 1) {
+    throw new Error('SNS record PDA derivation currently supports root .sol domains only');
+  }
+
+  const tld = deriveSnsNameKey('sol', SNS_ROOT_DOMAIN_ACCOUNT);
+  const domainKey = deriveSnsNameKey(`${SNS_SUBDOMAIN_PREFIX}${labels[0]}`, tld);
+  return deriveSnsNameKey(`${SNS_RECORD_V1_PREFIX}${recordType}`, domainKey);
+}
+
+/**
+ * @name readSnsOwner
+ * @description Reads the owner field from an SPL Name Service account header.
+ */
+async function readSnsOwner(connection: Connection, nameAccount: PublicKey): Promise<PublicKey | null> {
+  const accountInfo = await connection.getAccountInfo(nameAccount);
+  if (!accountInfo || accountInfo.data.length < SNS_REGISTRY_HEADER_LEN) {
+    return null;
+  }
+  return new PublicKey(accountInfo.data.subarray(32, 64));
+}
+
+/**
+ * @name readSnsRecord
+ * @description Reads and decodes a text-like SNS record value without the historical Bonfida package.
+ */
+async function readSnsRecord(
+  connection: Connection,
+  domain: string,
+  recordType: SnsRecordType,
+): Promise<string | null> {
+  const recordKey = deriveSnsRecordKey(domain, recordType);
+  const accountInfo = await connection.getAccountInfo(recordKey);
+  if (!accountInfo || accountInfo.data.length <= SNS_REGISTRY_HEADER_LEN) {
+    return null;
+  }
+
+  const registryData = accountInfo.data.subarray(SNS_REGISTRY_HEADER_LEN);
+  const valueData = registryData.length > 10 ? registryData.subarray(recordType === 'TXT' ? 8 : 10) : registryData;
+  const compact = Buffer.from(valueData).filter((byte) => byte !== 0);
+
+  if (recordType === 'SOL' && compact.length === 32) {
+    return new PublicKey(compact).toBase58();
+  }
+
+  const decoded = Buffer.from(compact).toString('utf8').trim();
+  return decoded.length > 0 ? decoded : null;
+}
+
+/**
+ * @name readSnsDomainRecords
+ * @description Fetches known SNS records for a .sol domain with bounded parallelism.
+ */
+async function readSnsDomainRecords(connection: Connection, domain: string): Promise<Record<string, string>> {
   const records: Record<string, string> = {};
+  const entries = Object.entries(SNS_RECORD_VALUE_BY_KEY);
 
-  recordEntries.forEach(([key, _value], index) => {
-    const result = results[index];
-    if (result !== undefined && result !== null) {
-      records[key] = result;
+  await Promise.all(entries.map(async ([key, value]) => {
+    try {
+      const record = await readSnsRecord(connection, domain, value);
+      if (record) {
+        records[key] = record;
+      }
+    } catch {
+      // Unsupported record namespaces should not fail the full domain record read.
     }
-  });
+  }));
 
   return records;
 }
 
 /**
- * @name bonfidaBuildManageRecordTx
- * @description Builds an unsigned transaction for creating/updating/deleting an SNS record.
- *
- * This replaces the deprecated SnsSdk.buildManageRecordTx() method.
- * Uses createRecordInstruction from Bonfida SDK directly.
- *
- * Note: SOL record is not supported by createRecordInstruction — it requires
- * createSolRecordInstruction with an Ed25519 signature. This is an SDK limitation.
+ * @name resolveSnsWallet
+ * @description Resolves a .sol domain to its SOL record first, then domain owner as fallback.
  */
-async function bonfidaBuildManageRecordTx(
-  connection: SapMcpContext['connection'],
-  domain: string,
-  recordType: BonfidaRecord,
-  value: string | null,
-  owner: PublicKey
-): Promise<{ transactionBase64: string }> {
-  if (value === null) {
-    // Delete: use delete instruction
-    // getRecordKeySync returns PublicKey directly (not an object with .pubkey)
-    const recordKey = getRecordKeySync(ensureFullDomain(domain), recordType);
-    void recordKey; // available for future use (e.g. streaming buffer checks)
-    // getDomainKeySync returns { pubkey, hashed, parent }
-    const { pubkey: _domainKey } = getDomainKeySync(ensureFullDomain(domain));
-    void _domainKey;
-    const deleteIx = await deleteNameRegistry(connection, `${ensureFullDomain(domain)}.${recordType}`, owner);
-    const tx = new Transaction().add(deleteIx);
-    tx.feePayer = owner;
-    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-    return { transactionBase64: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64') };
+async function resolveSnsWallet(connection: Connection, domain: string): Promise<string | null> {
+  try {
+    const solRecord = await readSnsRecord(connection, domain, 'SOL');
+    if (solRecord) {
+      return solRecord;
+    }
+  } catch {
+    // Fall through to owner lookup for domains without a readable SOL record.
   }
 
-  // Create/update: use createRecordInstruction
-  const fullDomain = ensureFullDomain(domain);
-
-  // SOL record is not supported by createRecordInstruction
-  if (recordType === BonfidaRecord.SOL) {
-    throw new Error(
-      'SOL record cannot be created with createRecordInstruction. ' +
-      'It requires createSolRecordInstruction with an Ed25519 signature. ' +
-      'This is a Bonfida SDK limitation.'
-    );
-  }
-
-  const ix = await bonfidaCreateRecordInstruction(connection, fullDomain, recordType, value, owner, owner);
-  const tx = new Transaction().add(ix);
-  tx.feePayer = owner;
-  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-  return { transactionBase64: Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64') };
+  const { pubkey } = deriveSnsDomainKey(domain);
+  return (await readSnsOwner(connection, pubkey))?.toBase58() ?? null;
 }
 
 /**
- * @name bonfidaResolveDomain
- * @description Resolves a .sol domain to its owner wallet using Bonfida SDK directly.
- *
- * This replaces the deprecated SnsSdk.resolveDomain() method.
+ * @name checkSnsAvailability
+ * @description Checks whether an SNS domain account is absent on-chain.
  */
-async function bonfidaResolveDomain(
-  connection: SapMcpContext['connection'],
-  domain: string
-): Promise<string | null> {
-  const { pubkey: domainKey } = getDomainKeySync(ensureFullDomain(domain));
-  const owner = await getNameOwner(connection, domainKey);
-  return owner?.registry?.owner?.toBase58() ?? null;
+async function checkSnsAvailability(connection: Connection, domain: string): Promise<boolean> {
+  const { pubkey } = deriveSnsDomainKey(domain);
+  return (await connection.getAccountInfo(pubkey)) === null;
 }
 
 /**
- * @name bonfidaCheckOwnership
- * @description Checks if a wallet owns a .sol domain using Bonfida SDK directly.
- *
- * This replaces the deprecated SnsSdk.checkOwnership() method.
+ * @name validateSnsRecords
+ * @description Returns a compact SAP compatibility view of common SNS records.
  */
-async function bonfidaCheckOwnership(
-  connection: SapMcpContext['connection'],
-  domain: string,
-  owner: PublicKey
-): Promise<boolean> {
-  const { pubkey: domainKey } = getDomainKeySync(ensureFullDomain(domain));
-  const ownerInfo = await getNameOwner(connection, domainKey);
-  if (!ownerInfo?.registry?.owner) {
-    return false;
+async function validateSnsRecords(connection: Connection, domain: string): Promise<JsonRecord> {
+  const records = await readSnsDomainRecords(connection, domain);
+  const warnings: string[] = [];
+
+  if (!records.Pic) {
+    warnings.push('Pic record is missing; agent marketplaces may not show an avatar.');
   }
-  return ownerInfo.registry.owner.equals(owner);
+
+  if (!records.TXT) {
+    warnings.push('TXT record is missing; SAP capability metadata cannot be discovered from SNS.');
+  }
+
+  if (records.SOL) {
+    try {
+      new PublicKey(records.SOL);
+    } catch {
+      warnings.push('SOL record is present but is not a valid base58 public key.');
+    }
+  }
+
+  return {
+    domain: ensureFullDomain(domain),
+    valid: warnings.length === 0,
+    records,
+    warnings,
+  };
 }
 
 // ============================================================================
@@ -546,72 +449,88 @@ function registerSnsTool(server: Server, tool: SnsToolRegistration): void {
  * @name createSnsTools
  * @description Creates all SNS tool registrations against the current SAP MCP context.
  *
- * Tools use SnsModule (modules/sns) as primary SDK and Bonfida SDK functions
- * for record management and queries not available in SnsModule.
+ * Read tools use local SPL Name Service PDA/account helpers. Write builders are
+ * deliberately unavailable until SAP MCP has a current SNS SDK path with E2E tests.
  */
 function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
   return [
-    // --- SnsModule: Availability checks ---
+    // --- SNS reads: availability checks ---
     {
       name: 'sap_sns_check_domain',
       title: 'Check SNS Domain',
-      description: 'Check whether a .sol domain is available for registration using the SAP SDK SnsModule.',
+      description: 'Check whether a .sol domain is available by deriving its Solana Name Service PDA and checking whether the account exists on-chain. This is a read-only helper and does not require the historical Bonfida npm package.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to check for availability (with or without .sol suffix)' } },
-      handler: async (input) => ({ available: await createSnsModule(context).checkAvailability(requiredString(input, 'domain')) }),
+      handler: async (input) => ({ available: await checkSnsAvailability(context.connection, requiredString(input, 'domain')) }),
     },
     {
       name: 'sap_sns_batch_check_domains',
       title: 'Batch Check SNS Domains',
-      description: 'Check availability for multiple .sol domains (up to 25) using the SAP SDK SnsModule.',
+      description: 'Check availability for multiple .sol domains (up to 25) by deriving each SNS PDA and checking account existence on-chain. This is read-only and safe for hosted mode.',
       inputSchema: { domains: { type: 'array', items: { type: 'string', description: 'A .sol domain name to check (with or without .sol suffix)' }, description: 'Array of .sol domain names to batch-check for availability (1-25 domains)' } },
       handler: async (input) => {
         const domains = optionalStringArray(input, 'domains');
         if (!domains || domains.length === 0) {
           throw new Error('domains must contain at least one domain');
         }
-        return { availability: await createSnsModule(context).batchCheckAvailability(domains) };
+        if (domains.length > 25) {
+          throw new Error('domains supports at most 25 items per call');
+        }
+        const entries = await Promise.all(domains.map(async (domain) => [
+          ensureFullDomain(domain),
+          await checkSnsAvailability(context.connection, domain),
+        ] as const));
+        return { availability: Object.fromEntries(entries) };
       },
     },
 
-    // --- SnsModule: Domain resolution ---
+    // --- SNS reads: domain resolution ---
     {
       name: 'sap_sns_resolve_domain',
       title: 'Resolve SAP SNS Domain',
-      description: 'Resolve a .sol domain to SAP agent identity, wallet, metadata, and SNS records using the SAP SDK SnsModule.',
+      description: 'Resolve a .sol domain to its wallet/owner and configured SNS records using direct Solana Name Service account reads. Agents should treat TXT/Pic/Url records as optional metadata and fall back to the wallet owner when no SOL record exists.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to resolve to SAP agent identity and SNS records' } },
-      handler: async (input) => ({ resolution: await createSnsModule(context).resolveAgentDomain(requiredString(input, 'domain')) }),
+      handler: async (input) => {
+        const domain = requiredString(input, 'domain');
+        return {
+          resolution: {
+            domain: ensureFullDomain(domain),
+            wallet: await resolveSnsWallet(context.connection, domain),
+            records: await readSnsDomainRecords(context.connection, domain),
+          },
+        };
+      },
     },
     {
       name: 'sap_sns_validate_records',
       title: 'Validate SAP SNS Records',
       description: 'Validate SNS records for SAP agent compatibility (checks SOL, Pic, TXT records on-chain).',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name whose SNS records should be validated for SAP agent compatibility' } },
-      handler: async (input) => await createSnsModule(context).validateAgentRecords(requiredString(input, 'domain')),
+      handler: async (input) => await validateSnsRecords(context.connection, requiredString(input, 'domain')),
     },
 
-    // --- SnsModule: PDA derivation ---
+    // --- SNS reads: PDA derivation ---
     {
       name: 'sap_sns_get_domain_pda',
       title: 'Get SNS Domain PDA',
-      description: 'Derive the SNS domain PDA for a .sol domain using the SAP SDK SnsModule.',
+      description: 'Derive the Solana Name Service domain PDA for a .sol domain. This helper is deterministic, read-only, and does not require any external SNS SDK.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to derive the SNS domain PDA for' } },
-      handler: async (input) => ({ domainPda: createSnsModule(context).getDomainPda(requiredString(input, 'domain')) }),
+      handler: async (input) => ({ domainPda: deriveSnsDomainKey(requiredString(input, 'domain')).pubkey }),
     },
     {
       name: 'sap_sns_get_record_pda',
       title: 'Get SNS Record PDA',
-      description: 'Derive the SNS record PDA for a domain and record type using the SAP SDK SnsModule.',
+      description: 'Derive the Solana Name Service record PDA for a root .sol domain and record type such as SOL, TXT, Pic, Url, or IPFS.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to derive the record PDA for' }, recordType: { type: 'string', description: 'The SNS record type for the PDA derivation (e.g. SOL, TXT, Url, IPFS, ETH, BTC, etc.)' } },
       handler: async (input) => ({
-        recordPda: createSnsModule(context).getRecordPda(requiredString(input, 'domain'), parseSnsRecordType(input, 'recordType')),
+        recordPda: deriveSnsRecordKey(requiredString(input, 'domain'), parseSnsRecordType(input, 'recordType')),
       }),
     },
 
-    // --- SnsModule: Domain registration (local signer only) ---
+    // --- SNS writes: unavailable until migrated to a current SDK path ---
     {
       name: 'sap_sns_register_agent_domain',
       title: 'Register SAP Agent SNS Domain',
-      description: 'Local-signer-only tool: register a .sol domain for the configured SAP agent wallet using the SAP SDK SnsModule. This tool builds, signs, and submits the full registration transaction with the local profile signer or external signer. Hosted accountless SAP MCP rejects this tool before x402 payment because OOBE never custodies user keys. Domain registration fees are paid in USDC plus SOL for rent and transaction fees. The SOL record is NOT set during registration (it requires a separate Ed25519 signature) — set it after using sap_sns_build_manage_record_transaction.',
+      description: 'Temporarily unavailable. SAP MCP does not currently publish an SNS registration write path because the historical Bonfida SNS npm package is not installable from npmjs. Use this tool only to receive the fail-fast status before any payment or signing attempt.',
       inputSchema: {
         domain: { type: 'string', description: 'The .sol domain name to register for the SAP agent (with or without .sol suffix)' },
         agentWallet: { type: 'string', description: 'The Solana public key (base58) of the SAP agent wallet that will own the domain' },
@@ -624,107 +543,69 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
         durationYears: { type: 'number', description: 'Registration duration in years (default: 1)' },
         space: { type: 'number', description: 'Storage space in bytes for the domain name account (default: 600)' },
       },
-      handler: async (input) => {
-        const agentWallet = requiredPublicKey(input, 'agentWallet');
-        const signer = requireLocalRegistrationSigner(context, agentWallet);
-        return {
-          registration: await createSnsModule(context).registerAgentDomain({
-            agentWallet,
-            domainName: normalizeDomain(requiredString(input, 'domain')),
-            records: parseSnsRecordMap(input),
-            signer,
-            durationYears: optionalNumber(input, 'durationYears'),
-            setAsPrimary: optionalBoolean(input, 'setAsPrimary'),
-            commitment: context.config.commitment,
-            space: optionalNumber(input, 'space'),
-          }),
-        };
-      },
+      handler: async () => snsUnavailable(),
     },
 
-    // --- Bonfida SDK: Record fetching ---
+    // --- SNS reads: record fetching ---
     {
       name: 'sap_sns_get_domain_records',
       title: 'Get SNS Domain Records',
-      description: 'Fetch all configured SNS records for a .sol domain using the Bonfida SDK. Returns a key-value map of all records.',
+      description: 'Fetch known SNS records for a .sol domain using direct Solana Name Service account reads. Returns a key-value map for records that exist and can be decoded.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to fetch all configured SNS records for' } },
-      handler: async (input) => ({ records: await bonfidaGetDomainRecords(context.connection, requiredString(input, 'domain')) }),
+      handler: async (input) => ({ records: await readSnsDomainRecords(context.connection, requiredString(input, 'domain')) }),
     },
     {
       name: 'sap_sns_get_record',
       title: 'Get SNS Record',
-      description: 'Fetch a single SNS record value for a .sol domain using the Bonfida SDK.',
+      description: 'Fetch a single SNS record value for a .sol domain using direct Solana Name Service account reads. Returns null if the record account is absent or empty.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to fetch a record from' }, recordType: { type: 'string', description: 'The SNS record type to fetch (e.g. SOL, TXT, Url, IPFS, ETH, BTC, etc.)' } },
       handler: async (input) => ({
-        record: await bonfidaGetRecord(context.connection, ensureFullDomain(requiredString(input, 'domain')), parseSnsRecordType(input, 'recordType') as BonfidaRecord, true),
+        record: await readSnsRecord(context.connection, requiredString(input, 'domain'), parseSnsRecordType(input, 'recordType')),
       }),
     },
 
-    // --- Bonfida SDK: Domain queries ---
+    // --- SNS reads: domain queries ---
     {
       name: 'sap_sns_resolve_wallet',
       title: 'Resolve SNS Wallet',
-      description: 'Resolve a .sol domain to its owner wallet public key using the Bonfida SDK.',
+      description: 'Resolve a .sol domain to a wallet public key. The tool prefers the SOL record when available and falls back to the domain owner field from the SNS account header.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to resolve to its owner wallet public key' } },
-      handler: async (input) => ({ wallet: await bonfidaResolveDomain(context.connection, requiredString(input, 'domain')) }),
+      handler: async (input) => ({ wallet: await resolveSnsWallet(context.connection, requiredString(input, 'domain')) }),
     },
     {
       name: 'sap_sns_check_ownership',
       title: 'Check SNS Ownership',
-      description: 'Check whether a wallet owns a .sol domain using the Bonfida SDK.',
+      description: 'Check whether a wallet matches the resolved SNS wallet for a .sol domain. This uses the SOL record when present and the domain owner as fallback.',
       inputSchema: {
         domain: { type: 'string', description: 'The .sol domain name to check ownership of' },
         owner: { type: 'string', description: 'Canonical field: Solana public key (base58) of the wallet to verify as the domain owner' },
         wallet: { type: 'string', description: 'Alias for owner, accepted for agent ergonomics when the user says wallet.' },
       },
       handler: async (input) => ({
-        ownsDomain: await bonfidaCheckOwnership(
-          context.connection,
-          requiredString(input, 'domain'),
-          input.owner === undefined ? requiredPublicKey(input, 'wallet') : requiredPublicKey(input, 'owner'),
-        ),
+        ownsDomain: (await resolveSnsWallet(context.connection, requiredString(input, 'domain'))) ===
+          (input.owner === undefined ? requiredPublicKey(input, 'wallet') : requiredPublicKey(input, 'owner')).toBase58(),
       }),
     },
 
-    // --- Bonfida SDK: Record management (builds unsigned transactions) ---
+    // --- SNS writes: unavailable until migrated to a current SDK path ---
     {
       name: 'sap_sns_build_manage_record_transaction',
       title: 'Build SNS Manage Record Transaction',
-      description: 'Build an unsigned SNS record create/update/delete transaction using the Bonfida SDK. In hosted mode, finalize the returned transaction locally with sap_payments_finalize_transaction. In local mode, preview and sign with sap_sign_transaction before submission. Use null value to delete a record. Note: SOL record is not supported — it requires a separate Ed25519 signature flow.',
+      description: 'Temporarily unavailable. SAP MCP does not currently publish an SNS record write builder because the historical Bonfida SNS npm package is not installable from npmjs. The tool fails fast before payment or signing.',
       inputSchema: {
         domain: { type: 'string', description: 'The .sol domain name whose record should be created, updated, or deleted' },
         recordType: { type: 'string', description: 'The SNS record type to manage (e.g. TXT, Url, IPFS, ETH, BTC, etc.)' },
         value: { type: ['string', 'null'], description: 'The new record value as a string, or null to delete the record' },
         owner: { type: 'string', description: 'The Solana public key (base58) of the domain owner authorizing the record change' },
       },
-      handler: async (input) => {
-        const rawValue = input.value;
-        if (rawValue !== null && rawValue !== undefined && typeof rawValue !== 'string') {
-          throw new Error('value must be a string or null');
-        }
-        const recordValue: string | null = typeof rawValue === 'string' ? rawValue : null;
-        return {
-          transaction: await bonfidaBuildManageRecordTx(
-            context.connection,
-            requiredString(input, 'domain'),
-            parseSnsRecordType(input, 'recordType') as BonfidaRecord,
-            recordValue,
-            requiredPublicKey(input, 'owner')
-          ),
-        };
-      },
+      handler: async () => snsUnavailable(),
     },
     {
       name: 'sap_sns_build_set_primary_domain_transaction',
       title: 'Build SNS Set Primary Domain Transaction',
-      description: 'Unavailable builder: setting primary domain requires the Bonfida SNS CLI or direct program interaction. Hosted accountless SAP MCP rejects this tool before x402 payment until a production unsigned builder is available.',
+      description: 'Temporarily unavailable. Setting primary SNS domains is disabled in SAP MCP until the SNS write path is migrated to a current installable SDK and covered by end-to-end tests.',
       inputSchema: { domain: { type: 'string', description: 'The .sol domain name to set as primary for the owner' }, owner: { type: 'string', description: 'The Solana public key (base58) of the domain owner setting their primary domain' } },
-      handler: async () => {
-        throw new Error(
-          'Setting primary domain requires the Bonfida SNS CLI or direct program interaction. ' +
-          'This operation is not available via the Bonfida SDK JavaScript bindings.'
-        );
-      },
+      handler: async () => snsUnavailable(),
     },
   ];
 }
@@ -737,9 +618,8 @@ function createSnsTools(context: SapMcpContext): SnsToolRegistration[] {
  * @name registerSapSnsTools
  * @description Registers production SNS integration tools.
  *
- * Uses SnsModule from synapse-sap-sdk v1.0.x as primary SDK module and
- * Bonfida SDK functions for record management not covered by SnsModule.
- * sns-standalone (SnsSdk) is deprecated and removed.
+ * Uses local SPL Name Service helpers for reads. SNS write paths are disabled
+ * until a current installable SNS SDK path is migrated and tested.
  */
 export function registerSapSnsTools(server: Server, context: SapMcpContext): void {
   logger.debug('Registering SAP SNS tools');

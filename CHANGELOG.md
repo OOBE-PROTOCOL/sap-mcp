@@ -2,6 +2,33 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.65 - 2026-08-05
+
+### Fixed
+
+- Removed the direct dependency on the unavailable
+  `@bonfida/spl-name-service` npm package, which caused clean
+  `npm exec @oobe-protocol-labs/sap-mcp-server@0.9.64 -- sap-mcp-config repair`
+  installs to fail with npm 404.
+- Reworked SAP SNS read tools to derive SNS PDAs, ownership, availability, and
+  records through local Solana Name Service helpers backed by `@solana/web3.js`.
+- Disabled SNS registration and record-write builders with a fail-fast message
+  before payment or signing until a current installable SNS write SDK path is
+  migrated and covered by end-to-end tests.
+
+### Changed
+
+- Updated SNS skills and identity pipeline docs so agents do not promise hosted
+  SNS write builders while the write path is intentionally unavailable.
+- Bumped the SAP SDK dependency target to `@oobe-protocol-labs/synapse-sap-sdk`
+  `^1.0.3`, which must be published before the SAP MCP 0.9.65 package is
+  published.
+
+### Tests
+
+- Added release-readiness coverage preventing known unavailable public npm
+  packages from re-entering the package dependency surface.
+
 ## 0.9.64 - 2026-08-01
 
 ### Added

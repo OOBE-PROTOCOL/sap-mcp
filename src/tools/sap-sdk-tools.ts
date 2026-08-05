@@ -2765,6 +2765,16 @@ const agentTools: ToolRegistration[] = [
     handler: async (_input, client) => ({ signature: await client.agent.reactivate() }),
   },
   {
+    name: 'sap_agent_migrate_pricing_menu',
+    title: 'Migrate Agent Pricing Menu',
+    description: 'Backfill or resync the AgentPricingMenu PDA for the connected wallet SAP agent. ' +
+      'Run this once if sap_update_agent, sap_close_agent, or createEscrowV2 fails with AccountNotInitialized ' +
+      'on the pricing_menu account. Agents registered before pricing menus were created at registration need this ' +
+      'one-time migration. Local-signer-only; hosted accountless SAP MCP rejects this direct write before x402 payment.',
+    inputSchema: {},
+    handler: async (_input, client) => ({ signature: await client.agent.migratePricingMenu() }),
+  },
+  {
     name: 'sap_close_agent',
     title: 'Close SAP Agent',
     description: 'Close the connected wallet SAP agent and reclaim rent.',
