@@ -175,8 +175,35 @@ export class RedisSessionStore {
    *
    * @returns Array of all stored agent sessions.
    */
+  /**
+   * @name RedisSessionStore.scanKeys
+   * @description Iterates session keys with `SCAN` instead of `KEYS` to avoid
+   *   blocking Redis on large key spaces. `KEYS` is O(N) and can stall a
+   *   production instance; `SCAN` is incremental and safe under load.
+   *
+   * @returns The full list of session keys matching the store prefix.
+   */
+  private async scanKeys(): Promise<string[]> {
+    const keys: string[] = [];
+    let cursor = '0';
+
+    do {
+      const [nextCursor, batch] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${this.keyPrefix}*`,
+        'COUNT',
+        100
+      );
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== '0');
+
+    return keys;
+  }
+
   async getAll(): Promise<SapAgentSession[]> {
-    const keys = await this.redis.keys(`${this.keyPrefix}*`);
+    const keys = await this.scanKeys();
     const sessions: SapAgentSession[] = [];
 
     for (const key of keys) {
@@ -200,7 +227,7 @@ export class RedisSessionStore {
    * @returns Count of session keys in Redis.
    */
   async getCount(): Promise<number> {
-    const keys = await this.redis.keys(`${this.keyPrefix}*`);
+    const keys = await this.scanKeys();
     return keys.length;
   }
 
@@ -209,7 +236,7 @@ export class RedisSessionStore {
    * @description Manually removes expired sessions from Redis.
    */
   async cleanup(): Promise<void> {
-    const keys = await this.redis.keys(`${this.keyPrefix}*`);
+    const keys = await this.scanKeys();
     let cleaned = 0;
 
     for (const key of keys) {
@@ -234,7 +261,7 @@ export class RedisSessionStore {
     activeSessions: number;
     expiredSessions: number;
   }> {
-    const keys = await this.redis.keys(`${this.keyPrefix}*`);
+    const keys = await this.scanKeys();
     let active = 0;
     let expired = 0;
     const now = Date.now();

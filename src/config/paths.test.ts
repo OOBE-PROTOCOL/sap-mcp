@@ -14,7 +14,6 @@ import {
 } from './paths.js';
 
 const ORIGINAL_ENV = { ...process.env };
-const ORIGINAL_PLATFORM = process.platform;
 
 function restoreEnv(): void {
   process.env = { ...ORIGINAL_ENV };

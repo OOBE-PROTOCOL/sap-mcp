@@ -36,6 +36,7 @@ import { isHostedAccountlessBlockedTool } from '../../payments/hosted-tool-eligi
 import { classifyTool, type PaymentTier } from '../../payments/pricing.js';
 import { checkToolPermissions, privateKeyGuard } from '../../security/index.js';
 import { canonicalizeToolName } from '../../tools/tool-aliases.js';
+import { recordToolCall, trackInFlight } from '../../observability/metrics.js';
 
 // Track which handlers have been registered to avoid duplicates
 const handlerRegistry = new WeakMap<Server, {
@@ -983,9 +984,8 @@ export function registerTool<TInput = unknown>(
         throw new Error(`Tool not found: ${toolName}`);
       }
       
-      try {
-        const context = executionContexts.get(server);
-        if (context) {
+      const context = executionContexts.get(server);
+      if (context) {
           const keyGuard = privateKeyGuard(args || {});
           if (!keyGuard.safe) {
             logger.warn('Tool call blocked by private key guard', { tool: canonicalToolName, requestedTool: toolName, reason: keyGuard.reason });
@@ -1009,14 +1009,23 @@ export function registerTool<TInput = unknown>(
           }
         }
 
-        const result = await handler(args || {});
-        logger.debug('Tool call completed', { tool: canonicalToolName, requestedTool: toolName });
-        const hasExplicitOutputSchema = Boolean(withRegistrationStore(server).toolHasExplicitOutputSchema?.[canonicalToolName]);
-        return toToolCallResult(result, hasExplicitOutputSchema);
-      } catch (error) {
-        logger.error('Tool call failed', { tool: canonicalToolName, requestedTool: toolName, error });
-        throw error;
-      }
+        const startNs = process.hrtime.bigint();
+        trackInFlight(1);
+        try {
+          const result = await handler(args || {});
+          const durationMs = Number(process.hrtime.bigint() - startNs) / 1e6;
+          recordToolCall(canonicalToolName, durationMs, true);
+          logger.debug('Tool call completed', { tool: canonicalToolName, requestedTool: toolName });
+          const hasExplicitOutputSchema = Boolean(withRegistrationStore(server).toolHasExplicitOutputSchema?.[canonicalToolName]);
+          return toToolCallResult(result, hasExplicitOutputSchema);
+        } catch (error) {
+          const durationMs = Number(process.hrtime.bigint() - startNs) / 1e6;
+          recordToolCall(canonicalToolName, durationMs, false);
+          logger.error('Tool call failed', { tool: canonicalToolName, requestedTool: toolName, error });
+          throw error;
+        } finally {
+          trackInFlight(-1);
+        }
     });
     
     registry.tools = true;

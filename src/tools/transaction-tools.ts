@@ -185,7 +185,7 @@ function parseSystemTransferLamports(data: Uint8Array): bigint {
  * @param signer - Optional signer to filter outgoing transfers.
  * @returns Native transfer estimate in lamports and SOL.
  */
-function estimateNativeTransfer(transaction: SolanaTransaction, signer?: PublicKey): NativeTransferEstimate {
+export function estimateNativeTransfer(transaction: SolanaTransaction, signer?: PublicKey): NativeTransferEstimate {
   let lamports = 0n;
 
   if (transaction instanceof VersionedTransaction) {

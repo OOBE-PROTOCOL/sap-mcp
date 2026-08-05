@@ -11,10 +11,13 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  rmSync,
 } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
+import { execFileSync } from 'child_process';
+import { mkdtempSync } from 'fs';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createStructuredJsonResponse, createTextResponse } from '../adapters/mcp/tool-response.js';
@@ -52,7 +55,7 @@ const SAP_MCP_REPAIR_COMMAND = `npm exec --yes --package ${SAP_MCP_PACKAGE} -- s
  * @name parseInput
  * @description Narrows unknown MCP tool input into skill tool input.
  */
-function parseInput(input: unknown): SkillToolInput {
+export function parseInput(input: unknown): SkillToolInput {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return {};
   }
@@ -393,7 +396,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
           skills: getSkillSummaries(parsed.skills),
           upstream: {
             repository: 'https://github.com/OOBE-PROTOCOL/synapse-sap-sdk',
-            ref: 'v1.0.2',
+            ref: `v${MCP_SERVER_VERSION}`,
             sourcePath: 'skills',
           },
         }, null, 2));
@@ -644,4 +647,212 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
       }
     }
   );
+
+  registerTool(
+    server,
+    'sap_skills_check_updates',
+    {
+      title: 'Check SAP MCP Skills Updates',
+      description: 'Compare the bundled skill version with the latest published npm package and report which local agent skill directories are stale. Read-only. Works in every server mode.',
+      inputSchema: {
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'clawpump', 'custom'], description: 'Optional runtime whose default skill directory should be checked.' },
+        targetDir: { type: 'string', description: 'Optional explicit local skill directory to check.' },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          currentVersion: { type: 'string' },
+          latestVersion: { type: ['string', 'null'] },
+          updateAvailable: { type: 'boolean' },
+          registryReachable: { type: 'boolean' },
+          checkedDirs: { type: 'array', items: { type: 'object' } },
+        },
+        required: ['success', 'currentVersion', 'latestVersion', 'updateAvailable', 'registryReachable', 'checkedDirs'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        const parsed = parseInput(input);
+        const currentVersion = MCP_SERVER_VERSION;
+        let latestVersion: string | null = null;
+        let registryReachable = false;
+        try {
+          const registryUrl = 'https://registry.npmjs.org/@oobe-protocol-labs/sap-mcp-server/latest';
+          const res = await fetch(registryUrl, { headers: { Accept: 'application/json' } });
+          if (res.ok) {
+            const pkg = await res.json() as { version?: string };
+            if (typeof pkg.version === 'string') {
+              latestVersion = pkg.version;
+              registryReachable = true;
+            }
+          }
+        } catch {
+          registryReachable = false;
+        }
+
+        const dirs = parsed.targetDir
+          ? [parsed.targetDir]
+          : parsed.agent
+            ? [getDefaultTargetDir(parsed.agent)].filter((d): d is string => Boolean(d))
+            : Object.values(getAgentTargetDirs());
+
+        const checkedDirs = dirs.map((dir) => {
+          const skillsDir = resolve(dir);
+          const stale: string[] = [];
+          if (existsSync(skillsDir)) {
+            for (const name of listBundledSkillNames()) {
+              const localSkill = join(skillsDir, name, 'SKILL.md');
+              if (!existsSync(localSkill)) {
+                stale.push(name);
+              }
+            }
+          }
+          return { dir: skillsDir, exists: existsSync(skillsDir), missingSkills: stale };
+        });
+
+        const updateAvailable = registryReachable && latestVersion !== null
+          && compareVersions(latestVersion, currentVersion) > 0;
+
+        return createStructuredJsonResponse({
+          success: true,
+          currentVersion,
+          latestVersion,
+          updateAvailable,
+          registryReachable,
+          checkedDirs,
+          message: updateAvailable
+            ? `A newer SAP MCP skills package (${latestVersion}) is available. Run sap_skills_self_update from a local process to refresh.`
+            : 'SAP MCP skills are up to date with the latest published package.',
+        });
+      } catch (error) {
+        return createStructuredJsonResponse(
+          { success: false, currentVersion: MCP_SERVER_VERSION, latestVersion: null, updateAvailable: false, registryReachable: false, checkedDirs: [], error: error instanceof Error ? error.message : 'Unknown error' },
+          { isError: true }
+        );
+      }
+    }
+  );
+
+  registerTool(
+    server,
+    'sap_skills_self_update',
+    {
+      title: 'Self-Update SAP MCP Skills',
+      description: 'Refresh local agent skill files from the latest published @oobe-protocol-labs/sap-mcp-server package. Local-mode only (hosted MCP cannot write to the caller machine). Requires confirm: true. Uses npm pack + tar extraction; no shell interpolation of paths.',
+      inputSchema: {
+        agent: { type: 'string', enum: ['claude', 'codex', 'hermes', 'openclaw', 'clawpump', 'custom'] },
+        targetDir: { type: 'string' },
+        skills: { type: 'array', items: { type: 'string' } },
+        confirm: { type: 'boolean' },
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      try {
+        if (context.config.mode === 'hosted-api') {
+          return createStructuredJsonResponse({
+            success: false,
+            hosted: true,
+            message: 'Hosted SAP MCP cannot write skill files to the caller machine. Run sap_skills_self_update from a local SAP MCP process, or use sap_skills_bundle to download skill contents.',
+          }, { isError: true });
+        }
+
+        const parsed = parseInput(input);
+        const targetDir = resolveTargetDir(parsed);
+
+        if (!parsed.confirm) {
+          return createStructuredJsonResponse({
+            success: false,
+            dryRun: true,
+            requiresConfirmation: true,
+            message: 'Call again with confirm: true to pull the latest published skills into the target directory.',
+            targetDir,
+          });
+        }
+
+        const workDir = mkdtempSync(join(tmpdir(), 'sap-skills-update-'));
+        try {
+          execFileSync('npm', [
+            'pack',
+            '@oobe-protocol-labs/sap-mcp-server@latest',
+            '--pack-destination',
+            workDir,
+          ], { cwd: workDir, stdio: 'pipe' });
+
+          const tarballs = readdirSync(workDir).filter((f) => f.endsWith('.tgz'));
+          if (tarballs.length === 0) {
+            throw new Error('npm pack produced no tarball');
+          }
+          const tarball = join(workDir, tarballs[0]);
+          const extractDir = join(workDir, 'extract');
+          mkdirSync(extractDir, { recursive: true });
+          execFileSync('tar', ['xzf', tarball, '-C', extractDir], { stdio: 'pipe' });
+
+          const upstreamSkillsRoot = join(extractDir, 'package', 'skills');
+          if (!existsSync(upstreamSkillsRoot)) {
+            throw new Error('Published package does not contain a skills directory');
+          }
+
+          const names = parsed.skills && parsed.skills.length > 0
+            ? resolveSelectedSkills(parsed.skills)
+            : listBundledSkillNames();
+
+          const files: SkillFile[] = names.flatMap((name) => {
+            const skillRoot = join(upstreamSkillsRoot, name);
+            return listFilesRecursive(skillRoot).map((file) => ({
+              path: relative(upstreamSkillsRoot, file),
+              content: readFileSync(file, 'utf-8'),
+            }));
+          }).sort((left, right) => left.path.localeCompare(right.path));
+
+          mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+          const copied = installSkillFiles(files, targetDir);
+
+          return createStructuredJsonResponse({
+            success: true,
+            dryRun: false,
+            targetDir,
+            latestVersion: MCP_SERVER_VERSION,
+            copied,
+            message: `Updated ${copied.length} SAP MCP skill files from the latest published package.`,
+          });
+        } finally {
+          rmSync(workDir, { recursive: true, force: true });
+        }
+      } catch (error) {
+        return createStructuredJsonResponse(
+          { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+          { isError: true }
+        );
+      }
+    }
+  );
+}
+
+/**
+ * @name compareVersions
+ * @description Semver comparison helper. Returns 1 if a > b, -1 if a < b, 0 if equal.
+ */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) {
+      return diff > 0 ? 1 : -1;
+    }
+  }
+  return 0;
 }

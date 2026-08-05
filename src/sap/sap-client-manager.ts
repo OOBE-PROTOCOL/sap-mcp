@@ -18,6 +18,8 @@ import { logger } from '../core/logger.js';
 import { SapClientError } from '../core/errors.js';
 import type { SapMcpConfig } from '../core/types.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
+import type { PolicyEngine } from '../policy/policy-engine.js';
+import { PolicyEnforcingWallet } from '../signer/policy-enforcing-wallet.js';
 
 /**
  * @name SapClientManager
@@ -81,7 +83,7 @@ export class SapClientManager {
    *
    * @usedBy `createSapClient`, `create-server.ts:createSapMcpServer`.
    */
-  async initialize(config: SapMcpConfig): Promise<SapClient> {
+  async initialize(config: SapMcpConfig, policyEngine?: PolicyEngine): Promise<SapClient> {
     if (this.client && this.config && this.isSameClientConfig(this.config, config)) {
       logger.debug('SAP client already initialized');
       return this.client;
@@ -117,11 +119,20 @@ export class SapClientManager {
         logger.debug('Delegated mode — wallet will be provided by session');
       }
 
+      // Enforce the SOL spending policy on local signer writes. The SDK signs
+      // through the wallet, so wrapping it here covers every SDK tool that writes
+      // on-chain (agent, escrow, staking, swaps) without patching each tool.
+      let effectiveWallet = wallet;
+      if (wallet && policyEngine) {
+        effectiveWallet = new PolicyEnforcingWallet(wallet, policyEngine) as unknown as Wallet;
+      }
+
       // Create SAP client using factory function
-      this.client = createSdkClient(config.rpcUrl, wallet);
+      this.client = createSdkClient(config.rpcUrl, effectiveWallet);
 
       logger.debug('SAP client initialized successfully', {
         programId: this.client.programId.toBase58(),
+        spendingPolicyEnforced: Boolean(wallet && policyEngine),
       });
 
       return this.client;
@@ -185,9 +196,9 @@ export class SapClientManager {
  *
  * @usedBy `create-server.ts:createSapMcpServer`.
  */
-export async function createSapClient(config: SapMcpConfig): Promise<SapClient> {
+export async function createSapClient(config: SapMcpConfig, policyEngine?: PolicyEngine): Promise<SapClient> {
   const manager = SapClientManager.getInstance();
-  return manager.initialize(config);
+  return manager.initialize(config, policyEngine);
 }
 
 /**

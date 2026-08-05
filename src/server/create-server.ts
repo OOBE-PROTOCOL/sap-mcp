@@ -29,6 +29,7 @@ import { resolveSigner } from '../signer/signer-resolver.js';
 import { PolicyEngine } from '../policy/policy-engine.js';
 import { registerCapabilities } from './register-capabilities.js';
 import { setToolExecutionContext } from '../adapters/mcp/sdk-compat.js';
+import { initMetrics, startMetricsExporter } from '../observability/metrics.js';
 
 /**
  * @name createSapMcpServer
@@ -71,18 +72,19 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
     }
   );
   
-  // Create SAP client
-  const sapClient = await createSapClient(config);
-  logger.debug('SAP client created', { programId: config.programId });
-  
+  // Create policy engine (must exist before the SAP client so local-signer
+  // spending enforcement can be wired into the signing wallet).
+  const policyEngine = new PolicyEngine(config);
+  logger.debug('Policy engine initialized');
+
+  // Create SAP client (wired with the policy engine for spending enforcement)
+  const sapClient = await createSapClient(config, policyEngine);
+  logger.debug('SAP client created', { programId: config.programId, spendingPolicyEnforced: true });
+
   // Resolve signer based on mode
   const signer = await resolveSigner(config);
   logger.debug('Signer resolved', { mode: signer?.mode ?? 'none' });
-  
-  // Create policy engine
-  const policyEngine = new PolicyEngine(config);
-  logger.debug('Policy engine initialized');
-  
+
   // Create shared context
   const context: SapMcpContext = {
     config,
@@ -95,6 +97,13 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
   };
 
   setToolExecutionContext(server, context);
+
+  // Start Prometheus metrics exporter when explicitly enabled (VPS deployments).
+  // Local user deployments keep metrics disabled by default — opt-in only.
+  if (config.enableMetrics) {
+    initMetrics();
+    startMetricsExporter(config.metricsPort ?? 9090);
+  }
 
   // Register all capabilities (tools, resources, prompts)
   await registerCapabilities(server, context);

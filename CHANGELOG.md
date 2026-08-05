@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.66 - 2026-08-05
+
+### Security
+
+- Enforced the configured SOL spending policy on every local-signer SDK write.
+  A new `PolicyEnforcingWallet` wraps the SAP client signer so all on-chain
+  writes (agent register/update/close, escrow V2, staking, swaps) are checked
+  against `maxTxValueSol` / `requireApprovalAboveSol` before signing, closing a
+  gap where only raw `sign_transaction` calls were previously gated.
+
+### Added
+
+- Prometheus metrics exporter, opt-in via `enableMetrics` (VPS deployments).
+  Exposes `/metrics` (tool call totals, duration histogram, in-flight gauge,
+  request totals, uptime) and is wired into the central `tools/call` handler.
+  Disabled by default so local user deployments stay opt-in only.
+- `sap_skills_check_updates` tool: compares the bundled skill version with the
+  latest published npm package and reports stale local agent skill directories.
+- `sap_skills_self_update` tool: refreshes local agent skill files from the
+  latest published package via `npm pack` + `tar` extraction (local mode only,
+  hosted MCP cannot write to the caller machine, requires `confirm: true`).
+
+### Fixed
+
+- Replaced blocking Redis `KEYS` with incremental `SCAN` across session store
+  admin paths to avoid stalling production Redis on large key spaces.
+- Corrected stale upstream skill reference (`v1.0.2` -> `v${MCP_SERVER_VERSION}`).
+- Resolved two unused-variable lint warnings in test files.
+
+### Changed
+
+- Added `scripts/bump-version.mjs` for single-source version bumps across
+  `package.json`, `server.json`, `constants.ts`, `logger.ts`, and `README.md`.
+
 ## 0.9.65 - 2026-08-05
 
 ### Fixed
