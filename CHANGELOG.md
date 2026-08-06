@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.68 - 2026-08-06
+
+### Fixed
+
+- Resolved the bare command name bug in `sap-mcp-config repair` where the
+  generated MCP client config wrote `"command": "sap-mcp-server"` (bare name)
+  instead of the absolute filesystem path of the globally installed binary.
+  Runtime MCP clients (Hermes, Claude Desktop, Codex, OpenClaw) resolved the
+  bare name via `npx`, which pointed to a stale cached version in
+  `~/.npm/_npx/` instead of the global install at
+  `/Users/<user>/.local/bin/sap-mcp-server`. This caused the `sap_payments`
+  stdio bridge to start but fail to register tools correctly, leaving the
+  bridge in an unusable state.
+
+- `resolveBridgeCommand()` now calls `resolveGlobalBinaryPath()` which uses
+  `which` (Unix) or `where` (Windows) to resolve the absolute path of the
+  global binary. The repair writes this absolute path as the `command` value,
+  eliminating any ambiguity in runtime resolution.
+
+- Updated config validators to accept any absolute path containing
+  `sap-mcp-server` as a valid global binary command, not just the bare name.
+
 ## 0.9.67 - 2026-08-06
 
 ### Fixed

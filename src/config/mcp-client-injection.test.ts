@@ -34,10 +34,13 @@ const GLOBAL_BINARY_AVAILABLE = (() => {
   }
 })();
 
+/** Returns the expected command for the local bridge (global binary path or npx). */
 function expectedBridgeCommand(): string {
-  return GLOBAL_BINARY_AVAILABLE ? 'sap-mcp-server' : 'npx';
+  if (GLOBAL_BINARY_AVAILABLE) {
+    return execFileSync('which', ['sap-mcp-server'], { encoding: 'utf-8' }).trim();
+  }
+  return 'npx';
 }
-
 let tempDirs: string[] = [];
 
 function makeTempDir(): string {
@@ -225,7 +228,7 @@ describe('MCP client injection', () => {
     const config = createNpxCodexServerConfig();
 
     if (GLOBAL_BINARY_AVAILABLE) {
-      expect(config.command).toBe('sap-mcp-server');
+      expect(config.command).toBe(expectedBridgeCommand());
       expect(config.args).toEqual([]);
     } else {
       expect(config.args).toContain(NPM_PACKAGE);
