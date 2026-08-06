@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
+import { execFileSync } from 'child_process';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 /**
@@ -141,6 +142,50 @@ const LEGACY_ENV_KEYS = new Set([
  */
 function getNpxCommand(platform: SupportedPlatform): 'npx' | 'npx.cmd' {
   return platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+/**
+ * @name isGlobalBinaryAvailable
+ * @description Checks whether the `sap-mcp-server` binary is resolvable from the
+ * system PATH. When true, MCP client configs use the global binary directly
+ * instead of `npx --package`, which avoids an npm 10/11 bug on macOS where
+ * `npx --package X -- Y` does not add the package's `.bin` directory to PATH.
+ */
+function isGlobalBinaryAvailable(platform: SupportedPlatform): boolean {
+  if (platform === 'win32') {
+    try {
+      execFileSync('where', ['sap-mcp-server'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    execFileSync('which', ['sap-mcp-server'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @name resolveBridgeCommand
+ * @description Returns the optimal command + args for launching the local SAP MCP
+ * stdio server. Prefers the global binary (fast, no npx overhead, avoids the
+ * npm PATH resolution bug) and falls back to `npx --package` when the binary is
+ * not globally installed.
+ */
+function resolveBridgeCommand(platform: SupportedPlatform): { command: string; args: string[] } {
+  if (isGlobalBinaryAvailable(platform)) {
+    return {
+      command: platform === 'win32' ? 'sap-mcp-server.cmd' : 'sap-mcp-server',
+      args: [],
+    };
+  }
+  return {
+    command: getNpxCommand(platform),
+    args: ['--yes', '--package', SAP_MCP_NPM_PACKAGE, 'sap-mcp-server'],
+  };
 }
 
 /**
@@ -454,15 +499,10 @@ export function createNpxCodexServerConfig(): McpServerInjectionConfig {
  * @description Builds a portable Codex stdio config for a specific host platform.
  */
 function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
-  const command = getNpxCommand(platform);
+  const { command, args } = resolveBridgeCommand(platform);
   return {
     command,
-    args: [
-      '--yes',
-      '--package',
-      SAP_MCP_NPM_PACKAGE,
-      'sap-mcp-server',
-    ],
+    args,
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
@@ -483,15 +523,10 @@ export function createNpxPaymentBridgeServerConfig(runtimeId = 'manual'): McpSer
  * @description Builds the local sap_payments bridge command for a specific host platform.
  */
 function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform, runtimeId = 'manual'): McpServerInjectionConfig {
-  const command = getNpxCommand(platform);
+  const { command, args } = resolveBridgeCommand(platform);
   return {
     command,
-    args: [
-      '--yes',
-      '--package',
-      SAP_MCP_NPM_PACKAGE,
-      'sap-mcp-server',
-    ],
+    args,
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_MCP_PAYMENTS_BRIDGE_ONLY: 'true',
@@ -1357,8 +1392,12 @@ export function validateHostedPaymentBridgeContent(
   if (!content.includes('SAP_ALLOWED_TOOLS')) {
     issues.push('Missing SAP_ALLOWED_TOOLS allow-list for the local payment bridge.');
   }
-  if (!content.includes(SAP_MCP_NPM_PACKAGE)) {
-    issues.push(`Local sap_payments bridge must pin ${SAP_MCP_NPM_PACKAGE}; unpinned npx can download an older npm latest.`);
+  const usesGlobalBinary = content.includes('command: "sap-mcp-server"')
+    || content.includes('command: sap-mcp-server')
+    || content.includes('command = "sap-mcp-server"')
+    || content.includes('"command": "sap-mcp-server"');
+  if (!content.includes(SAP_MCP_NPM_PACKAGE) && !usesGlobalBinary) {
+    issues.push(`Local sap_payments bridge must pin ${SAP_MCP_NPM_PACKAGE} or use the global sap-mcp-server binary; unpinned npx can download an older npm latest.`);
   }
   const allowsAllTools = content.includes('SAP_ALLOWED_TOOLS = "all"')
     || content.includes('"SAP_ALLOWED_TOOLS": "all"')
@@ -1374,8 +1413,10 @@ export function validateHostedPaymentBridgeContent(
     if (!content.includes(`[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`)) {
       issues.push('Missing Codex [mcp_servers.sap_payments] local bridge block.');
     }
-    if (!content.includes(`command = ${JSON.stringify(expectedNpx)}`)) {
-      issues.push(`Codex local bridge must use ${expectedNpx} on ${platform}.`);
+    const expectedGlobalBinaryCmd = `command = "sap-mcp-server"`;
+    const expectedNpxCmd = `command = ${JSON.stringify(expectedNpx)}`;
+    if (!content.includes(expectedNpxCmd) && !content.includes(expectedGlobalBinaryCmd)) {
+      issues.push(`Codex local bridge must use ${expectedNpx} or the global sap-mcp-server binary on ${platform}.`);
     }
     if (!content.includes('startup_timeout_sec = 300')) {
       issues.push('Codex local bridge must set startup_timeout_sec = 300 so first-run npx installs do not hide sap_payments.');

@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.67 - 2026-08-06
+
+### Fixed
+
+- Resolved a bridge startup failure affecting macOS users with npm 10/11 where
+  `npx --package X -- Y` does not add the package's `.bin` directory to PATH,
+  causing `sh: sap-mcp-server: command not found` and preventing the local
+  `sap_payments` stdio bridge from connecting to agent runtimes (Hermes, Claude,
+  Codex, OpenClaw). The repair now detects whether the `sap-mcp-server` binary
+  is globally available and, when it is, writes MCP client configs that invoke
+  the global binary directly (`command: "sap-mcp-server"`) instead of relying
+  on `npx --package`. When the binary is not globally installed, the repair
+  installs the package globally as a fallback before writing configs. This
+  eliminates the npx PATH resolution bug without requiring users to manually
+  install or configure anything.
+
+### Changed
+
+- `resolveBridgeCommand()` in `mcp-client-injection.ts` now prefers the global
+  binary and falls back to `npx --package` for both Codex and `sap_payments`
+  bridge configs across all supported platforms (darwin, linux, win32).
+- The config validator accepts both forms: `npx` with a pinned package version
+  or the global `sap-mcp-server` binary.
+- Updated `mcp-client-injection.test.ts` to be agnostic to the bridge command
+  form (global binary vs npx) so tests pass in both environments.
+
 ## 0.9.66 - 2026-08-05
 
 ### Security
