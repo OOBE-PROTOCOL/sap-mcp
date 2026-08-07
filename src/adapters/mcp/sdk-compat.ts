@@ -928,6 +928,8 @@ export function registerTool<TInput = unknown>(
     inputSchema: unknown;
     outputSchema?: unknown;
     annotations?: ToolAnnotations;
+    /** MCP Apps extension: maps a tool to a `ui://` resource for visual rendering. */
+    _meta?: Record<string, unknown>;
   },
   handler: (input: TInput) => Promise<unknown>
 ) {
@@ -948,6 +950,7 @@ export function registerTool<TInput = unknown>(
       ...inferToolAnnotations(name, title),
       ...definition.annotations,
     },
+    ...(definition._meta ? { _meta: definition._meta } : {}),
   };
   
   // Initialize server storage if needed

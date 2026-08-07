@@ -8,6 +8,9 @@
  * @module adapters/mcp/tool-response
  */
 
+import type { UiCardContext } from '../../ui/ui-resources.js';
+import { buildUiCardResource } from '../../ui/ui-resources.js';
+
 /**
  * @name createTextResponse
  * @description Creates a simple text MCP tool response.
@@ -77,5 +80,40 @@ export function createErrorResponse(message: string): { content: Array<{ type: '
   return {
     content: [{ type: 'text', text: `Error: ${message}` }],
     isError: true,
+  };
+}
+
+/**
+ * @name createUiCardResponse
+ * @description Creates an MCP tool response with text content, structured JSON,
+ * and an embedded `ui://` resource (MCP Apps extension). The MCP client renders
+ * the embedded HTML card in a sandboxed iframe alongside the text/JSON output.
+ *
+ * @param data      — The structured data object to embed as `structuredContent`.
+ * @param cardCtx   — The UI card context used to render the visual card.
+ * @param options   — Optional flags, e.g. `{ isError: true }`.
+ * @returns An MCP tool result with text content, an embedded `ui://` resource,
+ *          `structuredContent`, and optional `isError` flag.
+ */
+export function createUiCardResponse<T extends Record<string, unknown>>(
+  data: T,
+  cardCtx: UiCardContext,
+  options?: { isError?: boolean },
+): {
+  content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'resource'; resource: { uri: string; mimeType: 'text/html'; text: string } }
+  >;
+  structuredContent: T;
+  isError?: boolean;
+} {
+  const cardResource = buildUiCardResource(cardCtx);
+  return {
+    content: [
+      { type: 'text', text: JSON.stringify(data, null, 2) },
+      cardResource,
+    ],
+    structuredContent: data,
+    isError: options?.isError,
   };
 }

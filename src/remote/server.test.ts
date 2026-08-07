@@ -761,12 +761,12 @@ describe('remote MCP server config', () => {
 
   it('serves allowlisted public protocol and registry logos only', () => {
     const head = resolvePublicLogoAsset('HEAD', '/logos/smithery.svg');
-    const get = resolvePublicLogoAsset('GET', '/logos/jupiter.ico');
+    const get = resolvePublicLogoAsset('GET', '/logos/jupiter.svg');
 
     expect(head?.contentType).toBe('image/svg+xml');
     expect(head?.contentLength).toBeGreaterThan(0);
     expect(head?.body).toBeUndefined();
-    expect(get?.contentType).toBe('image/x-icon');
+    expect(get?.contentType).toBe('image/svg+xml');
     expect(get?.body?.byteLength).toBeGreaterThan(0);
     expect(resolvePublicLogoAsset('GET', '/logos/unknown.svg')).toBeUndefined();
     expect(resolvePublicLogoAsset('POST', '/logos/smithery.svg')).toBeUndefined();
