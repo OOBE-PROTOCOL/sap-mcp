@@ -58,16 +58,22 @@ let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefi
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
 
 const PUBLIC_LOGO_ASSETS = {
+  '/logos/adrena.svg': { filename: 'adrena.svg', contentType: 'image/svg+xml' },
   '/logos/claude.png': { filename: 'claude.png', contentType: 'image/png' },
   '/logos/codex.webp': { filename: 'codex.webp', contentType: 'image/webp' },
   '/logos/hermes.png': { filename: 'hermes.png', contentType: 'image/png' },
-  '/logos/jupiter.ico': { filename: 'jupiter.ico', contentType: 'image/x-icon' },
+  '/logos/jupiter.svg': { filename: 'jupiter.svg', contentType: 'image/svg+xml' },
+  '/logos/magicblock.svg': { filename: 'magicblock.svg', contentType: 'image/svg+xml' },
   '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
-  '/logos/meteora.png': { filename: 'meteora.png', contentType: 'image/png' },
-  '/logos/orca.ico': { filename: 'orca.ico', contentType: 'image/x-icon' },
+  '/logos/metaplex.png': { filename: 'metaplex.png', contentType: 'image/png' },
+  '/logos/meteora.svg': { filename: 'meteora.svg', contentType: 'image/svg+xml' },
   '/logos/openclaw.svg': { filename: 'openclaw.svg', contentType: 'image/svg+xml' },
-  '/logos/raydium.ico': { filename: 'raydium.ico', contentType: 'image/x-icon' },
+  '/logos/orca.svg': { filename: 'orca.svg', contentType: 'image/svg+xml' },
+  '/logos/raydium.svg': { filename: 'raydium.svg', contentType: 'image/svg+xml' },
   '/logos/smithery.svg': { filename: 'smithery.svg', contentType: 'image/svg+xml' },
+  '/logos/solana.svg': { filename: 'solana.svg', contentType: 'image/svg+xml' },
+  '/logos/usdc.svg': { filename: 'usdc.svg', contentType: 'image/svg+xml' },
+  '/logos/usdt.svg': { filename: 'usdt.svg', contentType: 'image/svg+xml' },
 } as const;
 
 /**

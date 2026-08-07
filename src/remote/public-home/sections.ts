@@ -76,10 +76,14 @@ function renderSolanaMark(): string {
  */
 function renderDefiLogoRail(): string {
   const protocols = [
-    ['Jupiter', '/logos/jupiter.ico'],
-    ['Raydium', '/logos/raydium.ico'],
-    ['Orca', '/logos/orca.ico'],
-    ['Meteora', '/logos/meteora.png'],
+    ['Jupiter', '/logos/jupiter.svg'],
+    ['Raydium', '/logos/raydium.svg'],
+    ['Orca', '/logos/orca.svg'],
+    ['Meteora', '/logos/meteora.svg'],
+    ['Adrena', '/logos/adrena.svg'],
+    ['MagicBlock', '/logos/magicblock.svg'],
+    ['Metaplex', '/logos/metaplex.png'],
+    ['Solana', '/logos/solana.svg'],
   ] as const;
   const items = [...protocols, ...protocols];
 
