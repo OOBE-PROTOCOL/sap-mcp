@@ -287,6 +287,33 @@ Before any write-like operation, use this routing order:
 5. Missing bridge: call `sap_runtime_repair_plan`, then tell the user to run the
    pinned repair command or desktop wizard repair path.
 
+### MagicBlock Private Payments
+
+SAP MCP exposes 21 MagicBlock tools across three protocol domains: ER Router
+(6 read-only JSON-RPC), Private Payments API (13 REST tools including
+ensure-crank), and VRF (2 on-chain tools).
+
+Private transfers and private swaps use the Hydra delivery crank for scheduled
+settlement. The API requires specific fields for private mode:
+
+- `magicblock_transfer` with `visibility: "private"`: `minDelayMs`, `maxDelayMs`,
+  and `split` are optional with defaults (`"0"`, `"0"`, `1`). SAP MCP passes these
+  defaults explicitly when the user omits them.
+- `magicblock_swap` with `visibility: "private"`: `destination`, `minDelayMs`,
+  `maxDelayMs`, and `split` are all required. SAP MCP validates these before
+  calling the API and rejects `asLegacyTransaction: true` (private swaps require
+  v0 VersionedTransactions).
+
+If a private transfer or swap has been submitted but the recipient has not
+received funds, call `magicblock_ensureCrank` with the mint address to force a
+transfer queue crank attempt. This does not move funds; it triggers the existing
+queued delivery.
+
+wSOL (`So11111111111111111111111111111111111111112`) is supported as both
+input and output mint in private mode. The API only rejects
+`nativeDestinationAccount`, not the wSOL mint itself. Private swap output
+delivered as wSOL lands in the recipient's wSOL ATA, not as native SOL.
+
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or
 external signer." Avoid saying "signer not configured", "read-only only",

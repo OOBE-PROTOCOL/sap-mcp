@@ -1,9 +1,9 @@
 /**
  * MagicBlock MCP Tools
  *
- * Registers 20 MagicBlock tools across 3 protocol domains:
+ * Registers 21 MagicBlock tools across 3 protocol domains:
  *   - mb-router   (6 read-only ER Router JSON-RPC tools)
- *   - mb-payments (12 Private Payment API REST tools)
+ *   - mb-payments (13 Private Payment API REST tools, including ensure-crank)
  *   - mb-vrf      (2 Solana VRF tools — on-chain via @solana/web3.js)
  *
  * Pricing:
@@ -355,7 +355,7 @@ const VRF_PROGRAM_IDENTITY = new PublicKey('9irBy75QS2BN81FUgXuHcjqceJJRuc9oDkAe
 const DEFAULT_QUEUE = new PublicKey('Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh');
 const DEFAULT_EPHEMERAL_QUEUE = new PublicKey('5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc');
 
-const WRAPPED_SOL_MINT = 'So11111111111111111111111111111111111111112';
+// WRAPPED_SOL_MINT constant removed — the API handles wSOL routing internally.
 
 // ═══════════════════════════════════════════════════════════════════
 //  HTTP Helpers (stateless — zero external deps, uses global fetch)
@@ -434,6 +434,7 @@ const MAGICBLOCK_READ_TOOLS = new Set([
   'magicblock_balance',
   'magicblock_privateBalance',
   'magicblock_isMintInitialized',
+  'magicblock_ensureCrank',
   'magicblock_getRandomnessResult',
 ]);
 
@@ -526,9 +527,8 @@ function requirePositiveSafeInteger(value: number, fieldName: string): void {
   }
 }
 
-function isWrappedSolMint(mint: string | undefined): boolean {
-  return mint === WRAPPED_SOL_MINT;
-}
+// wSOL mint check removed — the MagicBlock Payments API supports wSOL in private mode;
+// it only rejects nativeDestinationAccount (not outputMint = wSOL).
 
 function validateMagicBlockTransferInput(input: TransferInput): void {
   requireValidPubkey(input.from, 'from');
@@ -558,9 +558,29 @@ function validateMagicBlockSwapInput(input: SwapInput): void {
     }
     requireValidPubkey(input.destination, 'destination');
 
-    if (isWrappedSolMint(input.quoteResponse?.outputMint)) {
+    if (input.minDelayMs == null) {
       throw new Error(
-        'magicblock_private_swap_wsol_output_blocked: private swaps that output wSOL are disabled because live mainnet testing found Hydra delivery can leave wSOL stuck in the mixer pool. Use visibility="public", swap into a non-SOL SPL token, or wait for MagicBlock shuttle delivery recovery support.',
+        'magicblock_private_swap_min_delay_required: visibility="private" requires minDelayMs (string, milliseconds). Pass "0" for immediate settlement eligibility.',
+      );
+    }
+    if (input.maxDelayMs == null) {
+      throw new Error(
+        'magicblock_private_swap_max_delay_required: visibility="private" requires maxDelayMs (string, milliseconds, <= 600000). Pass "0" for immediate settlement or "60000" for a 60-second window.',
+      );
+    }
+    if (input.split == null) {
+      throw new Error(
+        'magicblock_private_swap_split_required: visibility="private" requires split (integer 1-14). Pass 1 for a single transfer.',
+      );
+    }
+    if (input.split < 1 || input.split > 14) {
+      throw new Error(
+        `magicblock_private_swap_split_range: split must be between 1 and 14, got ${input.split}.`,
+      );
+    }
+    if (input.asLegacyTransaction === true) {
+      throw new Error(
+        'magicblock_private_swap_legacy_not_allowed: asLegacyTransaction=true is not allowed when visibility="private". The private transfer appends a schedule_private_transfer instruction that requires a v0 VersionedTransaction.',
       );
     }
   }
@@ -624,7 +644,7 @@ function normalizeRoutePlanBps(hop: unknown, routePlanLength: number): unknown {
 
 /**
  * @name registerMagicBlockTools
- * @description Registers 20 MagicBlock tools (ER Router, Private Payments, VRF)
+ * @description Registers 21 MagicBlock tools (ER Router, Private Payments, VRF)
  *   with the MCP server. Hosted pricing is resolved centrally by src/payments/pricing.ts.
  * @param server - MCP server receiving tool definitions and handlers.
  * @param context - Shared runtime context (VRF getRandomnessResult uses the Solana connection).
@@ -840,7 +860,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<TransferInput>('magicblock_transfer',
-    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
+    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Private mode defaults: minDelayMs=0, maxDelayMs=0, split=1 — override for delayed or split settlements. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({
       from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
       amount: f.number('Base-unit amount to transfer (integer, minimum 1)'),
@@ -871,8 +891,10 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
             cluster: input.cluster, validator: input.validator,
             initIfMissing: input.initIfMissing, initAtasIfMissing: input.initAtasIfMissing,
             initVaultIfMissing: input.initVaultIfMissing, memo: input.memo,
-            minDelayMs: input.minDelayMs, maxDelayMs: input.maxDelayMs,
-            clientRefId: input.clientRefId, split: input.split,
+            minDelayMs: input.minDelayMs ?? (input.visibility === 'private' ? '0' : undefined),
+            maxDelayMs: input.maxDelayMs ?? (input.visibility === 'private' ? '0' : undefined),
+            clientRefId: input.clientRefId,
+            split: input.split ?? (input.visibility === 'private' ? 1 : undefined),
             gasless: input.gasless, legacy: input.legacy,
           }),
         }, input.authToken);
@@ -925,7 +947,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   register<SwapInput>('magicblock_swap',
-    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter. 'private' mode routes output through scheduled private transfer with delay and split, requires destination, and currently rejects wSOL output because live mainnet testing found stuck-fund risk in MagicBlock shuttle delivery. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
+    "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter. 'private' mode routes output through a scheduled private transfer: requires destination, minDelayMs (string ms), maxDelayMs (string ms, <= 600000), and split (1-14). The API appends a schedule_private_transfer instruction that registers a one-shot Hydra crank for delivery. Legacy transactions are not allowed in private mode. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
     schema({ userPublicKey: f.pubkey('Wallet that will sign the swap transaction'), quoteResponse: f.object('Quote response object from magicblock_swapQuote (pass as-is)', {}), visibility: f.enum("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']), destination: f.pubkey("Final private-transfer recipient (required when visibility='private')"), minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle"), maxDelayMs: f.string("Private only. Latest (ms) the queued transfer may settle (<= 600000)"), split: f.number('Private only. Number of queue entries to split across (1-14)'), clientRefId: f.string('Private only. Optional u64 client correlation ID'), validator: f.string('Optional validator pubkey for the transfer-queue PDA'), wrapAndUnwrapSol: f.boolean('Auto wrap/unwrap native SOL when needed (default true)'), asLegacyTransaction: f.boolean('Build a legacy transaction (not allowed when visibility=private, default false)') }, ['userPublicKey', 'quoteResponse']),
     async (raw) => {
       try {
@@ -976,6 +998,25 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
         });
         return success(result, 'magicblock_isMintInitialized');
       } catch (e) { return handleError('magicblock_isMintInitialized', e); }
+    },
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  //  Private Payment API — Transfer Queue Crank (1 tool)
+  // ═══════════════════════════════════════════════════════════════
+
+  register<IsMintInitializedInput>('magicblock_ensureCrank',
+    'Force a transfer queue crank attempt for a mint. Use this after a private transfer or private swap if the Hydra delivery crank has not yet delivered funds to the recipient. The API verifies the validator-scoped transfer queue and forces one crank attempt, returning the crank signature. Read-only tier: this does not move funds, it triggers the existing queued delivery..',
+    schema({ mint: f.string('SPL mint to crank the transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey. Defaults to the well-known MagicBlock validator (MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57)') }, ['mint']),
+    async (raw) => {
+      try {
+        const input = parseInput<IsMintInitializedInput>(raw);
+        const result = await apiPost<{ mint: string; validator: string; transferQueue: string; crankSignature: string }>('/v1/spl/transfer-queue/ensure-crank', {
+          mint: input.mint,
+          ...stripNullish({ cluster: input.cluster, validator: input.validator }),
+        });
+        return success(result, 'magicblock_ensureCrank');
+      } catch (e) { return handleError('magicblock_ensureCrank', e); }
     },
   );
 
