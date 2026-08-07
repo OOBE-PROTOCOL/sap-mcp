@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.70 - 2026-08-07
+
+### Fixed
+
+- Fixed MagicBlock private swap fund loss: `validateMagicBlockSwapInput` now requires
+  `minDelayMs`, `maxDelayMs`, and `split` when `visibility=private`, matching the
+  MagicBlock Private Payments API specification. Previously these fields were
+  optional and stripped by `stripNullish`, causing the API to receive incomplete
+  `schedule_private_transfer` parameters. The Hydra delivery crank could not
+  deliver funds to recipient ATAs without these parameters.
+- Fixed MagicBlock private transfer defaults: `minDelayMs`, `maxDelayMs`, and
+  `split` are now explicitly passed as `"0"`, `"0"`, and `1` when the user omits
+  them in private mode, instead of being stripped from the API request.
+- Removed incorrect wSOL output block on private swaps: the MagicBlock API supports
+  wSOL as `outputMint` in private mode. It only rejects `nativeDestinationAccount`,
+  not the wSOL mint. The previous block was based on an incorrect assumption.
+- Added validation: `asLegacyTransaction=true` is rejected for private swaps
+  because the `schedule_private_transfer` instruction requires a v0 VersionedTransaction.
+
+### Added
+
+- New `magicblock_ensureCrank` tool: forces a transfer queue crank attempt for a
+  mint via `POST /v1/spl/transfer-queue/ensure-crank`. Use after a private transfer
+  or private swap if the Hydra delivery crank has not yet delivered funds to the
+  recipient. Read-only tier, does not move funds.
+- MCP Apps UI card templates with real protocol brand logos (Solana, Jupiter, Orca,
+  Raydium, Meteora, Adrena, MagicBlock, Metaplex, USDC, USDT) as inline base64 data
+  URIs. Card headers show an avatar group (SAP + OOBE Protocol logos). Card footer
+  version is sourced from `MCP_SERVER_VERSION` at module load time, never hardcoded.
+- High-resolution SVG brand assets replaced low-res `.ico` files on the public
+  dashboard protocol logo rail.
+
+### Changed
+
+- MagicBlock tool count increased from 20 to 21 (added `magicblock_ensureCrank`).
+- MagicBlock tool descriptions updated with required fields documentation for
+  private mode swaps and transfers.
+- Skill docs (`sap-mcp/SKILL.md`) updated with MagicBlock Private Payments section
+  covering required fields, ensure-crank usage, and wSOL behavior.
+
 ## 0.9.69 - 2026-08-07
 
 ### Fixed
