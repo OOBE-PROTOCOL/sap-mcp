@@ -2,392 +2,262 @@
  * @name ui/card-templates
  * @description HTML card templates for MCP Apps UI resources.
  *
- * Each template is a self-contained HTML document rendered inside a sandboxed
- * iframe by MCP clients that support the `ui://` resource scheme (MCP Apps
- * extension, standardized November 2025, spec version 2026-07-28).
- *
- * Logos are resolved via a hybrid system:
- * - Protocol logos present in assets/logos/ → absolute URL to the hosted server
- * - Token logos (SOL, USDC, etc.) → inline SVG with official brand colors
- * - Unknown tokens/protocols → inline SVG fallback with initials + brand color
+ * Bento grid layout: variable-size cards (compact stat, wide detail, hero).
+ * Colors only on numbers (PnL green/red, balance cyan, cost amber).
+ * Labels neutral. No badges. No overflow — everything visible.
  *
  * @module ui/card-templates
  */
 
-// ── Brand ─────────────────────────────────────────────────────────────────
-
 const C = {
-  bg: '#0a0e14',
-  surface: '#111827',
-  surface2: '#0d1421',
-  border: '#1f2937',
-  borderDim: '#161e2e',
-  accent: '#06b6d4',
-  accentDim: '#0e7490',
-  text: '#e5e7eb',
-  textDim: '#9ca3af',
-  textMuted: '#6b7280',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  purple: '#8b5cf6',
+  bg: '#080e18',
+  surface: 'rgba(255,255,255,0.01)',
+  border: 'rgba(255,255,255,0.03)',
+  borderHover: 'rgba(255,255,255,0.06)',
+  accent: 'hsl(190,85%,55%)',
+  text: '#eaeef2',
+  textDim: 'hsl(210,10%,55%)',
+  textMuted: 'hsl(210,8%,38%)',
+  success: 'hsl(155,65%,52%)',
+  warning: 'hsl(35,90%,55%)',
+  danger: 'hsl(0,75%,60%)',
   mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  sans: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
 } as const;
-
-/** Base URL for hosted logo assets. Overridden at render time when available. */
-let logoBaseUrl = 'https://mcp.sap.oobeprotocol.ai';
-
-/**
- * @name setLogoBaseUrl
- * @description Sets the base URL for resolving hosted logo assets (e.g.
- * `https://mcp.sap.oobeprotocol.ai/logos/jupiter.ico`). Called once at server
- * startup or when the hosted URL is known.
- */
-export function setLogoBaseUrl(url: string): void {
-  logoBaseUrl = url.replace(/\/$/, '');
-}
-
-// ── SAP Logo (inline SVG) ─────────────────────────────────────────────────
 
 const SAP_LOGO = `<svg width="32" height="32" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
 <defs><linearGradient id="sapg" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-<stop stop-color="#22d3ee"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs>
-<rect width="200" height="200" rx="44" fill="url(#sapg)"/>
+<stop stop-color="#00F0FF"/><stop offset="0.5" stop-color="#0097A7"/><stop offset="1" stop-color="#05101F"/></linearGradient></defs>
+<rect width="200" height="200" rx="48" fill="url(#sapg)"/>
 <path d="M125 30 C 95 30 75 55 75 85 C 75 115 105 125 125 145 C 105 165 75 175 75 185" stroke="white" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-<path d="M40 105 L 55 105 L 60 85 L 70 125 L 80 95 L 90 115" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85"/>
-</svg>`;
+<path d="M40 105 L 55 105 L 60 85 L 70 125 L 80 95 L 90 115" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85"/></svg>`;
 
-// ── Token Logos (inline SVG with official brand colors) ───────────────────
+// logoBaseUrl removed — all logos are now inline base64 data URIs (see logos.ts)
 
-const TOKEN_LOGOS: Record<string, string> = {
-  SOL: `<svg width="20" height="20" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="#9945FF"/><path d="M9 14h17.5c1.4 0 2.1 1.7 1.1 2.7L9 27h17.5c1.4 0 2.1 1.7 1.1 2.7" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M14 20h17.5c1.4 0 2.1 1.7 1.1 2.7L14 33" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/></svg>`,
-  USDC: `<svg width="20" height="20" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="#2775CA"/><text x="20" y="27" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" font-weight="700" fill="white">$</text></svg>`,
-  USDT: `<svg width="20" height="20" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="#26A17B"/><text x="20" y="27" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="14" font-weight="700" fill="white">T</text></svg>`,
-  WSOL: `<svg width="20" height="20" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="#9945FF"/><text x="20" y="27" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="10" font-weight="700" fill="white">wSOL</text></svg>`,
-  EPjFWdd5: `<svg width="20" height="20" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="8" fill="#2775CA"/><text x="20" y="27" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" font-weight="700" fill="white">$</text></svg>`,
-};
+import {
+  SOL_LOGO_URI,
+  USDC_LOGO_URI,
+  USDT_LOGO_URI,
+  JUPITER_LOGO_URI,
+  ORCA_LOGO_URI,
+  RAYDIUM_LOGO_URI,
+  METEORA_LOGO_URI,
+  ADRENA_LOGO_URI,
+  MAGICBLOCK_LOGO_URI,
+  METAPLEX_LOGO_URI,
+} from './logos.js';
 
-// ── Protocol Logos ────────────────────────────────────────────────────────
-
-/** Maps protocol names to hosted logo URLs (files in assets/logos/). */
-const HOSTED_LOGOS: Record<string, { filename: string; contentType: string }> = {
-  jupiter: { filename: 'jupiter.ico', contentType: 'image/x-icon' },
-  raydium: { filename: 'raydium.ico', contentType: 'image/x-icon' },
-  orca: { filename: 'orca.ico', contentType: 'image/x-icon' },
-  meteora: { filename: 'meteora.png', contentType: 'image/png' },
-  hermes: { filename: 'hermes.png', contentType: 'image/png' },
-  claude: { filename: 'claude.png', contentType: 'image/png' },
-  codex: { filename: 'codex.webp', contentType: 'image/webp' },
-  openclaw: { filename: 'openclaw.svg', contentType: 'image/svg+xml' },
-  smithery: { filename: 'smithery.svg', contentType: 'image/svg+xml' },
-  mcp: { filename: 'mcp.svg', contentType: 'image/svg+xml' },
-};
-
-/** Protocol logo as <img> tag pointing to hosted asset, or inline SVG fallback. */
-function protocolLogo(name: string, fallbackInitials: string, fallbackColor: string): string {
-  const key = name.toLowerCase();
-  const hosted = HOSTED_LOGOS[key];
-  if (hosted) {
-    return `<img class="icon" src="${logoBaseUrl}/logos/${hosted.filename}" alt="${esc(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="icon-fallback" style="display:none;width:20px;height:20px;border-radius:6px;background:${fallbackColor};align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0">${esc(fallbackInitials)}</span>`;
-  }
-  return inlineLogo(fallbackInitials, fallbackColor);
+/**
+ * Returns an <img> tag with the real protocol logo as a base64 data URI.
+ * Falls back to a colored circle with initials if the protocol is unknown.
+ */
+function pLogo(name: string, initials: string, color: string): string {
+  const k = name.toLowerCase();
+  const known: Record<string, string> = {
+    jupiter: JUPITER_LOGO_URI,
+    orca: ORCA_LOGO_URI,
+    raydium: RAYDIUM_LOGO_URI,
+    meteora: METEORA_LOGO_URI,
+    adrena: ADRENA_LOGO_URI,
+    magicblock: MAGICBLOCK_LOGO_URI,
+    metaplex: METAPLEX_LOGO_URI,
+  };
+  const uri = known[k];
+  if (uri) return `<img src="${uri}" alt="${esc(name)}" style="width:16px;height:16px;border-radius:4px;object-fit:cover">`;
+  return `<svg width="14" height="14" viewBox="0 0 40 40"><rect width="40" height="40" rx="10" fill="${color}" opacity="0.85"/><text x="20" y="27" text-anchor="middle" font-family="sans-serif" font-size="${initials.length>2?9:14}" font-weight="700" fill="white">${esc(initials)}</text></svg>`;
 }
 
-/** Inline SVG logo fallback with initials + brand color. */
-function inlineLogo(initials: string, color: string): string {
-  return `<svg width="20" height="20" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="${color}"/><text x="20" y="27" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="${initials.length > 2 ? 10 : 14}" font-weight="700" fill="white">${esc(initials)}</text></svg>`;
+function tLogo(symbol: string): string {
+  const k = symbol.toUpperCase();
+  const known: Record<string, string> = { SOL: SOL_LOGO_URI, USDC: USDC_LOGO_URI, USDT: USDT_LOGO_URI };
+  const uri = known[k];
+  if (uri) return `<img src="${uri}" alt="${esc(k)}" style="width:12px;height:12px;border-radius:3px;object-fit:cover;vertical-align:middle;margin-right:2px">`;
+  return pLogo(symbol, k.slice(0, 3), C.textMuted);
+}
+function esc(t: string): string { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function short(a: string): string { return a.length<=12 ? esc(a) : `${esc(a.slice(0,4))}...${esc(a.slice(-4))}`; }
+
+// ── CSS (shared, compact, no overflow) ────────────────────────────────────
+
+const CSS = `*{margin:0;padding:0;box-sizing:border-box}
+body{background:${C.bg};color:${C.text};font-family:${C.sans};font-size:12px;line-height:1.4;-webkit-font-smoothing:antialiased}
+.c{background:${C.surface};border:1px solid ${C.border};border-radius:12px;overflow:hidden;position:relative;backdrop-filter:blur(20px) saturate(130%);-webkit-backdrop-filter:blur(20px) saturate(130%);transition:border-color .2s;display:flex;flex-direction:column;height:100%}
+.c:hover{border-color:${C.borderHover}}
+.c::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)}
+.h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid ${C.border}}
+.hl{width:28px;height:28px;border-radius:7px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.hl svg{width:28px;height:28px}.hl img{width:28px;height:28px;border-radius:7px;object-fit:cover}
+.ht{font-size:12px;font-weight:600;color:${C.text};letter-spacing:-0.01em}
+.hs{font-size:9px;color:${C.textMuted};text-transform:uppercase;letter-spacing:0.05em;margin-top:1px}
+.hp{width:18px;height:18px;opacity:0.3;margin-left:auto;flex-shrink:0}
+.hp svg{width:18px;height:18px}
+.b{padding:10px 14px;flex:1 1 auto}
+.r{display:flex;justify-content:space-between;align-items:center;padding:5px 0}
+.r+.r{border-top:1px solid rgba(255,255,255,0.02)}
+.rl{font-size:10px;color:${C.textMuted};font-weight:500;display:flex;align-items:center;gap:4px}
+.rv{font-family:${C.mono};font-size:12px;font-weight:600;color:${C.text}}
+.rv.a{color:${C.text}}.rv.s{color:${C.success}}.rv.w{color:${C.warning}}.rv.d{color:${C.danger}}
+.rv.lg{font-size:24px;font-weight:700}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.g2 .r{padding:5px 0}.g2 .r:nth-child(2n){padding-left:10px}.g2 .r:nth-child(2n-1){padding-right:10px}
+.f{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-top:1px solid ${C.border};background:rgba(0,0,0,0.1);font-size:9px;color:${C.textMuted};font-family:${C.mono};flex-shrink:0}
+.fl{display:flex;align-items:center;gap:4px}.fr{color:${C.textDim}}
+.dot{width:4px;height:4px;border-radius:50%;background:${C.text};box-shadow:0 0 3px ${C.textMuted}}
+.stat{padding:10px 14px;text-align:center}
+.stat-v{font-family:${C.mono};font-size:26px;font-weight:700}
+.stat-l{font-size:10px;color:${C.textMuted};text-transform:uppercase;letter-spacing:0.06em;margin-top:3px}
+.tag{display:inline-block;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);font-size:9px;color:${C.textDim};font-family:${C.mono};margin:1px}`;
+
+function shell(title: string, body: string, fv: string, fw: string): string {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS}</style></head><body><div class="c">${body}<div class="f"><span class="fl"><span class="dot"></span> SAP MCP v${esc(fv)}</span><span class="fr">${esc(fw)}</span></div></div></body></html>`;
 }
 
-/** Token logo: inline SVG for known tokens, fallback for unknown. */
-function tokenLogo(symbol: string, mintAddress?: string): string {
-  const key = symbol.toUpperCase();
-  if (TOKEN_LOGOS[key]) return TOKEN_LOGOS[key];
-  // Try mint address prefix (for USDC etc.)
-  if (mintAddress && TOKEN_LOGOS[mintAddress.slice(0, 8)]) return TOKEN_LOGOS[mintAddress.slice(0, 8)];
-  // Fallback: first letter + deterministic color from mint
-  const color = mintAddress ? `#${mintAddress.slice(0, 6).padEnd(6, '0')}` : '#6b7280';
-  return inlineLogo(symbol.slice(0, 3).toUpperCase(), color);
+function hdr(t: string, s: string, logo: string = SAP_LOGO): string {
+  const b = SAP_LOGO.replace('width="32" height="32"', 'width="18" height="18"');
+  return `<div class="h"><div class="hl">${logo}</div><div><div class="ht">${esc(t)}</div><div class="hs">${esc(s)}</div></div><div class="hp">${b}</div></div>`;
 }
 
-// ── Shell ─────────────────────────────────────────────────────────────────
-
-function shell(title: string, body: string, footerVersion: string, footerWallet: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:${C.bg};color:${C.text};font-family:${C.sans};font-size:13px;line-height:1.5;padding:14px}
-.card{background:${C.surface};border:1px solid ${C.border};border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px ${C.borderDim},0 4px 24px rgba(0,0,0,0.25)}
-.ch{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid ${C.border};background:linear-gradient(135deg,${C.surface} 0%,${C.surface2} 100%)}
-.ch-logo{width:32px;height:32px;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.ch-title{font-size:13px;font-weight:600;color:${C.text};letter-spacing:.01em}
-.ch-sub{font-size:10px;color:${C.textMuted};margin-top:1px}
-.ch-sap{width:20px;height:20px;margin-left:auto;opacity:0.5}
-.cb{padding:14px 15px}
-.row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid ${C.borderDim}}
-.row:last-child{border-bottom:none}
-.rl{font-size:11px;color:${C.textDim};font-weight:500;display:flex;align-items:center;gap:6px}
-.rv{font-family:${C.mono};font-size:12px;color:${C.text};font-weight:600;text-align:right}
-.rv.a{color:${C.accent}}
-.rv.s{color:${C.success}}
-.rv.w{color:${C.warning}}
-.rv.d{color:${C.danger}}
-.rv.p{color:${C.purple}}
-.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-.badge.s{background:rgba(16,185,129,.15);color:${C.success}}
-.badge.w{background:rgba(245,158,11,.15);color:${C.warning}}
-.badge.d{background:rgba(239,68,68,.15);color:${C.danger}}
-.badge.a{background:rgba(6,182,212,.15);color:${C.accent}}
-.badge.p{background:rgba(139,92,246,.15);color:${C.purple}}
-.cf{display:flex;justify-content:space-between;align-items:center;padding:8px 15px;border-top:1px solid ${C.border};font-size:9px;color:${C.textMuted}}
-.cf-l{font-family:${C.mono}}
-.cf-r{font-family:${C.mono};color:${C.textDim}}
-.sect{font-size:9px;font-weight:600;color:${C.textMuted};text-transform:uppercase;letter-spacing:.05em;margin:10px 0 4px}
-.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:${C.surface2};border:1px solid ${C.border};font-size:10px;color:${C.textDim};font-family:${C.mono}}
-.icon{width:16px;height:16px;flex-shrink:0;border-radius:4px}
-.icon-fallback{width:16px;height:16px;flex-shrink:0;border-radius:4px}
-</style>
-</head>
-<body>
-<div class="card">
-${body}
-  <div class="cf">
-    <span class="cf-l">SAP MCP v${esc(footerVersion)}</span>
-    <span class="cf-r">${esc(footerWallet)}</span>
-  </div>
-</div>
-</body>
-</html>`;
+function r(label: string, value: string, vc?: string, icon?: string): string {
+  const cls = vc ? ` ${vc}` : '';
+  const ic = icon ? `<span style="display:flex;align-items:center;flex-shrink:0">${icon}</span>` : '';
+  return `<div class="r"><span class="rl">${ic}${esc(label)}</span><span class="rv${cls}">${value}</span></div>`;
 }
 
-function header(title: string, subtitle: string, logoSvg: string = SAP_LOGO, showSapBadge: boolean = true): string {
-  const sapBadge = showSapBadge ? `<div class="ch-sap">${SAP_LOGO.replace('width="32" height="32"', 'width="20" height="20"')}</div>` : '';
-  return `  <div class="ch">
-    <div class="ch-logo">${logoSvg}</div>
-    <div>
-      <div class="ch-title">${esc(title)}</div>
-      <div class="ch-sub">${esc(subtitle)}</div>
-    </div>
-    ${sapBadge}
-  </div>`;
-}
-
-function row(label: string, value: string, vClass?: string, icon?: string): string {
-  const cls = vClass ? ` ${vClass}` : '';
-  const ic = icon ? `<span class="rl-icon">${icon}</span>` : '';
-  return `    <div class="row"><span class="rl">${ic}${esc(label)}</span><span class="rv${cls}">${value}</span></div>`;
-}
-
-function shortAddr(a: string): string {
-  return a.length <= 12 ? esc(a) : `${esc(a.slice(0,4))}...${esc(a.slice(-4))}`;
-}
-
-function esc(t: string): string {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-}
-
-// ── Card: Balance ────────────────────────────────────────────────────────
+// ── Cards (compact, variable size, colors on numbers only) ────────────────
 
 export function renderBalanceCard(d: { sol: number; usdc?: number; walletAddress: string; network: string; version: string }): string {
-  const rows = [
-    row('SOL', `${d.sol.toFixed(4)} SOL`, 'a', tokenLogo('SOL')),
-  ];
-  if (d.usdc !== undefined) rows.push(row('USDC', `${d.usdc.toFixed(2)} USDC`, '', tokenLogo('USDC')));
-  rows.push(row('Network', esc(d.network)));
-  rows.push(row('Wallet', shortAddr(d.walletAddress)));
-  return shell('Wallet Balance', header('Wallet Balance', d.network) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, shortAddr(d.walletAddress));
+  // Hero stat card: big SOL number, small USDC below
+  const usdcRow = d.usdc !== undefined ? `<div class="r" style="margin-top:6px"><span class="rl">${tLogo('USDC')}USDC</span><span class="rv">${d.usdc.toFixed(2)}</span></div>` : '';
+  const body = hdr('Wallet Balance', d.network) + `<div class="b"><div class="stat" style="padding:8px 0 4px"><div class="stat-v">${d.sol.toFixed(4)}</div><div class="stat-l">${tLogo('SOL')} SOL</div></div>${usdcRow}<div class="r" style="margin-top:4px"><span class="rl">Wallet</span><span class="rv" style="font-size:10px">${short(d.walletAddress)}</span></div></div>`;
+  return shell('Wallet Balance', body, d.version, short(d.walletAddress));
 }
-
-// ── Card: Readiness ──────────────────────────────────────────────────────
 
 export function renderReadinessCard(d: {
-  status: 'ready' | 'degraded' | 'not-ready';
-  signerPublicKey?: string;
-  sol?: number; usdc?: number;
-  profile: string;
-  canPayX402: boolean; canExecuteWriteTools: boolean;
-  issues: readonly string[];
-  version: string;
-  walletAddress?: string;
+  status: 'ready' | 'degraded' | 'not-ready'; signerPublicKey?: string; sol?: number; usdc?: number;
+  profile: string; canPayX402: boolean; canExecuteWriteTools: boolean;
+  issues: readonly string[]; version: string; walletAddress?: string;
 }): string {
-  const sc = d.status === 'ready' ? 's' : d.status === 'degraded' ? 'w' : 'd';
-  const badge = `<span class="badge ${sc}">${d.status}</span>`;
+  const color = d.status === 'ready' ? C.success : d.status === 'degraded' ? C.warning : C.danger;
   const rows = [
-    row('Status', badge),
-    row('Profile', esc(d.profile)),
+    r('Profile', esc(d.profile)),
+    r('SOL', d.sol !== undefined ? d.sol.toFixed(4) : '—'),
+    r('x402', d.canPayX402 ? 'enabled' : 'disabled', d.canPayX402 ? 's' : 'd'),
+    r('Write', d.canExecuteWriteTools ? 'enabled' : 'disabled', d.canExecuteWriteTools ? 's' : 'd'),
   ];
-  if (d.signerPublicKey) rows.push(row('Signer', shortAddr(d.signerPublicKey)));
-  if (d.sol !== undefined) rows.push(row('SOL', d.sol.toFixed(4), 'a', tokenLogo('SOL')));
-  if (d.usdc !== undefined) rows.push(row('USDC', `${d.usdc.toFixed(2)} USDC`, '', tokenLogo('USDC')));
-  rows.push(row('x402', d.canPayX402 ? '<span class="badge s">enabled</span>' : '<span class="badge d">disabled</span>'));
-  rows.push(row('Write', d.canExecuteWriteTools ? '<span class="badge s">enabled</span>' : '<span class="badge d">disabled</span>'));
-  if (d.issues.length > 0) {
-    rows.push(`<div class="sect">Issues</div>`);
-    for (const i of d.issues) rows.push(`<div style="font-size:10px;color:${C.warning};padding:3px 0">${esc(i)}</div>`);
-  }
-  return shell('Payment Bridge', header('Payment Bridge Readiness', d.profile) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : d.profile);
+  let extra = '';
+  if (d.issues.length > 0) extra = `<div style="margin-top:6px;font-size:10px;color:${C.warning}">${d.issues.map(i => `<div style="padding:1px 0">${esc(i)}</div>`).join('')}</div>`;
+  const body = hdr('Payment Bridge', d.profile) + `<div class="b"><div class="stat" style="padding:4px 0 8px"><div class="stat-v" style="color:${color};font-size:16px">${d.status}</div></div><div class="g2">${rows.join('')}</div>${extra}</div>`;
+  return shell('Payment Bridge', body, d.version, d.walletAddress ? short(d.walletAddress) : d.profile);
 }
-
-// ── Card: Position ───────────────────────────────────────────────────────
 
 export function renderPositionCard(d: {
-  market: string; side: 'long' | 'short';
-  size: number; entryPrice: number; markPrice: number;
-  leverage: number; pnlUsd: number; pnlPct: number;
+  market: string; side: 'long' | 'short'; size: number; entryPrice: number;
+  markPrice: number; leverage: number; pnlUsd: number; pnlPct: number;
   liquidationPrice?: number; version: string; walletAddress?: string;
 }): string {
-  const sc = d.side === 'long' ? 's' : 'd';
-  const pc = d.pnlUsd >= 0 ? 's' : 'd';
+  const pnlColor = d.pnlUsd >= 0 ? 's' : 'd';
   const ps = d.pnlUsd >= 0 ? '+' : '-';
   const pa = Math.abs(d.pnlUsd); const pp = Math.abs(d.pnlPct);
-  const adxLogo = protocolLogo('adrena', 'ADX', '#8b5cf6');
+  const adx = pLogo('adrena', 'ADX', '#8b5cf6');
   const rows = [
-    row('Market', esc(d.market), 'a'),
-    row('Side', `<span class="badge ${sc}">${d.side.toUpperCase()}</span>`),
-    row('Size', `$${d.size.toFixed(2)}`),
-    row('Leverage', `${d.leverage}x`),
-    row('Entry', `$${d.entryPrice.toFixed(2)}`),
-    row('Mark', `$${d.markPrice.toFixed(2)}`),
-    row('PnL', `${ps}$${pa.toFixed(2)} (${ps}${pp.toFixed(2)}%)`, pc),
+    r('Side', d.side.toUpperCase(), d.side === 'long' ? 's' : 'd'),
+    r('Lev', `${d.leverage}x`),
+    r('Entry', `$${d.entryPrice.toFixed(2)}`),
+    r('Mark', `$${d.markPrice.toFixed(2)}`),
+    r('Size', `$${d.size.toFixed(2)}`),
+    r('Liq.', d.liquidationPrice !== undefined ? `$${d.liquidationPrice.toFixed(2)}` : '—', 'w'),
   ];
-  if (d.liquidationPrice !== undefined) rows.push(row('Liq.', `$${d.liquidationPrice.toFixed(2)}`, 'w'));
-  return shell('Perp Position', header('Perp Position', d.market, adxLogo) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  const body = hdr('Perp Position', d.market, adx) + `<div class="b"><div class="stat" style="padding:4px 0 8px"><div class="stat-v ${pnlColor} lg">${ps}$${pa.toFixed(2)}</div><div class="stat-l">${ps}${pp.toFixed(2)}% PnL</div></div><div class="g2">${rows.join('')}</div></div>`;
+  return shell('Perp Position', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
-
-// ── Card: Pricing ─────────────────────────────────────────────────────────
 
 export function renderPricingCard(d: {
-  toolName: string; tier: string;
-  priceUsd: number; recommendedMaxPriceUsd: number;
+  toolName: string; tier: string; priceUsd: number; recommendedMaxPriceUsd: number;
   isFree: boolean; version: string; walletAddress?: string;
 }): string {
-  const tb = d.isFree ? '<span class="badge s">FREE</span>' : `<span class="badge a">${esc(d.tier)}</span>`;
-  const rows = [
-    row('Tool', esc(d.toolName), 'a'),
-    row('Tier', tb),
-  ];
-  if (!d.isFree) {
-    rows.push(row('Cost', `$${d.priceUsd.toFixed(6)}`));
-    rows.push(row('Max Cap', `$${d.recommendedMaxPriceUsd.toFixed(6)}`, 'w'));
-  }
-  return shell('Tool Pricing', header('Tool Pricing', d.toolName) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  const price = d.isFree ? 'FREE' : `$${d.priceUsd.toFixed(6)}`;
+  const priceColor = d.isFree ? 's' : '';
+  const cap = d.isFree ? '' : r('Max Cap', `$${d.recommendedMaxPriceUsd.toFixed(6)}`, 'w');
+  const body = hdr('Tool Pricing', d.toolName) + `<div class="b"><div class="stat" style="padding:8px 0"><div class="stat-v ${priceColor} lg">${price}</div><div class="stat-l">${esc(d.tier)}</div></div>${cap}</div>`;
+  return shell('Tool Pricing', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
-
-// ── Card: Transfer ────────────────────────────────────────────────────────
 
 export function renderTransferCard(d: {
-  type: 'sol' | 'spl';
-  amount: number; symbol: string;
-  from: string; to: string;
-  signature?: string; status: 'confirmed' | 'pending' | 'failed';
-  version: string; walletAddress?: string;
-  mintAddress?: string;
+  type: 'sol' | 'spl'; amount: number; symbol: string; from: string; to: string;
+  signature?: string; status: 'confirmed' | 'pending' | 'failed'; version: string; walletAddress?: string;
 }): string {
   const sc = d.status === 'confirmed' ? 's' : d.status === 'pending' ? 'w' : 'd';
-  const logo = tokenLogo(d.symbol, d.mintAddress);
   const rows = [
-    row('Amount', `${d.amount.toFixed(6)} ${esc(d.symbol)}`, 'a', logo),
-    row('From', shortAddr(d.from)),
-    row('To', shortAddr(d.to)),
-    row('Status', `<span class="badge ${sc}">${d.status}</span>`),
+    r('From', short(d.from)),
+    r('To', short(d.to)),
+    r('Status', d.status, sc),
   ];
-  if (d.signature) rows.push(row('Signature', shortAddr(d.signature)));
-  return shell('Transfer', header('Token Transfer', `${d.type.toUpperCase()} Transfer`) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  if (d.signature) rows.push(r('Sig', short(d.signature)));
+  const body = hdr('Transfer', `${d.type.toUpperCase()} Transfer`) + `<div class="b"><div class="stat" style="padding:4px 0 8px"><div class="stat-v lg">${d.amount.toFixed(4)}</div><div class="stat-l">${tLogo(d.symbol)} ${esc(d.symbol)}</div></div><div class="g2">${rows.join('')}</div></div>`;
+  return shell('Transfer', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
-
-// ── Card: MagicBlock ──────────────────────────────────────────────────────
 
 export function renderMagicBlockCard(d: {
-  action: 'swap' | 'deposit' | 'withdraw' | 'transfer';
-  tokenIn?: string; tokenOut?: string;
-  amountIn?: number; amountOut?: number;
-  status: 'success' | 'pending' | 'failed';
-  visibility?: 'public' | 'private';
-  version: string; walletAddress?: string;
-  mintIn?: string; mintOut?: string;
+  action: 'swap' | 'deposit' | 'withdraw' | 'transfer'; tokenIn?: string; tokenOut?: string;
+  amountIn?: number; amountOut?: number; status: 'success' | 'pending' | 'failed';
+  visibility?: 'public' | 'private'; version: string; walletAddress?: string;
 }): string {
   const sc = d.status === 'success' ? 's' : d.status === 'pending' ? 'w' : 'd';
-  const mbLogo = protocolLogo('magicblock', 'MB', '#6366f1');
-  const rows = [
-    row('Action', `<span class="badge p">${esc(d.action.toUpperCase())}</span>`),
-  ];
-  if (d.visibility) rows.push(row('Visibility', `<span class="badge ${d.visibility === 'private' ? 'p' : 'a'}">${d.visibility}</span>`));
-  if (d.tokenIn && d.amountIn !== undefined) rows.push(row('Token In', `${d.amountIn.toFixed(4)} ${esc(d.tokenIn)}`, '', tokenLogo(d.tokenIn, d.mintIn)));
-  if (d.tokenOut && d.amountOut !== undefined) rows.push(row('Token Out', `${d.amountOut.toFixed(4)} ${esc(d.tokenOut)}`, 'a', tokenLogo(d.tokenOut, d.mintOut)));
-  rows.push(row('Status', `<span class="badge ${sc}">${d.status}</span>`));
-  return shell('MagicBlock', header('MagicBlock Operation', d.action, mbLogo) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  const mb = pLogo('magicblock', 'MB', '#6366f1');
+  const rows = [r('Action', d.action.toUpperCase())];
+  if (d.visibility) rows.push(r('Vis', d.visibility));
+  if (d.tokenIn && d.amountIn !== undefined) rows.push(r('In', `${d.amountIn.toFixed(4)} ${esc(d.tokenIn)}`));
+  if (d.tokenOut && d.amountOut !== undefined) rows.push(r('Out', `${d.amountOut.toFixed(4)} ${esc(d.tokenOut)}`));
+  rows.push(r('Status', d.status, sc));
+  const body = hdr('MagicBlock', d.action, mb) + `<div class="b"><div class="g2">${rows.join('')}</div></div>`;
+  return shell('MagicBlock', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
-
-// ── Card: Metaplex NFT ─────────────────────────────────────────────────────
 
 export function renderMetaplexCard(d: {
-  action: 'mint' | 'deploy' | 'update' | 'verify';
-  collectionName?: string;
-  nftName?: string;
-  mintAddress?: string;
-  status: 'success' | 'pending' | 'failed';
+  action: 'mint' | 'deploy' | 'update' | 'verify'; collectionName?: string;
+  nftName?: string; mintAddress?: string; status: 'success' | 'pending' | 'failed';
   version: string; walletAddress?: string;
 }): string {
   const sc = d.status === 'success' ? 's' : d.status === 'pending' ? 'w' : 'd';
-  const mpLogo = protocolLogo('metaplex', 'MP', '#ec4899');
-  const rows = [
-    row('Action', `<span class="badge p">${esc(d.action.toUpperCase())}</span>`),
-  ];
-  if (d.collectionName) rows.push(row('Collection', esc(d.collectionName)));
-  if (d.nftName) rows.push(row('NFT', esc(d.nftName)));
-  if (d.mintAddress) rows.push(row('Mint', shortAddr(d.mintAddress)));
-  rows.push(row('Status', `<span class="badge ${sc}">${d.status}</span>`));
-  return shell('Metaplex NFT', header('Metaplex NFT Operation', d.action, mpLogo) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  const mp = pLogo('metaplex', 'MP', '#ec4899');
+  const rows = [r('Action', d.action.toUpperCase()), r('Status', d.status, sc)];
+  if (d.collectionName) rows.push(r('Collection', esc(d.collectionName)));
+  if (d.nftName) rows.push(r('NFT', esc(d.nftName)));
+  if (d.mintAddress) rows.push(r('Mint', short(d.mintAddress)));
+  const body = hdr('Metaplex', d.action, mp) + `<div class="b"><div class="g2">${rows.join('')}</div></div>`;
+  return shell('Metaplex NFT', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
 
-// ── Card: Jupiter Swap ────────────────────────────────────────────────────
-
 export function renderJupiterSwapCard(d: {
-  tokenIn: string; tokenOut: string;
-  amountIn: number; amountOut: number;
-  priceImpactPct: number;
-  route: string[];
-  status: 'success' | 'pending' | 'failed';
+  tokenIn: string; tokenOut: string; amountIn: number; amountOut: number;
+  priceImpactPct: number; route: string[]; status: 'success' | 'pending' | 'failed';
   version: string; walletAddress?: string;
-  mintIn?: string; mintOut?: string;
 }): string {
   const sc = d.status === 'success' ? 's' : d.status === 'pending' ? 'w' : 'd';
   const pi = d.priceImpactPct < 0.5 ? 's' : d.priceImpactPct < 2 ? 'w' : 'd';
-  const jupLogo = protocolLogo('jupiter', 'JUP', '#f97316');
+  const jp = pLogo('jupiter', 'JUP', '#f97316');
   const rows = [
-    row('Input', `${d.amountIn.toFixed(4)} ${esc(d.tokenIn)}`, '', tokenLogo(d.tokenIn, d.mintIn)),
-    row('Output', `${d.amountOut.toFixed(4)} ${esc(d.tokenOut)}`, 'a', tokenLogo(d.tokenOut, d.mintOut)),
-    row('Price Impact', `${d.priceImpactPct.toFixed(3)}%`, pi),
-    row('Route', esc(d.route.join(' \u2192 '))),
-    row('Status', `<span class="badge ${sc}">${d.status}</span>`),
+    r('In', `${d.amountIn.toFixed(4)} ${esc(d.tokenIn)}`),
+    r('Out', `${d.amountOut.toFixed(4)} ${esc(d.tokenOut)}`),
+    r('Impact', `${d.priceImpactPct.toFixed(3)}%`, pi),
+    r('Status', d.status, sc),
   ];
-  return shell('Jupiter Swap', header('Jupiter Swap', `${d.tokenIn} \u2192 ${d.tokenOut}`, jupLogo) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  const routeRow = `<div class="r" style="margin-top:4px"><span class="rl">Route</span><span class="rv" style="font-size:10px">${esc(d.route.join(' -> '))}</span></div>`;
+  const body = hdr('Jupiter Swap', `${d.tokenIn} -> ${d.tokenOut}`, jp) + `<div class="b"><div class="g2">${rows.join('')}</div>${routeRow}</div>`;
+  return shell('Jupiter Swap', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
 
-// ── Card: Agent Registry ──────────────────────────────────────────────────
-
 export function renderAgentRegistryCard(d: {
-  agentName: string;
-  agentId?: string;
-  capabilities: string[];
-  protocols: string[];
-  isActive: boolean;
-  registeredAt?: string;
-  version: string; walletAddress?: string;
+  agentName: string; agentId?: string; capabilities: string[]; protocols: string[];
+  isActive: boolean; registeredAt?: string; version: string; walletAddress?: string;
 }): string {
-  const st = d.isActive ? '<span class="badge s">active</span>' : '<span class="badge d">inactive</span>';
   const rows = [
-    row('Agent', esc(d.agentName), 'a'),
-    row('Status', st),
+    r('Status', d.isActive ? 'active' : 'inactive', d.isActive ? 's' : 'd'),
+    r('Caps', `${d.capabilities.length}`),
   ];
-  if (d.agentId) rows.push(row('Agent ID', shortAddr(d.agentId)));
-  if (d.registeredAt) rows.push(row('Registered', esc(d.registeredAt)));
-  rows.push(row('Capabilities', `${d.capabilities.length}`));
-  rows.push(row('Protocols', d.protocols.map(p => `<span class="tag">${esc(p)}</span>`).join(' ')));
-  return shell('Agent Registry', header('SAP Agent Registry', d.agentName) + `  <div class="cb">\n${rows.join('\n')}\n  </div>`, d.version, d.walletAddress ? shortAddr(d.walletAddress) : '');
+  if (d.agentId) rows.push(r('ID', short(d.agentId)));
+  if (d.registeredAt) rows.push(r('Since', esc(d.registeredAt)));
+  const tags = `<div style="margin-top:4px">${d.protocols.map(p => `<span class="tag">${esc(p)}</span>`).join(' ')}</div>`;
+  const body = hdr('Agent Registry', d.agentName) + `<div class="b"><div class="g2">${rows.join('')}</div>${tags}</div>`;
+  return shell('Agent Registry', body, d.version, d.walletAddress ? short(d.walletAddress) : '');
 }
