@@ -443,7 +443,7 @@ export function createManualMcpJsonSnippets(
     {
       title: 'Hosted SAP MCP YAML (ClawPump Agent config)',
       description:
-        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and uses the same YAML config shape.',
+        'Use this inside ClawPump Agent (~/.hermes/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and resolves its home through get_hermes_home() (HERMES_HOME override, ~/.hermes default).',
       content: [
         'mcp_servers:',
         `  ${SAP_SERVER_NAME}:`,
@@ -455,7 +455,7 @@ export function createManualMcpJsonSnippets(
     {
       title: 'Local SAP MCP YAML (ClawPump Agent + payment bridge)',
       description:
-        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
+        'Use this inside ClawPump Agent (~/.hermes/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
       content: [
         'mcp_servers:',
         `  ${SAP_SERVER_NAME}:`,
@@ -795,7 +795,9 @@ export function getKnownClientTargets(homeDir = homedir(), platform: SupportedPl
     {
       id: 'clawpump',
       label: 'ClawPump Agent',
-      path: join(homeDir, '.clawpump', 'config.yaml'),
+      // ClawPump is a Hermes fork: config lives in ~/.hermes/config.yaml
+      // (HERMES_HOME override), per Hermes hermes_constants.get_hermes_home().
+      path: join(homeDir, '.hermes', 'config.yaml'),
       format: 'yaml',
       exists: false,
     },

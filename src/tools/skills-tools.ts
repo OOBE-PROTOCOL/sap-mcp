@@ -98,7 +98,10 @@ function getDefaultTargetDir(agent: AgentTarget | undefined): string | undefined
     case 'openclaw':
       return join(homedir(), '.openclaw', 'skills');
     case 'clawpump':
-      return join(homedir(), '.clawpump', 'skills');
+      // ClawPump is a Hermes downstream fork and resolves its home through
+      // Hermes' get_hermes_home() (HERMES_HOME override, ~/.hermes default).
+      // Skills therefore live in ~/.hermes/skills, not ~/.clawpump.
+      return join(homedir(), '.hermes', 'skills');
     case 'custom':
     case undefined:
       return undefined;
@@ -115,7 +118,7 @@ function getAgentTargetDirs(): Record<Exclude<AgentTarget, 'custom'>, string> {
     codex: join(homedir(), '.codex', 'skills'),
     hermes: join(homedir(), '.hermes', 'skills'),
     openclaw: join(homedir(), '.openclaw', 'skills'),
-    clawpump: join(homedir(), '.clawpump', 'skills'),
+    clawpump: join(homedir(), '.hermes', 'skills'),
   };
 }
 
