@@ -63,7 +63,7 @@ const PUBLIC_LOGO_ASSETS = {
   '/logos/codex.webp': { filename: 'codex.webp', contentType: 'image/webp' },
   '/logos/hermes.png': { filename: 'hermes.png', contentType: 'image/png' },
   '/logos/jupiter.svg': { filename: 'jupiter.svg', contentType: 'image/svg+xml' },
-  '/logos/magicblock.svg': { filename: 'magicblock.svg', contentType: 'image/svg+xml' },
+  '/logos/magicblock.png': { filename: 'magicblock.png', contentType: 'image/png' },
   '/logos/mcp.svg': { filename: 'mcp.svg', contentType: 'image/svg+xml' },
   '/logos/metaplex.png': { filename: 'metaplex.png', contentType: 'image/png' },
   '/logos/meteora.svg': { filename: 'meteora.svg', contentType: 'image/svg+xml' },

@@ -81,7 +81,7 @@ function renderDefiLogoRail(): string {
     ['Orca', '/logos/orca.svg'],
     ['Meteora', '/logos/meteora.svg'],
     ['Adrena', '/logos/adrena.svg'],
-    ['MagicBlock', '/logos/magicblock.svg'],
+    ['MagicBlock', '/logos/magicblock.png'],
     ['Metaplex', '/logos/metaplex.png'],
     ['Solana', '/logos/solana.svg'],
   ] as const;

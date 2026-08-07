@@ -9,7 +9,6 @@
  * @module ui/ui-resources
  */
 
-import { MCP_SERVER_VERSION } from '../core/constants.js';
 import {
   renderBalanceCard,
   renderReadinessCard,
@@ -131,17 +130,16 @@ export const UI_RESOURCES: readonly UiResourceDescriptor[] = [
 ] as const;
 
 export function renderUiCard(ctx: UiCardContext): string {
-  const v = MCP_SERVER_VERSION;
   switch (ctx.kind) {
-    case 'balance': return renderBalanceCard({ ...ctx, version: v });
-    case 'readiness': return renderReadinessCard({ ...ctx, version: v });
-    case 'position': return renderPositionCard({ ...ctx, version: v });
-    case 'pricing': return renderPricingCard({ ...ctx, version: v });
-    case 'transfer': return renderTransferCard({ ...ctx, version: v });
-    case 'magicblock': return renderMagicBlockCard({ ...ctx, version: v });
-    case 'metaplex': return renderMetaplexCard({ ...ctx, version: v });
-    case 'jupiter': return renderJupiterSwapCard({ ...ctx, version: v });
-    case 'agent': return renderAgentRegistryCard({ ...ctx, version: v });
+    case 'balance': return renderBalanceCard(ctx);
+    case 'readiness': return renderReadinessCard(ctx);
+    case 'position': return renderPositionCard(ctx);
+    case 'pricing': return renderPricingCard(ctx);
+    case 'transfer': return renderTransferCard(ctx);
+    case 'magicblock': return renderMagicBlockCard(ctx);
+    case 'metaplex': return renderMetaplexCard(ctx);
+    case 'jupiter': return renderJupiterSwapCard(ctx);
+    case 'agent': return renderAgentRegistryCard(ctx);
   }
 }
 
