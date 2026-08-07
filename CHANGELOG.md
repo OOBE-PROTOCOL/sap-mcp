@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.69 - 2026-08-07
+
+### Fixed
+
+- Resolved stale npx cache path bug in `resolveGlobalBinaryPath`: `which sap-mcp-server`
+  could return a path inside `~/.npm/_npx/` (the npx cache) that becomes invalid
+  after npm cache cleanup or version update. The function now uses `which -a` and
+  filters out any path containing `/.npm/` or `/_npx/`, falling back to
+  `npm bin -g` to find the authoritative global install path.
+- Added validation detection for `args: null` in MCP bridge configs, which crashes
+  the Hermes stdio bridge with `TypeError: Value after * must be an iterable, not
+  NoneType` (upstream issue NousResearch/hermes-agent#80652). The repair now
+  detects and normalizes this to `args: []` on the next repair run.
+- Added validation detection for stale npx cache paths in existing configs, with
+  automatic normalization during repair.
+
+### Added
+
+- MCP Apps UI card templates with real protocol brand logos (Solana, Jupiter, Orca,
+  Raydium, Meteora, Adrena, MagicBlock, Metaplex, USDC, USDT) as inline base64 data
+  URIs. Card headers show an avatar group (SAP + OOBE Protocol logos). Card footer
+  version is sourced from `MCP_SERVER_VERSION` at module load time, never hardcoded.
+- High-resolution SVG brand assets replaced low-res `.ico` files on the public
+  dashboard protocol logo rail.
+
 ## 0.9.68 - 2026-08-06
 
 ### Fixed

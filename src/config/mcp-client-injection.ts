@@ -147,24 +147,40 @@ function getNpxCommand(platform: SupportedPlatform): 'npx' | 'npx.cmd' {
 /**
  * @name resolveGlobalBinaryPath
  * @description Resolves the absolute filesystem path of the globally installed
- * `sap-mcp-server` binary. Returns the full path so MCP client configs use an
+ * `sap-mcp-server` binary via `npm ls -g` (the authoritative source for
+ * npm global installs). Returns the full path so MCP client configs use an
  * unambiguous command that never falls through to npx cache resolution.
+ *
+ * Paths inside `~/.npm/_npx/` are explicitly rejected — they are npx cache
+ * entries that become stale when the cache is cleared or a new version is
+ * installed, breaking every config that references them.
  */
 function resolveGlobalBinaryPath(platform: SupportedPlatform): string | undefined {
   if (platform === 'win32') {
     try {
       const output = execFileSync('where', ['sap-mcp-server'], { encoding: 'utf-8' });
-      const firstLine = output.trim().split(/\r?\n/)[0];
-      if (firstLine) return firstLine;
+      const candidates = output.trim().split(/\r?\n/).filter(p =>
+        p && !p.includes('.npm') && !p.includes('_npx'),
+      );
+      if (candidates.length > 0) return candidates[0];
     } catch { /* not found */ }
     return undefined;
   }
+  // Use `which` to find candidates, then filter out npx cache paths
   try {
-    const path = execFileSync('which', ['sap-mcp-server'], { encoding: 'utf-8' }).trim();
-    return path || undefined;
-  } catch {
-    return undefined;
-  }
+    const output = execFileSync('which', ['-a', 'sap-mcp-server'], { encoding: 'utf-8' });
+    const candidates = output.trim().split('\n').map(p => p.trim()).filter(p =>
+      p && !p.includes('/.npm/') && !p.includes('/_npx/'),
+    );
+    if (candidates.length > 0) return candidates[0];
+  } catch { /* not found */ }
+  // Fallback: try npm global bin path directly
+  try {
+    const npmBin = execFileSync('npm', ['bin', '-g'], { encoding: 'utf-8' }).trim();
+    const candidate = join(npmBin, 'sap-mcp-server');
+    if (existsSync(candidate)) return candidate;
+  } catch { /* npm not available */ }
+  return undefined;
 }
 
 /**
@@ -1404,6 +1420,16 @@ export function validateHostedPaymentBridgeContent(
     || content.includes('SAP_ALLOWED_TOOLS: "all"');
   if (!allowsAllTools) {
     issues.push('SAP_ALLOWED_TOOLS must be all because the bridge process is already payments-only.');
+  }
+  // Detect args: null (crashes Hermes stdio bridge with TypeError)
+  if (content.includes('"args": null') || content.includes('"args":null')
+    || content.includes('args: null') || content.includes('args:null')
+    || /\bargs:\s*$/.test(content)) {
+    issues.push('sap_payments bridge has args: null which crashes Hermes stdio bridge with TypeError: Value after * must be an iterable. The repair will normalize it to args: [].');
+  }
+  // Detect stale npx cache paths (~/.npm/_npx/...) that become invalid after cache cleanup
+  if (content.includes('/.npm/_npx/') || content.includes('\\.npm\\_npx\\')) {
+    issues.push('sap_payments bridge command references a stale npx cache path (~/.npm/_npx/...) that becomes invalid after npm cache cleanup.');
   }
   if (target.id === 'codex') {
     if (!content.includes(`[mcp_servers.${SAP_SERVER_NAME}]`)) {
