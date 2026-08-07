@@ -41,6 +41,7 @@ import {
   readCustodyTokenAccount,
   getWalletTokenBalances,
   checkSufficientBalance,
+  encodeAdrenaLeverage,
   ensureUserProfileInstructions,
   ensureAtaInstructions,
   createAdrenaProgram,
@@ -178,7 +179,7 @@ async function buildOpenPositionLongInternal(
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
   // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
 
   const ix = await buildInstruction(program, ixName, [
     {
@@ -218,7 +219,7 @@ async function buildOpenPositionLongInternal(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, leverage);
 }
 
 async function buildClosePositionLongInternal(

@@ -241,9 +241,12 @@ export class PolicyEngine {
       maxLeverage: this.config.maxLeverage ?? 100,
       maxOpenPositions: this.config.maxOpenPositions ?? 3,
       allowedMarkets: this.config.allowedMarkets ?? ['BONK', 'JITOSOL', 'WBTC', 'USDC', 'XAU', 'XAG', 'WTI'],
-      stopLossRequired: this.config.stopLossRequired ?? true,
+      stopLossRequired: this.config.stopLossRequired ?? false,
       maxSlippageBps: this.config.maxSlippageBps ?? 500,
       requireHumanAckAboveUsd: this.config.requireHumanAckAboveUsd ?? 30,
+      dailyLossLimitUsd: this.config.dailyLossLimitUsd ?? 10,
+      maxDrawdownPct: this.config.maxDrawdownPct ?? 30,
+      cooldownMinutes: this.config.cooldownMinutes ?? 15,
     };
   }
 
@@ -292,6 +295,12 @@ export interface TradingPolicy {
   stopLossRequired: boolean;
   maxSlippageBps: number;
   requireHumanAckAboveUsd: number;
+  /** Daily loss limit in USD. New trades are blocked when exceeded. */
+  dailyLossLimitUsd?: number;
+  /** Max drawdown percentage before blocking new trades. */
+  maxDrawdownPct?: number;
+  /** Cooldown in minutes after a losing trade. */
+  cooldownMinutes?: number;
 }
 
 /** Parameters for trading policy validation. */

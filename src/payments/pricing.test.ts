@@ -113,6 +113,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_runtime_status')).toBe('free');
     expect(classifyTool('sap_agent_next_action')).toBe('free');
     expect(classifyTool('sap_prepare_action')).toBe('free');
+    expect(classifyTool('sap_agent_standard_context')).toBe('free');
+    expect(classifyTool('sap_prepare_mandate')).toBe('free');
+    expect(classifyTool('sap_export_agent_oasf')).toBe('free');
     expect(classifyTool('sap_pricing_catalog')).toBe('free');
     expect(classifyTool('sap_skills_list')).toBe('free');
     expect(classifyTool('sap_skills_bundle')).toBe('free');
@@ -387,6 +390,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_runtime_status', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_next_action', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_prepare_action', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_agent_standard_context', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_prepare_mandate', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_export_agent_oasf', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_agent_context', { strictTools: true })).toBe('micro-read');
     expect(classifyTool('sap_pricing_catalog', { strictTools: true })).toBe('free');
     expect(classifyTool('sap_profile_current', { strictTools: true })).toBe('free');
@@ -455,11 +461,45 @@ describe('SAP MCP monetization pricing', () => {
 
   it('keeps SAP payment readiness and transaction preflight free', () => {
     expect(classifyTool('sap_x402_estimate_cost')).toBe('free');
+    expect(classifyTool('sap_payments_wallet_guard')).toBe('free');
     expect(classifyTool('sap_payments_readiness')).toBe('free');
     expect(classifyTool('sap_payments_register_agent')).toBe('free');
     expect(classifyTool('sap_payments_update_agent')).toBe('free');
     expect(classifyTool('sap_decode_transaction')).toBe('free');
     expect(classifyTool('sap_preview_transaction')).toBe('free');
+  });
+
+  it('prices hosted prepaid funding as the exact requested deposit', () => {
+    expect(classifyTool('sap_payments_start_prepaid')).toBe('free');
+    expect(classifyTool('sap_payments_prepaid_balance')).toBe('free');
+    expect(classifyTool('sap_payments_fund_prepaid')).toBe('value-action');
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'sap_payments_fund_prepaid',
+        arguments: { amountUsd: 0.25, perCallCostUsd: 0.005 },
+      },
+    });
+
+    const decision = resolvePaymentDecision(parsed, {
+      ...monetizationConfig,
+      prices: {
+        ...monetizationConfig.prices,
+        valueFixedUsd: 0.06,
+        maxUsd: 0.09,
+      },
+    });
+
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('value-action');
+      expect(decision.priceUsd).toBe(0.25);
+      expect(decision.price).toBe('$0.25');
+      expect(decision.toolPricings[0]?.reason).toContain('exact prepaid funding deposit');
+    }
   });
 
   it('prices SNS batch checks as builder calls', () => {
@@ -512,6 +552,9 @@ describe('SAP MCP monetization pricing', () => {
     expect(catalog.toolSets.microRead).toContain('sap_agent_context');
     expect(catalog.toolSets.free).toContain('sap_agent_runtime_status');
     expect(catalog.toolSets.free).toContain('sap_prepare_action');
+    expect(catalog.toolSets.free).toContain('sap_agent_standard_context');
+    expect(catalog.toolSets.free).toContain('sap_prepare_mandate');
+    expect(catalog.toolSets.free).toContain('sap_export_agent_oasf');
     expect(catalog.toolSets.free).toContain('sap_pricing_catalog');
     expect(catalog.toolSets.free).toContain('sol_get_balance');
     expect(catalog.toolSets.free).toContain('spl-token_getTokenAccounts');

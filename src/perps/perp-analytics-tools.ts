@@ -14,7 +14,6 @@ import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
 import {
   ADRENA_CUSTODY_OFFSETS,
-  ADRENA_POSITION_OWNER_MEMCMP_OFFSET,
   DISC_CUSTODY,
   DISC_POOL,
   DISC_POSITION,
@@ -231,7 +230,7 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
   };
 
   registerTool(server, 'sap_perp_position_info', {
-    description: 'Read all open perpetual positions on Adrena for a given wallet address. Returns position key, market, side, size, collateral, entry price, leverage, unrealized PnL, and liquidation price from the on-chain Position account. markPrice mirrors entryPrice until SAP MCP has a live oracle/feed price decoder. Read-only — uses Solana RPC.',
+    description: 'Read all open perpetual positions on Adrena for a given wallet address. Returns position key, market, side, size, collateral, entry price, leverage, unrealized PnL, and liquidation price from the on-chain Position account. markPrice mirrors entryPrice until SAP MCP has a live oracle/feed price decoder. Read-only — uses Solana RPC with PDA derivation (works on public RPC without getProgramAccounts).',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const walletStr = typeof args['wallet'] === 'string' ? args['wallet'] as string : '';
@@ -247,39 +246,70 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
     }
 
     try {
-      const accounts = await context.connection.getProgramAccounts(getAdrenaProgramId(context), {
-        filters: [
-          { memcmp: { offset: 0, bytes: discToBase58(DISC_POSITION) } },
-          { memcmp: { offset: ADRENA_POSITION_OWNER_MEMCMP_OFFSET, bytes: walletPubkey.toBase58() } },
-        ],
-        commitment: 'confirmed',
-      });
+      // Derive Position PDAs directly instead of using getProgramAccounts.
+      // Public RPC (api.mainnet-beta.solana.com) does not reliably support
+      // getProgramAccounts with memcmp filters — returns 0 results even when
+      // accounts exist. PDA derivation + getAccountInfo is deterministic and
+      // works on any RPC.
+      const { derivePositionPda } = await import('../perps/adrena/adrena-pda.js');
+      const { ADRENA_CUSTODIES } = await import('../perps/adrena/adrena-constants.js');
+      const { PublicKey: PK } = await import('@solana/web3.js');
 
+      // Build all possible position PDAs: each custody x each side (long/short).
+      const custodyEntries = Object.entries(ADRENA_CUSTODIES);
+      const sides: Array<'long' | 'short'> = ['long', 'short'];
+      const pdaChecks: Array<{ pda: PublicKey; custody: string; side: 'long' | 'short'; pool: string }> = [];
+
+      for (const [, custody] of custodyEntries) {
+        const poolPk = new PK(custody.pool);
+        const custodyPk = new PK(custody.address);
+        for (const side of sides) {
+          const pda = derivePositionPda(walletPubkey, poolPk, custodyPk, side);
+          pdaChecks.push({ pda, custody: custody.symbol, side, pool: custody.pool });
+        }
+      }
+
+      // Batch fetch all PDAs with getMultipleAccountsInfo.
+      const accounts = await context.connection.getMultipleAccountsInfo(
+        pdaChecks.map((c) => c.pda),
+        'confirmed',
+      );
+
+      // Read markets for enrichment.
       const marketsByCustody = await readAdrenaMarketsByCustody(context);
-      const positions: PerpPosition[] = accounts
-        .map(({ pubkey, account }) => decodeAdrenaPositionAccount(pubkey, account.data, marketsByCustody))
-        .filter((position): position is NonNullable<typeof position> => Boolean(position))
-        .map((position) => ({
-          positionKey: position.positionKey,
-          market: position.market,
-          side: position.side,
-          size: position.size,
-          collateral: position.collateral,
-          entryPrice: position.entryPrice,
-          markPrice: position.entryPrice,
-          leverage: position.leverage,
-          unrealizedPnl: position.unrealizedPnl,
-          liquidationPrice: position.liquidationPrice,
-        }));
+
+      const positions: PerpPosition[] = [];
+      for (let i = 0; i < accounts.length; i++) {
+        const account = accounts[i];
+        if (!account || !account.data) continue;
+        const check = pdaChecks[i];
+        if (!check) continue;
+
+        const position = decodeAdrenaPositionAccount(check.pda, account.data, marketsByCustody);
+        if (position) {
+          positions.push({
+            positionKey: position.positionKey,
+            market: position.market,
+            side: position.side,
+            size: position.size,
+            collateral: position.collateral,
+            entryPrice: position.entryPrice,
+            markPrice: position.entryPrice,
+            leverage: position.leverage,
+            unrealizedPnl: position.unrealizedPnl,
+            liquidationPrice: position.liquidationPrice,
+          });
+        }
+      }
 
       return createTextResponse(JSON.stringify({
         wallet: walletStr,
         positions,
         count: positions.length,
         scan: {
+          method: 'PDA derivation + getMultipleAccountsInfo',
+          checkedPdas: pdaChecks.length,
           programId: getAdrenaProgramId(context).toBase58(),
-          positionDiscriminator: discToBase58(DISC_POSITION),
-          ownerMemcmpOffset: ADRENA_POSITION_OWNER_MEMCMP_OFFSET,
         },
         note: 'Positions are decoded from the official Adrena release/39 Position account layout. markPrice mirrors entryPrice until a live oracle/feed price decoder is available.',
       }));
@@ -493,43 +523,63 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
     }
 
     try {
-      const accounts = await context.connection.getProgramAccounts(getAdrenaProgramId(context), {
-        filters: [
-          { memcmp: { offset: 0, bytes: discToBase58(DISC_POSITION) } },
-          { memcmp: { offset: ADRENA_POSITION_OWNER_MEMCMP_OFFSET, bytes: walletPubkey.toBase58() } },
-        ],
-        commitment: 'confirmed',
-      });
+      // Derive Position PDAs directly (same fix as sap_perp_position_info).
+      const { derivePositionPda } = await import('../perps/adrena/adrena-pda.js');
+      const { ADRENA_CUSTODIES } = await import('../perps/adrena/adrena-constants.js');
+      const { PublicKey: PK } = await import('@solana/web3.js');
+
+      const custodyEntries = Object.entries(ADRENA_CUSTODIES);
+      const sides: Array<'long' | 'short'> = ['long', 'short'];
+      const pdaChecks: Array<{ pda: PublicKey }> = [];
+
+      for (const [, custody] of custodyEntries) {
+        const poolPk = new PK(custody.pool);
+        const custodyPk = new PK(custody.address);
+        for (const side of sides) {
+          pdaChecks.push({ pda: derivePositionPda(walletPubkey, poolPk, custodyPk, side) });
+        }
+      }
+
+      const accounts = await context.connection.getMultipleAccountsInfo(
+        pdaChecks.map((c) => c.pda),
+        'confirmed',
+      );
 
       const marketsByCustody = await readAdrenaMarketsByCustody(context);
-      const zones: LiquidationZone[] = accounts
-        .map(({ pubkey, account }) => decodeAdrenaPositionAccount(pubkey, account.data, marketsByCustody))
-        .filter((position): position is NonNullable<typeof position> => Boolean(position))
-        .map((position) => {
-          const currentPrice = position.entryPrice;
-          const distanceToLiquidationPct = position.liquidationPrice > 0 && currentPrice > 0
-            ? Math.abs((currentPrice - position.liquidationPrice) / currentPrice) * 100
-            : 0;
+      const zones: LiquidationZone[] = [];
+      for (let i = 0; i < accounts.length; i++) {
+        const account = accounts[i];
+        if (!account || !account.data) continue;
+        const check = pdaChecks[i];
+        if (!check) continue;
 
-          return {
-            positionKey: position.positionKey,
-            market: position.market,
-            side: position.side,
-            liquidationPrice: position.liquidationPrice,
-            currentPrice,
-            distanceToLiquidationPct,
-            leverage: position.leverage,
-          };
+        const position = decodeAdrenaPositionAccount(check.pda, account.data, marketsByCustody);
+        if (!position) continue;
+
+        const currentPrice = position.entryPrice;
+        const distanceToLiquidationPct = position.liquidationPrice > 0 && currentPrice > 0
+          ? Math.abs((currentPrice - position.liquidationPrice) / currentPrice) * 100
+          : 0;
+
+        zones.push({
+          positionKey: position.positionKey,
+          market: position.market,
+          side: position.side,
+          liquidationPrice: position.liquidationPrice,
+          currentPrice,
+          distanceToLiquidationPct,
+          leverage: position.leverage,
         });
+      }
 
       return createTextResponse(JSON.stringify({
         wallet: walletStr,
         zones,
         count: zones.length,
         scan: {
+          method: 'PDA derivation + getMultipleAccountsInfo',
+          checkedPdas: pdaChecks.length,
           programId: getAdrenaProgramId(context).toBase58(),
-          positionDiscriminator: discToBase58(DISC_POSITION),
-          ownerMemcmpOffset: ADRENA_POSITION_OWNER_MEMCMP_OFFSET,
         },
         note: 'Liquidation zones use entryPrice as currentPrice until SAP MCP has a live Adrena oracle/feed price decoder. Treat the output as risk geometry, not a liquidation alert feed.',
       }));
@@ -584,7 +634,7 @@ function registerPerpTradePlanTool(server: Server): void {
       },
       entryPrice: {
         type: 'number',
-        description: 'Reference entry price in USD used for risk math.',
+        description: 'Reference entry price in USD used for risk math. Required. Get the current price from sap_adrena_get_trading_prices or sap_adrena_get_prices before calling this tool.',
         minimum: 0,
       },
       stopLossPrice: {
@@ -623,7 +673,7 @@ function registerPerpTradePlanTool(server: Server): void {
   };
 
   registerTool(server, 'sap_perp_trade_plan', {
-    description: 'Create a trader-grade perpetual futures plan from a simple intent. Returns notional size, stop risk, reward/risk, liquidation estimate, preflight checklist, and the exact SAP MCP read tools to call next. This is analysis-only: SAP MCP does not expose Adrena execution builders until they are IDL-backed and locally finalizable.',
+    description: 'Create a trader-grade perpetual futures plan from a simple intent. Returns notional size, stop risk, reward/risk, liquidation estimate, preflight checklist, and the exact SAP MCP read tools to call next. This is analysis-only: SAP MCP does not expose Adrena execution builders until they are IDL-backed and locally finalizable. Required fields: market, side, collateralAmountUsd, leverage, entryPrice. Get entryPrice from sap_adrena_get_trading_prices or sap_adrena_get_prices before calling this tool.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const market = String(args['market'] ?? '').trim().toUpperCase();

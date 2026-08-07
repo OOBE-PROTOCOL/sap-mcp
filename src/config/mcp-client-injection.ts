@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
+import { execFileSync } from 'child_process';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 /**
  * @name McpClientId
  * @description Supported local MCP clients that can receive SAP MCP server config.
  */
-export type McpClientId = 'claude' | 'hermes' | 'openclaw' | 'codex';
+export type McpClientId = 'claude' | 'hermes' | 'openclaw' | 'codex' | 'clawpump';
 
 /**
  * @name McpClientConfigFormat
@@ -141,6 +142,50 @@ const LEGACY_ENV_KEYS = new Set([
  */
 function getNpxCommand(platform: SupportedPlatform): 'npx' | 'npx.cmd' {
   return platform === 'win32' ? 'npx.cmd' : 'npx';
+}
+
+/**
+ * @name isGlobalBinaryAvailable
+ * @description Checks whether the `sap-mcp-server` binary is resolvable from the
+ * system PATH. When true, MCP client configs use the global binary directly
+ * instead of `npx --package`, which avoids an npm 10/11 bug on macOS where
+ * `npx --package X -- Y` does not add the package's `.bin` directory to PATH.
+ */
+function isGlobalBinaryAvailable(platform: SupportedPlatform): boolean {
+  if (platform === 'win32') {
+    try {
+      execFileSync('where', ['sap-mcp-server'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    execFileSync('which', ['sap-mcp-server'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @name resolveBridgeCommand
+ * @description Returns the optimal command + args for launching the local SAP MCP
+ * stdio server. Prefers the global binary (fast, no npx overhead, avoids the
+ * npm PATH resolution bug) and falls back to `npx --package` when the binary is
+ * not globally installed.
+ */
+function resolveBridgeCommand(platform: SupportedPlatform): { command: string; args: string[] } {
+  if (isGlobalBinaryAvailable(platform)) {
+    return {
+      command: platform === 'win32' ? 'sap-mcp-server.cmd' : 'sap-mcp-server',
+      args: [],
+    };
+  }
+  return {
+    command: getNpxCommand(platform),
+    args: ['--yes', '--package', SAP_MCP_NPM_PACKAGE, 'sap-mcp-server'],
+  };
 }
 
 /**
@@ -395,6 +440,36 @@ export function createManualMcpJsonSnippets(
       ].join('\n'),
     },
     {
+      title: 'Hosted SAP MCP YAML (ClawPump Agent config)',
+      description:
+        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and uses the same YAML config shape.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${yamlScalar(hostedUrl)}`,
+        `    transport: ${yamlScalar('streamable-http')}`,
+        '',
+      ].join('\n'),
+    },
+    {
+      title: 'Local SAP MCP YAML (ClawPump Agent + payment bridge)',
+      description:
+        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
+      content: [
+        'mcp_servers:',
+        `  ${SAP_SERVER_NAME}:`,
+        `    url: ${yamlScalar(hostedUrl)}`,
+        `    transport: ${yamlScalar('streamable-http')}`,
+        `  ${SAP_PAYMENT_BRIDGE_SERVER_NAME}:`,
+        `    command: ${yamlScalar(createNpxPaymentBridgeServerConfig().command)}`,
+        `    args: [${createNpxPaymentBridgeServerConfig().args.map(shellQuote).join(', ')}]`,
+        `    env:`,
+        `      SAP_MCP_PAYMENTS_BRIDGE_ONLY: "true"`,
+        `      SAP_LOG_LEVEL: "info"`,
+        '',
+      ].join('\n'),
+    },
+    {
       title: 'Local SAP MCP JSON',
       description: 'Use this when the agent runs SAP MCP locally and follows ~/.config/mcp-sap/.active-profile.',
       content: formatJson({
@@ -424,15 +499,10 @@ export function createNpxCodexServerConfig(): McpServerInjectionConfig {
  * @description Builds a portable Codex stdio config for a specific host platform.
  */
 function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
-  const command = getNpxCommand(platform);
+  const { command, args } = resolveBridgeCommand(platform);
   return {
     command,
-    args: [
-      '--yes',
-      '--package',
-      SAP_MCP_NPM_PACKAGE,
-      'sap-mcp-server',
-    ],
+    args,
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
@@ -444,27 +514,23 @@ function createNpxCodexServerConfigForPlatform(platform: SupportedPlatform): Mcp
  * @name createNpxPaymentBridgeServerConfig
  * @description Builds a portable local stdio MCP config that exposes only x402 payment helper tools.
  */
-export function createNpxPaymentBridgeServerConfig(): McpServerInjectionConfig {
-  return createNpxPaymentBridgeServerConfigForPlatform(process.platform);
+export function createNpxPaymentBridgeServerConfig(runtimeId = 'manual'): McpServerInjectionConfig {
+  return createNpxPaymentBridgeServerConfigForPlatform(process.platform, runtimeId);
 }
 
 /**
  * @name createNpxPaymentBridgeServerConfigForPlatform
  * @description Builds the local sap_payments bridge command for a specific host platform.
  */
-function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform): McpServerInjectionConfig {
-  const command = getNpxCommand(platform);
+function createNpxPaymentBridgeServerConfigForPlatform(platform: SupportedPlatform, runtimeId = 'manual'): McpServerInjectionConfig {
+  const { command, args } = resolveBridgeCommand(platform);
   return {
     command,
-    args: [
-      '--yes',
-      '--package',
-      SAP_MCP_NPM_PACKAGE,
-      'sap-mcp-server',
-    ],
+    args,
     env: {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_MCP_PAYMENTS_BRIDGE_ONLY: 'true',
+      SAP_MCP_RUNTIME_ID: runtimeId,
       SAP_ALLOWED_TOOLS: 'all',
       SAP_LOG_LEVEL: 'info',
     },
@@ -725,6 +791,13 @@ export function getKnownClientTargets(homeDir = homedir(), platform: SupportedPl
       format: 'json',
       exists: false,
     },
+    {
+      id: 'clawpump',
+      label: 'ClawPump Agent',
+      path: join(homeDir, '.clawpump', 'config.yaml'),
+      format: 'yaml',
+      exists: false,
+    },
   ];
 
   const hermesProfilesDir = join(homeDir, '.hermes', 'profiles');
@@ -871,7 +944,7 @@ function buildHostedPaymentBridgeJsonContent(
 ): { nextContent: string; hadSapConfig: boolean } {
   const parsed: unknown = content.trim() ? JSON.parse(content) : {};
   const root = isRecord(parsed) ? parsed : {};
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, target.id);
 
   if (target.id === 'openclaw') {
     return buildOpenClawHostedPaymentBridgeJsonContent(root, paymentBridge);
@@ -1095,9 +1168,10 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
 function replaceYamlHostedPaymentBridgeBlocks(
   content: string,
   platform: SupportedPlatform,
+  target: Pick<McpClientTarget, 'id'>,
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, target.id);
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
@@ -1149,7 +1223,7 @@ function replaceOpenClawYamlHostedPaymentBridgeBlocks(
   platform: SupportedPlatform,
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
-  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform);
+  const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, 'openclaw');
   const replacement = [
     ...yamlHostedServerBlock(SAP_SERVER_NAME, 4),
     ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4),
@@ -1312,11 +1386,18 @@ export function validateHostedPaymentBridgeContent(
   if (!bridgeOnlyEnabled) {
     issues.push('Missing SAP_MCP_PAYMENTS_BRIDGE_ONLY=true for the local payment bridge process.');
   }
+  if (!content.includes('SAP_MCP_RUNTIME_ID')) {
+    issues.push('Missing SAP_MCP_RUNTIME_ID in local bridge env; duplicate bridge detection needs the runtime scope.');
+  }
   if (!content.includes('SAP_ALLOWED_TOOLS')) {
     issues.push('Missing SAP_ALLOWED_TOOLS allow-list for the local payment bridge.');
   }
-  if (!content.includes(SAP_MCP_NPM_PACKAGE)) {
-    issues.push(`Local sap_payments bridge must pin ${SAP_MCP_NPM_PACKAGE}; unpinned npx can download an older npm latest.`);
+  const usesGlobalBinary = content.includes('command: "sap-mcp-server"')
+    || content.includes('command: sap-mcp-server')
+    || content.includes('command = "sap-mcp-server"')
+    || content.includes('"command": "sap-mcp-server"');
+  if (!content.includes(SAP_MCP_NPM_PACKAGE) && !usesGlobalBinary) {
+    issues.push(`Local sap_payments bridge must pin ${SAP_MCP_NPM_PACKAGE} or use the global sap-mcp-server binary; unpinned npx can download an older npm latest.`);
   }
   const allowsAllTools = content.includes('SAP_ALLOWED_TOOLS = "all"')
     || content.includes('"SAP_ALLOWED_TOOLS": "all"')
@@ -1332,8 +1413,10 @@ export function validateHostedPaymentBridgeContent(
     if (!content.includes(`[mcp_servers.${SAP_PAYMENT_BRIDGE_SERVER_NAME}]`)) {
       issues.push('Missing Codex [mcp_servers.sap_payments] local bridge block.');
     }
-    if (!content.includes(`command = ${JSON.stringify(expectedNpx)}`)) {
-      issues.push(`Codex local bridge must use ${expectedNpx} on ${platform}.`);
+    const expectedGlobalBinaryCmd = `command = "sap-mcp-server"`;
+    const expectedNpxCmd = `command = ${JSON.stringify(expectedNpx)}`;
+    if (!content.includes(expectedNpxCmd) && !content.includes(expectedGlobalBinaryCmd)) {
+      issues.push(`Codex local bridge must use ${expectedNpx} or the global sap-mcp-server binary on ${platform}.`);
     }
     if (!content.includes('startup_timeout_sec = 300')) {
       issues.push('Codex local bridge must set startup_timeout_sec = 300 so first-run npx installs do not hide sap_payments.');
@@ -1485,7 +1568,7 @@ export function buildCodexHostedPaymentBridgeContent(
   const nextContent = [
       prefix,
       hostedTomlServerBlock(hosted).trimEnd(),
-      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfigForPlatform(platform)).trimEnd(),
+      codexPaymentBridgeTomlBlock(createNpxPaymentBridgeServerConfigForPlatform(platform, 'codex')).trimEnd(),
     ].filter(Boolean).join('\n\n');
 
   return {
@@ -1553,7 +1636,7 @@ export function buildHostedPaymentBridgeContent(
     return replaceOpenClawYamlHostedPaymentBridgeBlocks(content, platform);
   }
 
-  return replaceYamlHostedPaymentBridgeBlocks(content, platform);
+  return replaceYamlHostedPaymentBridgeBlocks(content, platform, target);
 }
 
 /**

@@ -101,7 +101,7 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
               maxPriceUsdHint: 'no x402 payment — this tool requires a local signer',
               reason: 'This tool requires a local Solana signature and cannot be executed on the hosted accountless server. No x402 payment will be charged.',
             },
-            hint: `Do NOT use sap_payments_call_paid_tool for this tool — it will fail with "Invalid payment required response" because the hosted server never issues a 402 challenge. Instead, use the local sap_payments equivalent: check sap_payments_readiness first, then use the local signer tool directly (e.g. sap_payments_register_agent, sap_payments_update_agent, sap_payments_finalize_transaction).`,
+            hint: 'Do NOT use sap_payments_call_paid_tool for this tool. The hosted server will not issue an x402 challenge because the operation requires a user signer, not an access payment. Use the local sap_payments equivalent instead: check sap_payments_readiness first, then call the local signer tool directly (e.g. sap_payments_register_agent, sap_payments_update_agent, sap_payments_finalize_transaction).',
           }, null, 2));
         }
 

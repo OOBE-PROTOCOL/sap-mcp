@@ -37,6 +37,26 @@ describe('release readiness documentation and package surface', () => {
     expect(packageJson.scripts['verify:release']).toContain('npm pack --dry-run');
   });
 
+  it('does not depend on npm packages known to be unavailable from the public registry', () => {
+    const packageJson = JSON.parse(readText('package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    };
+    const dependencyNames = [
+      ...Object.keys(packageJson.dependencies ?? {}),
+      ...Object.keys(packageJson.devDependencies ?? {}),
+      ...Object.keys(packageJson.optionalDependencies ?? {}),
+    ];
+    const unavailablePublicPackages = [
+      '@bonfida/spl-name-service',
+    ];
+
+    for (const packageName of unavailablePublicPackages) {
+      expect(dependencyNames).not.toContain(packageName);
+    }
+  });
+
   it('keeps the docs explicit about hosted users, agent owners, x402, and external signing', () => {
     const overview = readText('docs/01_PRODUCT_OVERVIEW.md');
     const remote = readText('docs/05_REMOTE_VPS_DEPLOYMENT.md');

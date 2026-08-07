@@ -13,6 +13,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { logger } from '../core/logger.js';
+import { clearSessionCache } from '../payments/mcp-session-cache.js';
+import { releasePaymentBridgeProcessLock } from '../runtime/payment-bridge-process.js';
 
 /**
  * @name startStdioTransport
@@ -32,6 +34,29 @@ export async function startStdioTransport(
   logger.info('Starting stdio transport');
   
   const transport = new StdioServerTransport();
+  let shuttingDown = false;
+
+  const shutdown = async (reason: string, exitCode = 0): Promise<void> => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    logger.info('Shutting down stdio transport...', { reason });
+    clearSessionCache();
+    releasePaymentBridgeProcessLock();
+
+    try {
+      await server.close();
+    } catch (error) {
+      logger.warn('Error while closing stdio MCP server', {
+        reason,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    process.exit(exitCode);
+  };
   
   // Connect transport - this starts handling JSON-RPC requests immediately
   await server.connect(transport);
@@ -39,15 +64,25 @@ export async function startStdioTransport(
   logger.info('stdio transport started successfully');
   
   // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    logger.info('Shutting down stdio transport...');
-    await server.close();
-    process.exit(0);
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('disconnect', () => void shutdown('parent-disconnect'));
+  process.stdin.on('end', () => void shutdown('stdin-end'));
+  process.stdin.on('close', () => void shutdown('stdin-close'));
+  process.on('beforeExit', () => {
+    clearSessionCache();
+    releasePaymentBridgeProcessLock();
   });
-  
-  process.on('SIGTERM', async () => {
-    logger.info('Shutting down stdio transport...');
-    await server.close();
-    process.exit(0);
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception in stdio transport', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    void shutdown('uncaughtException', 1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled rejection in stdio transport', {
+      reason: reason instanceof Error ? reason.message : String(reason),
+    });
+    void shutdown('unhandledRejection', 1);
   });
 }

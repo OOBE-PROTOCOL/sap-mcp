@@ -1,10 +1,11 @@
 /**
  * @name signer/local-keypair-signer
- * @description Local hot-key signer for development and local-dev-keypair mode.
+ * @description Local profile signer for local-dev-keypair mode.
  *
- * WARNING: This is a local hot-key signer. The hosted SAP MCP server never
- * receives keypair bytes, but production custody should prefer an external
- * signer, hardware wallet, delegated session, or a tightly capped profile.
+ * The hosted SAP MCP server never receives keypair bytes. Agents receive a
+ * signer capability through sap_payments tools, not direct keypair access.
+ * Production value flows should use a dedicated capped profile, external
+ * signer, hardware wallet, or delegated session policy.
  *
  * @flow
  *   1. `createLocalKeypairSigner` loads a keypair from file via `loadKeypairFromFile`.
@@ -29,14 +30,15 @@ import type { Signer } from './signer-types.js';
  * @usedBy `signer-resolver.ts:resolveSigner` when mode is `local-keypair`.
  */
 export function createLocalKeypairSigner(walletPath: string): Signer {
-  logger.info('Creating local keypair signer', { walletPath: '[REDACTED]' });
+  logger.info('Resolving local SAP profile signer', { walletPath: '[REDACTED]' });
   
   const keypair = loadKeypairFromFile(walletPath);
   
-  logger.warn('Local hot-key signer created', {
+  logger.info('Local SAP profile signer ready', {
     custody: 'user-local',
+    signerAccess: 'capability-only',
     secretMaterial: 'never-exposed-to-hosted-server',
-    recommendation: 'Use external signer, hardware wallet, or capped profile for production/value funds.',
+    recommendation: 'Use a dedicated capped profile or external signer for production/value funds.',
   });
   
   return {

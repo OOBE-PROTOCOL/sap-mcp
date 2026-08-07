@@ -49,9 +49,10 @@ NFT-backed identity.
 5. Optionally link SNS identity.
    - Check availability with `sap_sns_check_domain`.
    - Check ownership with `sap_sns_check_ownership`.
-   - Hosted record updates should use unsigned SNS builders, then
-     `sap_payments_finalize_transaction`.
-   - Direct domain registration requires local signing.
+   - Use SNS record reads and PDA tools for verification.
+   - SNS record writes and direct SNS registration are temporarily unavailable
+     through SAP MCP until the write path is migrated to a current installable
+     SNS SDK and covered by end-to-end tests.
 6. Update the SAP profile.
    - Use `sap_payments_update_agent` for name, description, image metadata URI,
      capabilities, protocols, pricing, `agentId`, and `x402Endpoint` updates.

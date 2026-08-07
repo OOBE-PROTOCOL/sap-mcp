@@ -35,10 +35,12 @@ DeFi execution when the tool is available in the current runtime and the
 required signing route is explicit.
 
 For perps, prefer SAP MCP analysis tools first: `sap_perp_trade_plan`,
-`sap_perp_markets`, `sap_perp_position_info`, `sap_perp_liquidation_zones`, and
-`sap_chart_*`. Hosted SAP MCP does not expose Adrena unsigned execution builders
-yet. Do not call direct Adrena signer tools through `sap_payments_call_paid_tool`;
-they are local-signer-only and should be rejected before any x402 payment.
+`sap_perp_markets`, `sap_perp_position_info`, `sap_perp_liquidation_zones`,
+`sap_perp_signal_score`, `sap_perp_risk_check`, and `sap_chart_*`. For execution,
+use the hosted Adrena unsigned builders (`sap_adrena_build_*`) only when
+`sap_perp_builder_status` reports the operation available, then finalize the
+returned `transactionBase64` locally with `sap_payments_finalize_transaction`.
+SAP MCP never signs user-owned Adrena transactions on the hosted server.
 
 ## Social, Blinks, Gaming
 

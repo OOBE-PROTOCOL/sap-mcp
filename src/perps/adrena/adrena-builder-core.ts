@@ -26,6 +26,7 @@ import {
   ADRENA_DATA_API_BASE_URL,
   ADRENA_COMMODITIES_POOL_ADDRESS,
   ADRENA_CUSTODIES,
+  ADRENA_DEFAULT_REFERRER_PROFILE,
   ADRENA_TOKEN_MINTS,
   SYSTEM_PROGRAM_ID,
 } from './adrena-constants.js';
@@ -127,6 +128,17 @@ export interface PoolMetadata {
 }
 
 /**
+ * Encode a human leverage multiplier into Adrena's 1e4 BPS wire format.
+ * Example: 3x => 30000, 100x => 1000000.
+ */
+export function encodeAdrenaLeverage(leverage: number): number {
+  if (!Number.isFinite(leverage) || leverage <= 0) {
+    throw new Error(`Invalid leverage ${leverage}; expected a positive finite multiplier such as 3 for 3x.`);
+  }
+  return Math.round(leverage * 10_000);
+}
+
+/**
  * Result of simulating a position open without building or serializing a transaction.
  * Free dry-run — no x402 charge, no transaction bytes returned.
  */
@@ -166,6 +178,12 @@ export interface UnsignedTransactionResult {
   balanceCheck?: BalanceCheck;
   /** Pool/custody metadata (present for open-position builders). */
   poolMetadata?: PoolMetadata;
+  /** Requested leverage metadata for Adrena open-position builders. */
+  requestedLeverage?: {
+    multiplier: number;
+    encodedBps: number;
+    scale: 'adrena_bps_1e4';
+  };
   /** Warning message if balance is insufficient or other pre-flight concern. */
   warning?: string;
   /** Pre-submit simulation logs from the builder (when available). */
@@ -399,7 +417,7 @@ export function validateLeverage(
   maxInitialLeverageBps: number,
   principalToken: string,
 ): void {
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
   if (leverageBps > maxInitialLeverageBps) {
     const maxLeverage = maxInitialLeverageBps / 10000;
     const suggested = Math.floor(maxLeverage * 100) / 100; // round down to 2 decimals
@@ -609,6 +627,193 @@ export async function ensureAtaInstructions(
   return [createAtaIdempotentIx(owner, mint, payer)];
 }
 
+interface AdrenaIdlAccountMeta {
+  name: string;
+  writable?: boolean;
+  signer?: boolean;
+  optional?: boolean;
+}
+
+interface AdrenaIdlInstructionMeta {
+  name: string;
+  accounts?: AdrenaIdlAccountMeta[];
+}
+
+function camelToSnake(value: string): string {
+  return value.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+function snakeToCamel(value: string): string {
+  return value.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+function getIdlInstructionAccounts(program: Program, ixName: string): AdrenaIdlAccountMeta[] {
+  const idl = (program as unknown as { idl?: { instructions?: AdrenaIdlInstructionMeta[] } }).idl;
+  const snakeName = camelToSnake(ixName);
+  const instruction = idl?.instructions?.find(candidate =>
+    candidate.name === ixName || candidate.name === snakeName,
+  );
+  return instruction?.accounts ?? [];
+}
+
+const DEFAULT_REFERRER_PROFILE_PUBKEY = new PublicKey(ADRENA_DEFAULT_REFERRER_PROFILE);
+
+function callerRequestedNullReferrer(accounts: Record<string, PublicKey | null>): boolean {
+  return Object.prototype.hasOwnProperty.call(accounts, 'referrerProfile') && accounts['referrerProfile'] === null;
+}
+
+function getFinalIdlAccounts(
+  idlAccounts: AdrenaIdlAccountMeta[],
+  accounts: Record<string, PublicKey | null>,
+): AdrenaIdlAccountMeta[] {
+  return idlAccounts.filter(accountMeta => {
+    if (!accountMeta.optional) {
+      return true;
+    }
+
+    const camelName = snakeToCamel(accountMeta.name);
+    return !(Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null);
+  });
+}
+
+function normalizeAdrenaAccountMetas(
+  ixName: string,
+  idlAccounts: AdrenaIdlAccountMeta[],
+  accounts: Record<string, PublicKey | null>,
+  ix: TransactionInstruction,
+): TransactionInstruction {
+  const finalIdlAccounts = getFinalIdlAccounts(idlAccounts, accounts);
+  const isOpenPositionInstruction =
+    ixName === 'openOrIncreasePositionLong' || ixName === 'openOrIncreasePositionShort';
+
+  if (finalIdlAccounts.length === 0 || finalIdlAccounts.length !== ix.keys.length) {
+    if (!isOpenPositionInstruction) {
+      return ix;
+    }
+
+    const keys = ix.keys.map(key => ({
+      ...key,
+      // Anchor can leave a trailing placeholder account for the omitted
+      // optional referrer, which makes the concrete account list longer than
+      // the filtered IDL account list. In open-position instructions any
+      // remaining Dhz8... account is the cortex PDA, and Adrena's CPI path
+      // requires it writable.
+      isWritable: key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY) ? true : key.isWritable,
+    }));
+
+    return new TransactionInstruction({
+      programId: ix.programId,
+      keys,
+      data: ix.data,
+    });
+  }
+
+  const keys = ix.keys.map((key, index) => {
+    const accountMeta = finalIdlAccounts[index];
+    if (!accountMeta) {
+      return key;
+    }
+
+    const openPositionNeedsWritableCortex =
+      accountMeta.name === 'cortex' &&
+      isOpenPositionInstruction;
+
+    return {
+      ...key,
+      isSigner: accountMeta.signer === true,
+      // Adrena's on-chain open-position path performs an internal CPI that
+      // expects cortex to be writable even though the vendored IDL marks
+      // cortex readonly for open_or_increase_position_{long,short}. If we
+      // follow the IDL literally, simulation fails with:
+      // "Dhz8Ta79... writable privilege escalated".
+      isWritable: openPositionNeedsWritableCortex || accountMeta.writable === true,
+    };
+  });
+
+  return new TransactionInstruction({
+    programId: ix.programId,
+    keys,
+    data: ix.data,
+  });
+}
+
+/**
+ * Anchor 0.30 can still materialize optional accounts after a retry with
+ * explicit nulls. For Adrena, a phantom referrer profile is worse than no
+ * referrer: the on-chain program rejects open-position transactions with
+ * privilege/escalation errors. If the caller intentionally passed
+ * `referrerProfile: null`, remove the corresponding optional IDL account from
+ * the final instruction before simulation/serialization.
+ */
+function sanitizeNullOptionalAdrenaAccounts(
+  program: Program,
+  ixName: string,
+  accounts: Record<string, PublicKey | null>,
+  ix: TransactionInstruction,
+): TransactionInstruction {
+  if (!callerRequestedNullReferrer(accounts)) {
+    return ix;
+  }
+
+  const idlAccounts = getIdlInstructionAccounts(program, ixName);
+  const removalIndexes = new Set<number>();
+
+  const defaultReferrerIndexes = ix.keys
+    .map((key, index) => ({ key, index }))
+    .filter(({ key }) => key.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY))
+    .map(({ index }) => index);
+  const idlHasCortexAccount = idlAccounts.some(accountMeta => accountMeta.name === 'cortex');
+
+  for (const [index, accountMeta] of idlAccounts.entries()) {
+    if (accountMeta.name !== 'referrer_profile' || accountMeta.optional !== true) {
+      continue;
+    }
+
+    const camelName = snakeToCamel(accountMeta.name);
+    const referrerWasExplicitlyNull =
+      Object.prototype.hasOwnProperty.call(accounts, camelName) && accounts[camelName] === null;
+    if (!referrerWasExplicitlyNull) {
+      continue;
+    }
+
+    // Adrena's cortex PDA is the same public key as the default referrer
+    // profile. Removing every matching pubkey corrupts the account order and
+    // makes the program read the next account as `cortex` (Anchor 3002).
+    // Only remove the default-referrer key when it is in the IDL referrer slot.
+    if (ix.keys[index]?.pubkey.equals(DEFAULT_REFERRER_PROFILE_PUBKEY)) {
+      removalIndexes.add(index);
+    }
+  }
+
+  if (removalIndexes.size === 0 && defaultReferrerIndexes.length > 1) {
+    // When Anchor returns a compact account list and cannot be aligned to the
+    // full IDL index map, keep the first default-referrer pubkey as cortex and
+    // remove later duplicate materializations as optional referrer accounts.
+    for (const index of defaultReferrerIndexes.slice(1)) {
+      removalIndexes.add(index);
+    }
+  } else if (removalIndexes.size === 0 && defaultReferrerIndexes.length === 1 && !idlHasCortexAccount) {
+    removalIndexes.add(defaultReferrerIndexes[0]!);
+  }
+
+  if (removalIndexes.size === 0) {
+    return normalizeAdrenaAccountMetas(ixName, idlAccounts, accounts, ix);
+  }
+
+  logger.debug('Removed null optional Adrena accounts from built instruction', {
+    ixName,
+    removedAccounts: Array.from(removalIndexes).map(index => idlAccounts[index]?.name ?? ix.keys[index]?.pubkey.toBase58() ?? `#${index}`),
+  });
+
+  const filteredIx = new TransactionInstruction({
+    programId: ix.programId,
+    keys: ix.keys.filter((_, index) => !removalIndexes.has(index)),
+    data: ix.data,
+  });
+
+  return normalizeAdrenaAccountMetas(ixName, idlAccounts, accounts, filteredIx);
+}
+
 /**
  * Create an Anchor Program instance from the vendored IDL.
  * @param connection — Solana RPC connection.
@@ -638,10 +843,13 @@ export async function buildInstruction(
 ): Promise<TransactionInstruction> {
   // Anchor v0.30 exposes methods via program.methods.
   // .instruction() is async and returns a Promise<TransactionInstruction>.
-  // For optional accounts (null values), Anchor handles them internally
-  // when passed as null in the accounts object.
+  // For optional accounts (null values), omit the key entirely so Anchor does
+  // not include a placeholder account in the instruction. Passing null or
+  // PublicKey.default for optional accounts without PDA seeds can make Anchor
+  // resolve or pass a real account where Adrena expects "not provided".
   const methods = program.methods as unknown as Record<string, (...args: unknown[]) => {
     accounts: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
+    accountsPartial?: (accs: Record<string, unknown>) => { instruction: () => Promise<TransactionInstruction> };
   }>;
 
   const ixBuilder = methods[ixName];
@@ -649,9 +857,39 @@ export async function buildInstruction(
     throw new Error(`Adrena instruction not found in IDL: ${ixName}`);
   }
 
+  // Strip null entries so Anchor omits optional accounts entirely.
+  const filteredAccounts: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(accounts)) {
+    if (value !== null) {
+      filteredAccounts[key] = value;
+    }
+  }
+
   const ixWithArgs = ixBuilder(...args);
-  const ixWithAccounts = ixWithArgs.accounts(accounts as Record<string, unknown>);
-  return await ixWithAccounts.instruction();
+  const bindAccounts = ixWithArgs.accountsPartial ?? ixWithArgs.accounts;
+
+  try {
+    const ixWithAccounts = bindAccounts.call(ixWithArgs, filteredAccounts);
+    const ix = await ixWithAccounts.instruction();
+    return sanitizeNullOptionalAdrenaAccounts(program, ixName, accounts, ix);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.toLowerCase().includes('not provided')) {
+      throw error;
+    }
+
+    logger.debug('Retrying Adrena instruction build with explicit optional account nulls', {
+      ixName,
+      omittedAccounts: Object.entries(accounts)
+        .filter(([, value]) => value === null)
+        .map(([key]) => key),
+      error: message,
+    });
+
+    const ixWithAccounts = ixWithArgs.accounts(accounts);
+    const ix = await ixWithAccounts.instruction();
+    return sanitizeNullOptionalAdrenaAccounts(program, ixName, accounts, ix);
+  }
 }
 
 /**
@@ -745,7 +983,12 @@ export function buildResult(
   balanceCheck?: BalanceCheck,
   warning?: string,
   poolMetadata?: PoolMetadata,
+  requestedLeverage?: number,
 ): UnsignedTransactionResult {
+  const encodedLeverageBps = requestedLeverage !== undefined
+    ? encodeAdrenaLeverage(requestedLeverage)
+    : undefined;
+
   return {
     transactionBase64,
     encoding: 'base64',
@@ -759,6 +1002,13 @@ export function buildResult(
     },
     ...(balanceCheck ? { balanceCheck } : {}),
     ...(poolMetadata ? { poolMetadata } : {}),
+    ...(requestedLeverage !== undefined && encodedLeverageBps !== undefined ? {
+      requestedLeverage: {
+        multiplier: requestedLeverage,
+        encodedBps: encodedLeverageBps,
+        scale: 'adrena_bps_1e4' as const,
+      },
+    } : {}),
     ...(warning ? { warning } : {}),
   };
 }

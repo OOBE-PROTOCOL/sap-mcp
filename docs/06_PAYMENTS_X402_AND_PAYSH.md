@@ -139,6 +139,7 @@ has a user-controlled wallet profile:
 | Tool | Purpose |
 | --- | --- |
 | `sap_payments_readiness` | Free local readiness check for hosted MCP, active profile, signer, SOL/USDC balance, and commerce policy limits. Call this first for paid/write workflows. |
+| `sap_payments_process_status` | Free local bridge process diagnostic. Shows the bridge PID, parent runtime, profile/runtime lock, and possible duplicate SAP MCP processes without killing anything. |
 | `sap_payments_call_paid_tool` | End-to-end paid hosted tool execution; preferred for agents. |
 | `sap_payments_call_external_x402` | End-to-end generic HTTP x402 execution for external providers discovered through SAP registry metadata. Use for non-SAP-hosted x402 agents. |
 | `sap_payments_register_agent` | Local non-custodial SAP agent registration for hosted users when `sap_register_agent` returns `hosted_local_signer_required`. |
@@ -148,6 +149,15 @@ has a user-controlled wallet profile:
 | `sap_payments_sign_challenge` | Sign a parsed challenge with the local SAP profile signer. |
 | `sap_payments_verify_receipt` | Decode a payment response/receipt header for inspection. |
 | `sap_x402_paid_call` | Backward-compatible alias for the high-level paid-call tool. |
+
+The local bridge is guarded by a profile/runtime process lock. Current configs
+set `SAP_MCP_RUNTIME_ID` for Codex, Hermes, Claude, and OpenClaw so a runtime
+restart cannot spawn a second bridge for the same SAP profile. If a client
+omits that env var, SAP MCP uses a stable `default-runtime` lock instead of a
+parent-PID lock, which prevents retry loops from creating one new bridge per
+startup attempt. Bridge-only processes also exit when their original parent
+runtime disappears, so stale orphan processes do not keep confusing later
+sessions.
 
 The public hosted server should not advertise the signing helpers in
 non-custodial mode because signing belongs on the user's machine.

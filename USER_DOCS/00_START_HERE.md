@@ -72,7 +72,10 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config re
 10. Use `sap_payments_finalize_transaction` when a paid hosted builder returns an unsigned transaction to preview, sign locally, and optionally submit already-signed bytes through the hosted OOBE relay.
 11. Use `sap_agent_runtime_status` when asking an agent whether SAP MCP is connected or ready for paid/write work. It returns the hosted/local bridge routing truth without reading local files.
 12. Use `sap_prepare_action` before swaps, registry writes, identity updates, Escrow V2, external x402 calls, premium streams, or transaction finalization. It returns fresh-data requirements, the correct hosted/local route, confirmation policy, retry rules, and proof-tape fields without charging x402.
-13. Use `sap_pricing_catalog` or `https://mcp.sap.oobeprotocol.ai/pricing.json` to inspect generated hosted pricing tiers. The x402 challenge returned by a paid tool remains the final payment source of truth.
+13. Use `sap_agent_standard_context` when an agent needs to understand SAP MCP's MCP/x402/pay.sh, A2A-style agent-card, OASF-style export, AP2-style mandate, local signing, and hosted-builder boundaries before making public claims or composing cross-agent workflows.
+14. Use `sap_prepare_mandate` before bounded agent-commerce work. It returns an unsigned planning artifact with spend caps, allowed tools/protocols, confirmation thresholds, expiry, and proof-tape fields. It is not a wallet signature and does not authorize payment by itself.
+15. Use `sap_export_agent_oasf` when a known owner wallet needs a machine-readable OASF-style profile export for directories or agent networks.
+16. Use `sap_pricing_catalog` or `https://mcp.sap.oobeprotocol.ai/pricing.json` to inspect generated hosted pricing tiers. The x402 challenge returned by a paid tool remains the final payment source of truth.
 
 Session memory is for operational context and audit: active profile name after
 readiness, public wallet keys, runtime namespace availability, x402 receipts,
@@ -95,6 +98,9 @@ server exposes these free maintenance tools:
 | `sap_agent_start` | Load the canonical startup playbook. |
 | `sap_agent_runtime_status` | Free runtime truth table for hosted connection, local `sap_payments` readiness expectations, write routing, forbidden actions, and next tool calls. |
 | `sap_prepare_action` | Free intent-level planner for paid calls, writes, swaps, escrow, external x402, premium streams, confirmation policy, retry rules, and proof-tape shape. |
+| `sap_agent_standard_context` | Free standards-aware routing map for MCP, x402/pay.sh, A2A-style metadata, OASF-style exports, AP2-style mandates, and public claim boundaries. |
+| `sap_prepare_mandate` | Free unsigned agent-commerce mandate draft with spend limits, allow-lists, expiry, confirmation policy, and proof-tape template. |
+| `sap_export_agent_oasf` | Free exact owner-wallet export of SAP agent identity, capabilities, protocols, pricing, x402 endpoint, and trust facts in an OASF-style shape. |
 | `sap_pricing_catalog` | Free machine-readable pricing catalog generated from the hosted pricing registry. Also available at `/pricing.json`. |
 | `sap_protocol_invariants` | Return the canonical SAP program id, protocol treasury, registration fee, hosted/local routing rules, and forbidden actions. |
 | `sap_agent_identity_plan` | Free planner for SAP registration, image/profile updates, Metaplex identity, SNS linking, and verification. |
@@ -204,11 +210,12 @@ Agents should follow these rules:
 
 1. Never read keypair bytes.
 2. Never print wallet secret material.
-3. Use `sap_profile_current` before operational work.
-4. Use preview/sign/submit flows for transactions.
-5. Ask for user approval when policy requires it.
-6. Treat hosted paid tools as x402/pay.sh-gated resources.
-7. Load SAP MCP skills before using advanced tools.
+3. Use `sap_payments_wallet_guard` and `sap_payments_readiness` before paid/write hosted work.
+4. Use `sap_profile_current` only for hosted server state; do not infer the local user wallet from it.
+5. Use preview/sign/submit flows for transactions.
+6. Ask for user approval when policy requires it.
+7. Treat hosted paid tools as x402/pay.sh-gated resources.
+8. Load SAP MCP skills before using advanced tools.
 
 ## 6. Core User Commands
 

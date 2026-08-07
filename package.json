@@ -1,6 +1,6 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.9.50",
+  "version": "0.9.67",
   "mcpName": "ai.oobeprotocol.sap.mcp/sap-mcp",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
@@ -60,6 +60,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "verify:release": "pnpm run typecheck && pnpm run lint && pnpm run test:run && pnpm run build && npm pack --dry-run --cache ./.npm-cache",
+    "version:bump": "node scripts/bump-version.mjs",
     "clean": "rm -rf dist"
   },
   "keywords": [
@@ -84,12 +85,11 @@
     "url": "https://github.com/OOBE-PROTOCOL/sap-mcp/issues"
   },
   "dependencies": {
-    "@bonfida/spl-name-service": "3.0.9",
     "@coral-xyz/anchor": "^0.30.1",
     "@langchain/core": "^0.3.80",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@oobe-protocol-labs/synapse-client-sdk": "^2.0.6",
-    "@oobe-protocol-labs/synapse-sap-sdk": "^1.0.2",
+    "@oobe-protocol-labs/synapse-sap-sdk": "^1.0.3",
     "@solana/kit": "^5.5.1",
     "@solana/spl-token": "0.3.8",
     "@solana/sysvars": "^5.5.1",
@@ -151,7 +151,7 @@
   "overrides": {
     "@hono/node-server": "2.0.10",
     "body-parser": "1.20.6",
-    "fast-uri": "3.1.4",
+    "fast-uri": "3.1.5",
     "hono": "4.12.27",
     "langsmith": "^0.6.0",
     "postcss": "8.5.18",

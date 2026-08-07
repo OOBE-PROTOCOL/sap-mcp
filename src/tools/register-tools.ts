@@ -12,7 +12,7 @@ import { registerTransactionTools } from './transaction-tools.js';
 import { registerProfileTools } from './profile-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerChatTools } from './chat-tools.js';
-import { registerX402PaidCallTool } from './x402-paid-call-tool.js';
+import { registerX402PaidCallTool, registerHostedPrepaidTools } from './x402-paid-call-tool.js';
 import { registerMagicBlockTools } from './magicblock-tools.js';
 import { registerMemoryTools } from './memory-tools.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
@@ -21,6 +21,9 @@ import { registerQuickContextTool } from './quick-context-tool.js';
 import { registerPremiumTools } from './premium-tools.js';
 import { registerPerpTools } from './perp-tools.js';
 import { registerAdrenaTools } from './adrena-tools.js';
+import { registerRiskCheckTool, registerPortfolioRiskTool } from '../perps/risk-engine.js';
+import { registerSignalScoreTool } from '../perps/signal-engine.js';
+import { registerFearGreedTool } from '../perps/market-intelligence.js';
 
 /**
  * Register all tools with the MCP server.
@@ -61,6 +64,11 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Hosted non-custodial servers must not advertise a remote signer helper.
   if (context.config.mode !== 'hosted-api' || context.config.walletPath) {
     registerX402PaidCallTool(server, context);
+  } else {
+    // Hosted server: register only the prepaid fund + balance tools so that
+    // the bridge can create prepaid sessions on the hosted server (where the
+    // PrepaidCreditStore lives and grantAccess is checked).
+    registerHostedPrepaidTools(server);
   }
 
   // Register profile tools with redacted signer metadata and live runtime reload.
@@ -87,6 +95,12 @@ export async function registerTools(server: Server, context: SapMcpContext): Pro
   // Register Adrena perps protocol tools: local builders + Data API.
   // 32 tools: trading, SL/TP, limit orders, commodities, liquidity, swap, staking, data API.
   registerAdrenaTools(server, context);
+
+  // Register perps risk engine + signal score + market intelligence (Sprint 1-3).
+  registerRiskCheckTool(server, context);
+  registerSignalScoreTool(server, context);
+  registerPortfolioRiskTool(server, context);
+  registerFearGreedTool(server, context);
 
   // Register bundled agent skill pack tools.
   registerSkillsTools(server, context);

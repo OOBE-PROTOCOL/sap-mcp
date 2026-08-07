@@ -66,6 +66,7 @@ For paid/write hosted tools, also configure the local `sap_payments` bridge. The
 - [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
 - [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
 - [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
+- [Agentic Standards Alignment](19_AGENTIC_STANDARDS_ALIGNMENT.md)
 
 ## What The Hosted Server Provides
 
@@ -93,10 +94,13 @@ Hosted paid tools use x402 and pay.sh:
 - value flows: fixed or percentage pricing only where it is operationally appropriate
 
 For agents that cannot replay x402 challenges natively, configure the local
-`sap_payments` MCP bridge and call `sap_payments_call_paid_tool`. If a hosted
-builder returns an unsigned transaction, finalize it with
-`sap_payments_finalize_transaction` so the local signer previews, signs, and
-optionally submits without exposing keypair bytes. The standalone helper remains
+`sap_payments` MCP bridge. Call `sap_payments_wallet_guard` and
+`sap_payments_readiness` first: they expose signer capability, profile status,
+balances, and policy without returning wallet paths or keypair bytes. Then call
+`sap_payments_call_paid_tool`. If a hosted builder returns an unsigned
+transaction, finalize it with `sap_payments_finalize_transaction` so the local
+signer previews, signs, and optionally submits without exposing keypair bytes.
+The standalone helper remains
 available as a terminal/custom-wrapper fallback:
 
 ```bash
@@ -120,6 +124,7 @@ Read these first:
 7. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
 8. [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
 9. [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
+10. [Agentic Standards Alignment](19_AGENTIC_STANDARDS_ALIGNMENT.md)
 
 ## Public Endpoints
 

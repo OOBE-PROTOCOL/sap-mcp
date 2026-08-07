@@ -2,6 +2,359 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.67 - 2026-08-06
+
+### Fixed
+
+- Resolved a bridge startup failure affecting macOS users with npm 10/11 where
+  `npx --package X -- Y` does not add the package's `.bin` directory to PATH,
+  causing `sh: sap-mcp-server: command not found` and preventing the local
+  `sap_payments` stdio bridge from connecting to agent runtimes (Hermes, Claude,
+  Codex, OpenClaw). The repair now detects whether the `sap-mcp-server` binary
+  is globally available and, when it is, writes MCP client configs that invoke
+  the global binary directly (`command: "sap-mcp-server"`) instead of relying
+  on `npx --package`. When the binary is not globally installed, the repair
+  installs the package globally as a fallback before writing configs. This
+  eliminates the npx PATH resolution bug without requiring users to manually
+  install or configure anything.
+
+### Changed
+
+- `resolveBridgeCommand()` in `mcp-client-injection.ts` now prefers the global
+  binary and falls back to `npx --package` for both Codex and `sap_payments`
+  bridge configs across all supported platforms (darwin, linux, win32).
+- The config validator accepts both forms: `npx` with a pinned package version
+  or the global `sap-mcp-server` binary.
+- Updated `mcp-client-injection.test.ts` to be agnostic to the bridge command
+  form (global binary vs npx) so tests pass in both environments.
+
+## 0.9.66 - 2026-08-05
+
+### Security
+
+- Enforced the configured SOL spending policy on every local-signer SDK write.
+  A new `PolicyEnforcingWallet` wraps the SAP client signer so all on-chain
+  writes (agent register/update/close, escrow V2, staking, swaps) are checked
+  against `maxTxValueSol` / `requireApprovalAboveSol` before signing, closing a
+  gap where only raw `sign_transaction` calls were previously gated.
+
+### Added
+
+- Prometheus metrics exporter, opt-in via `enableMetrics` (VPS deployments).
+  Exposes `/metrics` (tool call totals, duration histogram, in-flight gauge,
+  request totals, uptime) and is wired into the central `tools/call` handler.
+  Disabled by default so local user deployments stay opt-in only.
+- `sap_skills_check_updates` tool: compares the bundled skill version with the
+  latest published npm package and reports stale local agent skill directories.
+- `sap_skills_self_update` tool: refreshes local agent skill files from the
+  latest published package via `npm pack` + `tar` extraction (local mode only,
+  hosted MCP cannot write to the caller machine, requires `confirm: true`).
+
+### Fixed
+
+- Replaced blocking Redis `KEYS` with incremental `SCAN` across session store
+  admin paths to avoid stalling production Redis on large key spaces.
+- Corrected stale upstream skill reference (`v1.0.2` -> `v${MCP_SERVER_VERSION}`).
+- Resolved two unused-variable lint warnings in test files.
+
+### Changed
+
+- Added `scripts/bump-version.mjs` for single-source version bumps across
+  `package.json`, `server.json`, `constants.ts`, `logger.ts`, and `README.md`.
+
+## 0.9.65 - 2026-08-05
+
+### Fixed
+
+- Removed the direct dependency on the unavailable
+  `@bonfida/spl-name-service` npm package, which caused clean
+  `npm exec @oobe-protocol-labs/sap-mcp-server@0.9.64 -- sap-mcp-config repair`
+  installs to fail with npm 404.
+- Reworked SAP SNS read tools to derive SNS PDAs, ownership, availability, and
+  records through local Solana Name Service helpers backed by `@solana/web3.js`.
+- Disabled SNS registration and record-write builders with a fail-fast message
+  before payment or signing until a current installable SNS write SDK path is
+  migrated and covered by end-to-end tests.
+
+### Changed
+
+- Updated SNS skills and identity pipeline docs so agents do not promise hosted
+  SNS write builders while the write path is intentionally unavailable.
+- Bumped the SAP SDK dependency target to `@oobe-protocol-labs/synapse-sap-sdk`
+  `^1.0.3`, which must be published before the SAP MCP 0.9.65 package is
+  published.
+
+### Tests
+
+- Added release-readiness coverage preventing known unavailable public npm
+  packages from re-entering the package dependency surface.
+
+## 0.9.64 - 2026-08-01
+
+### Added
+
+- Added the free local `sap_payments_wallet_guard` tool. It exposes the active
+  SAP profile, signer public key, wallet storage class, permission hints,
+  allowed local signing capabilities, and forbidden agent actions without
+  returning wallet paths, keypair bytes, seed phrases, or private config.
+- Added a reusable signer wallet-guard module so local signing is presented to
+  agents as a capability surface, not filesystem keypair access.
+
+### Changed
+
+- `sap_payments_profile_current` now returns redacted wallet status and
+  `walletGuard` metadata instead of a raw local wallet path.
+- `sap_payments_readiness`, `sap_agent_runtime_status`,
+  `sap_agent_standard_context`, and mandate planners now route agents through
+  `sap_payments_wallet_guard` before paid/write flows.
+- Reworded local signer logs from scary hot-key warnings to capability-only
+  local signer status while preserving the non-custodial security boundary.
+- Updated docs and skills so agents use `sap_payments` tools for local signing,
+  never inspect keypair files, and never create temporary signing scripts.
+- Hardened the local `sap_payments` bridge singleton guard. Runtime configs
+  still use `SAP_MCP_RUNTIME_ID`, but stale configs now fall back to a stable
+  `default-runtime` lock instead of `parent-<pid>`, which prevents retry loops
+  from spawning duplicate bridge processes.
+- Bridge-only processes now treat live locks with dead parent runtimes as stale
+  and exit automatically when their own parent runtime disappears, reducing
+  orphaned/zombie Node processes after Hermes, Codex, Claude, or OpenClaw
+  restarts.
+
+### Tests
+
+- Added coverage proving local payment profile/guard outputs do not leak local
+  keypair paths or filenames.
+- Added pricing coverage proving `sap_payments_wallet_guard` is always free.
+- Added process-lock coverage for stable runtime fallback, duplicate bridge
+  blocking, and stale parent-runtime replacement.
+
+## 0.9.63 - 2026-07-30
+
+### Added
+
+- Added a runtime-scoped `sap_payments` process lock keyed by active SAP
+  profile and agent runtime id. This prevents duplicate local payment bridges
+  inside the same runtime/profile while still allowing Codex, Hermes, Claude,
+  and OpenClaw to run their own bridges safely.
+- Added the free `sap_payments_process_status` diagnostic tool. Agents can now
+  inspect local bridge PID, runtime/profile scope, stale locks, and possible
+  duplicate SAP MCP processes before retrying stuck x402/write flows.
+
+### Fixed
+
+- Hardened stdio shutdown handling for local payment bridges. The bridge now
+  releases local caches and runtime locks on stdin close/end, process
+  disconnect, SIGINT, SIGTERM, uncaught exceptions, and unhandled rejections.
+- Updated runtime repair output, desktop wizard next steps, and x402 skills so
+  agents diagnose bridge process issues instead of killing node/npx processes
+  mid-session.
+
+## 0.9.62 - 2026-07-30
+
+### Fixed
+
+- Fixed the remaining Adrena open-position account-meta blocker. Live Anchor
+  instructions can leave a trailing optional-referrer placeholder, so the
+  filtered account list no longer aligns 1:1 with the vendored IDL. For
+  `open_or_increase_position_long` and `open_or_increase_position_short`,
+  SAP MCP now treats any remaining `Dhz8Ta79...` key as the Adrena `cortex`
+  PDA and marks it writable, matching the on-chain CPI requirement instead of
+  trusting the stale readonly IDL flag. Local simulation now passes the
+  `PrivilegeEscalation` stage and reaches real Adrena validation errors such
+  as `InsufficientCollateral`.
+
+### Tests
+
+- Updated Adrena builder regressions for the concrete account-list shape seen
+  in hosted simulations: duplicate default-referrer removal plus writable
+  `cortex` preservation when the same public key has both roles.
+
+## 0.9.61 - 2026-07-30
+
+### Fixed
+
+- Normalized Adrena unsigned-builder account metas against the vendored IDL
+  after optional referrer cleanup. This keeps `cortex` readonly for
+  `open_or_increase_position_short` while still removing duplicated null
+  `referrerProfile` metas, preventing the `Dhz8Ta79... writable privilege
+  escalated` failure that remained after v0.9.60.
+
+### Tests
+
+- Added regression coverage for the exact live case where `Dhz8Ta79...` is the
+  only remaining default-referrer pubkey and must be treated as Adrena `cortex`
+  with `isWritable: false`.
+
+## 0.9.60 - 2026-07-30
+
+### Fixed
+
+- Fixed Adrena open-position account sanitization for the `cortex` PDA. Adrena
+  uses the same public key for the `cortex` PDA and its default referrer
+  profile, so removing every matching default-referrer pubkey corrupted the
+  instruction account order and surfaced Anchor `AccountDiscriminatorMismatch`
+  on `cortex`. SAP MCP now keeps the first occurrence as `cortex` and removes
+  only the duplicated optional referrer meta when agents request
+  `referrerProfile: null`.
+
+### Tests
+
+- Added regression coverage proving Adrena builders preserve the `cortex`
+  account while removing only the duplicated default-referrer optional account.
+
+## 0.9.59 - 2026-07-29
+
+### Fixed
+
+- Hardened Adrena open-position builders against Anchor-materialized default
+  referrer profile metas. When agents request no referrer
+  (`referrerProfile: null`), SAP MCP now removes both the optional IDL
+  `referrer_profile` meta and the observed Adrena default referrer profile
+  account before simulation or serialization, preventing the BONK open-short
+  `PrivilegeEscalation` failure class.
+- Made the local `sap_payments_call_paid_tool` bridge tolerant of free hosted
+  tools. If the hosted SAP MCP returns `200 OK` before issuing an x402
+  challenge, the bridge now returns the tool response with
+  `paymentCharged:false` and `freeToolBypass:true` instead of failing with
+  `Invalid payment required response`.
+
+### Tests
+
+- Added regression coverage for Adrena default referrer profile removal when
+  optional `user_profile` and `referrer_profile` accounts are materialized in
+  open-position instructions.
+
+## 0.9.58 - 2026-07-29
+
+### Fixed
+
+- Hardened Adrena open-position builders by removing any materialized null
+  `referrerProfile` optional account from the final instruction before
+  simulation or serialization. This applies the same no-referrer behavior to
+  open long/short flows that already made close-position flows safe.
+- Added a Codex repair regression test proving stale SAP `mcp-remote` blocks
+  and stale `sap_payments` allow-lists are replaced without touching
+  third-party MCP servers.
+
+### Tests
+
+- Added targeted coverage for Adrena optional referrer account sanitization and
+  Codex namespace repair safety.
+
+## 0.9.57 - 2026-07-29
+
+### Fixed
+
+- Made hosted prepaid sessions reliable across MCP runtimes by resolving payment and prepaid headers case-insensitively, including `X-SAP-Prepaid-Session` and x402 payment aliases.
+- Restored Adrena simulation compatibility when optional accounts such as `referrerProfile` are omitted by retrying with explicit null optional accounts only when the IDL builder requires them.
+- Centralized Adrena leverage encoding with explicit `adrena_bps_1e4` audit metadata so agents can distinguish requested leverage from protocol-side effective leverage.
+- Updated `sap_perp_signal_score` funding reads to use the shared Adrena custody decoder instead of stale binary offsets.
+- Prevented tiny-token ATR values from rounding to zero by using significant-digit rounding in signal scoring.
+
+### Tests
+
+- Added coverage for case-insensitive prepaid session headers, prepaid gate bypass behavior, Adrena leverage encoding, and optional-account instruction building.
+- Verified with typecheck, lint, build, targeted regression tests, and the full Vitest suite.
+
+## 0.9.56 - 2026-07-29
+
+### Fixed
+
+- Corrected hosted prepaid funding monetization: `sap_payments_fund_prepaid` is now exact-priced from `amountUsd`, so the x402 settlement amount matches the hosted prepaid credit granted to the session.
+- Kept `sap_payments_start_prepaid` and `sap_payments_prepaid_balance` free on the local bridge, while exposing only the hosted prepaid fund/balance tools on accountless hosted servers.
+- Made prepaid session parsing robust for MCP text-content responses, structured content, and direct JSON results.
+- Restored Adrena optional account handling so nullable accounts are omitted instead of being sent as `PublicKey.default`.
+- Removed unsupported numeric performance claims from prepaid guidance; prompts now describe the real x402 lifecycle-hook benefit: fewer repeated challenge round-trips with hosted ledger accounting preserved.
+
+### Tests
+
+- Added coverage for exact prepaid funding prices and hosted/local prepaid tool exposure.
+- Verified with typecheck, lint, build, targeted prepaid/server tests, and the full Vitest suite.
+
+## 0.9.55 - 2026-07-28
+
+### Added - Sprint 1-3: Risk Engine, Signal Score, Advanced Builders, Market Intelligence
+
+- **6 new perps tools** for professional autonomous trading:
+  - `sap_perp_risk_check` - Pre-trade dynamic risk gate. Reads the trade journal to compute daily P&L, drawdown, cooldown status. Returns risk score (0-1) with PROCEED/WAIT/BLOCK recommendation.
+  - `sap_perp_signal_score` - Aggregate technical signal score (0-1) from RSI, EMA, MACD, Bollinger Bands, price action, and on-chain funding rate. Returns LONG/SHORT/WAIT with confidence. Replaces 5-7 individual indicator calls with 1.
+  - `sap_adrena_build_trailing_stop` - Trailing stop loss builder. Reads the current oracle price and computes the stop at a specified percentage distance. For longs: SL below price. For shorts: SL above price.
+  - `sap_adrena_build_modify_position` - Add collateral to an existing position via openOrIncreasePosition. Optionally change leverage to adjust position risk.
+  - `sap_perp_fear_greed` - Crypto Fear & Greed Index from alternative.me (free, no API key). Returns current value (0-100), classification, historical values, and risk_on/risk_off recommendation.
+  - `sap_perp_portfolio_risk` - Aggregate portfolio risk score from open positions. Returns total exposure, weighted leverage, diversification score, and SAFE/MODERATE/HIGH/CRITICAL recommendation.
+
+- Extended `TradingPolicy` interface with `dailyLossLimitUsd`, `maxDrawdownPct`, `cooldownMinutes` (all optional, typed defaults: $10, 30%, 15 min).
+- Extended `SapMcpConfig` with the same three optional fields for profile-level configuration.
+
+### Changed
+
+- Professional Perps Flow updated to include `sap_perp_signal_score` (step 6) and `sap_perp_risk_check` (step 7) before `sap_perp_trade_plan`.
+- `sap-agent-context.prompt.ts` updated with Risk and signal table row, trailing_stop and modify_position in Adrena perps trading table, and Risk gate + Signal score steps in the Adrena Perps Trading Flow.
+- All skills, TOOL_REFERENCE, and prompts updated to version 0.9.55.
+- All npm package references in USER_DOCS and docs updated to 0.9.55.
+
+### Documentation
+
+- Removed informal language ("no mocks", "no placeholders", "real indicator math", "bypasses the broken endpoint") from tool descriptions and module comments.
+- `sap-defi/SKILL.md` updated with Advanced Builders, Risk Engine, Signal Engine, and Market Intelligence sections.
+- `TOOL_REFERENCE.md` updated with all 6 new tools, tool count 38.
+
+## 0.9.54 - 2026-07-28
+
+### Fixed
+
+- **Adrena close builder error 3007** - `buildInstruction` was passing `null` for optional accounts (referrerProfile) to Anchor. Anchor v0.30 resolves `null` for optional accounts without PDA seeds to a wrong address, causing on-chain error 3007 (account owned by different program). Fix: strip `null` entries from the accounts object before passing to Anchor, so optional accounts are omitted entirely from the instruction. This affected `closePositionShort`, `closePositionLong`, and all builders that pass `referrerProfile = null`.
+
+## 0.9.52 - 2026-07-28
+
+### Added - ClawPump Runtime Partnership
+
+- **ClawPump Agent** is now a natively supported runtime in SAP MCP, alongside Hermes, Codex, Claude, and OpenClaw.
+  - `McpClientId` type extended with `'clawpump'`.
+  - `AgentTarget` type extended with `'clawpump'`.
+  - Skill directory `~/.clawpump/skills/` added to `getDefaultTargetDir` and `getAgentTargetDirs`.
+  - Wizard `runtimeIds` array includes `'clawpump'`.
+  - Config target `~/.clawpump/config.yaml` (YAML, same format as Hermes) added to `getKnownClientTargets`.
+  - Manual snippets for hosted SAP MCP + local payment bridge added to `createManualMcpJsonSnippets`.
+- **sap-clawpump-bridge** bundled skill with dual-payment model documentation (x402 Classic vs Escrow V2 vs Subscription) and decision matrix.
+- Integration files for external PR to Clawpump/claw-agent:
+  - `integration/clawpump/optional-mcps/sap-mcp/manifest.yaml` - MCP catalog entry.
+  - `integration/clawpump/scripts/sap-mcp-setup.sh` - Setup wizard helper.
+
+### Fixed
+
+- **PolicyViolation: stop_loss_required** - `stopLossRequired` default changed from `true` to `false` in `policy-engine.ts`. The previous default blocked all Adrena trades because `open_long` and `open_short` passed `hasStopLoss = false` hardcoded. Now `hasStopLoss` is computed dynamically from `stopLossPriceUsd !== null`, and `stopLossPriceUsd` is an optional field in both builder schemas.
+- **Adrena Data API error logging** - `fetchJson` in `adrena-data-api.ts` now logs HTTP status and response body when the API fails, instead of silently returning `null`. Agents can diagnose API failures via `pm2 logs`.
+- **sap_perp_trade_plan entryPrice** - Tool description and schema field description now explicitly state that `entryPrice` is required and should be fetched from `sap_adrena_get_trading_prices` or `sap_adrena_get_prices` first.
+
+## 0.9.50 - 2026-07-27
+
+### Added
+
+- **Policy engine** with 3 guard rails: `collateral_exceeded`, `leverage_exceeded`, `market_not_allowed`. Enforced at the builder level before constructing Adrena transactions.
+- **Mandatory pre-submit simulation** in `submitSignedTransactionWithLifecycle`. Simulates the signed transaction before submitting. If simulation fails, returns logs without submitting.
+- **Priority fee** support via `SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS` env var. Prepended to Adrena perps transactions.
+- **Market snapshot** with 30s TTL cache. Reduces polling costs 20x for repeated market data reads.
+- **Multi-chart** OHLC batch tool `sap_chart_multi_ohlc` - fetch OHLC for multiple resolutions in a single DexScreener call.
+- **Technical indicators** tool `sap_chart_indicators` - RSI, EMA-20, EMA-50, MACD, Bollinger Bands, ATR from DexScreener price data.
+- **Strategy execute** tool `sap_strategy_execute` - load a saved strategy and build a ready-to-sign transaction.
+- **Trade journal** - `sap_trade_journal` (append) and `sap_trade_journal_query` (query) for automatic trade tracking.
+
+### Fixed
+
+- **Adrena builder improvements**: pre-flight balance check on all builders, real on-chain mint addresses replacing placeholder values, leverage pre-validation against custody maxInitialLeverage.
+- **Blockhash refresh** before signing in `finalizeTransactionWithLocalSigner` and sign tools.
+- **Jupiter Ultra API** default to `lite-api.jup.ag` for Ultra API endpoints.
+- **SPL transfer** correct ATA seed derivation (removed incorrect 'AssociatedTokenAddress' prefix).
+- **On-chain pool info** reads directly from the Pool account instead of the broken Data API endpoint.
+- **Transaction retry** for heavy Adrena transactions (17+ accounts) that expire on public RPC.
+- **Simulation logs** returned in builder responses for debugging.
+- **Commodity builders** fixed (XAU, XAG, WTI now work with USDC collateral).
+- **Batch position builder** `sap_adrena_build_position_package` - open + set SL + set TP atomically in 1 transaction.
+- **Intent-level trading API** `sap_adrena_trade_intent` - resolves mint, decimals, max leverage, collateral token automatically. Reduces 5 tool calls to 1.
+- **Prepaid session** payment via x402 Lifecycle Hooks `grantAccess`. 6x faster, 6x cheaper than per-call payment.
+- **Dry-run simulation** `sap_adrena_simulate_position` - test leverage/collateral combinations without paying.
+
 ## 0.9.38 - 2026-07-27
 
 ### Added — Native Adrena Perps Builder + Data API

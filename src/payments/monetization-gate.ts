@@ -22,7 +22,7 @@ import type {
 import { registerExactSvmScheme } from '@x402/svm/exact/server';
 import type { SapMcpConfig, SapMcpMonetizationConfig } from '../config/env.js';
 import { logger } from '../core/logger.js';
-import { NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
+import { getHttpHeader, NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
 import { evaluateHostedToolEligibility } from './hosted-tool-eligibility.js';
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
@@ -367,7 +367,7 @@ export class McpMonetizationGate {
     // MCP SDK uniquely sends Accept: application/json, text/event-stream.
     // x402scan sends Accept: */* or Accept: application/json (without text/event-stream).
     // Only text/event-stream is a reliable MCP SDK marker.
-    const acceptHeader = request.headers['accept'] || '';
+    const acceptHeader = getHttpHeader(request.headers, 'accept') || '';
     const isMcpSdkClient = acceptHeader.includes('text/event-stream');
 
     if (!decision.required) {
@@ -390,8 +390,8 @@ export class McpMonetizationGate {
     // session ID that has sufficient balance, grant access without a 402
     // challenge. This is the standard x402 onProtectedRequest → grantAccess
     // pattern documented in the Lifecycle Hooks docs.
-    const prepaidSessionId = request.headers['x-sap-prepaid-session'] as string | undefined;
-    if (prepaidSessionId && typeof prepaidSessionId === 'string') {
+    const prepaidSessionId = getHttpHeader(request.headers, 'x-sap-prepaid-session');
+    if (prepaidSessionId) {
       const prepaidResult = this.prepaidStore.checkAndDeduct(prepaidSessionId, requiredDecision.priceUsd);
       if (prepaidResult.hasCredit) {
         logger.info('Prepaid session granted access', {
@@ -413,9 +413,7 @@ export class McpMonetizationGate {
     // Standard x402 scanners and non-MCP HTTP clients must see a normal HTTP
     // 402 challenge before MCP transport/session validation runs. MCP SDK
     // clients are the only callers that need the JSON-RPC compatible 200 error.
-    const paymentHeader =
-      (request.headers['payment-signature'] as string | undefined) ??
-      (request.headers['x-payment'] as string | undefined);
+    const paymentHeader = getHttpHeader(request.headers, 'payment-signature');
 
     if (!paymentHeader && !isMcpSdkClient) {
       await this.usageLedger.recordDecision(metadata, decision);
@@ -1400,16 +1398,14 @@ function buildRequestMetadata(
   requestHash: string,
   virtualPath: string,
 ): PaymentRequestMetadata {
-  const paymentHeader = request.headers['payment-signature'] ?? request.headers['x-payment'];
+  const paymentHeader = getHttpHeader(request.headers, 'payment-signature');
   return {
     requestHash,
     method: request.method ?? 'POST',
     path: virtualPath,
-    paymentHeaderPresent: typeof paymentHeader === 'string' || Array.isArray(paymentHeader),
+    paymentHeaderPresent: typeof paymentHeader === 'string',
     remoteAddress: request.socket.remoteAddress,
-    userAgent: Array.isArray(request.headers['user-agent'])
-      ? request.headers['user-agent'][0]
-      : request.headers['user-agent'],
+    userAgent: getHttpHeader(request.headers, 'user-agent'),
   };
 }
 

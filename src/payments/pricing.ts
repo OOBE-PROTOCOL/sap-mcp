@@ -22,6 +22,7 @@ export interface ToolPricing {
   tier: PaymentTier;
   priceUsd: number;
   reason: string;
+  exactPrice?: boolean;
 }
 
 /**
@@ -92,6 +93,9 @@ const FREE_TOOLS = new Set([
   'sap_agent_runtime_status',
   'sap_agent_next_action',
   'sap_prepare_action',
+  'sap_agent_standard_context',
+  'sap_prepare_mandate',
+  'sap_export_agent_oasf',
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
@@ -108,6 +112,7 @@ const FREE_TOOLS = new Set([
   'sap_x402_estimate_cost',
   'sap_x402_calculate_cost',
   'sap_payments_profile_current',
+  'sap_payments_wallet_guard',
   'sap_payments_readiness',
   'sap_payments_prepare_challenge',
   'sap_payments_sign_challenge',
@@ -161,6 +166,16 @@ const FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+  // Sprint 1-3 tools — free because they read local data or free external APIs.
+  'sap_perp_risk_check',
+  'sap_perp_portfolio_risk',
+  'sap_perp_fear_greed',
+  'sap_adrena_simulate_position',
+  'sap_strategy_execute',
+  'sap_trade_journal',
+  'sap_trade_journal_query',
+  'sap_payments_start_prepaid',
+  'sap_payments_prepaid_balance',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -169,6 +184,9 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_agent_runtime_status',
   'sap_agent_next_action',
   'sap_prepare_action',
+  'sap_agent_standard_context',
+  'sap_prepare_mandate',
+  'sap_export_agent_oasf',
   'sap_pricing_catalog',
   'sap_protocol_invariants',
   'sap_agent_identity_plan',
@@ -185,6 +203,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_x402_estimate_cost',
   'sap_x402_calculate_cost',
   'sap_payments_profile_current',
+  'sap_payments_wallet_guard',
   'sap_payments_readiness',
   'sap_payments_prepare_challenge',
   'sap_payments_sign_challenge',
@@ -237,6 +256,16 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_audit_stats',
   'sap_hermes_search',
   'sap_hermes_recent',
+  // Sprint 1-3 tools — free in strict mode too.
+  'sap_perp_risk_check',
+  'sap_perp_portfolio_risk',
+  'sap_perp_fear_greed',
+  'sap_adrena_simulate_position',
+  'sap_strategy_execute',
+  'sap_trade_journal',
+  'sap_trade_journal_query',
+  'sap_payments_start_prepaid',
+  'sap_payments_prepaid_balance',
 ]);
 
 const MICRO_READ_TOOLS = new Set([
@@ -275,6 +304,12 @@ const MICRO_READ_TOOLS = new Set([
   'sap_adrena_get_prices',
   'sap_adrena_get_trading_prices',
   'sap_adrena_get_position_status',
+  // Sprint 1-3 tools — micro-read because they aggregate data in 1 call.
+  'sap_perp_signal_score',
+  'sap_adrena_get_markets',
+  'sap_market_snapshot',
+  'sap_chart_indicators',
+  'sap_chart_multi_ohlc',
 ]);
 
 const READ_PREMIUM_TOOLS = new Set([
@@ -361,6 +396,11 @@ const BUILDER_TOOLS = new Set([
   'sap_adrena_build_remove_liquid_stake',
   'sap_adrena_build_add_locked_stake',
   'sap_adrena_build_claim_stakes',
+  // Sprint 1-3 tools — builders that construct unsigned transactions.
+  'sap_adrena_build_position_package',
+  'sap_adrena_build_trailing_stop',
+  'sap_adrena_build_modify_position',
+  'sap_adrena_trade_intent',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([
@@ -494,8 +534,15 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'value-action': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.valueFixedUsd, config),
-        pricingRule: `Standard value-action calls are fixed at ${formatUsdPrice(config.prices.valueFixedUsd)}. Heavy execution paths are fixed at ${formatUsdPrice(config.prices.heavyValueUsd)}. Optional notional bps is ${config.prices.valueBps}, then clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}.`,
-        examples: ['jupiter_getOrder', 'jupiter_swap', 'magicblock_swap', 'sap_create_escrow_v2', 'sap_submit_signed_transaction'],
+        pricingRule: `Standard value-action calls are fixed at ${formatUsdPrice(config.prices.valueFixedUsd)}. Heavy execution paths are fixed at ${formatUsdPrice(config.prices.heavyValueUsd)}. Optional notional bps is ${config.prices.valueBps}, then clamped between ${formatUsdPrice(config.prices.minUsd)} and ${formatUsdPrice(config.prices.maxUsd)}. sap_payments_fund_prepaid is exact-priced: the x402 charge equals amountUsd because it becomes hosted prepaid credit.`,
+        examples: [
+          'jupiter_getOrder',
+          'jupiter_swap',
+          'magicblock_swap',
+          'sap_create_escrow_v2',
+          'sap_submit_signed_transaction',
+          'sap_payments_fund_prepaid amountUsd=0.25',
+        ],
       },
       batch: {
         paymentRequired: true,
@@ -565,10 +612,13 @@ export function resolvePaymentDecision(
     };
   }
 
-  const priceUsd = clampPrice(
-    paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0),
-    config,
-  );
+  const exactPrice = paidPricings.some(pricing => pricing.exactPrice);
+  const priceUsd = exactPrice
+    ? paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0)
+    : clampPrice(
+      paidPricings.reduce((sum, pricing) => sum + pricing.priceUsd, 0),
+      config,
+    );
 
   return {
     required: true,
@@ -596,6 +646,10 @@ export function priceToolCall(
   toolCall: McpToolCall,
   config: SapMcpMonetizationConfig,
 ): ToolPricing {
+  if (toolCall.toolName === 'sap_payments_fund_prepaid') {
+    return pricePrepaidFundingToolCall(toolCall, config);
+  }
+
   if (isConditionalMicroReadToolCall(toolCall)) {
     return {
       toolName: toolCall.toolName,
@@ -655,6 +709,32 @@ export function priceToolCall(
       isHeavyValueActionTool(toolCall.toolName) ? 'heavy value-changing action fixed fee' : 'value-changing action fixed fee',
       variableUsd > 0 ? 'plus configured basis-points fee' : undefined,
     ].filter(Boolean).join(' '),
+  };
+}
+
+function pricePrepaidFundingToolCall(
+  toolCall: McpToolCall,
+  config: SapMcpMonetizationConfig,
+): ToolPricing {
+  const amountUsd = isRecord(toolCall.arguments)
+    ? readOptionalNumber(toolCall.arguments['amountUsd'])
+    : undefined;
+  if (amountUsd === undefined || amountUsd <= 0) {
+    return {
+      toolName: toolCall.toolName,
+      tier: 'value-action',
+      priceUsd: Math.max(config.prices.minUsd, 0),
+      reason: 'prepaid funding deposit missing amountUsd; minimum x402 guard price applies',
+      exactPrice: true,
+    };
+  }
+
+  return {
+    toolName: toolCall.toolName,
+    tier: 'value-action',
+    priceUsd: Math.max(amountUsd, config.prices.minUsd),
+    reason: 'exact prepaid funding deposit; x402 charge equals credited session balance',
+    exactPrice: true,
   };
 }
 

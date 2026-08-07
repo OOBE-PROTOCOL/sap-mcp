@@ -8,6 +8,7 @@ import type { PaymentRequired } from '@x402/core/types';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
+import { logger } from '../core/logger.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { setValidationServer, validateToolArguments } from '../payments/schema-validation.js';
 import {
@@ -31,6 +32,8 @@ import {
   parseUpdateAgentArgs,
 } from './sap-sdk-tools.js';
 import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '../core/constants.js';
+import { getPaymentBridgeProcessStatus } from '../runtime/payment-bridge-process.js';
+import { buildWalletGuardSummary } from '../signer/wallet-guard.js';
 
 interface X402PaidCallToolInput {
   endpoint?: string;
@@ -219,6 +222,19 @@ function networkFromRpcUrl(value: string | undefined): string | undefined {
 }
 
 /**
+ * @name registerHostedPrepaidTools
+ * @description Registers only the prepaid fund + balance tools on the hosted server.
+ * The hosted server owns the PrepaidCreditStore that grantAccess checks against.
+ * The bridge calls sap_payments_fund_prepaid via x402 to create a session here,
+ * then passes the sessionId back as X-SAP-Prepaid-Session header for grantAccess.
+ */
+export function registerHostedPrepaidTools(server: Server): void {
+  registerPaymentsFundPrepaidTool(server);
+  registerPaymentsPrepaidBalanceTool(server);
+  logger.info('Hosted prepaid tools registered (fund + balance)');
+}
+
+/**
  * @name registerX402PaidCallTool
  * @description Registers local hosted-payment tools for agents that need to resolve x402-gated SAP MCP calls.
  */
@@ -228,7 +244,9 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   // registration store and validate arguments before paying x402.
   setValidationServer(server);
   registerPaymentsProfileCurrentTool(server, _context);
+  registerPaymentsWalletGuardTool(server, _context);
   registerPaymentsReadinessTool(server);
+  registerPaymentsProcessStatusTool(server);
   registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
   registerPaymentsCallExternalX402Tool(server);
   registerPaymentsRegisterAgentTool(server, _context);
@@ -239,7 +257,6 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   registerPaymentsVerifyReceiptTool(server);
   registerPaymentsPrepaidBalanceTool(server);
   registerPaymentsStartPrepaidTool(server, _context);
-  registerPaymentsFundPrepaidTool(server);
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
   registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
@@ -906,14 +923,15 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
           network: { type: 'string', description: 'Derived Solana network for the local profile RPC.' },
           rpcUrl: { type: 'string', description: 'Redacted RPC URL used by the local profile.' },
           programId: { type: 'string', description: 'SAP program id configured by the local profile.' },
-          walletPath: { type: 'string', description: 'Configured local wallet path. File contents are never returned.' },
           walletPathConfigured: { type: 'boolean', description: 'Whether a wallet path is configured.' },
+          wallet: { type: 'object', description: 'Redacted wallet file status. The path is never returned.' },
+          walletGuard: { type: 'object', description: 'Capability-only local signer guardrails and recommended safe flow.' },
           signerConfigured: { type: 'boolean', description: 'Whether the local bridge resolved a signer.' },
           signerPublicKey: { type: 'string', description: 'Public key of the local signer when available.' },
           secretMaterial: { type: 'string', description: 'Secret handling guarantee.' },
           recommendedPaidTool: { type: 'string', description: 'Tool agents should call for hosted paid/write calls.' },
         },
-        required: ['serverRole', 'activeProfile', 'configPath', 'mode', 'walletPathConfigured', 'signerConfigured', 'secretMaterial', 'recommendedPaidTool'],
+        required: ['serverRole', 'activeProfile', 'configPath', 'mode', 'walletPathConfigured', 'wallet', 'walletGuard', 'signerConfigured', 'secretMaterial', 'recommendedPaidTool'],
       },
       annotations: {
         readOnlyHint: true,
@@ -930,7 +948,7 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
       const currentProfile = getActiveProfile();
       const currentConfigPath = getProfileConfigPath(currentProfile);
       let currentSignerPubkey: string | undefined = context.signer?.publicKey.toBase58();
-      let currentWalletPath: string | undefined = context.config.walletPath;
+      let currentConfig = context.config;
 
       // Always try to re-resolve the signer from the active profile to avoid
       // stale cache. If .active-profile was switched manually after startup,
@@ -940,28 +958,33 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
         const { resolveSigner } = await import('../signer/signer-resolver.js');
         const profileConfig = loadProfileConfig(currentProfile);
         if (profileConfig) {
-          const signerResult = await resolveSigner({ ...context.config, ...profileConfig });
+          currentConfig = { ...context.config, ...profileConfig };
+          const signerResult = await resolveSigner(currentConfig);
           if (signerResult.signer) {
             currentSignerPubkey = signerResult.signer.publicKey.toBase58();
           }
-          currentWalletPath = profileConfig.walletPath;
         }
       } catch {
         // If we can't resolve the signer for the current profile, fall back
         // to the cached signer — better than crashing.
       }
+      const walletGuard = buildWalletGuardSummary(currentConfig, {
+        activeProfile: currentProfile,
+        signerPublicKey: currentSignerPubkey,
+      });
 
       return createTextResponse(JSON.stringify({
         serverRole: 'local-sap-payments-bridge',
         activeProfile: currentProfile,
         configPath: currentConfigPath,
-        mode: context.config.mode,
-        network: networkFromRpcUrl(context.config.rpcUrl),
-        rpcUrl: redactUrl(context.config.rpcUrl),
-        programId: context.config.programId,
-        agentPubkey: context.config.agentPubkey,
-        walletPath: currentWalletPath,
-        walletPathConfigured: Boolean(currentWalletPath),
+        mode: currentConfig.mode,
+        network: networkFromRpcUrl(currentConfig.rpcUrl),
+        rpcUrl: redactUrl(currentConfig.rpcUrl),
+        programId: currentConfig.programId,
+        agentPubkey: currentConfig.agentPubkey,
+        walletPathConfigured: walletGuard.wallet.configured,
+        wallet: walletGuard.wallet,
+        walletGuard,
         signerConfigured: Boolean(currentSignerPubkey),
         signerPublicKey: currentSignerPubkey,
         localProfileVisibility: 'visible-to-local-sap-payments-bridge',
@@ -970,6 +993,75 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
         recommendedPaidTool: 'sap_payments_call_paid_tool',
         recommendedReadinessTool: 'sap_payments_readiness',
         agentInstruction: 'For wallet/profile questions, trust this local sap_payments profile result over the remote hosted sap_profile_current result. For paid/write workflows call sap_payments_readiness first. The hosted SAP MCP server is intentionally accountless. If you need to sign with a specific profile, use signerProfile param on sap_payments_finalize_transaction instead of switching .active-profile.',
+      }, null, 2));
+    },
+  );
+}
+
+function registerPaymentsWalletGuardTool(server: Server, context: SapMcpContext): void {
+  registerTool(
+    server,
+    'sap_payments_wallet_guard',
+    {
+      title: 'Show Local Wallet Guardrails',
+      description: 'Free local signer safety guard for agents. Returns the active SAP profile, signer public key, redacted wallet storage status, allowed sap_payments capabilities, and forbidden actions. Never returns wallet paths, keypair bytes, seed phrases, or private material.',
+      inputSchema: {
+        profileName: {
+          type: 'string',
+          description: 'Optional SAP MCP profile name to inspect. Defaults to the active local profile.',
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          serverRole: { type: 'string', description: 'Role of this local MCP server.' },
+          activeProfile: { type: 'string', description: 'Inspected local SAP MCP profile name.' },
+          signerConfigured: { type: 'boolean', description: 'Whether the profile resolves to a local signer capability.' },
+          signerPublicKey: { type: 'string', description: 'Signer public key when available.' },
+          walletGuard: { type: 'object', description: 'Redacted capability-only wallet guard result.' },
+          agentInstruction: { type: 'string', description: 'Short instruction agents should follow before paid/write workflows.' },
+        },
+        required: ['serverRole', 'activeProfile', 'signerConfigured', 'walletGuard', 'agentInstruction'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => {
+      const record = input && typeof input === 'object' && !Array.isArray(input)
+        ? input as Record<string, unknown>
+        : {};
+      const profileName = typeof record.profileName === 'string' ? record.profileName : getActiveProfile();
+      let currentConfig = context.config;
+      let signerPublicKey: string | undefined = context.signer?.publicKey.toBase58();
+
+      try {
+        const { loadProfileConfig } = await import('../config/profiles.js');
+        const { resolveSigner } = await import('../signer/signer-resolver.js');
+        const profileConfig = loadProfileConfig(profileName);
+        if (profileConfig) {
+          currentConfig = { ...context.config, ...profileConfig };
+          const signerResult = await resolveSigner(currentConfig);
+          signerPublicKey = signerResult.signer?.publicKey.toBase58();
+        }
+      } catch {
+        // The guard should remain available even when signer resolution fails.
+      }
+
+      const walletGuard = buildWalletGuardSummary(currentConfig, {
+        activeProfile: profileName,
+        signerPublicKey,
+      });
+      return createTextResponse(JSON.stringify({
+        serverRole: 'local-sap-payments-bridge',
+        activeProfile: profileName,
+        signerConfigured: Boolean(signerPublicKey),
+        signerPublicKey,
+        walletGuard,
+        agentInstruction: 'Treat the local signer as a capability. Use sap_payments_readiness, sap_payments_call_paid_tool, sap_payments_finalize_transaction, sap_payments_register_agent, and sap_payments_update_agent. Do not read keypair files or create temporary signing scripts.',
       }, null, 2));
     },
   );
@@ -998,12 +1090,13 @@ function registerPaymentsReadinessTool(server: Server): void {
           hostedMcp: { type: 'object', description: 'Hosted remote MCP endpoint and accountless trust boundary.' },
           localBridge: { type: 'object', description: 'Local sap_payments bridge status and preferred tools.' },
           profile: { type: 'object', description: 'Redacted active profile, signer, RPC, and wallet path status.' },
+          walletGuard: { type: 'object', description: 'Capability-only local signer guardrails. No wallet path or keypair bytes are returned.' },
           balances: { type: 'object', description: 'SOL and USDC payment readiness when RPC checks are available.' },
           policy: { type: 'object', description: 'Local agent commerce policy limits used before autopay or value-moving operations.' },
           readiness: { type: 'object', description: 'Ready/degraded/not-ready result with issues and next action.' },
           agentInstruction: { type: 'string', description: 'Operational instruction for MCP agents.' },
         },
-        required: ['hostedMcp', 'localBridge', 'profile', 'balances', 'policy', 'readiness', 'agentInstruction'],
+        required: ['hostedMcp', 'localBridge', 'profile', 'walletGuard', 'balances', 'policy', 'readiness', 'agentInstruction'],
       },
       annotations: {
         readOnlyHint: true,
@@ -1021,6 +1114,40 @@ function registerPaymentsReadinessTool(server: Server): void {
       const result = await getX402PaymentReadiness(profileName, endpoint);
       return createTextResponse(JSON.stringify(result, null, 2));
     },
+  );
+}
+
+function registerPaymentsProcessStatusTool(server: Server): void {
+  registerTool(
+    server,
+    'sap_payments_process_status',
+    {
+      title: 'Inspect Local Payment Bridge Process',
+      description: 'Free local diagnostic for sap_payments process health. Shows the current bridge PID, profile/runtime lock, possible duplicate SAP MCP processes, and safe next action. Use this when paid-call settlement is slow, the bridge disappears, or an agent suspects stale/zombie bridge processes. This tool never kills processes and never reads keypair bytes.',
+      inputSchema: {},
+      outputSchema: {
+        type: 'object',
+        properties: {
+          pid: { type: 'number', description: 'Current sap_payments bridge process id.' },
+          ppid: { type: 'number', description: 'Parent process id, usually the agent runtime that spawned the stdio bridge.' },
+          version: { type: 'string', description: 'SAP MCP package version running in this bridge.' },
+          bridgeOnly: { type: 'boolean', description: 'Whether this process is running in sap_payments bridge-only mode.' },
+          profileName: { type: 'string', description: 'Active or requested SAP MCP profile used for process lock scoping.' },
+          runtimeId: { type: 'string', description: 'Runtime scope such as codex, hermes, claude, openclaw, or parent pid fallback.' },
+          lock: { type: 'object', description: 'Profile/runtime process lock path and ownership status.' },
+          processes: { type: 'object', description: 'Best-effort local process list for SAP MCP-looking node/npx processes.' },
+          nextAction: { type: 'string', description: 'Safe operational next step for the agent.' },
+        },
+        required: ['pid', 'ppid', 'version', 'bridgeOnly', 'profileName', 'runtimeId', 'lock', 'processes', 'nextAction'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => createTextResponse(JSON.stringify(getPaymentBridgeProcessStatus(), null, 2)),
   );
 }
 
@@ -1379,15 +1506,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
           }, null, 2), { isError: true });
         }
 
-        // Extract the session ID from the hosted tool response
-        const responseBody = fundResult.response as Record<string, unknown> | undefined;
-        const resultContent = responseBody?.result as Record<string, unknown> | undefined;
-        // The hosted tool may return the sessionId at the top level or nested
-        const sessionId =
-          (typeof responseBody?.sessionId === 'string' && responseBody.sessionId) ||
-          (typeof resultContent?.sessionId === 'string' && resultContent.sessionId) ||
-          (typeof responseBody?.id === 'string' && responseBody.id) ||
-          undefined;
+        const sessionId = extractHostedPrepaidSessionId(fundResult.response);
 
         if (!sessionId) {
           return createTextResponse(JSON.stringify({
@@ -1411,6 +1530,60 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
       }
     },
   );
+}
+
+function extractHostedPrepaidSessionId(response: unknown): string | undefined {
+  const direct = extractSessionIdFromRecord(response);
+  if (direct) return direct;
+
+  if (!response || typeof response !== 'object') {
+    return undefined;
+  }
+
+  const record = response as Record<string, unknown>;
+  const result = record['result'];
+  const resultDirect = extractSessionIdFromRecord(result);
+  if (resultDirect) return resultDirect;
+
+  const structuredContent = result && typeof result === 'object'
+    ? (result as Record<string, unknown>)['structuredContent']
+    : undefined;
+  const structuredDirect = extractSessionIdFromRecord(structuredContent);
+  if (structuredDirect) return structuredDirect;
+
+  const content = result && typeof result === 'object'
+    ? (result as Record<string, unknown>)['content']
+    : undefined;
+  if (Array.isArray(content)) {
+    for (const item of content) {
+      if (!item || typeof item !== 'object') continue;
+      const text = (item as Record<string, unknown>)['text'];
+      if (typeof text !== 'string') continue;
+      try {
+        const parsed = JSON.parse(text) as unknown;
+        const parsedSessionId = extractSessionIdFromRecord(parsed);
+        if (parsedSessionId) return parsedSessionId;
+      } catch {
+        // Non-JSON text content is normal for some MCP tools.
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function extractSessionIdFromRecord(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of ['sessionId', 'id']) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 /**

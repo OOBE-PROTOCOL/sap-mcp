@@ -4,7 +4,7 @@
  * @description Local helper for paying and retrying hosted SAP MCP x402 tool calls with a user-controlled SAP profile signer.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { appendFileSync, mkdirSync, readFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { x402Client, x402HTTPClient } from '@x402/core/client';
@@ -16,6 +16,7 @@ import { loadConfig, type SapMcpConfig } from '../config/env.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
 import { getPreferredConfigDir } from '../config/paths.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
+import { buildWalletGuardSummary, type WalletGuardSummary } from '../signer/wallet-guard.js';
 import { getCachedSession, cacheSession, invalidateSession } from './mcp-session-cache.js';
 
 export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';
@@ -179,6 +180,7 @@ export interface X402PaymentReadinessResult {
     agentPubkey?: string;
     secretMaterial: 'keypair-bytes-never-returned';
   };
+  walletGuard: WalletGuardSummary;
   balances: {
     checked: boolean;
     sol?: number;
@@ -231,6 +233,10 @@ export interface X402PaidCallResult {
   /** True when a prepaid session was used to grant access without x402
    * payment. The prepaidSessionId field identifies which session was used. */
   prepaidUsed?: boolean;
+  /** True when the hosted tool was free or otherwise did not require an x402
+   * challenge. This lets agents safely route mixed free/paid tools through the
+   * bridge without treating HTTP 200 as a malformed payment response. */
+  freeToolBypass?: boolean;
   /** The prepaid session ID used for this call, if any. Present when
    * prepaidUsed is true. */
   prepaidSessionId?: string;
@@ -661,14 +667,16 @@ export async function getX402PaymentReadiness(
     issues.push(`balance_check_degraded: ${balances.error}`);
   }
 
-  const walletFileExists = Boolean(config?.walletPath && existsSync(config.walletPath));
-  if (config?.walletPath && !walletFileExists) {
+  const walletGuard = buildWalletGuardSummary(config, { activeProfile, signerPublicKey: signerAddress });
+  const walletFileExists = walletGuard.wallet.exists;
+  const walletStorageMissing = Boolean(config?.walletPath && !walletFileExists);
+  if (walletStorageMissing) {
     issues.push('wallet_file_missing');
   }
 
   const canPayX402 = Boolean(signerAddress && balances.payerBalanceEnoughForAutoPay !== false);
   const canExecuteWriteTools = Boolean(signerAddress && config?.mode !== 'readonly');
-  const status = !config || !signerAddress || !walletFileExists
+  const status = !config || !signerAddress || walletStorageMissing
     ? 'not-ready'
     : issues.length > 0
       ? 'degraded'
@@ -700,6 +708,7 @@ export async function getX402PaymentReadiness(
       ...(config?.agentPubkey ? { agentPubkey: config.agentPubkey } : {}),
       secretMaterial: 'keypair-bytes-never-returned',
     },
+    walletGuard,
     balances,
     policy,
     readiness: {
@@ -836,15 +845,31 @@ async function executePaidAttempt(options: {
     return executePaidAttempt({ ...options, sessionId: freshSession, sessionRefreshAttempted: true });
   }
 
-  // ── Prepaid session bypass ──────────────────────────────────────────────
-  // If the server returned 200 (not 402), the prepaid session had sufficient
-  // balance and granted access. Return the result directly without x402 payment.
-  if (options.prepaidSessionId && unpaid.response.status === 200) {
+  // ── No-payment bypass ───────────────────────────────────────────────────
+  // If the server returned 200 (not 402), there is no challenge to sign. This
+  // can happen for prepaid sessions and for genuinely free tools routed
+  // through the bridge by an agent. Return the result directly without x402
+  // payment instead of treating the response as a malformed challenge.
+  if (unpaid.response.status === 200) {
     if (isJsonRpcError(unpaid.body)) {
       throw new Error(`Paid MCP call returned JSON-RPC error: ${JSON.stringify((unpaid.body as { error: unknown }).error)}`);
     }
 
     const toolName = extractToolName(options.requestBody);
+    const prepaidUsed = Boolean(options.prepaidSessionId);
+    const payment = prepaidUsed
+      ? {
+          amountUsd: 0,
+          network: 'prepaid',
+          asset: 'prepaid-session',
+          payTo: 'prepaid-session',
+        }
+      : {
+          amountUsd: 0,
+          network: 'free',
+          asset: 'free-tool',
+          payTo: 'free-tool',
+        };
     const audit: X402PaidCallAudit = {
       intentId: buildIntentId(options.requestBody, options.sessionId),
       profileName: options.profileName,
@@ -852,12 +877,7 @@ async function executePaidAttempt(options: {
       endpoint: options.endpoint,
       ...(toolName ? { toolName } : {}),
       requestMethod: options.requestBody.method,
-      payment: {
-        amountUsd: 0,
-        network: 'prepaid',
-        asset: 'prepaid-session',
-        payTo: 'prepaid-session',
-      },
+      payment,
       receipt: {
         present: false,
       },
@@ -871,18 +891,14 @@ async function executePaidAttempt(options: {
       endpoint: options.endpoint,
       sessionId: options.sessionId,
       signerAddress: options.signerAddress,
-      payment: {
-        amountUsd: 0,
-        network: 'prepaid',
-        asset: 'prepaid-session',
-        payTo: 'prepaid-session',
-      },
+      payment,
       response: unpaid.body,
       attempts: options.attempt,
       transientRetries: options.transientRetries,
       paymentCharged: false,
-      prepaidUsed: true,
-      prepaidSessionId: options.prepaidSessionId,
+      prepaidUsed,
+      freeToolBypass: !prepaidUsed,
+      ...(options.prepaidSessionId ? { prepaidSessionId: options.prepaidSessionId } : {}),
       audit,
     };
   }

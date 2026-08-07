@@ -188,6 +188,138 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
 
   registerTool(
     server,
+    'sap_agent_standard_context',
+    {
+      title: 'Get SAP Agentic Standards Context',
+      description: 'Free agentic-standards orientation for SAP MCP. Use this after sap_agent_start when an agent needs to understand how SAP MCP maps MCP, x402/pay.sh, A2A-style Agent Cards, OASF-style agent facts, AP2-style mandate planning, local signing, and hosted unsigned builders without guessing or over-claiming unsupported standards.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          intent: {
+            type: 'string',
+            enum: ['connection', 'paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity', 'swap', 'external-x402', 'premium-stream', 'general'],
+            description: 'Closest user intent so the standards context can highlight the correct MCP/x402/local-signer route.',
+          },
+          includeRoadmap: {
+            type: 'boolean',
+            description: 'Whether to include planned-but-not-claimed standards work such as MCP Apps, A2A signatures, AG-UI views, and full AP2 mandate signatures. Defaults to true.',
+          },
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the standards context was generated.' },
+          serverVersion: { type: 'string', description: 'SAP MCP server version that generated this context.' },
+          intent: { type: 'string', description: 'Normalized intent used for routing.' },
+          standards: { type: 'object', description: 'SAP MCP mapping across MCP, x402/pay.sh, A2A-style metadata, OASF-style export, AP2-style mandates, and UI/runtime standards.' },
+          trustBoundary: { type: 'object', description: 'Non-custodial and local-signing boundaries agents must preserve.' },
+          bootstrapSequence: { type: 'array', description: 'Recommended first calls for agent runtimes.', items: { type: 'object' } },
+          claims: { type: 'object', description: 'Public claims agents can safely make and claims they must avoid.' },
+          nextToolCalls: { type: 'array', description: 'Exact next tool calls for this standards-aware session.', items: { type: 'object' } },
+          roadmap: { type: 'array', description: 'Planned standards improvements when includeRoadmap is true.', items: { type: 'object' } },
+        },
+        required: ['success', 'serverVersion', 'intent', 'standards', 'trustBoundary', 'bootstrapSequence', 'claims', 'nextToolCalls', 'roadmap'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => createStructuredJsonResponse(buildAgentStandardContextPayload(context, parseStandardContextInput(input))),
+  );
+
+  registerTool(
+    server,
+    'sap_prepare_mandate',
+    {
+      title: 'Prepare SAP Agent Mandate',
+      description: 'Free AP2-style mandate planner for SAP MCP agent commerce. It converts a user intent into a bounded, unsigned planning artifact with spend limits, tool/protocol allow-lists, freshness rules, confirmation thresholds, proof-tape fields, and the correct hosted/local signing route. This tool does not sign, submit, authorize payment, or replace wallet confirmation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          intent: {
+            type: 'string',
+            description: 'Human intent to bind, for example "check solking.sol", "register Solking", "swap 0.05 SOL to USDC", or "open a $10 BONK short".',
+          },
+          operationType: {
+            type: 'string',
+            enum: ['paid-tool', 'swap', 'perp-trade', 'registry-write', 'escrow', 'external-x402', 'premium-stream', 'transaction-finalize', 'other'],
+            description: 'Closest operation family. Use registry-write for SAP agent registration/update, escrow for SAP Escrow V2, and transaction-finalize when an unsigned hosted transaction is already available.',
+          },
+          profile: {
+            type: 'string',
+            description: 'Optional local SAP profile name the user expects the runtime to use. Do not guess wallet/keypair paths from this value.',
+          },
+          wallet: {
+            type: 'string',
+            description: 'Optional expected owner/signer wallet public key in base58. Used only as a public constraint, never as a keypair path.',
+          },
+          maxX402Usd: {
+            type: 'number',
+            description: 'Maximum x402/pay.sh fee the agent may auto-pay for one hosted tool call under the user policy.',
+          },
+          maxTotalX402Usd: {
+            type: 'number',
+            description: 'Maximum total x402/pay.sh spend for this mandate before asking the user again.',
+          },
+          maxTradeUsd: {
+            type: 'number',
+            description: 'Maximum value-moving notional in USD for swaps, perps, escrow, or transaction finalization under this mandate.',
+          },
+          maxSlippageBps: {
+            type: 'number',
+            description: 'Maximum slippage in basis points for swap or trading routes. 100 means 1%.',
+          },
+          allowedProtocols: {
+            type: 'array',
+            description: 'Protocol allow-list such as sap, mcp, x402, jupiter, adrena, pyth, metaplex, sns, magicblock, or custom protocol ids.',
+            items: { type: 'string' },
+          },
+          allowedTools: {
+            type: 'array',
+            description: 'Exact SAP MCP tool allow-list for this mandate. Use exact names from tools/list and do not rewrite hyphenated tools.',
+            items: { type: 'string' },
+          },
+          requireConfirmationAboveUsd: {
+            type: 'number',
+            description: 'Require a human preview and explicit confirmation above this USD notional or spend threshold.',
+          },
+          expiresInSeconds: {
+            type: 'number',
+            description: 'Mandate TTL in seconds. Defaults to 900 and is capped to 86400.',
+          },
+        },
+        required: ['intent'],
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', description: 'Whether the mandate draft was generated.' },
+          mandate: { type: 'object', description: 'Unsigned mandate planning artifact. This is not a signature and not a payment authorization.' },
+          route: { type: 'object', description: 'Canonical hosted/local route for this operation type.' },
+          freshness: { type: 'array', description: 'Data that must be fetched fresh before paid, signed, or value-moving actions.', items: { type: 'string' } },
+          confirmationPolicy: { type: 'object', description: 'When the agent must show a compact preview and ask the user to confirm.' },
+          proofTapeTemplate: { type: 'object', description: 'Audit record shape to fill as execution proceeds.' },
+          nextToolCalls: { type: 'array', description: 'Exact next SAP MCP tool calls recommended for this mandate.', items: { type: 'object' } },
+          forbiddenActions: { type: 'array', description: 'Actions agents must not perform under this mandate.', items: { type: 'string' } },
+        },
+        required: ['success', 'mandate', 'route', 'freshness', 'confirmationPolicy', 'proofTapeTemplate', 'nextToolCalls', 'forbiddenActions'],
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input: unknown) => createStructuredJsonResponse(buildMandatePayload(context, parseMandateInput(input))),
+  );
+
+  registerTool(
+    server,
     'sap_pricing_catalog',
     {
       title: 'Get SAP MCP Pricing Catalog',
@@ -303,6 +435,138 @@ function parsePrepareActionInput(input: unknown) {
     hasUnsignedTransaction: record.hasUnsignedTransaction === true,
     hasSubmittedSignature: record.hasSubmittedSignature === true,
   };
+}
+
+interface StandardContextInput {
+  intent: SapAgentIntent;
+  includeRoadmap: boolean;
+}
+
+function parseStandardContextInput(input: unknown): StandardContextInput {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  return {
+    intent: normalizeSapAgentIntent(record.intent),
+    includeRoadmap: record.includeRoadmap !== false,
+  };
+}
+
+type MandateOperationType =
+  | 'paid-tool'
+  | 'swap'
+  | 'perp-trade'
+  | 'registry-write'
+  | 'escrow'
+  | 'external-x402'
+  | 'premium-stream'
+  | 'transaction-finalize'
+  | 'other';
+
+interface MandateInput {
+  intent: string;
+  operationType: MandateOperationType;
+  profile?: string;
+  wallet?: string;
+  maxX402Usd?: number;
+  maxTotalX402Usd?: number;
+  maxTradeUsd?: number;
+  maxSlippageBps?: number;
+  allowedProtocols: string[];
+  allowedTools: string[];
+  requireConfirmationAboveUsd?: number;
+  expiresInSeconds: number;
+}
+
+function parseMandateInput(input: unknown): MandateInput {
+  const record = input && typeof input === 'object' && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : {};
+  const intent = readOptionalString(record.intent);
+  if (!intent) {
+    throw new Error('intent is required to prepare a SAP mandate.');
+  }
+  const explicitOperationType = normalizeMandateOperationType(record.operationType);
+  return {
+    intent,
+    operationType: explicitOperationType === 'other' ? inferMandateOperationType(intent) : explicitOperationType,
+    profile: readOptionalString(record.profile),
+    wallet: readOptionalString(record.wallet),
+    maxX402Usd: readOptionalNumber(record.maxX402Usd),
+    maxTotalX402Usd: readOptionalNumber(record.maxTotalX402Usd),
+    maxTradeUsd: readOptionalNumber(record.maxTradeUsd),
+    maxSlippageBps: readOptionalNumber(record.maxSlippageBps),
+    allowedProtocols: readOptionalStringArray(record.allowedProtocols),
+    allowedTools: readOptionalStringArray(record.allowedTools),
+    requireConfirmationAboveUsd: readOptionalNumber(record.requireConfirmationAboveUsd),
+    expiresInSeconds: clampTtlSeconds(readOptionalNumber(record.expiresInSeconds)),
+  };
+}
+
+function normalizeMandateOperationType(value: unknown): MandateOperationType {
+  if (typeof value !== 'string') {
+    return 'other';
+  }
+  const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+  if ([
+    'paid-tool',
+    'swap',
+    'perp-trade',
+    'registry-write',
+    'escrow',
+    'external-x402',
+    'premium-stream',
+    'transaction-finalize',
+    'other',
+  ].includes(normalized)) {
+    return normalized as MandateOperationType;
+  }
+  return 'other';
+}
+
+function inferMandateOperationType(intent: string): MandateOperationType {
+  const normalized = intent.toLowerCase();
+  if (/\b(register|update|agent|profile|metadata|identity|sns|domain)\b/.test(normalized)) {
+    return 'registry-write';
+  }
+  if (/\b(perp|short|long|leverage|position|stop loss|take profit|adrena|percolator)\b/.test(normalized)) {
+    return 'perp-trade';
+  }
+  if (/\b(swap|quote|jupiter|raydium|orca|meteora)\b/.test(normalized)) {
+    return 'swap';
+  }
+  if (/\b(escrow|settle|settlement|dispute|co-?sign)\b/.test(normalized)) {
+    return 'escrow';
+  }
+  if (/\b(external x402|third[- ]party|http 402|payment-signature)\b/.test(normalized)) {
+    return 'external-x402';
+  }
+  if (/\b(stream|webhook|premium session|subscription)\b/.test(normalized)) {
+    return 'premium-stream';
+  }
+  if (/\b(finalize|submit|unsigned transaction|sign transaction)\b/.test(normalized)) {
+    return 'transaction-finalize';
+  }
+  if (/\b(paid tool|x402|pay\.sh|payment)\b/.test(normalized)) {
+    return 'paid-tool';
+  }
+  return 'other';
+}
+
+function readOptionalStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((item) => item.trim());
+}
+
+function clampTtlSeconds(value: number | undefined): number {
+  if (value === undefined) {
+    return 900;
+  }
+  return Math.max(60, Math.min(Math.floor(value), 86400));
 }
 
 interface NextActionInput {
@@ -465,6 +729,284 @@ function nextAction(payload: {
   return { success: true, ...payload };
 }
 
+function buildAgentStandardContextPayload(context: SapMcpContext, input: StandardContextInput): Record<string, unknown> {
+  const hostedMode = context.config.mode === 'hosted-api';
+  return {
+    success: true,
+    serverVersion: MCP_SERVER_VERSION,
+    intent: input.intent,
+    standards: {
+      mcp: {
+        status: 'production',
+        transport: 'Streamable HTTP for hosted SAP MCP; stdio for local sap_payments bridge.',
+        endpoint: HOSTED_MCP_URL,
+        protocolVersion: '2025-06-18 compatible runtime metadata; clients must initialize and reuse the returned mcp-session-id.',
+        tasksAppsExtensions: 'tracked roadmap; do not claim full MCP Tasks/Apps/Extensions support unless a runtime advertises those capabilities.',
+        route: 'Use hosted sap for reads/builders and local sap_payments for x402 replay, local signing, registry writes, and transaction finalization.',
+      },
+      x402PaySh: {
+        status: 'production',
+        discovery: [
+          'https://mcp.sap.oobeprotocol.ai/.well-known/x402',
+          'https://mcp.sap.oobeprotocol.ai/pay/provider.yml',
+          'https://mcp.sap.oobeprotocol.ai/openapi.json',
+        ],
+        hostedToolFlow: 'Hosted paid tools return x402/pay.sh challenges. Resolve them with sap_payments_call_paid_tool unless the runtime has native x402 challenge replay.',
+        externalAgentFlow: 'For third-party HTTP x402 endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402.',
+        receiptRule: 'Bind PAYMENT-RESPONSE or X-PAYMENT-RESPONSE to the tool result proof tape.',
+      },
+      a2a: {
+        status: 'metadata-compatible',
+        agentCardUrl: 'https://mcp.sap.oobeprotocol.ai/.well-known/agent-card.json',
+        currentScope: 'SAP MCP publishes a machine-readable agent card and MCP server metadata; signed A2A task orchestration is roadmap work.',
+      },
+      oasf: {
+        status: 'compatible-export',
+        exportTool: 'sap_export_agent_oasf',
+        currentScope: 'Export SAP on-chain identity, capabilities, protocols, pricing, x402 endpoint, and trust facts into an OASF-style JSON view for agent directories.',
+      },
+      ap2Mandates: {
+        status: 'planning-artifact',
+        plannerTool: 'sap_prepare_mandate',
+        currentScope: 'Creates bounded, unsigned mandate drafts with spend/tool/protocol constraints. Wallet confirmation and local signing remain mandatory for value-moving actions.',
+      },
+      agUiA2Ui: {
+        status: 'roadmap',
+        currentScope: 'SAP MCP returns structured previews/proof tapes today. Runtime-native UI cards, wallet prompts, and agent cockpit surfaces belong in SAP Studio or runtime extensions.',
+      },
+      acpUcpCommerce: {
+        status: 'interoperability-target',
+        currentScope: 'SAP MCP can expose agent identity, pricing, x402 endpoint, reputation, and tool capabilities; do not claim native ACP/UCP compatibility until adapters are published.',
+      },
+    },
+    trustBoundary: {
+      hostedAccountless: hostedMode,
+      canHostedSeeUserKeypair: false,
+      canHostedSeeLocalProfile: !hostedMode,
+      signerRule: 'User-owned signatures must come from sap_payments local bridge, a local SAP MCP profile, wallet UI, or a hosted unsigned builder finalized locally.',
+      forbidden: [
+        'Do not read keypair JSON.',
+        'Do not create temporary signing scripts.',
+        'Do not call hosted direct writes after hosted_local_signer_required.',
+        'Do not reuse stale x402 payment payloads.',
+      ],
+    },
+    bootstrapSequence: [
+      { tool: 'sap_agent_start', arguments: {}, reason: 'Load canonical startup rules.' },
+      { tool: 'sap_agent_runtime_status', arguments: { intent: input.intent }, reason: 'Check hosted/accountless/local bridge truth table.' },
+      { tool: 'sap_agent_standard_context', arguments: { intent: input.intent }, reason: 'Load standards-aware routing and public claim boundaries.' },
+      { tool: 'sap_prepare_action', arguments: { intent: input.intent }, reason: 'Prepare exact execution route before payment or signing.' },
+      { tool: 'sap_skills_bundle', arguments: { includeContents: true }, reason: 'Load current SAP MCP skills before selecting tool families.' },
+    ],
+    claims: {
+      safe: [
+        'SAP MCP is an MCP server for Solana agent operations with x402/pay.sh monetization.',
+        'Hosted SAP MCP is non-custodial and accountless.',
+        'Local sap_payments signs x402 payments and user-approved transactions without exposing keypair bytes.',
+        'SAP can export agent identity/capability facts in an OASF-style view.',
+      ],
+      avoid: [
+        'Do not claim SAP MCP implements every emerging agent standard end-to-end.',
+        'Do not claim hosted SAP MCP can sign user-owned writes.',
+        'Do not call unsigned mandate drafts wallet authorizations.',
+        'Do not claim external x402 agents use the OOBE facilitator unless their metadata says so.',
+      ],
+    },
+    nextToolCalls: buildStandardContextNextCalls(input.intent),
+    roadmap: input.includeRoadmap ? [
+      { area: 'MCP Tasks/Apps', action: 'Expose task-state and UI-extension adapters once runtime compatibility stabilizes.' },
+      { area: 'A2A', action: 'Add signed agent-card proofs and task-status webhooks for cross-agent orchestration.' },
+      { area: 'AP2-style mandates', action: 'Bind mandate drafts to wallet-visible confirmations and proof-tape receipts.' },
+      { area: 'OASF directories', action: 'Publish stable OASF-compatible agent profile resources for third-party discovery indexes.' },
+      { area: 'SAP Studio', action: 'Render preview/confirm/done UI cards from the same proof-tape schema returned by tools.' },
+    ] : [],
+  };
+}
+
+function buildStandardContextNextCalls(intent: SapAgentIntent): Record<string, unknown>[] {
+  const calls: Record<string, unknown>[] = [
+    { namespace: 'hosted sap', tool: 'sap_prepare_action', arguments: { intent }, reason: 'Resolve freshness, pricing, route, and retry rules.' },
+  ];
+  if (['registry-write', 'identity'].includes(intent)) {
+    calls.push({ namespace: 'hosted sap', tool: 'sap_agent_identity_plan', arguments: { intendedAction: intent === 'registry-write' ? 'register' : 'update' }, reason: 'Normalize SAP identity fields before local signing.' });
+  }
+  if (['paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity'].includes(intent)) {
+    calls.push({ namespace: 'local sap_payments', tool: 'sap_payments_wallet_guard', arguments: {}, reason: 'Inspect local signer guardrails without exposing wallet paths or keypair bytes.' });
+    calls.push({ namespace: 'local sap_payments', tool: 'sap_payments_readiness', arguments: {}, reason: 'Verify local signer/payment bridge readiness.' });
+  }
+  calls.push({ namespace: 'hosted sap', tool: 'sap_prepare_mandate', arguments: { intent: `Prepare ${intent} under user policy`, operationType: mandateOperationForIntent(intent) }, reason: 'Create a bounded intent artifact before paid/write work.' });
+  return calls;
+}
+
+function buildMandatePayload(context: SapMcpContext, input: MandateInput): Record<string, unknown> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + input.expiresInSeconds * 1000);
+  const mandateId = `sap-mandate-${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${Math.abs(hashString(input.intent)).toString(36)}`;
+  const route = routeForMandate(input.operationType);
+  const requireConfirmation = shouldRequireConfirmation(input);
+
+  return {
+    success: true,
+    mandate: {
+      id: mandateId,
+      status: 'unsigned_planning_artifact',
+      standardIntent: 'AP2-style bounded agent mandate draft',
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      intent: input.intent,
+      operationType: input.operationType,
+      profile: input.profile ?? null,
+      wallet: input.wallet ?? null,
+      constraints: {
+        maxX402Usd: input.maxX402Usd ?? 0.02,
+        maxTotalX402Usd: input.maxTotalX402Usd ?? input.maxX402Usd ?? 0.02,
+        maxTradeUsd: input.maxTradeUsd ?? null,
+        maxSlippageBps: input.maxSlippageBps ?? null,
+        allowedProtocols: input.allowedProtocols,
+        allowedTools: input.allowedTools,
+        requireConfirmationAboveUsd: input.requireConfirmationAboveUsd ?? 0,
+      },
+      notPaymentAuthorization: true,
+      notWalletSignature: true,
+      signerBoundary: 'A wallet, local sap_payments bridge, external signer, or local SAP MCP signer must still confirm any value-moving transaction.',
+      hostedServerMode: context.config.mode,
+    },
+    route,
+    freshness: freshnessForMandate(input.operationType),
+    confirmationPolicy: {
+      required: requireConfirmation,
+      reason: requireConfirmation
+        ? 'This mandate can involve payment, signing, or value movement; show a compact preview and ask the user to confirm before execution.'
+        : 'Only free/read-only preflight is covered. Ask again before paid or value-moving work.',
+      previewFields: [
+        'user intent',
+        'profile and wallet public key',
+        'tool route',
+        'x402 fee cap',
+        'trade/escrow notional cap',
+        'slippage or risk cap',
+        'expected receipt/signature/proof tape',
+      ],
+    },
+    proofTapeTemplate: {
+      mandateId,
+      preparedAt: now.toISOString(),
+      toolsCalled: [],
+      x402Receipts: [],
+      unsignedTransactions: [],
+      localSignatures: [],
+      submittedSignatures: [],
+      finalStatus: 'pending',
+      verification: {
+        paymentReceiptsChecked: false,
+        transactionStatusChecked: false,
+        onChainStateChecked: false,
+      },
+    },
+    nextToolCalls: nextCallsForMandate(input),
+    forbiddenActions: [
+      'Do not treat this mandate draft as a wallet signature.',
+      'Do not read or print keypair JSON.',
+      'Do not create temporary signing scripts.',
+      'Do not call hosted wallet-owned writes after hosted_local_signer_required.',
+      'Do not retry submitted writes until signature status is known.',
+      'Do not exceed maxX402Usd, maxTotalX402Usd, maxTradeUsd, maxSlippageBps, allowedProtocols, or allowedTools without asking the user again.',
+    ],
+  };
+}
+
+function mandateOperationForIntent(intent: SapAgentIntent): MandateOperationType {
+  if (intent === 'paid-call') return 'paid-tool';
+  if (intent === 'registry-write' || intent === 'identity') return 'registry-write';
+  if (intent === 'transaction-finalize') return 'transaction-finalize';
+  if (intent === 'escrow') return 'escrow';
+  return 'other';
+}
+
+function routeForMandate(operationType: MandateOperationType): Record<string, unknown> {
+  switch (operationType) {
+    case 'paid-tool':
+      return { hostedTool: true, localTool: 'sap_payments_call_paid_tool', rule: 'Estimate, cap maxPriceUsd, resolve x402 locally, capture receipt.' };
+    case 'swap':
+      return { hostedBuilder: true, localTool: 'sap_payments_finalize_transaction', rule: 'Fetch quote fresh, build unsigned transaction, preview, then finalize locally after confirmation.' };
+    case 'perp-trade':
+      return { hostedAnalytics: true, hostedBuilder: true, localTool: 'sap_payments_finalize_transaction', rule: 'Run market snapshot, signal score, fear/greed, risk check, simulate, then build/finalize only if wouldSucceed and user confirms.' };
+    case 'registry-write':
+      return { localTool: 'sap_payments_register_agent or sap_payments_update_agent', rule: 'Use local sap_payments registry write tools; hosted direct writes are accountless and blocked.' };
+    case 'escrow':
+      return { hostedBuilder: 'sap_escrow_build_*_transaction', localTool: 'sap_payments_finalize_transaction', rule: 'Build unsigned Escrow V2 transaction hosted, then finalize locally.' };
+    case 'external-x402':
+      return { localTool: 'sap_payments_call_external_x402', rule: 'Use only for third-party x402 endpoints; do not route hosted SAP MCP tools through generic HTTP.' };
+    case 'premium-stream':
+      return { hostedTools: ['sap_premium_session_start', 'sap_premium_stream_poll'], rule: 'Start a bounded premium session, then consume stream/webhook outputs under the returned limits.' };
+    case 'transaction-finalize':
+      return { localTool: 'sap_payments_finalize_transaction', rule: 'Preview unsigned transaction, sign locally, submit through relay when requested, verify signature status.' };
+    default:
+      return { hostedTool: 'sap_prepare_action', rule: 'Resolve exact SAP MCP route before spending, signing, or claiming support.' };
+  }
+}
+
+function freshnessForMandate(operationType: MandateOperationType): string[] {
+  const common = ['sap_agent_runtime_status', 'sap_prepare_action', 'sap_payments_wallet_guard and sap_payments_readiness when paid/write/local signing is needed'];
+  if (operationType === 'swap') {
+    return [...common, 'fresh wallet SOL/SPL balances', 'fresh quote', 'fresh slippage/routing preview'];
+  }
+  if (operationType === 'perp-trade') {
+    return [...common, 'fresh wallet USDC/SOL balances', 'fresh market snapshot', 'fresh signal score', 'fresh risk check', 'fresh position simulation'];
+  }
+  if (operationType === 'registry-write') {
+    return [...common, 'sap_protocol_invariants', 'sap_agent_identity_plan', 'current SAP agent profile when updating'];
+  }
+  if (operationType === 'escrow') {
+    return [...common, 'fresh agent profile/x402 endpoint', 'fresh escrow PDA state', 'fresh token mint/decimals'];
+  }
+  return common;
+}
+
+function shouldRequireConfirmation(input: MandateInput): boolean {
+  if (['swap', 'perp-trade', 'registry-write', 'escrow', 'transaction-finalize'].includes(input.operationType)) {
+    return true;
+  }
+  if ((input.maxTotalX402Usd ?? input.maxX402Usd ?? 0) > (input.requireConfirmationAboveUsd ?? Number.POSITIVE_INFINITY)) {
+    return true;
+  }
+  return false;
+}
+
+function nextCallsForMandate(input: MandateInput): Record<string, unknown>[] {
+  const calls: Record<string, unknown>[] = [
+    { namespace: 'hosted sap', tool: 'sap_prepare_action', arguments: { intent: sapIntentForMandate(input.operationType), userGoal: input.intent }, reason: 'Resolve exact route and retry rules.' },
+  ];
+  if (input.operationType !== 'other') {
+    calls.push({ namespace: 'local sap_payments', tool: 'sap_payments_wallet_guard', arguments: {}, reason: 'Inspect local signer guardrails without reading keypair files.' });
+    calls.push({ namespace: 'local sap_payments', tool: 'sap_payments_readiness', arguments: {}, reason: 'Verify local signer, payment balance, and policy before paid/write execution.' });
+  }
+  if (input.operationType === 'registry-write') {
+    calls.push({ namespace: 'hosted sap', tool: 'sap_agent_identity_plan', arguments: { intendedAction: 'full-identity' }, reason: 'Normalize SAP + optional Metaplex/SNS identity fields.' });
+  }
+  if (input.operationType === 'paid-tool') {
+    calls.push({ namespace: 'hosted sap', tool: 'sap_estimate_tool_cost', arguments: { toolName: input.allowedTools[0] ?? '' }, reason: 'Estimate before x402 payment and set maxPriceUsd.' });
+  }
+  return calls;
+}
+
+function sapIntentForMandate(operationType: MandateOperationType): SapAgentIntent {
+  if (operationType === 'paid-tool') return 'paid-call';
+  if (operationType === 'registry-write') return 'registry-write';
+  if (operationType === 'escrow') return 'escrow';
+  if (operationType === 'transaction-finalize') return 'transaction-finalize';
+  if (operationType === 'external-x402') return 'paid-call';
+  return 'general';
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  }
+  return hash;
+}
+
 function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentIntent): Record<string, unknown> {
   const signerConfigured = Boolean(context.signer || context.config.walletPath || context.config.externalSignerUrl);
   const hostedMode = context.config.mode === 'hosted-api';
@@ -492,7 +1034,9 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentInten
       status: localBridgeStatus,
       verificationTool: 'sap_payments_readiness',
       profileTool: 'sap_payments_profile_current',
+      walletGuardTool: 'sap_payments_wallet_guard',
       requiredTools: [
+        'sap_payments_wallet_guard',
         'sap_payments_readiness',
         'sap_payments_profile_current',
         'sap_payments_call_paid_tool',
@@ -573,6 +1117,12 @@ function buildRuntimeStatusNextCalls(intent: SapAgentIntent): Record<string, unk
   if (['paid-call', 'registry-write', 'transaction-finalize', 'escrow', 'identity'].includes(intent)) {
     calls.push({
       namespace: 'local sap_payments',
+      tool: 'sap_payments_wallet_guard',
+      arguments: {},
+      reason: 'Inspect capability-only local signer guardrails without reading wallet paths or keypair bytes.',
+    });
+    calls.push({
+      namespace: 'local sap_payments',
       tool: 'sap_payments_readiness',
       arguments: {},
       reason: 'Verify the local profile, signer, balances, and bridge tool surface before paid/write work.',
@@ -631,6 +1181,13 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
         arguments: { intent: goal ? 'general' : 'connection', userGoal: goal ?? undefined },
         required: false,
         reason: 'Create an intent-level route plan with fresh-data requirements, local/hosted tool path, confirmation policy, retry rules, and proof-tape shape.',
+      },
+      {
+        namespace: 'hosted sap',
+        tool: 'sap_agent_standard_context',
+        arguments: { intent: goal ? 'general' : 'connection' },
+        required: false,
+        reason: 'Load MCP/x402/A2A-style/OASF/AP2-style interoperability rules and public-claim boundaries before composing cross-agent workflows.',
       },
       {
         namespace: 'hosted sap',
@@ -696,6 +1253,12 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       },
       {
         namespace: 'local sap_payments',
+        tool: 'sap_payments_wallet_guard',
+        required: false,
+        reason: 'Inspect local signer guardrails. This never returns keypair paths or secret material.',
+      },
+      {
+        namespace: 'local sap_payments',
         tool: 'sap_payments_profile_current',
         required: false,
         reason: 'Inspect the user local profile, wallet public key, and signer status when the bridge is exposed.',
@@ -711,9 +1274,11 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'Use exact tool names returned by tools/list; do not rewrite hyphens to underscores.',
       'For a simple connection question, answer briefly. Do not dump the full tool catalog, categories, or every protocol unless the user asks what tools are available.',
       'For connection/readiness questions, call sap_agent_runtime_status and use its hosted/localBridge/routing fields as the source of truth.',
+      'For standards/interoperability questions, call sap_agent_standard_context before claiming MCP Tasks, A2A, OASF, AP2, AG-UI, ACP/UCP, or other emerging-standard support.',
       'When an error or partial result appears, call sap_agent_next_action before retrying. It classifies x402 challenges, hosted local-signer guards, transient RPC failures, missing bridge tools, and submitted signatures.',
       'Hosted SAP MCP is accountless and non-custodial. OOBE never has user keypair bytes.',
       'Do not report hosted profile default as the user local profile.',
+      'Treat local signing as a sap_payments capability, not as a filesystem keypair. Use sap_payments_wallet_guard for boundaries and forbidden actions.',
       'For local wallet/profile questions, prefer sap_payments_profile_current when available.',
       'For hosted SAP agent discovery, prefer sap_discover_agents with query, wallet, agentPda, protocol, capability, capabilities, hasX402Endpoint, small limit, and pagination.nextCursor before broad scans.',
       'For initial orientation, use free control-plane tools first, then micro-read exact/base reads: sap_agent_context, sap_get_agent, sap_get_agent_profile, sap_get_agent_stats, sap_is_agent_active, sap_get_global_state, or sap_list_agents with limit <= 20 and view: compact. Use read-premium sap_discover_agents or sap_list_all_agents only when the user needs search, enrichment, analytics, or larger pages.',
@@ -722,6 +1287,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       'Before any paid call, verify USDC and SOL balances using free readiness tools: sol_get_balance, spl-token_getBalance, spl-token_getTokenAccounts, sap_x402_get_balance, or magicblock_balance. Use read-premium holdings tools only when the user needs enriched portfolio context. An agent without USDC cannot make paid calls.',
       'For paid/write calls, use sap_payments_call_paid_tool from the local sap_payments bridge when available.',
       'Before paid calls, use sap_estimate_tool_cost to know the exact tier and estimated USD cost of a specific tool, or sap_pricing_catalog for the full tier overview. The x402 challenge itself is the final price source of truth.',
+      'For bounded agent commerce flows, call sap_prepare_mandate to create an unsigned AP2-style planning artifact with spend/tool/protocol constraints before payment, signing, or execution. This mandate draft is not a wallet signature.',
       'For external HTTP x402 agent endpoints discovered through SAP registry metadata, use sap_payments_call_external_x402 instead of hand-rolled HTTP/sign/retry scripts.',
       'If sap_payments is missing, ask the user to run the wizard repair flow and restart the agent runtime.',
       'If hosted sap_register_agent returns hosted_local_signer_required, do not retry the hosted direct write. No x402 payment was charged; call local sap_payments_register_agent with the same registration fields and confirm: true.',
@@ -739,6 +1305,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
       challenge: 'Hosted paid tools return 402 Payment Required with x402/pay.sh requirements.',
       preferredHelper: 'sap_payments_call_paid_tool',
       externalHttpHelper: 'sap_payments_call_external_x402',
+      walletGuardHelper: 'sap_payments_wallet_guard',
       readinessHelper: 'sap_payments_readiness',
       legacyAlias: 'sap_x402_paid_call',
       retryPolicy: 'On BlockhashNotFound, transaction_simulation_failed, node-behind, or expired payment payload, create a fresh challenge and retry through sap_payments_call_paid_tool. Do not reuse an old signed payload.',
@@ -761,7 +1328,7 @@ function buildAgentStartPayload(context: SapMcpContext, goal: string | undefined
     },
     connectionCheck: {
       intent: 'Use this when the user asks "are you connected?", "is SAP MCP connected?", "check SAP", or similar status-only questions.',
-      minimumChecks: ['sap_agent_start when available', 'sap_agent_runtime_status with intent: connection', 'sap_profile_current for hosted server state only when needed', 'sap_payments_readiness only when the user asks about paid/write readiness'],
+      minimumChecks: ['sap_agent_start when available', 'sap_agent_runtime_status with intent: connection', 'sap_profile_current for hosted server state only when needed', 'sap_payments_wallet_guard and sap_payments_readiness only when the user asks about paid/write readiness'],
       responseShape: [
         'Connected: yes/no',
         'Endpoint and mode',

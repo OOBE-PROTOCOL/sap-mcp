@@ -88,7 +88,7 @@ describe('CAPABILITIES', () => {
   });
 
   it('has category counts that are positive integers', () => {
-    for (const [category, count] of Object.entries(CAPABILITIES.tools.categories)) {
+    for (const [, count] of Object.entries(CAPABILITIES.tools.categories)) {
       expect(typeof count).toBe('number');
       expect(count).toBeGreaterThan(0);
     }

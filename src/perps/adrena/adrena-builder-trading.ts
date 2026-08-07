@@ -48,6 +48,7 @@ import {
   validateLeverage,
   getWalletTokenBalances,
   checkSufficientBalance,
+  encodeAdrenaLeverage,
   ensureUserProfileInstructions,
   ensureAtaInstructions,
   createAdrenaProgram,
@@ -107,7 +108,7 @@ export async function buildSimulatePosition(
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
   // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
 
   const ixName = side === 'long' ? 'openOrIncreasePositionLong' : 'openOrIncreasePositionShort';
 
@@ -207,8 +208,7 @@ export async function buildOpenPositionLong(
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
   // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
-  // The SDK does: Math.floor(normalLeverage * BPS) where BPS = 10000.
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
 
   const ix = await buildInstruction(program, 'openOrIncreasePositionLong', [
     {
@@ -247,7 +247,7 @@ export async function buildOpenPositionLong(
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage);
 }
 
 /**
@@ -301,7 +301,7 @@ export async function buildOpenPositionShort(
   const allPreInstructions = [...preInstructions, ...profileInstructions];
 
   // Leverage is passed as BPS (basis points) to Adrena: 3x = 30000 BPS.
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
 
   const ix = await buildInstruction(program, 'openOrIncreasePositionShort', [
     {
@@ -340,7 +340,7 @@ export async function buildOpenPositionShort(
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage);
 }
 
 /**
@@ -958,7 +958,7 @@ export async function buildPositionPackage(
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
-  const leverageBps = Math.floor(leverage * 10000);
+  const leverageBps = encodeAdrenaLeverage(leverage);
 
   // Pre-instructions: ATA + user profile
   const collateralMint = getMintPublicKey(collateralToken);
@@ -1049,5 +1049,5 @@ export async function buildPositionPackage(
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, instructions);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning, undefined, leverage);
 }

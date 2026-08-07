@@ -19,3 +19,14 @@ export { loadKeypairFromFile, loadKeypairFromEnv } from './load-keypair.js';
 export { createLocalKeypairSigner } from './local-keypair-signer.js';
 export { createExternalSigner } from './external-signer.js';
 export { resolveSigner } from './signer-resolver.js';
+export {
+  buildWalletGuardAudit,
+  buildWalletGuardSummary,
+  walletGuardForbiddenActions,
+} from './wallet-guard.js';
+export type {
+  WalletGuardAudit,
+  WalletGuardSummary,
+  WalletPermissionStatus,
+  WalletStorageClass,
+} from './wallet-guard.js';

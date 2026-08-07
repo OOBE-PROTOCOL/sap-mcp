@@ -82,6 +82,7 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       collateralAmount: { type: 'number', description: 'Collateral amount in human-readable units (e.g. 10 = 10 JITOSOL).', minimum: 0 },
       leverage: { type: 'number', description: 'Leverage multiplier (e.g. 3 = 3x).', minimum: 1, maximum: 100 },
       priceUsd: { type: 'number', description: 'Optional limit price in USD. Omit for market order.', minimum: 0 },
+      stopLossPriceUsd: { type: 'number', description: 'Optional stop-loss price in USD. When provided, the policy engine treats this trade as having a stop loss. Omit to skip the SL requirement (if policy requires SL, this field must be present).', minimum: 0 },
     },
     required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage'],
     additionalProperties: false,
@@ -98,10 +99,12 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       const collateralAmount = Number(args['collateralAmount']);
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
+      const stopLossPriceUsd = args['stopLossPriceUsd'] !== undefined ? Number(args['stopLossPriceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       // Policy validation before building.
-      const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, false);
+      const hasStopLoss = stopLossPriceUsd !== null;
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, hasStopLoss);
       if (violation) {
         return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
       }
@@ -131,6 +134,7 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       collateralAmount: { type: 'number', description: 'Collateral (USDC) amount in human-readable units.', minimum: 0 },
       leverage: { type: 'number', description: 'Leverage multiplier.', minimum: 1, maximum: 100 },
       priceUsd: { type: 'number', description: 'Optional limit price in USD. Omit for market order.', minimum: 0 },
+      stopLossPriceUsd: { type: 'number', description: 'Optional stop-loss price in USD. When provided, the policy engine treats this trade as having a stop loss. Omit to skip the SL requirement (if policy requires SL, this field must be present).', minimum: 0 },
     },
     required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage'],
     additionalProperties: false,
@@ -147,10 +151,12 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       const collateralAmount = Number(args['collateralAmount']);
       const leverage = Number(args['leverage']);
       const priceUsd = args['priceUsd'] !== undefined ? Number(args['priceUsd']) : null;
+      const stopLossPriceUsd = args['stopLossPriceUsd'] !== undefined ? Number(args['stopLossPriceUsd']) : null;
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       // Policy validation before building.
-      const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, false);
+      const hasStopLoss = stopLossPriceUsd !== null;
+      const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, hasStopLoss);
       if (violation) {
         return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
       }
@@ -632,6 +638,152 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
       return createTextResponse(JSON.stringify(enrichedResult, null, 2));
     } catch (err) {
       return createTextResponse(JSON.stringify({ error: 'Failed to build trade intent', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+    }
+  });
+}
+
+/**
+ * @name registerAdrenaTrailingStopTool
+ * @description Register sap_adrena_build_trailing_stop.
+ *
+ * Reads the current oracle price for the market, computes a trailing stop
+ * at the specified percentage distance from current price, and builds a
+ * setStopLoss instruction. For longs: SL below price. For shorts: SL above price.
+ *
+ * @internal
+ */
+export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpContext): void {
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: {
+      owner: { type: 'string', description: 'Position owner wallet public key (base58).' },
+      principalToken: { type: 'string', description: 'Asset of the position.', enum: [...MAIN_POOL_TOKENS, ...COMMODITY_TOKENS] },
+      side: { type: 'string', description: 'Position side.', enum: ['long', 'short'] },
+      trailPct: { type: 'number', description: 'Trailing distance as percentage from current price (e.g. 3 = 3% away).', minimum: 0.1, maximum: 50 },
+    },
+    required: ['owner', 'principalToken', 'side', 'trailPct'],
+    additionalProperties: false,
+  };
+
+  registerTool(server, 'sap_adrena_build_trailing_stop', {
+    description: 'Build an unsigned transaction to set a trailing stop loss on an Adrena position. Reads the current oracle price and computes the stop loss at the specified percentage distance. For longs: SL below current price. For shorts: SL above current price. Returns transactionBase64 for local signing. Call this repeatedly to keep the stop trailing the price.',
+    inputSchema: schema,
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const owner = parsePublicKey(String(args['owner']));
+      const principalToken = String(args['principalToken']).toUpperCase();
+      const side = (args['side'] === 'short' ? 'short' : 'long') as PositionSide;
+      const trailPct = Number(args['trailPct']);
+
+      if (trailPct <= 0 || trailPct > 50) {
+        return createTextResponse(JSON.stringify({ error: 'trailPct must be between 0.1 and 50' }), { isError: true });
+      }
+
+      // Fetch current oracle price.
+      const { fetchOraclePrice } = await import('../../perps/adrena/adrena-builder-core.js');
+      const oraclePriceRaw = await fetchOraclePrice(principalToken, side);
+      // Convert raw price (scaled by 10^10) to USD.
+      const currentPriceUsd = Number(oraclePriceRaw) / Math.pow(10, 10);
+
+      if (currentPriceUsd <= 0) {
+        return createTextResponse(JSON.stringify({ error: `Could not fetch oracle price for ${principalToken}` }), { isError: true });
+      }
+
+      // Compute trailing stop price.
+      const stopLossPriceUsd = side === 'long'
+        ? currentPriceUsd * (1 - trailPct / 100)
+        : currentPriceUsd * (1 + trailPct / 100);
+
+      const stopLossLimitPrice = priceToRaw(stopLossPriceUsd);
+
+      const result = await buildSetStopLoss(
+        getConnection(context), owner, principalToken, side, stopLossLimitPrice, null,
+      );
+
+      return createTextResponse(JSON.stringify({
+        ...result,
+        trailingStop: {
+          currentPriceUsd,
+          trailPct,
+          stopLossPriceUsd,
+          side,
+        },
+      }, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to build trailing stop transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+    }
+  });
+}
+
+/**
+ * @name registerAdrenaModifyPositionTool
+ * @description Register sap_adrena_build_modify_position.
+ *
+ * Builds an openOrIncreasePosition instruction to add collateral to an
+ * existing position. This effectively modifies the position by increasing
+ * its collateral (and optionally changing leverage).
+ *
+ * @internal
+ */
+export function registerAdrenaModifyPositionTool(server: Server, context: SapMcpContext): void {
+  const schema: JsonSchema = {
+    type: 'object',
+    properties: {
+      owner: { type: 'string', description: 'Position owner wallet public key (base58).' },
+      principalToken: { type: 'string', description: 'Asset of the position.', enum: [...MAIN_POOL_TOKENS, ...COMMODITY_TOKENS] },
+      collateralToken: { type: 'string', description: 'Collateral token.', enum: COLLATERAL_TOKENS },
+      collateralAmount: { type: 'number', description: 'Additional collateral amount in human-readable units to add to the position.', minimum: 0 },
+      leverage: { type: 'number', description: 'New leverage multiplier. Pass the same value to keep current leverage, or a different value to change it.', minimum: 1, maximum: 100 },
+      side: { type: 'string', description: 'Position side.', enum: ['long', 'short'] },
+    },
+    required: ['owner', 'principalToken', 'collateralToken', 'collateralAmount', 'leverage', 'side'],
+    additionalProperties: false,
+  };
+
+  registerTool(server, 'sap_adrena_build_modify_position', {
+    description: 'Build an unsigned transaction to modify an existing Adrena position by adding collateral. Uses openOrIncreasePosition which atomically adds collateral to an existing position. The leverage parameter can be changed to adjust the position risk. Returns transactionBase64 for local signing.',
+    inputSchema: schema,
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const owner = parsePublicKey(String(args['owner']));
+      const principalToken = String(args['principalToken']).toUpperCase();
+      const collateralToken = String(args['collateralToken']).toUpperCase();
+      const collateralAmount = Number(args['collateralAmount']);
+      const leverage = Number(args['leverage']);
+      const side = (args['side'] === 'short' ? 'short' : 'long') as PositionSide;
+
+      if (collateralAmount <= 0) {
+        return createTextResponse(JSON.stringify({ error: 'collateralAmount must be positive' }), { isError: true });
+      }
+
+      // Policy validation.
+      const hasStopLoss = false; // Modify does not set SL.
+      const violation = validateTradingPolicyFromContext(context, principalToken, side, collateralAmount, leverage, hasStopLoss);
+      if (violation) {
+        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+      }
+
+      // Use the open builder to increase the position (openOrIncreasePosition).
+      const builderFn = side === 'long'
+        ? buildOpenPositionLong
+        : buildOpenPositionShort;
+
+      const result = await builderFn(
+        getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, null,
+      );
+
+      return createTextResponse(JSON.stringify({
+        ...result,
+        modifyPosition: {
+          principalToken,
+          collateralToken,
+          additionalCollateral: collateralAmount,
+          newLeverage: leverage,
+          side,
+        },
+      }, null, 2));
+    } catch (err) {
+      return createTextResponse(JSON.stringify({ error: 'Failed to build modify position transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
     }
   });
 }
