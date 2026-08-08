@@ -19,7 +19,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { createTextResponse, createUiCardResponse } from '../adapters/mcp/tool-response.js';
+import type { UiCardContext } from '../ui/ui-resources.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
 
@@ -638,9 +639,50 @@ function normalizeRoutePlanBps(hop: unknown, routePlanLength: number): unknown {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  Registration
-// ═══════════════════════════════════════════════════════════════════
+/**
+ * Builds a UI card context for MagicBlock tools that have visual representations.
+ * Returns undefined for tools without a matching card template.
+ */
+function buildMagicBlockCardContext(toolName: string, data: unknown): UiCardContext | undefined {
+  const d = data as Record<string, unknown>;
+  if (toolName === 'magicblock_swap' || toolName === 'magicblock_swapQuote') {
+    const quote = d.quoteResponse as Record<string, unknown> | undefined;
+    const inputMint = (quote?.inputMint ?? d.inputMint) as string | undefined;
+    const outputMint = (quote?.outputMint ?? d.outputMint) as string | undefined;
+    const amountIn = Number(quote?.inAmount ?? d.inAmount ?? 0);
+    const amountOut = Number(quote?.outAmount ?? d.outAmount ?? 0);
+    const routePlan = Array.isArray(quote?.routePlan)
+      ? (quote.routePlan as readonly unknown[]).map((h) => {
+          const hop = h as Record<string, unknown>;
+          const si = hop.swapInfo as Record<string, unknown> | undefined;
+          return (si?.label as string) || '?';
+        })
+      : [inputMint ?? '?', outputMint ?? '?'];
+    return {
+      kind: 'jupiter',
+      tokenIn: inputMint ?? 'unknown',
+      tokenOut: outputMint ?? 'unknown',
+      amountIn,
+      amountOut,
+      priceImpactPct: Number(quote?.priceImpactPct ?? 0),
+      route: routePlan,
+      status: 'success',
+    };
+  }
+  if (toolName === 'magicblock_transfer') {
+    return {
+      kind: 'transfer',
+      type: 'spl',
+      amount: Number(d.amount ?? 0),
+      symbol: String(d.mint ?? 'unknown'),
+      from: String(d.from ?? ''),
+      to: String(d.to ?? ''),
+      status: 'confirmed',
+    };
+  }
+  return undefined;
+}
+
 
 /**
  * @name registerMagicBlockTools
@@ -683,6 +725,15 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
         : `${pricingTier} tier — estimated ${estimatedPriceUsd} USD per call. Use sap_x402_estimate_cost for exact pricing and sap_payments_call_paid_tool with maxPriceUsd >= ${estimatedPriceUsd} to execute.`,
       data,
     };
+
+    // Build UI card context for visual tools
+    const cardCtx = buildMagicBlockCardContext(toolName, data);
+    if (cardCtx) {
+      return createUiCardResponse(
+        response as unknown as Record<string, unknown>,
+        cardCtx,
+      );
+    }
     return createTextResponse(JSON.stringify(response, null, 2));
   }
 

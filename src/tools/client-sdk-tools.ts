@@ -15,7 +15,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey } from '@solana/web3.js';
 import type { ProtocolTool } from '@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { createTextResponse, createUiCardResponse } from '../adapters/mcp/tool-response.js';
+import type { UiCardContext } from '../ui/ui-resources.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
 import { classifyTool } from '../payments/pricing.js';
@@ -352,14 +353,23 @@ function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): v
         const publicKey = new PublicKey(address);
         const commitment = input.commitment ?? context.config.commitment;
         const lamports = await context.connection.getBalance(publicKey, commitment);
-
-        return createTextResponse(JSON.stringify({
+        const sol = lamports / 1_000_000_000;
+        const data = {
           success: true,
           address: publicKey.toBase58(),
           lamports,
-          sol: lamports / 1_000_000_000,
+          sol,
           commitment,
-        }, null, 2));
+        };
+        const cardCtx: UiCardContext = {
+          kind: 'balance',
+          sol,
+          walletAddress: publicKey.toBase58(),
+          network: /devnet/i.test(context.config.rpcUrl) ? 'devnet'
+            : /testnet/i.test(context.config.rpcUrl) ? 'testnet'
+            : 'mainnet',
+        };
+        return createUiCardResponse(data, cardCtx);
       } catch (error) {
         logger.error('Failed to get SOL balance', { error });
         return createTextResponse(
@@ -577,6 +587,10 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
             const wrapped = typeof result === 'string'
               ? { success: true, hostedPricing: pricing, result }
               : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
+            const metaCardCtx = buildMetaplexCardContext(name, input, result);
+            if (metaCardCtx) {
+              return createUiCardResponse(wrapped, metaCardCtx);
+            }
             return createTextResponse(
               typeof result === 'string' ? JSON.stringify(wrapped, null, 2) : JSON.stringify(wrapped, null, 2)
             );
@@ -618,6 +632,10 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
             const wrapped = typeof result === 'string'
               ? { success: true, hostedPricing: pricing, result }
               : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
+            const jupCardCtx = buildJupiterCardContext(name, result);
+            if (jupCardCtx) {
+              return createUiCardResponse(wrapped, jupCardCtx);
+            }
             return createTextResponse(JSON.stringify(wrapped, null, 2));
           } catch (invokeError) {
             logger.error(`Jupiter protocol tool execution failed: ${name}`, {
@@ -837,4 +855,114 @@ function structuredCloneSafe(value: unknown): unknown {
   } catch {
     return JSON.parse(JSON.stringify(value)) as unknown;
   }
+}
+
+// ─── UI Card Context Builders ─────────────────────────────────────
+
+/**
+ * Jupiter tool names that produce swap-like results suitable for a card.
+ */
+const JUPITER_SWAP_TOOL_NAMES = new Set([
+  'jupiter_swap',
+  'jupiter_smartSwap',
+  'jupiter_getOrder',
+  'jupiter_swapInstructions',
+]);
+
+/**
+ * @name buildJupiterCardContext
+ * @description Builds a Jupiter swap UiCardContext from the tool result when the
+ *   result contains swap fields (inputMint, outputMint, inAmount, outAmount,
+ *   priceImpactPct, routePlan). Returns undefined for non-swap Jupiter tools.
+ */
+function buildJupiterCardContext(toolName: string, result: unknown): UiCardContext | undefined {
+  if (!JUPITER_SWAP_TOOL_NAMES.has(toolName)) return undefined;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const r = result as Record<string, unknown>;
+  const inputMint = typeof r.inputMint === 'string' ? r.inputMint : undefined;
+  const outputMint = typeof r.outputMint === 'string' ? r.outputMint : undefined;
+  const inAmount = parseAmount(r.inAmount);
+  const outAmount = parseAmount(r.outAmount);
+  const priceImpactPct = parseAmount(r.priceImpactPct);
+  if (inputMint === undefined || outputMint === undefined || inAmount === undefined || outAmount === undefined) {
+    return undefined;
+  }
+  const routePlan = Array.isArray(r.routePlan) ? r.routePlan : [];
+  const route = routePlan.map((hop) => {
+    if (hop && typeof hop === 'object') {
+      const h = hop as Record<string, unknown>;
+      const swapInfo = h.swapInfo as Record<string, unknown> | undefined;
+      if (swapInfo) {
+        return typeof swapInfo.label === 'string' ? swapInfo.label
+          : typeof swapInfo.swapLabel === 'string' ? swapInfo.swapLabel
+          : '?';
+      }
+    }
+    return '?';
+  }).filter((s) => s !== '?');
+  return {
+    kind: 'jupiter',
+    tokenIn: inputMint,
+    tokenOut: outputMint,
+    amountIn: inAmount,
+    amountOut: outAmount,
+    priceImpactPct: priceImpactPct ?? 0,
+    route: route.length > 0 ? route : ['Jupiter'],
+    status: 'success',
+  };
+}
+
+/**
+ * @name parseAmount
+ * @description Parses a numeric amount that may arrive as a string or number.
+ */
+function parseAmount(value: unknown): number | undefined {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Metaplex tool name prefixes that produce NFT operation results suitable for a card.
+ */
+const METAPLEX_TOOL_PREFIX = 'metaplex-nft_';
+
+/**
+ * @name buildMetaplexCardContext
+ * @description Builds a Metaplex NFT UiCardContext from the tool input and result
+ *   for metaplex-nft_* tools. Returns undefined for non-Metaplex tools.
+ */
+function buildMetaplexCardContext(toolName: string, input: unknown, result: unknown): UiCardContext | undefined {
+  if (!toolName.startsWith(METAPLEX_TOOL_PREFIX)) return undefined;
+  const action = toolName.startsWith('metaplex-nft_deploy') ? 'deploy'
+    : toolName.startsWith('metaplex-nft_mint') ? 'mint'
+    : toolName.startsWith('metaplex-nft_update') ? 'update'
+    : toolName.startsWith('metaplex-nft_verify') ? 'verify'
+    : 'mint';
+  const inp = (input && typeof input === 'object' && !Array.isArray(input)) ? input as Record<string, unknown> : {};
+  const res = (result && typeof result === 'object' && !Array.isArray(result)) ? result as Record<string, unknown> : {};
+  const collectionName = typeof inp.collectionName === 'string' ? inp.collectionName
+    : typeof res.collectionName === 'string' ? res.collectionName
+    : typeof inp.collection === 'string' ? inp.collection
+    : undefined;
+  const nftName = typeof inp.name === 'string' ? inp.name
+    : typeof res.name === 'string' ? res.name
+    : typeof inp.nftName === 'string' ? inp.nftName
+    : undefined;
+  const mintAddress = typeof res.mint === 'string' ? res.mint
+    : typeof res.mintAddress === 'string' ? res.mintAddress
+    : typeof inp.mint === 'string' ? inp.mint
+    : typeof res.collectionMint === 'string' ? res.collectionMint
+    : undefined;
+  return {
+    kind: 'metaplex',
+    action: action as 'mint' | 'deploy' | 'update' | 'verify',
+    collectionName,
+    nftName,
+    mintAddress,
+    status: 'success',
+  };
 }

@@ -6,7 +6,8 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { createTextResponse, createUiCardResponse } from '../adapters/mcp/tool-response.js';
+import type { UiCardContext } from '../ui/ui-resources.js';
 import type { SapMcpContext } from '../core/types.js';
 import {
   formatUsdPrice,
@@ -119,14 +120,23 @@ export function registerEstimateToolCost(server: Server, context: SapMcpContext)
           reason: pricing.reason,
         };
 
-        return createTextResponse(JSON.stringify({
+        const estimateResult = {
           success: true,
           requestedToolName: toolName === canonicalToolName ? undefined : toolName,
           estimate,
           hint: tier === 'free'
             ? 'This tool is free. Call it directly without sap_payments_call_paid_tool.'
             : `This tool requires x402 payment. Use sap_payments_call_paid_tool with toolName="${canonicalToolName}" and maxPriceUsd >= ${priceUsd.toFixed(6)}. The actual x402 challenge is the final source of truth for pricing.`,
-        }, null, 2));
+        };
+        const cardCtx: UiCardContext = {
+          kind: 'pricing',
+          toolName: canonicalToolName,
+          tier,
+          priceUsd,
+          recommendedMaxPriceUsd: priceUsd * 1.5,
+          isFree: tier === 'free',
+        };
+        return createUiCardResponse(estimateResult as unknown as Record<string, unknown>, cardCtx);
       } catch (error) {
         return createTextResponse(
           JSON.stringify({

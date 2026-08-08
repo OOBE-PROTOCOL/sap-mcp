@@ -8,7 +8,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey } from '@solana/web3.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
+import { createTextResponse, createUiCardResponse } from '../../adapters/mcp/tool-response.js';
+import type { UiCardContext } from '../../ui/ui-resources.js';
 import { registerTool } from '../../adapters/mcp/sdk-compat.js';
 import {
   adrenaDataApi,
@@ -48,7 +49,26 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     if (positions === null) {
       return createTextResponse(JSON.stringify({ error: 'Failed to fetch positions from Adrena Data API', wallet }), { isError: true });
     }
-    return createTextResponse(JSON.stringify({ wallet, positions, count: positions.length }, null, 2));
+    const data = { wallet, positions, count: positions.length };
+    const openPosition = positions.find((p) => p.status === 'open');
+    const cardCtx: UiCardContext | undefined = openPosition
+      ? {
+          kind: 'position',
+          market: openPosition.principalToken,
+          side: openPosition.side === 'long' ? 'long' : 'short',
+          size: openPosition.sizeUsd,
+          entryPrice: openPosition.entryPrice,
+          markPrice: openPosition.exitPrice ?? openPosition.entryPrice,
+          leverage: openPosition.leverage,
+          pnlUsd: openPosition.pnlUsd ?? 0,
+          pnlPct: openPosition.sizeUsd > 0 ? ((openPosition.pnlUsd ?? 0) / openPosition.sizeUsd) * 100 : 0,
+          walletAddress: wallet,
+        }
+      : undefined;
+    if (cardCtx) {
+      return createUiCardResponse(data, cardCtx);
+    }
+    return createTextResponse(JSON.stringify(data, null, 2));
   });
 
   // Get pool info — reads directly from on-chain Pool account (Data API endpoint is broken)

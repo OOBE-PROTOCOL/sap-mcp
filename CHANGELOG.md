@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.72 - 2026-08-08
+
+### Added
+
+- Wired MCP Apps UI cards to tool handlers: `sol_get_balance` (balance card),
+  Jupiter swap tools (jupiter swap card), Metaplex NFT tools (metaplex card),
+  `sap_adrena_get_positions` (position card), `magicblock_swap` (jupiter swap card),
+  `magicblock_transfer` (transfer card), `sap_estimate_tool_cost` (pricing card).
+  Tool responses now include an embedded `ui://` HTML resource alongside the
+  existing text/JSON content, following the MCP Apps extension specification.
+  Clients that support MCP Apps (Claude Desktop, Cursor, future Hermes versions)
+  will render the visual card automatically. Clients without MCP Apps support
+  continue to receive the text/JSON content as before — no regression.
+
 ## 0.9.71 - 2026-08-07
 
 ### Fixed
