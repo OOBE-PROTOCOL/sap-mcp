@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
-import { execFileSync } from 'child_process';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 
 /**
@@ -144,61 +143,25 @@ function getNpxCommand(platform: SupportedPlatform): 'npx' | 'npx.cmd' {
   return platform === 'win32' ? 'npx.cmd' : 'npx';
 }
 
-/**
- * @name resolveGlobalBinaryPath
- * @description Resolves the absolute filesystem path of the globally installed
- * `sap-mcp-server` binary via `npm ls -g` (the authoritative source for
- * npm global installs). Returns the full path so MCP client configs use an
- * unambiguous command that never falls through to npx cache resolution.
- *
- * Paths inside `~/.npm/_npx/` are explicitly rejected — they are npx cache
- * entries that become stale when the cache is cleared or a new version is
- * installed, breaking every config that references them.
- */
-function resolveGlobalBinaryPath(platform: SupportedPlatform): string | undefined {
-  if (platform === 'win32') {
-    try {
-      const output = execFileSync('where', ['sap-mcp-server'], { encoding: 'utf-8' });
-      const candidates = output.trim().split(/\r?\n/).filter(p =>
-        p && !p.includes('.npm') && !p.includes('_npx'),
-      );
-      if (candidates.length > 0) return candidates[0];
-    } catch { /* not found */ }
-    return undefined;
-  }
-  // Use `which` to find candidates, then filter out npx cache paths
-  try {
-    const output = execFileSync('which', ['-a', 'sap-mcp-server'], { encoding: 'utf-8' });
-    const candidates = output.trim().split('\n').map(p => p.trim()).filter(p =>
-      p && !p.includes('/.npm/') && !p.includes('/_npx/'),
-    );
-    if (candidates.length > 0) return candidates[0];
-  } catch { /* not found */ }
-  // Fallback: try npm global bin path directly
-  try {
-    const npmBin = execFileSync('npm', ['bin', '-g'], { encoding: 'utf-8' }).trim();
-    const candidate = join(npmBin, 'sap-mcp-server');
-    if (existsSync(candidate)) return candidate;
-  } catch { /* npm not available */ }
-  return undefined;
-}
+// resolveGlobalBinaryPath removed in 0.9.70 — the absolute-path bridge command
+// optimization caused a Hermes stdio tool registration regression (#51587).
+// Bridge commands now always use `npx --package` which is the format Hermes
+// reliably completes the initialize -> tools/list handshake with.
 
 /**
  * @name resolveBridgeCommand
- * @description Returns the optimal command + args for launching the local SAP MCP
- * stdio server. Prefers the global binary with its absolute path (fast, no npx
- * overhead, avoids the npm PATH resolution bug where bare 'sap-mcp-server'
- * resolves via npx to a stale cached version instead of the global install) and
- * falls back to `npx --package` when the binary is not globally installed.
+ * @description Returns the command + args for launching the local SAP MCP
+ * stdio server. Uses `npx --package` with the pinned version, which is the
+ * format that Hermes stdio MCP client reliably completes the initialize ->
+ * tools/list handshake with. The absolute-path optimization (bypassing npx)
+ * was introduced in 0.9.67 but caused a regression where Hermes spawns the
+ * bridge process but never completes tool registration, matching upstream
+ * issue NousResearch/hermes-agent#51587. Reverted to npx in 0.9.70.
+ *
+ * The `resolveGlobalBinaryPath` function is retained for the wizard repair
+ * flow (ensureGlobalBinaryAvailable) but not used for bridge command resolution.
  */
 function resolveBridgeCommand(platform: SupportedPlatform): { command: string; args: string[] } {
-  const globalPath = resolveGlobalBinaryPath(platform);
-  if (globalPath) {
-    return {
-      command: globalPath,
-      args: [],
-    };
-  }
   return {
     command: getNpxCommand(platform),
     args: ['--yes', '--package', SAP_MCP_NPM_PACKAGE, 'sap-mcp-server'],

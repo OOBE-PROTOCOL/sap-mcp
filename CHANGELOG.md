@@ -2,11 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.71 - 2026-08-07
+
+### Fixed
+
+- Reverted bridge command to `npx --package` format: the absolute-path optimization
+  introduced in 0.9.67 (`resolveBridgeCommand` preferring the global binary with
+  `args: []`) caused a regression where Hermes spawns the bridge process but never
+  completes the MCP `initialize` -> `tools/list` handshake, matching upstream issue
+  NousResearch/hermes-agent#51587. Bridge commands now always use
+  `npx --yes --package @oobe-protocol-labs/sap-mcp-server@<version> sap-mcp-server`,
+  which is the format that worked reliably through 0.9.66. The
+  `resolveGlobalBinaryPath` function has been removed as dead code.
+
 ## 0.9.70 - 2026-08-07
 
 ### Fixed
 
-- Fixed MagicBlock private swap fund loss: `validateMagicBlockSwapInput` now requires
+- Fixed MagicBlock private swap issues: `validateMagicBlockSwapInput` now requires
   `minDelayMs`, `maxDelayMs`, and `split` when `visibility=private`, matching the
   MagicBlock Private Payments API specification. Previously these fields were
   optional and stripped by `stripNullish`, causing the API to receive incomplete

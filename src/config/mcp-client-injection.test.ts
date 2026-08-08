@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { execFileSync } from 'child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import {
@@ -25,22 +24,11 @@ import {
 
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
 
-const GLOBAL_BINARY_AVAILABLE = (() => {
-  try {
-    execFileSync('which', ['sap-mcp-server'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-})();
+// Bridge commands always use npx --package (reverted from absolute-path in 0.9.70
+// due to Hermes stdio tool registration regression #51587).
+const EXPECTED_BRIDGE_COMMAND = 'npx';
+const EXPECTED_BRIDGE_ARGS = ['--yes', '--package', NPM_PACKAGE, 'sap-mcp-server'];
 
-/** Returns the expected command for the local bridge (global binary path or npx). */
-function expectedBridgeCommand(): string {
-  if (GLOBAL_BINARY_AVAILABLE) {
-    return execFileSync('which', ['sap-mcp-server'], { encoding: 'utf-8' }).trim();
-  }
-  return 'npx';
-}
 let tempDirs: string[] = [];
 
 function makeTempDir(): string {
@@ -211,10 +199,8 @@ describe('MCP client injection', () => {
       SAP_LOG_LEVEL: 'info',
     });
     expect(codexLocal?.content).toContain('[mcp_servers.sap]');
-    if (!GLOBAL_BINARY_AVAILABLE) {
-      expect(codexLocal?.content).toContain('--package');
-      expect(codexLocal?.content).toContain(NPM_PACKAGE);
-    }
+    expect(codexLocal?.content).toContain('--package');
+    expect(codexLocal?.content).toContain(NPM_PACKAGE);
   });
 
   it('discovers Codex config as a create-capable target', () => {
@@ -227,13 +213,8 @@ describe('MCP client injection', () => {
   it('builds portable Codex npx stdio config without wallet or RPC overrides', () => {
     const config = createNpxCodexServerConfig();
 
-    if (GLOBAL_BINARY_AVAILABLE) {
-      expect(config.command).toBe(expectedBridgeCommand());
-      expect(config.args).toEqual([]);
-    } else {
-      expect(config.args).toContain(NPM_PACKAGE);
-      expect(config.args).toContain('sap-mcp-server');
-    }
+    expect(config.command).toBe(EXPECTED_BRIDGE_COMMAND);
+    expect(config.args).toEqual(EXPECTED_BRIDGE_ARGS);
     expect(config.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
@@ -415,7 +396,7 @@ describe('MCP client injection', () => {
       type: 'http',
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
     });
-    expect(parsed.mcpServers.sap_payments.command).toBe(expectedBridgeCommand());
+    expect(parsed.mcpServers.sap_payments.command).toBe(EXPECTED_BRIDGE_COMMAND);
     expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
     expect(parsed.mcpServers.sap_payments.env.SAP_MCP_RUNTIME_ID).toBe('claude');
     expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
@@ -441,7 +422,7 @@ describe('MCP client injection', () => {
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
       transport: 'streamable-http',
     });
-    expect(parsed.sap_payments.command).toBe(expectedBridgeCommand());
+    expect(parsed.sap_payments.command).toBe(EXPECTED_BRIDGE_COMMAND);
   });
 
   it('auto-repairs Hermes global JSON by removing nested legacy SAP blocks only', () => {
@@ -563,9 +544,7 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"\n    transport: "streamable-http"');
     expect(built.nextContent).toContain('  sap_payments:\n    command:');
-    if (!GLOBAL_BINARY_AVAILABLE) {
-      expect(built.nextContent).toContain(`      - "${NPM_PACKAGE}"`);
-    }
+    expect(built.nextContent).toContain(`      - "${NPM_PACKAGE}"`);
     expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).toContain('  keep:\n    command: keep');
     expect(built.nextContent).not.toContain('command: old');
@@ -593,9 +572,7 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"\n      transport: "streamable-http"');
     expect(built.nextContent).toContain('    sap_payments:\n      command:');
-    if (!GLOBAL_BINARY_AVAILABLE) {
-      expect(built.nextContent).toContain(`        - "${NPM_PACKAGE}"`);
-    }
+    expect(built.nextContent).toContain(`        - "${NPM_PACKAGE}"`);
     expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).toContain('    keep:\n      command: keep');
     expect(built.nextContent).not.toContain('command: old');
