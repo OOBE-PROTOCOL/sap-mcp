@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.73 - 2026-08-08
+
+### Fixed
+
+- Fixed MCP tool result validation for embedded `ui://` resources: `isToolCallResult`
+  in `sdk-compat.ts` now recognizes resource content items (`type: 'resource'` with
+  a nested `resource.text` field) instead of only text content items. Previously,
+  tool handlers returning `createUiCardResponse` (which includes both text and
+  resource content items) were rejected by `isToolCallResult` because the resource
+  item did not have a top-level `text` property. The entire response was then
+  JSON-stringified as plain text, causing Hermes to reject it with
+  "Invalid structured content returned by tool: 'content' is a required property".
+
 ## 0.9.72 - 2026-08-08
 
 ### Added

@@ -215,7 +215,13 @@ function isToolCallResult(value: unknown): value is ToolCallResult {
   return value.content.every((content) => (
     isPlainObject(content)
     && typeof content.type === 'string'
-    && (content.text === undefined || typeof content.text === 'string')
+    && (
+      content.text === undefined || typeof content.text === 'string'
+    ) && (
+      // Resource content items have a nested resource object, not a text field
+      content.type !== 'resource'
+      || (isPlainObject(content.resource) && typeof content.resource.text === 'string')
+    )
   ));
 }
 
