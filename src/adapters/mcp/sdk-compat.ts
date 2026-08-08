@@ -230,16 +230,28 @@ function isToolCallResult(value: unknown): value is ToolCallResult {
  * @description Normalizes legacy tool handler returns and native MCP tool results.
  */
 function parseSingleJsonTextContent(content: ToolContent[]): Record<string, unknown> | undefined {
-  if (content.length !== 1 || content[0].type !== 'text' || typeof content[0].text !== 'string') {
-    return undefined;
+  // When content has a single text item, parse it directly.
+  if (content.length === 1 && content[0].type === 'text' && typeof content[0].text === 'string') {
+    try {
+      const parsed = JSON.parse(content[0].text) as unknown;
+      return isPlainObject(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
   }
-
-  try {
-    const parsed = JSON.parse(content[0].text) as unknown;
-    return isPlainObject(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
+  // When content has multiple items (e.g. text + embedded resource),
+  // infer structuredContent from the first text item only.
+  for (const item of content) {
+    if (item.type === 'text' && typeof item.text === 'string') {
+      try {
+        const parsed = JSON.parse(item.text) as unknown;
+        if (isPlainObject(parsed)) return parsed;
+      } catch {
+        // not JSON, try next
+      }
+    }
   }
+  return undefined;
 }
 
 function toToolCallResult(result: unknown, hasExplicitOutputSchema = false): ToolCallResult {

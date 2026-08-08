@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.74 - 2026-08-08
+
+### Fixed
+
+- Fixed `createUiCardResponse` returning `structuredContent` with raw data that failed
+  Hermes MCP schema validation ("content is a required property"). Removed the
+  `structuredContent` field from `createUiCardResponse` — the compat layer now infers
+  it from the first text content item via `parseSingleJsonTextContent`.
+- Fixed `parseSingleJsonTextContent` to handle multi-item content arrays (text +
+  embedded resource). Previously it only worked with single-item arrays, so
+  structuredContent inference returned `undefined` when a `ui://` resource was
+  present alongside the text content.
+
 ## 0.9.73 - 2026-08-08
 
 ### Fixed
