@@ -8,8 +8,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineException,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import {
   buildAddLimitOrder,
   buildCancelLimitOrder,
@@ -50,7 +53,7 @@ export function registerAdrenaAddLimitOrderTool(server: Server, context: SapMcpC
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_add_limit_order', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_limit_order', {
     description: 'Build an unsigned transaction to place a limit order on Adrena. The order fills when the oracle price reaches the trigger price. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -67,9 +70,9 @@ export function registerAdrenaAddLimitOrderTool(server: Server, context: SapMcpC
       const limitPrice = limitPriceUsd !== null ? priceToRaw(limitPriceUsd) : null;
 
       const result = await buildAddLimitOrder(getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, side as PositionSide, triggerPrice, limitPrice);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build add limit order transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build add limit order transaction', err);
     }
   });
 }
@@ -91,7 +94,7 @@ export function registerAdrenaCancelLimitOrderTool(server: Server, context: SapM
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_cancel_limit_order', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_limit_order', {
     description: 'Build an unsigned transaction to cancel a limit order on Adrena. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -101,9 +104,9 @@ export function registerAdrenaCancelLimitOrderTool(server: Server, context: SapM
       const orderId = BigInt(Math.floor(Number(args['orderId'])));
 
       const result = await buildCancelLimitOrder(getConnection(context), owner, collateralToken, orderId);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build cancel limit order transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build cancel limit order transaction', err);
     }
   });
 }

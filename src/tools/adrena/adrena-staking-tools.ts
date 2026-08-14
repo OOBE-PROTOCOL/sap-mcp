@@ -7,8 +7,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineException,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import {
   buildInitUserStaking,
   buildAddLiquidStake,
@@ -32,7 +35,7 @@ import {
  */
 export function registerAdrenaStakingTools(server: Server, context: SapMcpContext): void {
   // Init user staking
-  registerTool(server, 'sap_adrena_build_init_user_staking', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_init_user_staking', {
     description: 'Build an unsigned transaction to initialize a user staking account on Adrena. Must be called before add_liquid_stake or add_locked_stake. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -46,14 +49,14 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
     try {
       const owner = parsePublicKey(String(args['owner']));
       const result = await buildInitUserStaking(getConnection(context), owner);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build init user staking transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build init user staking transaction', err);
     }
   });
 
   // Add liquid stake
-  registerTool(server, 'sap_adrena_build_add_liquid_stake', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_liquid_stake', {
     description: 'Build an unsigned transaction to add a liquid stake on Adrena (stake LP tokens). Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -69,14 +72,14 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
       const owner = parsePublicKey(String(args['owner']));
       const amount = BigInt(Math.floor(Number(args['amount'])));
       const result = await buildAddLiquidStake(getConnection(context), owner, amount);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build add liquid stake transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build add liquid stake transaction', err);
     }
   });
 
   // Remove liquid stake
-  registerTool(server, 'sap_adrena_build_remove_liquid_stake', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_remove_liquid_stake', {
     description: 'Build an unsigned transaction to remove a liquid stake on Adrena (unstake LP tokens). Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -92,14 +95,14 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
       const owner = parsePublicKey(String(args['owner']));
       const amount = BigInt(Math.floor(Number(args['amount'])));
       const result = await buildRemoveLiquidStake(getConnection(context), owner, amount);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build remove liquid stake transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build remove liquid stake transaction', err);
     }
   });
 
   // Add locked stake
-  registerTool(server, 'sap_adrena_build_add_locked_stake', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_locked_stake', {
     description: 'Build an unsigned transaction to add a locked stake on Adrena. LP tokens are locked for a specified duration. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -117,14 +120,14 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
       const amount = BigInt(Math.floor(Number(args['amount'])));
       const lockedDays = Math.floor(Number(args['lockedDays']));
       const result = await buildAddLockedStake(getConnection(context), owner, amount, lockedDays);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build add locked stake transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build add locked stake transaction', err);
     }
   });
 
   // Claim stakes
-  registerTool(server, 'sap_adrena_build_claim_stakes', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_claim_stakes', {
     description: 'Build an unsigned transaction to claim staking rewards on Adrena. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -143,9 +146,9 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
         ? indexesStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
         : null;
       const result = await buildClaimStakes(getConnection(context), owner, lockedStakeIndexes);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build claim stakes transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build claim stakes transaction', err);
     }
   });
 }

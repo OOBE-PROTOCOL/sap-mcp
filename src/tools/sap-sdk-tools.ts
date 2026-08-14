@@ -37,8 +37,6 @@ import type { FairScaleTask } from '@oobe-protocol-labs/synapse-sap-sdk/registri
 import type { ToolCategoryName } from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
 import type { PaymentContext, PreparePaymentOptions, SettleOptions } from '@oobe-protocol-labs/synapse-sap-sdk/registries/x402';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { getSapClient, isSapClientInitialized } from '../sap/sap-client-manager.js';
 import { logger } from '../core/logger.js';
 import {
@@ -47,15 +45,21 @@ import {
   SAP_REGISTRATION_FEE_LAMPORTS,
 } from '../core/constants.js';
 import { classifyTool } from '../payments/pricing.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
 
 type JsonRecord = Record<string, unknown>;
+type SapToolResult = ToolFamilyPipelineResult;
 type SapToolHandler = (input: JsonRecord, client: SapClient) => Promise<unknown>;
 
 interface ToolRegistration {
   name: string;
   title: string;
   description: string;
-  inputSchema: unknown;
+  inputSchema: Record<string, unknown>;
   handler: SapToolHandler;
 }
 
@@ -582,15 +586,12 @@ function jsonReplacer(_key: string, value: unknown): unknown {
  * @description Wraps a successful tool result in the MCP text response shape.
  *   Includes hostedPricing metadata so agents know the tier and estimated cost.
  */
-function ok(payload: unknown, toolName?: string) {
+function ok(payload: unknown, toolName?: string): SapToolResult {
   const pricingMeta = toolName ? buildHostedPricingMeta(toolName) : undefined;
-  return createTextResponse(
-    JSON.stringify(
-      { success: true, ...(pricingMeta ? { hostedPricing: pricingMeta } : {}), ...asObjectPayload(payload) },
-      jsonReplacer,
-      2,
-    ),
-  );
+  return createToolFamilyPipelineResult(JSON.parse(JSON.stringify(
+    { success: true, ...(pricingMeta ? { hostedPricing: pricingMeta } : {}), ...asObjectPayload(payload) },
+    jsonReplacer,
+  )) as JsonRecord);
 }
 
 /**
@@ -2649,26 +2650,32 @@ function parseUpdateToolArgs(input: JsonRecord): UpdateToolArgs {
  * @name registerSapTool
  * @description Registers one SAP SDK-backed MCP tool with common error handling.
  */
-function registerSapTool(server: Server, client: SapClient, definition: ToolRegistration): void {
-  registerTool(
+function registerSapPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  client: SapClient,
+  definition: ToolRegistration,
+): void {
+  registerToolFamilyPipelineTool<JsonRecord, JsonRecord>(
     server,
+    context,
     definition.name,
     {
       title: definition.title,
       description: buildSapSdkToolDescription(definition),
       inputSchema: definition.inputSchema,
     },
-    async (rawInput: unknown) => {
+    async (input) => {
       try {
-        return ok(await definition.handler(asRecord(rawInput), client), definition.name);
+        return ok(await definition.handler(asRecord(input), client), definition.name);
       } catch (error) {
         logger.error(`SAP SDK tool failed: ${definition.name}`, { error });
-        return createTextResponse(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          { isError: true }
-        );
+        return createToolFamilyPipelineResult({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }, undefined, { isError: true });
       }
-    }
+    },
   );
 }
 
@@ -3643,7 +3650,7 @@ const sapToolGroups: ToolRegistration[][] = [
  * @name registerSapSdkTools
  * @description Registers production SAP SDK-backed tools using the current public SDK v1.0.x client surface.
  */
-export function registerSapSdkTools(server: Server, _context: SapMcpContext): void {
+export function registerSapSdkTools(server: Server, context: SapMcpContext): void {
   logger.debug('Registering SAP SDK tools');
 
   if (!isSapClientInitialized()) {
@@ -3655,7 +3662,7 @@ export function registerSapSdkTools(server: Server, _context: SapMcpContext): vo
   let count = 0;
   for (const group of sapToolGroups) {
     for (const tool of group) {
-      registerSapTool(server, client, tool);
+      registerSapPipelineTool(server, context, client, tool);
       count++;
     }
   }

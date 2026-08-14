@@ -5,24 +5,27 @@
 
 import type { Dirent } from 'fs';
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  statSync,
   rmSync,
+  writeFileSync,
 } from 'fs';
-import { dirname, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir, tmpdir } from 'os';
 import { execFileSync } from 'child_process';
 import { mkdtempSync } from 'fs';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createStructuredJsonResponse, createTextResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+} from './tool-family-pipeline.js';
 
 type AgentTarget = 'claude' | 'codex' | 'hermes' | 'openclaw' | 'clawpump' | 'custom';
 
@@ -50,6 +53,20 @@ const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const SAP_MCP_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
 const SAP_MCP_WIZARD_COMMAND = `npm exec --yes --package ${SAP_MCP_PACKAGE} -- sap-mcp-config wizard`;
 const SAP_MCP_REPAIR_COMMAND = `npm exec --yes --package ${SAP_MCP_PACKAGE} -- sap-mcp-config repair`;
+
+interface SkillsPipelineToolDefinition extends ToolFamilyPipelineDefinition {
+  readonly name: string;
+  readonly execute: (input: { readonly input: unknown }) => Promise<ToolFamilyPipelineHandlerResult> | ToolFamilyPipelineHandlerResult;
+}
+
+function registerSkillsPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  definition: SkillsPipelineToolDefinition,
+): void {
+  const { name, execute, ...toolDefinition } = definition;
+  registerToolFamilyPipelineTool(server, context, name, toolDefinition, async (input) => execute({ input }));
+}
 
 /**
  * @name parseInput
@@ -249,18 +266,19 @@ function resolveTargetDir(input: SkillToolInput): string {
  * @name installSkillFiles
  * @description Copies bundled skill files into the target skills directory.
  */
-function installSkillFiles(files: SkillFile[], targetDir: string): string[] {
-  const skillsRoot = getSkillsRoot();
+export function installSkillFiles(files: SkillFile[], targetDir: string): string[] {
+  const resolvedTargetDir = resolve(targetDir);
   const copied: string[] = [];
 
   for (const file of files) {
-    const source = join(skillsRoot, file.path);
-    const destination = join(targetDir, file.path);
-    if (!statSync(source).isFile()) {
-      continue;
+    const destination = resolve(resolvedTargetDir, file.path);
+    const relativeDestination = relative(resolvedTargetDir, destination);
+    const relativeSegments = relativeDestination.split(/[\\/]+/);
+    if (relativeDestination === '..' || relativeSegments[0] === '..' || isAbsolute(relativeDestination)) {
+      throw new Error(`Refusing to install skill file outside targetDir: ${file.path}`);
     }
     mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
-    copyFileSync(source, destination);
+    writeFileSync(destination, file.content, { encoding: 'utf-8', mode: 0o600 });
     copied.push(destination);
   }
 
@@ -378,20 +396,19 @@ function buildRuntimeRepairPlan(input: SkillToolInput, context: SapMcpContext): 
  * @description Registers skill pack discovery, export, and install tools.
  */
 export function registerSkillsTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_list',
+    context,
     {
+      name: 'sap_skills_list',
       title: 'List SAP MCP Skills',
       description: 'List bundled SAP MCP skills and their files.',
       inputSchema: {
         skills: { type: 'array', items: { type: 'string' } },
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         const parsed = parseInput(input);
-        return createTextResponse(JSON.stringify({
+        return {
           skillsRoot: getSkillsRoot(),
           skills: getSkillSummaries(parsed.skills),
           upstream: {
@@ -399,17 +416,16 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
             ref: `v${MCP_SERVER_VERSION}`,
             sourcePath: 'skills',
           },
-        }, null, 2));
-      } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
-      }
-    }
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_bundle',
+    context,
     {
+      name: 'sap_skills_bundle',
       title: 'Bundle SAP MCP Skills',
       description:
         'Return bundled SAP MCP skills as JSON so an agent can load or write them itself. Pass skills: ["name1","name2"] to bundle only specific skills (filterNames pattern). Pass includeContents: false to get only file paths without content (metadata-only mode for cheap discovery). Combine both for efficient loading: skills:["sap-defi"], includeContents:true returns only the sap-defi skill files with full content, avoiding context bloat from unused skills.',
@@ -417,29 +433,26 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         skills: { type: 'array', items: { type: 'string' }, description: 'Optional subset of bundled skill names to bundle. When omitted, all bundled skills are returned. Use this to load only the skills you need and avoid context bloat.' },
         includeContents: { type: 'boolean', description: 'When false, only file paths are returned without file content (metadata-only). When true (default), full file contents are included. Set to false for cheap discovery, then call again with skills:["name"] and includeContents:true for only the skills you need.' },
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         const parsed = parseInput(input);
         const files = getSkillFiles(parsed.skills);
-        return createTextResponse(JSON.stringify({
+        return {
           version: '1.0.0',
           generatedBy: 'sap-mcp-server',
           skills: getSkillSummaries(parsed.skills),
           files: parsed.includeContents === false
             ? files.map((file) => ({ path: file.path }))
             : files,
-        }, null, 2));
-      } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
-      }
-    }
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_install',
+    context,
     {
+      name: 'sap_skills_install',
       title: 'Install SAP MCP Skills',
       description: 'Install bundled SAP MCP skills into a local agent skill directory. Requires confirm: true.',
       inputSchema: {
@@ -448,17 +461,19 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         skills: { type: 'array', items: { type: 'string' } },
         confirm: { type: 'boolean' },
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         if (context.config.mode === 'hosted-api') {
-          return createTextResponse(JSON.stringify({
-            success: false,
-            dryRun: true,
-            hosted: true,
-            message: 'Hosted SAP MCP cannot install files on the caller machine. Use sap_skills_bundle to download the skill files, or run the local SAP MCP wizard/addon installer on the user machine.',
-            nextAction: 'Call sap_skills_bundle with includeContents: true, or run sap-mcp-config wizard locally and choose the skills/addon install step.',
-          }, null, 2), { isError: true });
+          return createToolFamilyPipelineResult(
+            {
+              success: false,
+              dryRun: true,
+              hosted: true,
+              message: 'Hosted SAP MCP cannot install files on the caller machine. Use sap_skills_bundle to download the skill files, or run the local SAP MCP wizard/addon installer on the user machine.',
+              nextAction: 'Call sap_skills_bundle with includeContents: true, or run sap-mcp-config wizard locally and choose the skills/addon install step.',
+            },
+            undefined,
+            { isError: true },
+          );
         }
 
         const parsed = parseInput(input);
@@ -471,34 +486,33 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         };
 
         if (!parsed.confirm) {
-          return createTextResponse(JSON.stringify({
+          return {
             success: false,
             dryRun: true,
             requiresConfirmation: true,
             message: 'Call again with confirm: true to install these skill files.',
             plan,
-          }, null, 2));
+          };
         }
 
         mkdirSync(targetDir, { recursive: true, mode: 0o700 });
         const copied = installSkillFiles(files, targetDir);
-        return createTextResponse(JSON.stringify({
+        return {
           success: true,
           dryRun: false,
           targetDir,
           copied,
           message: `Installed ${copied.length} SAP MCP skill files.`,
-        }, null, 2));
-      } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
-      }
-    }
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_upgrade_plan',
+    context,
     {
+      name: 'sap_skills_upgrade_plan',
       title: 'Plan SAP MCP Skills Upgrade',
       description: 'Free helper that returns exact latest-release commands and target directories for upgrading SAP MCP skills. Hosted mode returns a local action plan; local mode can then use sap_skills_install to write files.',
       inputSchema: {
@@ -532,42 +546,44 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      try {
-        return createStructuredJsonResponse(buildSkillsUpgradePlan(parseInput(input), context));
-      } catch (error) {
-        return createStructuredJsonResponse(
-          {
-            success: false,
-            action: 'skills-upgrade-plan',
-            latestVersion: MCP_SERVER_VERSION,
-            package: SAP_MCP_PACKAGE,
-            hostedEndpoint: HOSTED_MCP_URL,
-            serverMode: context.config.mode,
-            canWriteLocalFiles: context.config.mode !== 'hosted-api',
-            selectedSkills: [],
-            fileCount: 0,
-            targetDir: null,
-            targetDirs: getAgentTargetDirs(),
-            commands: {
-              wizard: SAP_MCP_WIZARD_COMMAND,
-              repair: SAP_MCP_REPAIR_COMMAND,
+      execute: async ({ input }) => {
+        try {
+          return buildSkillsUpgradePlan(parseInput(input), context);
+        } catch (error) {
+          return createToolFamilyPipelineResult(
+            {
+              success: false,
+              action: 'skills-upgrade-plan',
+              latestVersion: MCP_SERVER_VERSION,
+              package: SAP_MCP_PACKAGE,
+              hostedEndpoint: HOSTED_MCP_URL,
+              serverMode: context.config.mode,
+              canWriteLocalFiles: context.config.mode !== 'hosted-api',
+              selectedSkills: [],
+              fileCount: 0,
+              targetDir: null,
+              targetDirs: getAgentTargetDirs(),
+              commands: {
+                wizard: SAP_MCP_WIZARD_COMMAND,
+                repair: SAP_MCP_REPAIR_COMMAND,
+              },
+              agentInstructions: ['Show this structured error and call sap_runtime_repair_plan before asking the user to edit config by hand.'],
+              nextToolCalls: [{ tool: 'sap_runtime_repair_plan', arguments: {}, reason: 'Recover from skill upgrade planning failure.' }],
+              error: error instanceof Error ? error.message : 'Unknown error',
             },
-            agentInstructions: ['Show this structured error and call sap_runtime_repair_plan before asking the user to edit config by hand.'],
-            nextToolCalls: [{ tool: 'sap_runtime_repair_plan', arguments: {}, reason: 'Recover from skill upgrade planning failure.' }],
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-          { isError: true },
-        );
-      }
-    }
+            undefined,
+            { isError: true },
+          );
+        }
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_runtime_repair_plan',
+    context,
     {
+      name: 'sap_runtime_repair_plan',
       title: 'Plan SAP Runtime Repair',
       description: 'Free helper that returns the pinned latest-release repair command for hosted SAP MCP plus local sap_payments bridge setup. Use this before asking users to manually edit runtime config.',
       inputSchema: {
@@ -598,60 +614,62 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      try {
-        return createStructuredJsonResponse(buildRuntimeRepairPlan(parseInput(input), context));
-      } catch (error) {
-        return createStructuredJsonResponse(
-          {
-            success: false,
-            action: 'runtime-repair-plan',
-            latestVersion: MCP_SERVER_VERSION,
-            package: SAP_MCP_PACKAGE,
-            hostedEndpoint: HOSTED_MCP_URL,
-            serverMode: context.config.mode,
-            targetRuntime: 'custom',
-            repairCommand: SAP_MCP_REPAIR_COMMAND,
-            wizardCommand: SAP_MCP_WIZARD_COMMAND,
-            commands: {
-              allPlatforms: SAP_MCP_REPAIR_COMMAND,
-              macosLinux: SAP_MCP_REPAIR_COMMAND,
-              windowsPowerShell: SAP_MCP_REPAIR_COMMAND,
-              windowsCmd: SAP_MCP_REPAIR_COMMAND,
-              fullWizard: SAP_MCP_WIZARD_COMMAND,
-            },
-            whatRepairDoes: [
-              'Preserves existing third-party MCP servers.',
-              'Repairs only OOBE SAP hosted MCP and sap_payments entries.',
-            ],
-            expectedAfterRestart: {
-              hostedNamespace: 'sap',
-              localBridgeNamespace: 'sap_payments',
-              requiredBridgeTools: [
-                'sap_payments_profile_current',
-                'sap_payments_readiness',
-                'sap_payments_call_paid_tool',
-                'sap_payments_call_external_x402',
-                'sap_payments_register_agent',
-                'sap_payments_update_agent',
-                'sap_payments_finalize_transaction',
-                'sap_payments_verify_receipt',
+      execute: async ({ input }) => {
+        try {
+          return buildRuntimeRepairPlan(parseInput(input), context);
+        } catch (error) {
+          return createToolFamilyPipelineResult(
+            {
+              success: false,
+              action: 'runtime-repair-plan',
+              latestVersion: MCP_SERVER_VERSION,
+              package: SAP_MCP_PACKAGE,
+              hostedEndpoint: HOSTED_MCP_URL,
+              serverMode: context.config.mode,
+              targetRuntime: 'custom',
+              repairCommand: SAP_MCP_REPAIR_COMMAND,
+              wizardCommand: SAP_MCP_WIZARD_COMMAND,
+              commands: {
+                allPlatforms: SAP_MCP_REPAIR_COMMAND,
+                macosLinux: SAP_MCP_REPAIR_COMMAND,
+                windowsPowerShell: SAP_MCP_REPAIR_COMMAND,
+                windowsCmd: SAP_MCP_REPAIR_COMMAND,
+                fullWizard: SAP_MCP_WIZARD_COMMAND,
+              },
+              whatRepairDoes: [
+                'Preserves existing third-party MCP servers.',
+                'Repairs only OOBE SAP hosted MCP and sap_payments entries.',
               ],
+              expectedAfterRestart: {
+                hostedNamespace: 'sap',
+                localBridgeNamespace: 'sap_payments',
+                requiredBridgeTools: [
+                  'sap_payments_profile_current',
+                  'sap_payments_readiness',
+                  'sap_payments_call_paid_tool',
+                  'sap_payments_call_external_x402',
+                  'sap_payments_register_agent',
+                  'sap_payments_update_agent',
+                  'sap_payments_finalize_transaction',
+                  'sap_payments_verify_receipt',
+                ],
+              },
+              agentInstructions: ['Show this structured error, run the pinned repair command locally, then restart the agent runtime.'],
+              error: error instanceof Error ? error.message : 'Unknown error',
             },
-            agentInstructions: ['Show this structured error, run the pinned repair command locally, then restart the agent runtime.'],
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-          { isError: true },
-        );
-      }
-    }
+            undefined,
+            { isError: true },
+          );
+        }
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_check_updates',
+    context,
     {
+      name: 'sap_skills_check_updates',
       title: 'Check SAP MCP Skills Updates',
       description: 'Compare the bundled skill version with the latest published npm package and report which local agent skill directories are stale. Read-only. Works in every server mode.',
       inputSchema: {
@@ -676,9 +694,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         const parsed = parseInput(input);
         const currentVersion = MCP_SERVER_VERSION;
         let latestVersion: string | null = null;
@@ -720,7 +736,7 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         const updateAvailable = registryReachable && latestVersion !== null
           && compareVersions(latestVersion, currentVersion) > 0;
 
-        return createStructuredJsonResponse({
+        return {
           success: true,
           currentVersion,
           latestVersion,
@@ -730,20 +746,16 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
           message: updateAvailable
             ? `A newer SAP MCP skills package (${latestVersion}) is available. Run sap_skills_self_update from a local process to refresh.`
             : 'SAP MCP skills are up to date with the latest published package.',
-        });
-      } catch (error) {
-        return createStructuredJsonResponse(
-          { success: false, currentVersion: MCP_SERVER_VERSION, latestVersion: null, updateAvailable: false, registryReachable: false, checkedDirs: [], error: error instanceof Error ? error.message : 'Unknown error' },
-          { isError: true }
-        );
-      }
-    }
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerSkillsPipelineTool(
     server,
-    'sap_skills_self_update',
+    context,
     {
+      name: 'sap_skills_self_update',
       title: 'Self-Update SAP MCP Skills',
       description: 'Refresh local agent skill files from the latest published @oobe-protocol-labs/sap-mcp-server package. Local-mode only (hosted MCP cannot write to the caller machine). Requires confirm: true. Uses npm pack + tar extraction; no shell interpolation of paths.',
       inputSchema: {
@@ -758,86 +770,91 @@ export function registerSkillsTools(server: Server, context: SapMcpContext): voi
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      try {
-        if (context.config.mode === 'hosted-api') {
-          return createStructuredJsonResponse({
-            success: false,
-            hosted: true,
-            message: 'Hosted SAP MCP cannot write skill files to the caller machine. Run sap_skills_self_update from a local SAP MCP process, or use sap_skills_bundle to download skill contents.',
-          }, { isError: true });
-        }
-
-        const parsed = parseInput(input);
-        const targetDir = resolveTargetDir(parsed);
-
-        if (!parsed.confirm) {
-          return createStructuredJsonResponse({
-            success: false,
-            dryRun: true,
-            requiresConfirmation: true,
-            message: 'Call again with confirm: true to pull the latest published skills into the target directory.',
-            targetDir,
-          });
-        }
-
-        const workDir = mkdtempSync(join(tmpdir(), 'sap-skills-update-'));
+      execute: async ({ input }) => {
         try {
-          execFileSync('npm', [
-            'pack',
-            '@oobe-protocol-labs/sap-mcp-server@latest',
-            '--pack-destination',
-            workDir,
-          ], { cwd: workDir, stdio: 'pipe' });
-
-          const tarballs = readdirSync(workDir).filter((f) => f.endsWith('.tgz'));
-          if (tarballs.length === 0) {
-            throw new Error('npm pack produced no tarball');
-          }
-          const tarball = join(workDir, tarballs[0]);
-          const extractDir = join(workDir, 'extract');
-          mkdirSync(extractDir, { recursive: true });
-          execFileSync('tar', ['xzf', tarball, '-C', extractDir], { stdio: 'pipe' });
-
-          const upstreamSkillsRoot = join(extractDir, 'package', 'skills');
-          if (!existsSync(upstreamSkillsRoot)) {
-            throw new Error('Published package does not contain a skills directory');
+          if (context.config.mode === 'hosted-api') {
+            return createToolFamilyPipelineResult(
+              {
+                success: false,
+                hosted: true,
+                message: 'Hosted SAP MCP cannot write skill files to the caller machine. Run sap_skills_self_update from a local SAP MCP process, or use sap_skills_bundle to download skill contents.',
+              },
+              undefined,
+              { isError: true },
+            );
           }
 
-          const names = parsed.skills && parsed.skills.length > 0
-            ? resolveSelectedSkills(parsed.skills)
-            : listBundledSkillNames();
+          const parsed = parseInput(input);
+          const targetDir = resolveTargetDir(parsed);
 
-          const files: SkillFile[] = names.flatMap((name) => {
-            const skillRoot = join(upstreamSkillsRoot, name);
-            return listFilesRecursive(skillRoot).map((file) => ({
-              path: relative(upstreamSkillsRoot, file),
-              content: readFileSync(file, 'utf-8'),
-            }));
-          }).sort((left, right) => left.path.localeCompare(right.path));
+          if (!parsed.confirm) {
+            return {
+              success: false,
+              dryRun: true,
+              requiresConfirmation: true,
+              message: 'Call again with confirm: true to pull the latest published skills into the target directory.',
+              targetDir,
+            };
+          }
 
-          mkdirSync(targetDir, { recursive: true, mode: 0o700 });
-          const copied = installSkillFiles(files, targetDir);
+          const workDir = mkdtempSync(join(tmpdir(), 'sap-skills-update-'));
+          try {
+            execFileSync('npm', [
+              'pack',
+              '@oobe-protocol-labs/sap-mcp-server@latest',
+              '--pack-destination',
+              workDir,
+            ], { cwd: workDir, stdio: 'pipe' });
 
-          return createStructuredJsonResponse({
-            success: true,
-            dryRun: false,
-            targetDir,
-            latestVersion: MCP_SERVER_VERSION,
-            copied,
-            message: `Updated ${copied.length} SAP MCP skill files from the latest published package.`,
-          });
-        } finally {
-          rmSync(workDir, { recursive: true, force: true });
+            const tarballs = readdirSync(workDir).filter((f) => f.endsWith('.tgz'));
+            if (tarballs.length === 0) {
+              throw new Error('npm pack produced no tarball');
+            }
+            const tarball = join(workDir, tarballs[0]);
+            const extractDir = join(workDir, 'extract');
+            mkdirSync(extractDir, { recursive: true });
+            execFileSync('tar', ['xzf', tarball, '-C', extractDir], { stdio: 'pipe' });
+
+            const upstreamSkillsRoot = join(extractDir, 'package', 'skills');
+            if (!existsSync(upstreamSkillsRoot)) {
+              throw new Error('Published package does not contain a skills directory');
+            }
+
+            const names = parsed.skills && parsed.skills.length > 0
+              ? resolveSelectedSkills(parsed.skills)
+              : listBundledSkillNames();
+
+            const files: SkillFile[] = names.flatMap((name) => {
+              const skillRoot = join(upstreamSkillsRoot, name);
+              return listFilesRecursive(skillRoot).map((file) => ({
+                path: relative(upstreamSkillsRoot, file),
+                content: readFileSync(file, 'utf-8'),
+              }));
+            }).sort((left, right) => left.path.localeCompare(right.path));
+
+            mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+            const copied = installSkillFiles(files, targetDir);
+
+            return {
+              success: true,
+              dryRun: false,
+              targetDir,
+              latestVersion: MCP_SERVER_VERSION,
+              copied,
+              message: `Updated ${copied.length} SAP MCP skill files from the latest published package.`,
+            };
+          } finally {
+            rmSync(workDir, { recursive: true, force: true });
+          }
+        } catch (error) {
+          return createToolFamilyPipelineResult(
+            { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
+            undefined,
+            { isError: true },
+          );
         }
-      } catch (error) {
-        return createStructuredJsonResponse(
-          { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-          { isError: true }
-        );
-      }
-    }
+      },
+    },
   );
 }
 

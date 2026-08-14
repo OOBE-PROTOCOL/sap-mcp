@@ -4,8 +4,7 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
+import { buildDoctorReport } from '../config/runtime-doctor.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import type { SapMcpContext } from '../core/types.js';
 import { buildPricingCatalog } from '../payments/pricing.js';
@@ -15,21 +14,41 @@ import {
   normalizeSapAgentIntent,
   type SapAgentIntent,
 } from './session-context-packet.js';
+import {
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+} from './tool-family-pipeline.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
 const REPAIR_COMMAND = `npm exec --yes --package ${NPM_PACKAGE} -- sap-mcp-config repair`;
 const WIZARD_COMMAND = `npm exec --yes --package ${NPM_PACKAGE} -- sap-mcp-config wizard`;
 
+interface AgentStartPipelineToolDefinition extends ToolFamilyPipelineDefinition {
+  readonly name: string;
+  readonly execute: (input: { readonly input: unknown }) => Promise<ToolFamilyPipelineHandlerResult> | ToolFamilyPipelineHandlerResult;
+}
+
+function registerAgentStartPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  definition: AgentStartPipelineToolDefinition,
+): void {
+  const { name, execute, ...toolDefinition } = definition;
+  registerToolFamilyPipelineTool(server, context, name, toolDefinition, async (input) => execute({ input }));
+}
+
 /**
  * @name registerAgentStartTool
  * @description Registers the SAP MCP startup playbook as a free read-only tool.
  */
 export function registerAgentStartTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_agent_start',
+    context,
     {
+      name: 'sap_agent_start',
       title: 'Start SAP MCP Agent Mode',
       description: 'Return the concise startup playbook for agents using SAP MCP. Call this when the user says "Start SAP MCP", "Initialize SAP MCP", "Load SAP", or asks what SAP MCP can do.',
       inputSchema: {
@@ -68,17 +87,18 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      const goal = parseGoal(input);
-      return createStructuredJsonResponse(buildAgentStartPayload(context, goal));
+      execute: async ({ input }) => {
+        const goal = parseGoal(input);
+        return buildAgentStartPayload(context, goal);
+      },
     },
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_agent_runtime_status',
+    context,
     {
+      name: 'sap_agent_runtime_status',
       title: 'Check SAP MCP Runtime Status',
       description: 'Free machine-readable readiness and routing summary for SAP MCP. Use this for "are you connected?", paid/write readiness, local profile visibility, and exact next actions without dumping the whole tool catalog.',
       inputSchema: {
@@ -95,13 +115,15 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
           intent: { type: 'string', description: 'Status intent used for routing.' },
           hosted: { type: 'object', description: 'Observable hosted SAP MCP status for this server process.' },
           localBridge: { type: 'object', description: 'Expected local sap_payments bridge status and verification tools.' },
+          runtimeDoctor: { type: 'object', description: 'Secret-free local runtime doctor report generated from the active server config. Includes pass/warning/fail checks for profile, signer, wallet path presence, policy limits, RPC, and paid/write readiness without keypair bytes.' },
+          toolCatalog: { type: ['object', 'null'], description: 'Secret-free modular tool catalog summary generated from registered tool modules, or null before registration summary is available.' },
           routing: { type: 'object', description: 'Canonical tool routes for reads, paid calls, writes, and unsigned transactions.' },
           sessionContextPacket: { type: 'object', description: 'Machine-readable SAP MCP routing, freshness, memory, proof-tape, and forbidden-action rules for this intent.' },
           nextToolCalls: { type: 'array', description: 'Exact next tool calls agents should make when available.', items: { type: 'object' } },
           userFacingSummary: { type: 'string', description: 'Short summary safe to show to the user.' },
           forbiddenActions: { type: 'array', description: 'Actions agents must not perform.', items: { type: 'string' } },
         },
-        required: ['success', 'intent', 'hosted', 'localBridge', 'routing', 'sessionContextPacket', 'nextToolCalls', 'userFacingSummary', 'forbiddenActions'],
+        required: ['success', 'intent', 'hosted', 'localBridge', 'runtimeDoctor', 'toolCatalog', 'routing', 'sessionContextPacket', 'nextToolCalls', 'userFacingSummary', 'forbiddenActions'],
       },
       annotations: {
         readOnlyHint: true,
@@ -109,17 +131,18 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
-    },
-    async (input: unknown) => {
-      const intent = parseStatusIntent(input);
-      return createStructuredJsonResponse(buildRuntimeStatusPayload(context, intent));
+      execute: async ({ input }) => {
+        const intent = parseStatusIntent(input);
+        return buildRuntimeStatusPayload(context, intent);
+      },
     },
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_prepare_action',
+    context,
     {
+      name: 'sap_prepare_action',
       title: 'Prepare SAP MCP Action',
       description: 'Free intent-level preflight planner for SAP MCP. Call before paid calls, swaps, registry writes, escrow, identity updates, external x402 calls, premium streams, or transaction finalization. It returns the correct hosted/local route, fresh-data requirements, max-price guidance, confirmation policy, retry rules, proof-tape shape, and forbidden actions without charging x402.',
       inputSchema: {
@@ -182,14 +205,15 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
+      execute: async ({ input }) => buildActionPreparation(context, parsePrepareActionInput(input)),
     },
-    async (input: unknown) => createStructuredJsonResponse(buildActionPreparation(context, parsePrepareActionInput(input))),
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_agent_standard_context',
+    context,
     {
+      name: 'sap_agent_standard_context',
       title: 'Get SAP Agentic Standards Context',
       description: 'Free agentic-standards orientation for SAP MCP. Use this after sap_agent_start when an agent needs to understand how SAP MCP maps MCP, x402/pay.sh, A2A-style Agent Cards, OASF-style agent facts, AP2-style mandate planning, local signing, and hosted unsigned builders without guessing or over-claiming unsupported standards.',
       inputSchema: {
@@ -227,14 +251,15 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
+      execute: async ({ input }) => buildAgentStandardContextPayload(context, parseStandardContextInput(input)),
     },
-    async (input: unknown) => createStructuredJsonResponse(buildAgentStandardContextPayload(context, parseStandardContextInput(input))),
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_prepare_mandate',
+    context,
     {
+      name: 'sap_prepare_mandate',
       title: 'Prepare SAP Agent Mandate',
       description: 'Free AP2-style mandate planner for SAP MCP agent commerce. It converts a user intent into a bounded, unsigned planning artifact with spend limits, tool/protocol allow-lists, freshness rules, confirmation thresholds, proof-tape fields, and the correct hosted/local signing route. This tool does not sign, submit, authorize payment, or replace wallet confirmation.',
       inputSchema: {
@@ -314,14 +339,15 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
+      execute: async ({ input }) => buildMandatePayload(context, parseMandateInput(input)),
     },
-    async (input: unknown) => createStructuredJsonResponse(buildMandatePayload(context, parseMandateInput(input))),
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_pricing_catalog',
+    context,
     {
+      name: 'sap_pricing_catalog',
       title: 'Get SAP MCP Pricing Catalog',
       description: 'Free machine-readable x402/pay.sh pricing catalog generated from the hosted SAP MCP pricing registry. Use before paid calls to understand free, micro-read, read-premium, builder, value-action, and batch tiers.',
       inputSchema: {},
@@ -344,14 +370,15 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
+      execute: async () => ({ ...buildPricingCatalog(context.config.monetization) }),
     },
-    async () => createStructuredJsonResponse({ ...buildPricingCatalog(context.config.monetization) }),
   );
 
-  registerTool(
+  registerAgentStartPipelineTool(
     server,
-    'sap_agent_next_action',
+    context,
     {
+      name: 'sap_agent_next_action',
       title: 'Resolve SAP MCP Next Action',
       description: 'Free routing resolver for SAP MCP errors and partial results. Use this before retrying after payment_required, hosted_local_signer_required, BlockhashNotFound, missing sap_payments, timeout, or a submitted signature that has not confirmed.',
       inputSchema: {
@@ -402,8 +429,8 @@ export function registerAgentStartTool(server: Server, context: SapMcpContext): 
         idempotentHint: true,
         openWorldHint: false,
       },
+      execute: async ({ input }) => buildAgentNextActionPayload(parseNextActionInput(input)),
     },
-    async (input: unknown) => createStructuredJsonResponse(buildAgentNextActionPayload(parseNextActionInput(input))),
   );
 }
 
@@ -1013,6 +1040,12 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentInten
   const localBridgeStatus = hostedMode
     ? 'unknown_from_hosted_server'
     : signerConfigured ? 'same_process_signer_available' : 'not_configured';
+  const runtimeDoctor = buildDoctorReport({
+    config: context.config,
+    profileName: context.config.agentPubkey ? 'runtime-configured-profile' : 'runtime-context',
+    configPath: 'runtime-context',
+    configRoot: 'runtime-context',
+  });
 
   return {
     success: true,
@@ -1049,6 +1082,8 @@ function buildRuntimeStatusPayload(context: SapMcpContext, intent: SapAgentInten
       repairTool: 'sap_runtime_repair_plan',
       repairCommand: REPAIR_COMMAND,
     },
+    runtimeDoctor,
+    toolCatalog: context.toolCatalog ?? null,
     routing: {
       reads: {
         route: 'hosted sap',

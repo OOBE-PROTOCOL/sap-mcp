@@ -1,29 +1,13 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { logger } from '../core/logger.js';
 import type { SapMcpContext } from '../core/types.js';
-import { getRegisteredTools } from '../adapters/mcp/sdk-compat.js';
+import { BUILTIN_TOOL_MODULES } from './builtin-tool-modules.js';
+import { buildToolCatalog, summarizeToolCatalog } from './tool-catalog.js';
+import { registerToolModules, type ToolModuleDefinition, type ToolModuleRegistrationSummary } from './module-registry.js';
 
-import { registerSapSdkTools } from './sap-sdk-tools.js';
-import { registerSapSnsTools } from './sap-sns-tools.js';
-import { sapNetworkStatsTool } from './sap-network-stats.tool.js';
-
-import { registerClientSdkTools } from './client-sdk-tools.js';
-import { registerTransactionTools } from './transaction-tools.js';
-import { registerProfileTools } from './profile-tools.js';
-import { registerSkillsTools } from './skills-tools.js';
-import { registerChatTools } from './chat-tools.js';
-import { registerX402PaidCallTool, registerHostedPrepaidTools } from './x402-paid-call-tool.js';
-import { registerMagicBlockTools } from './magicblock-tools.js';
-import { registerMemoryTools } from './memory-tools.js';
-import { registerAgentStartTool } from './agent-start-tool.js';
-import { registerEstimateToolCost } from './estimate-tool-cost.js';
-import { registerQuickContextTool } from './quick-context-tool.js';
-import { registerPremiumTools } from './premium-tools.js';
-import { registerPerpTools } from './perp-tools.js';
-import { registerAdrenaTools } from './adrena-tools.js';
-import { registerRiskCheckTool, registerPortfolioRiskTool } from '../perps/risk-engine.js';
-import { registerSignalScoreTool } from '../perps/signal-engine.js';
-import { registerFearGreedTool } from '../perps/market-intelligence.js';
+export interface RegisterToolsOptions {
+  readonly additionalModules?: readonly ToolModuleDefinition[];
+}
 
 /**
  * Register all tools with the MCP server.
@@ -34,82 +18,29 @@ import { registerFearGreedTool } from '../perps/market-intelligence.js';
  * @param context - Shared runtime context with SAP client, signer, policy, and configuration.
  */
 export async function registerTools(server: Server, context: SapMcpContext): Promise<void> {
+  await registerToolsWithSummary(server, context);
+}
+
+export async function registerToolsWithSummary(
+  server: Server,
+  context: SapMcpContext,
+  options: RegisterToolsOptions = {},
+): Promise<ToolModuleRegistrationSummary> {
   logger.debug('Registering tools');
+  const modules = [
+    ...BUILTIN_TOOL_MODULES,
+    ...(options.additionalModules ?? []),
+  ];
+  const summary = await registerToolModules(server, context, modules);
+  context.toolCatalog = summarizeToolCatalog(buildToolCatalog(modules, context));
 
-  if (process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY === 'true') {
-    registerX402PaidCallTool(server, context);
-    logger.debug('Payments bridge tools registered', { count: getRegisteredTools(server).length });
-    return;
-  }
-  
-  // Register SAP SDK tools backed by @oobe-protocol-labs/synapse-sap-sdk.
-  registerSapSdkTools(server, context);
+  logger.debug('Tools registered', {
+    count: summary.totalTools,
+    modules: summary.modules.map((module) => ({
+      id: module.id,
+      addedCount: module.addedCount,
+    })),
+  });
 
-  // Register SNS integration tools backed by synapse-sap-sdk v1.0.x.
-  registerSapSnsTools(server, context);
-  
-  // Register network stats tool backed by SAP discovery/global registry APIs.
-  sapNetworkStatsTool(server, context);
-  
-  // Register AgentKit tools from @oobe-protocol-labs/synapse-client-sdk.
-  await registerClientSdkTools(server, context);
-  
-  // Register transaction tools
-  registerTransactionTools(server, context);
-
-  // Register SAP chat tools backed by on-chain session ledgers.
-  registerChatTools(server, context);
-
-  // Register local x402 helper only when this process has a user-controlled wallet profile.
-  // Hosted non-custodial servers must not advertise a remote signer helper.
-  if (context.config.mode !== 'hosted-api' || context.config.walletPath) {
-    registerX402PaidCallTool(server, context);
-  } else {
-    // Hosted server: register only the prepaid fund + balance tools so that
-    // the bridge can create prepaid sessions on the hosted server (where the
-    // PrepaidCreditStore lives and grantAccess is checked).
-    registerHostedPrepaidTools(server);
-  }
-
-  // Register profile tools with redacted signer metadata and live runtime reload.
-  registerProfileTools(server, context);
-
-  // Register the free agent bootstrap tool before skill tools so runtimes have
-  // a single obvious entry point after tools/list.
-  registerAgentStartTool(server, context);
-
-  // Register the free pre-call cost estimator so agents can plan USDC spending.
-  registerEstimateToolCost(server, context);
-
-  // Register the free single-call bootstrap context aggregator so agents can
-  // load version, tool counts, pricing tiers, premium capabilities, and skills
-  // in one tool call instead of 5+ separate discovery calls.
-  registerQuickContextTool(server, context);
-
-  // Register premium plugin/runtime discovery and session-planning tools.
-  registerPremiumTools(server, context);
-
-  // Register perp trading and chart analysis tools (Adrena + DexScreener + DeFiLlama).
-  registerPerpTools(server, context);
-
-  // Register Adrena perps protocol tools: local builders + Data API.
-  // 32 tools: trading, SL/TP, limit orders, commodities, liquidity, swap, staking, data API.
-  registerAdrenaTools(server, context);
-
-  // Register perps risk engine + signal score + market intelligence (Sprint 1-3).
-  registerRiskCheckTool(server, context);
-  registerSignalScoreTool(server, context);
-  registerPortfolioRiskTool(server, context);
-  registerFearGreedTool(server, context);
-
-  // Register bundled agent skill pack tools.
-  registerSkillsTools(server, context);
-
-  // Register MagicBlock tools (20 tools: ER Router, Private Payments, VRF).
-  registerMagicBlockTools(server, context);
-
-  // Register local memory tools (15 free tools: memory, strategies, streams, audit).
-  registerMemoryTools(server, context);
-  
-  logger.debug('Tools registered', { count: getRegisteredTools(server).length });
+  return summary;
 }

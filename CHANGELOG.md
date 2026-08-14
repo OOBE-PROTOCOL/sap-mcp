@@ -1794,7 +1794,7 @@ with real MCP session management and a standalone client addon for AI agents.
 - **Log rotation** (`scripts/setup-logrotate.sh`):
   - PM2 logrotate config: 50MB max, 7 retained, compressed, daily rotation.
 
-- **x402 protocol spec** (`docs/x402-protocol-spec.md`):
+- **x402 protocol spec** (`docs/X402_PAYSH_PROTOCOL_SPECIFICATION.md`):
   - 984-line reference document covering V1/V2 schemas, header encoding, amount conversion,
     facilitator endpoints, and Solana transaction structure.
 
@@ -1803,7 +1803,7 @@ with real MCP session management and a standalone client addon for AI agents.
 - Updated skills (`skills/sap-payments-x402/SKILL.md`, `skills/sap-mcp/SKILL.md`) to
   document the `initialize → tools/call unpaid → tools/call paid retry` flow and the
   non-custodial signing boundary.
-- Updated user docs (`USER_DOCS/03_PAYMENTS_X402_PAYSH.md`, `USER_DOCS/04_CLIENT_CONFIGS.md`)
+- Updated user docs (`USER_DOCS/03_X402_PAYSH_PAID_TOOL_RUNBOOK.md`, `USER_DOCS/04_MCP_CLIENT_CONFIGURATION_MATRIX.md`)
   to clarify that retries must preserve `mcp-session-id`, bind to `method + params`, and
   must not fall back to free local stdio to bypass x402.
 - Updated landing page and wizard descriptor to surface `npx sap-mcp-x402-paid-call`.

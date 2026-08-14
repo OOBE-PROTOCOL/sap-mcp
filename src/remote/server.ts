@@ -32,6 +32,9 @@ import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
 import { preloadPremiumProviders, disconnectAllProviders } from '../premium/provider-bridge.js';
 import { asyncMemoryProcessor, memoryDatabase } from '../memory/index.js';
+import type { SapMcpContext } from '../core/types.js';
+import { BUILTIN_TOOL_MODULES } from '../tools/builtin-tool-modules.js';
+import { buildToolCatalog } from '../tools/tool-catalog.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -56,6 +59,40 @@ let logoAssetCache: Buffer | undefined;
 let oobeLogoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
+
+const DOCS_MARKDOWN_ALIASES: Readonly<Record<string, string>> = {
+  '00_README.md': '00_ENGINEERING_DOCUMENTATION_INDEX.md',
+  '01_PRODUCT_OVERVIEW.md': '01_PRODUCT_SCOPE_DEPLOYMENT_MODEL.md',
+  '02_ARCHITECTURE_AND_REQUEST_FLOW.md': '02_RUNTIME_ARCHITECTURE_TRUST_BOUNDARIES.md',
+  '03_CONFIGURATION_AND_WIZARD.md': '03_PROFILE_CONFIG_WIZARD_INJECTION.md',
+  '04_LOCAL_STDIO_USAGE.md': '04_LOCAL_STDIO_MCP_RUNBOOK.md',
+  '05_REMOTE_VPS_DEPLOYMENT.md': '05_HOSTED_STREAMABLE_HTTP_DEPLOYMENT.md',
+  '06_PAYMENTS_X402_AND_PAYSH.md': '06_X402_PAYSH_MONETIZATION_SETTLEMENT.md',
+  '07_ENDPOINTS_AND_CLIENTS.md': '07_HTTP_ENDPOINTS_MCP_CLIENTS_SMOKE_TESTS.md',
+  '08_SECURITY_POLICY_AND_SIGNING.md': '08_SECURITY_POLICY_SIGNING_RUNBOOK.md',
+  '09_TOOLS_SKILLS_AND_AGENT_GUIDE.md': '09_TOOL_SKILL_ROUTING_AGENT_OPERATIONS.md',
+  '10_OPERATIONS_RELEASE_AND_PM2.md': '10_RELEASE_OPERATIONS_PM2_RUNBOOK.md',
+  '11_CODE_QUALITY_AUDIT.md': '11_ENGINEERING_QUALITY_AUDIT_REPORT.md',
+  '12_ONCHAIN_AGENT_CHAT.md': '12_SIGNED_AGENT_CHAT_PROTOCOL.md',
+  '13_BOUNTY_PROGRAM_PROPOSAL.md': '13_BOUNTY_PROGRAM_TECHNICAL_SPEC.md',
+  '14_DESKTOP_WIZARD_RELEASE.md': '14_DESKTOP_WIZARD_RELEASE_ARTIFACTS.md',
+  '15_DASHBOARD_SCREENSHARE_SCRIPT.md': '15_DEMO_DASHBOARD_SCREENSHARE_RUNBOOK.md',
+  '16_SAP_AGENT_IDENTITY_PIPELINE.md': '16_AGENT_IDENTITY_REGISTRY_PIPELINE.md',
+  '18_PREMIUM_PLUGIN_RUNTIME.md': '18_PREMIUM_PLUGIN_RUNTIME_CONTRACTS.md',
+  '19_AGENTIC_STANDARDS_ALIGNMENT.md': '19_AGENTIC_STANDARDS_INTEROPERABILITY.md',
+  '20_COMPANY_ENGINEERING_OPERATING_MODEL.md': '20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md',
+  'BRANCH_AND_CI.md': 'BRANCHING_CI_RELEASE_WORKFLOW.md',
+  'magicblock-tools.md': 'MAGICBLOCK_TOOLING_REFERENCE.md',
+  'x402-protocol-spec.md': 'X402_PAYSH_PROTOCOL_SPECIFICATION.md',
+  'user/00_START_HERE.md': 'user/00_USER_ONBOARDING_INDEX.md',
+  'user/01_HOSTED_REMOTE_MCP.md': 'user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP.md',
+  'user/02_LOCAL_STDIO_MCP.md': 'user/02_LOCAL_STDIO_PROFILE_SIGNER_SETUP.md',
+  'user/03_PAYMENTS_X402_PAYSH.md': 'user/03_X402_PAYSH_PAID_TOOL_RUNBOOK.md',
+  'user/04_CLIENT_CONFIGS.md': 'user/04_MCP_CLIENT_CONFIGURATION_MATRIX.md',
+  'user/05_SKILLS_AND_TOOLS.md': 'user/05_AGENT_SKILLS_TOOL_ROUTING.md',
+  'user/06_DESKTOP_GUI_WIZARD.md': 'user/06_DESKTOP_WIZARD_INSTALL_RUNBOOK.md',
+  'user/07_SMITHERY_AND_MARKETPLACES.md': 'user/07_SMITHERY_MARKETPLACE_INTEGRATION.md',
+};
 
 const PUBLIC_LOGO_ASSETS = {
   '/logos/adrena.svg': { filename: 'adrena.svg', contentType: 'image/svg+xml' },
@@ -198,6 +235,7 @@ export interface WizardInstallDescriptor {
     downloads: string;
     installScript: string;
     mcp: string;
+    toolCatalog: string;
   };
   commands: {
     runWizard: string;
@@ -267,6 +305,7 @@ export interface PublicServerInfo {
     wizardDescriptor: string;
     wizardDownloads: string;
     wizardInstallScript: string;
+    toolCatalog: string;
     favicon: string;
     faviconIco: string;
   };
@@ -920,12 +959,17 @@ export function resolvePublicDocsMarkdown(method: string | undefined, pathname: 
     return undefined;
   }
 
-  const root = normalizedPath.startsWith('user/')
+  const resolvedPath = DOCS_MARKDOWN_ALIASES[normalizedPath] ?? normalizedPath;
+  if (isUnsafeDocsPath(resolvedPath)) {
+    return undefined;
+  }
+
+  const root = resolvedPath.startsWith('user/')
     ? USER_DOCS_ROOT_PATH
     : DOCS_ROOT_PATH;
-  const relativePath = normalizedPath.startsWith('user/')
-    ? normalizedPath.slice('user/'.length)
-    : normalizedPath;
+  const relativePath = resolvedPath.startsWith('user/')
+    ? resolvedPath.slice('user/'.length)
+    : resolvedPath;
   if (isUnsafeDocsPath(relativePath)) {
     return undefined;
   }
@@ -1252,6 +1296,7 @@ export function buildPublicServerInfo(
       wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
       wizardDownloads: `${baseUrl}/wizard/downloads.json`,
       wizardInstallScript: `${baseUrl}/wizard/install.sh`,
+      toolCatalog: `${baseUrl}/.well-known/sap-mcp-tool-catalog.json`,
       favicon: `${baseUrl}/favicon.png`,
       faviconIco: `${baseUrl}/favicon.ico`,
     },
@@ -1287,6 +1332,61 @@ export function buildPublicServerInfo(
       github: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
       userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS',
     },
+  };
+}
+
+/**
+ * @name buildPublicToolCatalogDocument
+ * @description Builds the secret-free hosted runtime tool catalog used by wizard, UI, and agent discovery.
+ */
+export function buildPublicToolCatalogDocument(
+  req: http.IncomingMessage,
+  config: RemoteMCPConfig,
+  appConfig: SapMcpConfig,
+): Record<string, unknown> {
+  const baseUrl = buildPublicBaseUrl(req, config);
+  const hostedAppConfig: SapMcpConfig = {
+    ...appConfig,
+    mode: 'hosted-api',
+    walletPath: undefined,
+    externalSignerUrl: undefined,
+  };
+  const catalog = buildToolCatalog(
+    BUILTIN_TOOL_MODULES,
+    { config: hostedAppConfig } as SapMcpContext,
+    {
+      profileId: 'hosted-accountless',
+      profileDescription: 'Hosted Streamable HTTP SAP MCP catalog with no server-side user signer.',
+    },
+  );
+
+  return {
+    kind: 'sap-mcp-tool-catalog',
+    version: '1.0.0',
+    serverVersion: MCP_SERVER_VERSION,
+    generatedAt: new Date().toISOString(),
+    sourceOfTruth: '@oobe-protocol-labs/sap-mcp-server/tools',
+    links: {
+      mcp: `${baseUrl}/mcp`,
+      serverInfo: `${baseUrl}/server.json`,
+      wizard: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
+      pricing: `${baseUrl}/pricing.json`,
+      x402Discovery: `${baseUrl}/.well-known/x402`,
+      docs: `${baseUrl}/docs/09_TOOL_SKILL_ROUTING_AGENT_OPERATIONS.md`,
+    },
+    security: {
+      keypairBytesExposed: false,
+      storesUserKeypairs: false,
+      signerBoundary: 'Hosted catalog is accountless; paid and value-moving finalization belongs to the user-controlled local sap_payments bridge or external signer.',
+    },
+    localBridge: {
+      serverName: 'sap_payments',
+      readinessTool: 'sap_payments_readiness',
+      paidCallTool: 'sap_payments_call_paid_tool',
+      finalizerTool: 'sap_payments_finalize_transaction',
+      wizardCommand: WIZARD_NPM_COMMAND,
+    },
+    catalog,
   };
 }
 
@@ -1345,7 +1445,7 @@ export function buildPremiumDiscoveryDocument(
       catalog: `${baseUrl}/premium/catalog.json`,
       streams: `${baseUrl}/premium/streams.json`,
       webhooks: `${baseUrl}/premium/webhooks.json`,
-      docs: `${baseUrl}/docs/18_PREMIUM_PLUGIN_RUNTIME.md`,
+      docs: `${baseUrl}/docs/18_PREMIUM_PLUGIN_RUNTIME_CONTRACTS.md`,
       mcp: `${baseUrl}/mcp`,
       pricing: `${baseUrl}/pricing.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
@@ -1524,6 +1624,7 @@ export function buildOpenApiSpec(
       premiumActivate: `${baseUrl}/premium/activate`,
       premiumStreamBase: `${baseUrl}/premium/stream`,
       premiumWebhookRegister: `${baseUrl}/premium/webhook/register`,
+      toolCatalog: `${baseUrl}/.well-known/sap-mcp-tool-catalog.json`,
       x402Discovery: `${baseUrl}/.well-known/x402`,
       payShProvider: `${baseUrl}/pay/provider.yml`,
       ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
@@ -2325,6 +2426,7 @@ export function buildWizardInstallDescriptor(
       downloads: `${baseUrl}/wizard/downloads.json`,
       installScript: `${baseUrl}/wizard/install.sh`,
       mcp: `${baseUrl}/mcp`,
+      toolCatalog: `${baseUrl}/.well-known/sap-mcp-tool-catalog.json`,
     },
     commands: {
       runWizard: WIZARD_NPM_COMMAND,
@@ -2598,6 +2700,13 @@ export class RemoteMCPServer {
 
       if (isPublicReadMethod(req.method) && ['/.well-known/sap-mcp-wizard.json', '/wizard', '/wizard.json'].includes(url.pathname)) {
         writeJson(res, 200, buildWizardInstallDescriptor(req, this.config), {}, isHeadMethod(req.method));
+        return;
+      }
+
+      if (isPublicReadMethod(req.method) && ['/.well-known/sap-mcp-tool-catalog.json', '/tool-catalog.json'].includes(url.pathname)) {
+        writeJson(res, 200, buildPublicToolCatalogDocument(req, this.config, this.appConfig), {
+          'Cache-Control': 'public, max-age=300',
+        }, isHeadMethod(req.method));
         return;
       }
 

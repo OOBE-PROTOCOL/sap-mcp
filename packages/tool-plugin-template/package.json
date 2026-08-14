@@ -1,0 +1,19 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-tool-plugin-template",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Workspace template for SAP MCP tool plugin packages.",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "pnpm run typecheck"
+  },
+  "sapMcp": {
+    "boundaryId": "tool-plugin-template",
+    "source": "packages/tool-plugin-template/src",
+    "architectureDomain": null,
+    "rootExport": null,
+    "boundary": "Trusted external tool-family plugin template."
+  }
+}

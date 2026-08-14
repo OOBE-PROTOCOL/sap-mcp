@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { createTextResponse } from './tool-response.js';
+import { createTextResponse, createUiCardResponse } from './tool-response.js';
 import { matchResourceTemplateUri, registerTool } from './sdk-compat.js';
 
 interface RegisteredServerForTest extends Server {
@@ -68,5 +68,105 @@ describe('MCP SDK compatibility resource templates', () => {
     expect(result?.isError).toBe(true);
     expect(result?.content?.[0]?.text).toContain('local registry write failed');
     expect(result).not.toHaveProperty('structuredContent');
+  });
+
+  it('accepts embedded ui resources and infers structuredContent from JSON text', async () => {
+    const server = new Server(
+      { name: 'sap-mcp-test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    ) as RegisteredServerForTest;
+
+    registerTool(
+      server,
+      'sap_test_ui_card',
+      {
+        title: 'SAP Test UI Card',
+        description: 'Test tool used to verify MCP Apps resource responses.',
+        inputSchema: {},
+        outputSchema: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', description: 'Whether the operation succeeded.' },
+            priceUsd: { type: 'number', description: 'Quoted price.' },
+          },
+          required: ['success', 'priceUsd'],
+        },
+      },
+      async () => createUiCardResponse(
+        { success: true, priceUsd: 0.01 },
+        {
+          kind: 'pricing',
+          toolName: 'sap_test_ui_card',
+          tier: 'micro',
+          priceUsd: 0.01,
+          recommendedMaxPriceUsd: 0.02,
+          isFree: false,
+        },
+      ),
+    );
+
+    const callTool = server._requestHandlers?.get('tools/call');
+    const result = await callTool?.(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'sap_test_ui_card',
+          arguments: {},
+        },
+      },
+      {},
+    ) as {
+      content?: Array<{ type?: string; text?: string; resource?: { uri?: string; text?: string } }>;
+      structuredContent?: unknown;
+      isError?: boolean;
+    } | undefined;
+
+    expect(result?.isError).toBeUndefined();
+    expect(result?.content).toHaveLength(2);
+    expect(result?.content?.[1]?.type).toBe('resource');
+    expect(result?.content?.[1]?.resource?.uri).toBe('ui://sap/pricing-card');
+    expect(result?.structuredContent).toEqual({ success: true, priceUsd: 0.01 });
+  });
+
+  it('preserves explicit structuredContent from embedded ui resources without an output schema', async () => {
+    const server = new Server(
+      { name: 'sap-mcp-test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    ) as RegisteredServerForTest;
+
+    registerTool(
+      server,
+      'sap_test_ui_card_without_schema',
+      {
+        title: 'SAP Test UI Card Without Schema',
+        description: 'Test tool used to verify MCP Apps resource responses without explicit outputSchema.',
+        inputSchema: {},
+      },
+      async () => createUiCardResponse(
+        { success: true, status: 'ready' },
+        {
+          kind: 'readiness',
+          status: 'ready',
+          profile: 'default',
+          canPayX402: true,
+          canExecuteWriteTools: true,
+          issues: [],
+        },
+      ),
+    );
+
+    const callTool = server._requestHandlers?.get('tools/call');
+    const result = await callTool?.(
+      {
+        method: 'tools/call',
+        params: {
+          name: 'sap_test_ui_card_without_schema',
+          arguments: {},
+        },
+      },
+      {},
+    ) as { structuredContent?: unknown } | undefined;
+
+    expect(result?.structuredContent).toEqual({ success: true, status: 'ready' });
   });
 });

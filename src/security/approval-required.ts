@@ -28,5 +28,8 @@ export function isApprovalRequired(
   context: SapMcpContext,
   amountSol: number
 ): boolean {
+  if (!Number.isFinite(amountSol) || amountSol < 0) {
+    return false;
+  }
   return amountSol > context.config.requireApprovalAboveSol;
 }

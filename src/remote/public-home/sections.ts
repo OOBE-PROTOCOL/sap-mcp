@@ -478,12 +478,12 @@ export function renderScrollMachine(model: LandingPageModel): string {
  */
 export function renderDocsLaunchpad(model: LandingPageModel): string {
   const docs = [
-    ['Getting started', `${model.info.endpoints.docs}/#/user/00_START_HERE`, 'coral'],
-    ['Hosted remote MCP', `${model.info.endpoints.docs}/#/user/01_HOSTED_REMOTE_MCP`, 'yellow'],
-    ['Client configs', `${model.info.endpoints.docs}/#/user/04_CLIENT_CONFIGS`, 'green'],
-    ['Desktop wizard', `${model.info.endpoints.docs}/#/user/06_DESKTOP_GUI_WIZARD`, 'blue'],
-    ['x402 and pay.sh', `${model.info.endpoints.docs}/#/user/03_PAYMENTS_X402_PAYSH`, 'aqua'],
-    ['Skills and tools', `${model.info.endpoints.docs}/#/user/05_SKILLS_AND_TOOLS`, 'green'],
+    ['User onboarding index', `${model.info.endpoints.docs}/#/user/00_USER_ONBOARDING_INDEX`, 'coral'],
+    ['Hosted MCP bridge setup', `${model.info.endpoints.docs}/#/user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP`, 'yellow'],
+    ['Client config matrix', `${model.info.endpoints.docs}/#/user/04_MCP_CLIENT_CONFIGURATION_MATRIX`, 'green'],
+    ['Desktop wizard runbook', `${model.info.endpoints.docs}/#/user/06_DESKTOP_WIZARD_INSTALL_RUNBOOK`, 'blue'],
+    ['x402/pay.sh runbook', `${model.info.endpoints.docs}/#/user/03_X402_PAYSH_PAID_TOOL_RUNBOOK`, 'aqua'],
+    ['Agent skill routing', `${model.info.endpoints.docs}/#/user/05_AGENT_SKILLS_TOOL_ROUTING`, 'green'],
   ] as const;
 
   return `
@@ -656,7 +656,7 @@ export function renderIntegrationPath(model: LandingPageModel): string {
             <li><b>4</b><span>Restart the agent and connect to the hosted <code>/mcp</code> endpoint.</span></li>
           </ol>
           <div class="inline-actions">
-            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/06_DESKTOP_GUI_WIZARD">Desktop docs</a>
+            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/06_DESKTOP_WIZARD_INSTALL_RUNBOOK">Desktop docs</a>
           </div>
         </article>
         <article class="card">
@@ -674,8 +674,8 @@ export function renderIntegrationPath(model: LandingPageModel): string {
           <pre class="code-block"><code>${escapeHtml(model.repairCommand)}</code></pre>
           <div class="inline-actions">
             <a class="button" href="${escapeHtml(model.info.endpoints.docs)}">Start here</a>
-            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/04_CLIENT_CONFIGS">Client configs</a>
-            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/03_PAYMENTS_X402_PAYSH">Payments</a>
+            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/04_MCP_CLIENT_CONFIGURATION_MATRIX">Client configs</a>
+            <a class="button" href="${escapeHtml(model.info.endpoints.docs)}/#/user/03_X402_PAYSH_PAID_TOOL_RUNBOOK">Payments</a>
           </div>
         </article>
       </div>
@@ -856,7 +856,7 @@ export function renderFooter(model: LandingPageModel): string {
           <strong>Payments</strong>
           <a href="${escapeHtml(model.info.endpoints.x402Discovery)}">x402 discovery</a>
           <a href="${escapeHtml(model.info.endpoints.payShProvider)}">pay.sh YAML</a>
-          <a href="${escapeHtml(model.info.endpoints.docs)}/#/user/03_PAYMENTS_X402_PAYSH">Payment docs</a>
+          <a href="${escapeHtml(model.info.endpoints.docs)}/#/user/03_X402_PAYSH_PAID_TOOL_RUNBOOK">Payment docs</a>
           <a href="${escapeHtml(model.info.endpoints.wizardDownloads)}">Wizard downloads</a>
         </div>
       </div>

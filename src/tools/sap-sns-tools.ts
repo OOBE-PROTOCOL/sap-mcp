@@ -26,19 +26,23 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createHash } from 'crypto';
 import { PublicKey, type Connection } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
 
 type JsonRecord = Record<string, unknown>;
 type SnsRecordType = string;
+type SnsToolResult = ToolFamilyPipelineResult;
 type SnsToolHandler = (input: JsonRecord) => Promise<unknown>;
 
 interface SnsToolRegistration {
   name: string;
   title: string;
   description: string;
-  inputSchema: unknown;
+  inputSchema: Record<string, unknown>;
   handler: SnsToolHandler;
 }
 
@@ -114,23 +118,23 @@ function jsonReplacer(_key: string, value: unknown): unknown {
  * @name ok
  * @description Wraps successful SNS output in a consistent MCP text response.
  */
-function ok(payload: unknown) {
+function ok(payload: unknown): SnsToolResult {
   const objectPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
     ? payload as JsonRecord
     : { result: payload };
 
-  return createTextResponse(JSON.stringify({ success: true, ...objectPayload }, jsonReplacer, 2));
+  return createToolFamilyPipelineResult(JSON.parse(JSON.stringify({ success: true, ...objectPayload }, jsonReplacer)) as JsonRecord);
 }
 
 /**
  * @name errorResponse
  * @description Wraps SNS failures in an MCP error response without throwing through the transport.
  */
-function errorResponse(error: unknown) {
-  return createTextResponse(
-    `Error: ${error instanceof Error ? error.message : 'Unknown SNS error'}`,
-    { isError: true }
-  );
+function errorResponse(error: unknown): SnsToolResult {
+  return createToolFamilyPipelineResult({
+    success: false,
+    error: error instanceof Error ? error.message : 'Unknown SNS error',
+  }, undefined, { isError: true });
 }
 
 // ============================================================================
@@ -420,24 +424,25 @@ async function validateSnsRecords(connection: Connection, domain: string): Promi
  * @name registerSnsTool
  * @description Registers a single SNS MCP tool with standard error handling.
  */
-function registerSnsTool(server: Server, tool: SnsToolRegistration): void {
-  registerTool(
+function registerSnsPipelineTool(server: Server, context: SapMcpContext, tool: SnsToolRegistration): void {
+  registerToolFamilyPipelineTool<JsonRecord, JsonRecord>(
     server,
+    context,
     tool.name,
     {
       title: tool.title,
       description: tool.description,
       inputSchema: tool.inputSchema,
     },
-    async (input: unknown) => {
+    async (input) => {
       try {
-        const args = input && typeof input === 'object' && !Array.isArray(input) ? input as JsonRecord : {};
+        const args = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
         return ok(await tool.handler(args));
       } catch (error) {
         logger.error(`SAP SNS tool failed: ${tool.name}`, { error });
         return errorResponse(error);
       }
-    }
+    },
   );
 }
 
@@ -626,7 +631,7 @@ export function registerSapSnsTools(server: Server, context: SapMcpContext): voi
 
   let count = 0;
   for (const tool of createSnsTools(context)) {
-    registerSnsTool(server, tool);
+    registerSnsPipelineTool(server, context, tool);
     count++;
   }
 

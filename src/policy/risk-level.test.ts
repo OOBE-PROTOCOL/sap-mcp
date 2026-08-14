@@ -192,14 +192,22 @@ describe('calculateRiskLevel', () => {
     })).toBe('critical');
   });
 
-  it('handles negative amounts as low', () => {
-    // Negative amounts are not 0 and are < 0.1
+  it('handles negative amounts as critical', () => {
     expect(calculateRiskLevel({
       amountSol: -1,
       isWriteOperation: false,
       isKnownOperation: false,
       toolName: 'transfer',
-    })).toBe('low');
+    })).toBe('critical');
+  });
+
+  it('handles non-finite amounts as critical', () => {
+    expect(calculateRiskLevel({
+      amountSol: Number.NaN,
+      isWriteOperation: false,
+      isKnownOperation: false,
+      toolName: 'transfer',
+    })).toBe('critical');
   });
 });
 

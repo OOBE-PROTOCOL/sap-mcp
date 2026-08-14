@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-core",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP core contracts and shared primitives.",
+  "sapMcp": {
+    "boundaryId": "core",
+    "source": "src/core",
+    "architectureDomain": "core",
+    "rootExport": "./core",
+    "apiContract": "config/package-export-contracts.json#./core",
+    "boundary": "Shared runtime contracts and primitives."
+  }
+}

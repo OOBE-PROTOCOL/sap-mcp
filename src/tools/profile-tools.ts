@@ -4,8 +4,6 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpConfig, SapMcpContext } from '../core/types.js';
 import {
   getActiveProfile,
@@ -20,8 +18,27 @@ import { resolveSigner } from '../signer/signer-resolver.js';
 import { PolicyEngine } from '../policy/policy-engine.js';
 import { loadConfig } from '../config/env.js';
 import { redactSensitiveString } from '../core/logger.js';
+import {
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+} from './tool-family-pipeline.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
+
+interface ProfilePipelineToolDefinition extends ToolFamilyPipelineDefinition {
+  readonly name: string;
+  readonly execute: (input: { readonly input: unknown }) => Promise<ToolFamilyPipelineHandlerResult> | ToolFamilyPipelineHandlerResult;
+}
+
+function registerProfilePipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  definition: ProfilePipelineToolDefinition,
+): void {
+  const { name, execute, ...toolDefinition } = definition;
+  registerToolFamilyPipelineTool(server, context, name, toolDefinition, async (input) => execute({ input }));
+}
 
 /**
  * @name ProfileToolInput
@@ -391,91 +408,94 @@ function parseInput(input: unknown): ProfileToolInput {
  * @description Registers profile inspection and runtime switching MCP tools.
  */
 export function registerProfileTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerProfilePipelineTool(
     server,
-    'sap_profile_current',
+    context,
     {
+      name: 'sap_profile_current',
       title: 'Show Current SAP MCP Profile',
       description: 'Return the currently loaded SAP MCP profile and redacted signer/config metadata.',
       inputSchema: {},
+      execute: async () => {
+        const hostedAccountless = isHostedAccountlessRuntime(context);
+        return {
+          connectionSummary: hostedAccountless ? buildHostedAccountlessConnectionSummary() : {
+            status: 'connected',
+            accountModel: 'local-profile-managed',
+            localProfileStatus: 'visible-to-this-process',
+          },
+          loadedProfile: hostedAccountless ? null : getLoadedProfileName(),
+          activeProfile: hostedAccountless ? null : getActiveProfile(),
+          accountModel: hostedAccountless ? 'hosted-remote-accountless' : 'local-profile-managed',
+          runtime: {
+            mode: context.config.mode,
+            rpcUrl: redactSensitiveString(context.config.rpcUrl),
+            network: getNetworkFromRpcUrl(context.config.rpcUrl),
+            programId: context.config.programId,
+            signerPublicKey: context.signer?.publicKey.toBase58(),
+            signerConfigured: Boolean(context.signer),
+            signerStatus: hostedAccountless
+              ? 'server-non-custodial-user-signer-required'
+              : context.signer
+                ? 'server-signer-configured'
+                : 'no-signer-configured',
+            writeAccess: context.config.mode === 'hosted-api'
+              ? 'available-through-user-signed-x402-pay.sh-and-tool-specific-signing-flows'
+              : context.signer
+                ? 'available-through-configured-signer-and-policy'
+                : 'not-available-without-configured-signer',
+            localProfileVisibleToHostedServer: !hostedAccountless,
+            localProfileStatus: hostedAccountless ? 'unknown-to-hosted-server-not-missing' : 'visible-to-this-process',
+            localProfileTool: hostedAccountless ? 'sap_payments.sap_payments_profile_current' : undefined,
+            important: hostedAccountless
+              ? 'loadedProfile is null because the hosted gateway is non-custodial and cannot inspect the caller machine. It does not mean the user local SAP profile is missing.'
+              : undefined,
+            secretMaterial: 'never-exposed',
+          },
+          identityConsistency: buildIdentityConsistency(context),
+          hostedRemote: buildHostedRemoteRuntime(context),
+          policy: context.policyEngine.getRuntimeStatus() satisfies PolicyRuntimeSummary,
+          profile: buildCurrentProfileSummary(context),
+        };
+      },
     },
-    async () => {
-      const hostedAccountless = isHostedAccountlessRuntime(context);
-      return createTextResponse(JSON.stringify({
-        connectionSummary: hostedAccountless ? buildHostedAccountlessConnectionSummary() : {
-          status: 'connected',
-          accountModel: 'local-profile-managed',
-          localProfileStatus: 'visible-to-this-process',
-        },
-        loadedProfile: hostedAccountless ? null : getLoadedProfileName(),
-        activeProfile: hostedAccountless ? null : getActiveProfile(),
-        accountModel: hostedAccountless ? 'hosted-remote-accountless' : 'local-profile-managed',
-        runtime: {
-          mode: context.config.mode,
-          rpcUrl: redactSensitiveString(context.config.rpcUrl),
-          network: getNetworkFromRpcUrl(context.config.rpcUrl),
-          programId: context.config.programId,
-          signerPublicKey: context.signer?.publicKey.toBase58(),
-          signerConfigured: Boolean(context.signer),
-          signerStatus: hostedAccountless
-            ? 'server-non-custodial-user-signer-required'
-            : context.signer
-              ? 'server-signer-configured'
-              : 'no-signer-configured',
-          writeAccess: context.config.mode === 'hosted-api'
-            ? 'available-through-user-signed-x402-pay.sh-and-tool-specific-signing-flows'
-            : context.signer
-              ? 'available-through-configured-signer-and-policy'
-              : 'not-available-without-configured-signer',
-          localProfileVisibleToHostedServer: !hostedAccountless,
-          localProfileStatus: hostedAccountless ? 'unknown-to-hosted-server-not-missing' : 'visible-to-this-process',
-          localProfileTool: hostedAccountless ? 'sap_payments.sap_payments_profile_current' : undefined,
-          important: hostedAccountless
-            ? 'loadedProfile is null because the hosted gateway is non-custodial and cannot inspect the caller machine. It does not mean the user local SAP profile is missing.'
-            : undefined,
-          secretMaterial: 'never-exposed',
-        },
-        identityConsistency: buildIdentityConsistency(context),
-        hostedRemote: buildHostedRemoteRuntime(context),
-        policy: context.policyEngine.getRuntimeStatus() satisfies PolicyRuntimeSummary,
-        profile: buildCurrentProfileSummary(context),
-      }, null, 2));
-    }
   );
 
-  registerTool(
+  registerProfilePipelineTool(
     server,
-    'sap_profile_list',
+    context,
     {
+      name: 'sap_profile_list',
       title: 'List SAP MCP Profiles',
       description: 'List available SAP MCP profiles with redacted signer metadata and no wallet paths.',
       inputSchema: {},
-    },
-    async () => {
-      if (isHostedAccountlessRuntime(context)) {
-        return createTextResponse(JSON.stringify({
-          connectionSummary: buildHostedAccountlessConnectionSummary(),
-          loadedProfile: null,
-          activeProfile: null,
-          accountModel: 'hosted-remote-accountless',
-          profiles: [],
-          hostedRemote: buildHostedRemoteRuntime(context),
-          instruction: 'Hosted SAP MCP cannot see the caller local profiles. Do not report that no local profile is configured based on this hosted response. Use the local sap_payments.sap_payments_profile_current bridge to inspect the user SAP profile, wallet, and signer status.',
-        }, null, 2));
-      }
+      execute: async () => {
+        if (isHostedAccountlessRuntime(context)) {
+          return {
+            connectionSummary: buildHostedAccountlessConnectionSummary(),
+            loadedProfile: null,
+            activeProfile: null,
+            accountModel: 'hosted-remote-accountless',
+            profiles: [],
+            hostedRemote: buildHostedRemoteRuntime(context),
+            instruction: 'Hosted SAP MCP cannot see the caller local profiles. Do not report that no local profile is configured based on this hosted response. Use the local sap_payments.sap_payments_profile_current bridge to inspect the user SAP profile, wallet, and signer status.',
+          };
+        }
 
-      return createTextResponse(JSON.stringify({
-        loadedProfile: getLoadedProfileName(),
-        activeProfile: getActiveProfile(),
-        profiles: listProfiles().map((profile) => buildProfileSummary(profile.name, context)),
-      }, null, 2));
-    }
+        return {
+          loadedProfile: getLoadedProfileName(),
+          activeProfile: getActiveProfile(),
+          profiles: listProfiles().map((profile) => buildProfileSummary(profile.name, context)),
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerProfilePipelineTool(
     server,
-    'sap_profile_public_key',
+    context,
     {
+      name: 'sap_profile_public_key',
       title: 'Show SAP MCP Profile Agent Public Key',
       description: 'Return the configured public agent key for a profile without reading or exposing keypair bytes.',
       inputSchema: {
@@ -484,11 +504,9 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           description: 'Profile name. Defaults to the loaded profile.',
         },
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         if (isHostedAccountlessRuntime(context)) {
-          return createTextResponse(JSON.stringify({
+          return {
             profileName: null,
             agentPubkey: null,
             configured: false,
@@ -500,7 +518,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
             localProfileTool: 'sap_payments.sap_payments_profile_current',
             instruction: 'Hosted SAP MCP is non-custodial and cannot read the caller local profile public key. Call the local sap_payments.sap_payments_profile_current bridge for the user wallet and agent public key.',
             secretMaterial: 'never-exposed',
-          }, null, 2));
+          };
         }
 
         const profileName = parseInput(input).profileName || getLoadedProfileName();
@@ -510,7 +528,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           throw new Error(`Profile "${profileName}" does not exist.`);
         }
 
-        return createTextResponse(JSON.stringify({
+        return {
           profileName,
           agentPubkey: profile.agentPubkey || null,
           configured: Boolean(profile.agentPubkey),
@@ -518,17 +536,16 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           rpcUrl: profile.rpcUrl,
           network: profile.network,
           secretMaterial: 'never-exposed',
-        }, null, 2));
-      } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
-      }
-    }
+        };
+      },
+    },
   );
 
-  registerTool(
+  registerProfilePipelineTool(
     server,
-    'sap_profile_switch',
+    context,
     {
+      name: 'sap_profile_switch',
       title: 'Switch Loaded SAP MCP Profile',
       description: 'Switch the live SAP MCP runtime to another existing profile and reload client, signer, connection, and policy.',
       inputSchema: {
@@ -540,14 +557,8 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           type: 'boolean',
           description: 'Must be true because switching profile can change signer, network, and policy.',
         },
-        signature: {
-          type: 'string',
-          description: 'Optional Ed25519 signature proving ownership of the target profile keypair. When provided, the server verifies that the signature matches the profile agentPubkey. This prevents impersonation via manual .active-profile file edits. If omitted, the switch proceeds without cryptographic verification (backward compat).',
-        },
       },
-    },
-    async (input: unknown) => {
-      try {
+      execute: async ({ input }) => {
         const parsed = parseInput(input);
         if (!parsed.profileName) {
           throw new Error('profileName is required.');
@@ -557,7 +568,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
         // When the server is hosted-accountless, it cannot see or switch
         // local profiles. Provide explicit guidance instead of a bare error.
         if (isHostedAccountlessRuntime(context)) {
-          return createTextResponse(JSON.stringify({
+          return {
             success: false,
             accountModel: 'hosted-remote-accountless',
             reason: 'The hosted SAP MCP gateway is non-custodial and cannot see, list, or switch local profiles on the caller machine.',
@@ -565,7 +576,7 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
             instruction: 'Profile switching is a local operation. Options: (1) Use the local sap_payments bridge if it exposes a profile switch tool. (2) Edit ~/.config/mcp-sap/.active-profile manually and set it to the profile name. (3) Run: sap-mcp-config switch-profile <profileName> on the machine where the local bridge runs.',
             localProfileTool: 'sap_payments.sap_payments_profile_current',
             warning: 'After switching .active-profile, restart the local sap_payments bridge to avoid stale signer cache. The bridge caches the active profile signer at startup and does not re-read .active-profile on every call.',
-          }, null, 2));
+          };
         }
 
         if (!profileExists(parsed.profileName)) {
@@ -575,13 +586,13 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
         const previousProfile = getLoadedProfileName();
         const profile = buildProfileSummary(parsed.profileName, context);
         if (!parsed.confirm) {
-          return createTextResponse(JSON.stringify({
+          return {
             success: false,
             requiresConfirmation: true,
             message: 'Profile switch can change signer, network, and policy. Call again with confirm: true to reload runtime.',
             previousProfile,
             targetProfile: profile,
-          }, null, 2));
+          };
         }
 
         await reloadRuntimeProfile(context, parsed.profileName);
@@ -594,10 +605,8 @@ export function registerProfileTools(server: Server, context: SapMcpContext): vo
           message: `Loaded SAP MCP profile "${parsed.profileName}".`,
         };
 
-        return createTextResponse(JSON.stringify(response, null, 2));
-      } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
-      }
-    }
+        return response as unknown as Record<string, unknown>;
+      },
+    },
   );
 }

@@ -34,6 +34,10 @@ export function calculateRiskLevel(params: {
   toolName: string;
 }): SapRiskLevel {
   const { amountSol, isWriteOperation, isKnownOperation } = params;
+
+  if (!Number.isFinite(amountSol) || amountSol < 0) {
+    return 'critical';
+  }
   
   // Base risk from amount
   let risk: SapRiskLevel = 'safe';

@@ -7,8 +7,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineException,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import {
   buildAddLiquidity,
   buildRemoveLiquidity,
@@ -32,7 +35,7 @@ import {
  */
 export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcpContext): void {
   // Add liquidity
-  registerTool(server, 'sap_adrena_build_add_liquidity', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_liquidity', {
     description: 'Build an unsigned transaction to add liquidity to an Adrena pool. Deposits collateral and receives LP tokens. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -55,14 +58,14 @@ export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcp
       const poolName = (args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool') as AdrenaPool;
 
       const result = await buildAddLiquidity(getConnection(context), owner, collateralToken, amount, minLpAmountOut, poolName);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build add liquidity transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build add liquidity transaction', err);
     }
   });
 
   // Remove liquidity
-  registerTool(server, 'sap_adrena_build_remove_liquidity', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_remove_liquidity', {
     description: 'Build an unsigned transaction to remove liquidity from an Adrena pool. Burns LP tokens and receives collateral. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -85,14 +88,14 @@ export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcp
       const poolName = (args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool') as AdrenaPool;
 
       const result = await buildRemoveLiquidity(getConnection(context), owner, collateralToken, lpAmountIn, minAmountOut, poolName);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build remove liquidity transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build remove liquidity transaction', err);
     }
   });
 
   // Swap
-  registerTool(server, 'sap_adrena_build_swap', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_swap', {
     description: 'Build an unsigned transaction to swap tokens through an Adrena pool. Uses zero-slippage oracle pricing. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -115,9 +118,9 @@ export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcp
       const minAmountOut = args['minAmountOut'] !== undefined ? BigInt(Math.floor(Number(args['minAmountOut']))) : 0n;
 
       const result = await buildSwap(getConnection(context), owner, fromToken, toToken, amount, minAmountOut);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build swap transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build swap transaction', err);
     }
   });
 }

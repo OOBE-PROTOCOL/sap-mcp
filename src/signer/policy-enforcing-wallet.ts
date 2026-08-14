@@ -1,6 +1,6 @@
 /**
  * @name signer/policy-enforcing-wallet
- * @description Wallet adapter that enforces the configured SOL spending policy
+ * @description Wallet adapter that enforces the configured value-movement policy
  *   before signing any transaction.
  *
  * Every SAP SDK tool that writes on-chain (agent register/update/close, escrow
@@ -19,8 +19,12 @@
 
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { logger } from '../core/logger.js';
-import type { PolicyEngine } from '../policy/policy-engine.js';
-import { estimateNativeTransfer } from '../tools/transaction-tools.js';
+import type { SapPolicyEngine } from '../core/types.js';
+import {
+  estimateTransactionValue,
+  explicitApprovalRiskPolicyReason,
+  tokenTransferPolicyReason,
+} from '../tools/transaction-tools.js';
 
 /** Minimal signer surface required by the SAP SDK wallet interface. */
 export interface SignerWallet {
@@ -37,24 +41,28 @@ export interface SignerWallet {
 export class PolicyEnforcingWallet implements SignerWallet {
   readonly publicKey: PublicKey;
   private readonly wrapped: SignerWallet;
-  private readonly policyEngine?: PolicyEngine;
+  private readonly policyEngine?: SapPolicyEngine;
   private readonly toolName: string;
+  private readonly sapProgramId?: string;
 
   /**
    * @param wrapped    — The underlying wallet/signer that performs the real signature.
    * @param policyEngine — Policy engine used to evaluate transaction:submit. When
    *   omitted, enforcement is skipped (delegated modes / disabled policy).
    * @param toolName    — Tool name reported to the policy engine for audit context.
+   * @param sapProgramId — Configured SAP program id allowed for SDK metadata writes.
    */
   constructor(
     wrapped: SignerWallet,
-    policyEngine?: PolicyEngine,
-    toolName = 'sap_sdk_local_signer'
+    policyEngine?: SapPolicyEngine,
+    toolName = 'sap_sdk_local_signer',
+    sapProgramId?: string,
   ) {
     this.wrapped = wrapped;
     this.publicKey = wrapped.publicKey;
     this.policyEngine = policyEngine;
     this.toolName = toolName;
+    this.sapProgramId = sapProgramId;
   }
 
   async signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> {
@@ -71,18 +79,43 @@ export class PolicyEnforcingWallet implements SignerWallet {
 
   /**
    * @name assertPolicy
-   * @description Estimates the native SOL value moved by the transaction and asks
-   *   the policy engine for permission before signing.
+   * @description Estimates value moved by the transaction and asks the policy
+   *   engine for permission before signing.
    *
-   * Zero-SOL transactions (e.g. pure metadata updates) are allowed without a
-   * policy lookup because they carry no spend risk.
+   * Zero-value transactions (e.g. pure metadata updates) are allowed without a
+   * policy lookup. Token transfers require an explicit approval path because
+   * their SOL-equivalent value cannot be safely inferred without a price oracle.
    */
   private async assertPolicy(tx: Transaction | VersionedTransaction): Promise<void> {
     if (!this.policyEngine) {
       return;
     }
 
-    const nativeTransfer = estimateNativeTransfer(tx, this.publicKey);
+    const valueEstimate = estimateTransactionValue(
+      tx,
+      this.publicKey,
+      this.sapProgramId ? { config: { programId: this.sapProgramId } } : undefined,
+    );
+    if (valueEstimate.tokenTransfers.length > 0) {
+      const reason = tokenTransferPolicyReason(valueEstimate);
+      logger.warn('Transaction signing blocked by token transfer policy', {
+        toolName: this.toolName,
+        tokenTransferCount: valueEstimate.tokenTransfers.length,
+        reason,
+      });
+      throw new Error(reason);
+    }
+    if (valueEstimate.explicitApprovalRisks.length > 0) {
+      const reason = explicitApprovalRiskPolicyReason(valueEstimate);
+      logger.warn('Transaction signing blocked by explicit approval policy', {
+        toolName: this.toolName,
+        explicitApprovalRiskCount: valueEstimate.explicitApprovalRisks.length,
+        reason,
+      });
+      throw new Error(reason);
+    }
+
+    const { nativeTransfer } = valueEstimate;
     if (nativeTransfer.sol <= 0) {
       return;
     }

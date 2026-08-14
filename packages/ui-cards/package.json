@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-ui-cards",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP Apps Card rendering boundary.",
+  "sapMcp": {
+    "boundaryId": "ui-cards",
+    "source": "src/ui",
+    "architectureDomain": "ui-cards",
+    "rootExport": "./ui-cards",
+    "apiContract": "config/package-export-contracts.json#./ui-cards",
+    "boundary": "MCP Apps Card rendering boundary."
+  }
+}

@@ -13,11 +13,32 @@ import {
 } from '../config/mcp-client-injection.js';
 import type { SapMcpMode } from '../config/env.js';
 
+const HOSTED_BASE_URL = 'https://mcp.sap.oobeprotocol.ai';
+const HOSTED_MCP_URL = `${HOSTED_BASE_URL}/mcp`;
+const HOSTED_TOOL_CATALOG_URL = `${HOSTED_BASE_URL}/.well-known/sap-mcp-tool-catalog.json`;
+const HOSTED_WIZARD_DESCRIPTOR_URL = `${HOSTED_BASE_URL}/.well-known/sap-mcp-wizard.json`;
+const HOSTED_SERVER_INFO_URL = `${HOSTED_BASE_URL}/server.json`;
+
 /**
  * @name DesktopRuntimeId
  * @description Agent runtimes supported by the desktop wizard runtime setup screen.
  */
 export type DesktopRuntimeId = 'codex' | 'claude' | 'hermes' | 'openclaw';
+
+/**
+ * @name DesktopWizardHostedDiscovery
+ * @description Hosted discovery URLs and local bridge tools shown by desktop wizard surfaces.
+ */
+export interface DesktopWizardHostedDiscovery {
+  hostedMcpUrl: string;
+  serverInfoUrl: string;
+  wizardDescriptorUrl: string;
+  toolCatalogUrl: string;
+  toolCatalogAliasUrl: string;
+  sourceOfTruth: '@oobe-protocol-labs/sap-mcp-server/tools';
+  requiredLocalBridgeTools: readonly string[];
+  requiredHostedPrepaidTools: readonly string[];
+}
 
 /**
  * @name DesktopWizardDraft
@@ -141,6 +162,42 @@ export function createDefaultDesktopWizardDraft(): DesktopWizardDraft {
     configureCodex: true,
     configureRuntimes: ['codex'],
     installAddonBundle: true,
+  };
+}
+
+/**
+ * @name getDesktopHostedDiscovery
+ * @description Returns hosted SAP MCP discovery links used by desktop wizard and renderer.
+ */
+export function getDesktopHostedDiscovery(): DesktopWizardHostedDiscovery {
+  return {
+    hostedMcpUrl: HOSTED_MCP_URL,
+    serverInfoUrl: HOSTED_SERVER_INFO_URL,
+    wizardDescriptorUrl: HOSTED_WIZARD_DESCRIPTOR_URL,
+    toolCatalogUrl: HOSTED_TOOL_CATALOG_URL,
+    toolCatalogAliasUrl: `${HOSTED_BASE_URL}/tool-catalog.json`,
+    sourceOfTruth: '@oobe-protocol-labs/sap-mcp-server/tools',
+    requiredLocalBridgeTools: [
+      'sap_payments_profile_current',
+      'sap_payments_wallet_guard',
+      'sap_payments_readiness',
+      'sap_payments_process_status',
+      'sap_payments_call_paid_tool',
+      'sap_x402_paid_call',
+      'sap_payments_call_external_x402',
+      'sap_payments_register_agent',
+      'sap_payments_update_agent',
+      'sap_payments_finalize_transaction',
+      'sap_payments_prepare_challenge',
+      'sap_payments_sign_challenge',
+      'sap_payments_verify_receipt',
+      'sap_payments_prepaid_balance',
+      'sap_payments_start_prepaid',
+    ],
+    requiredHostedPrepaidTools: [
+      'sap_payments_fund_prepaid',
+      'sap_payments_prepaid_balance',
+    ],
   };
 }
 

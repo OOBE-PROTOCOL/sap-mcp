@@ -11,7 +11,7 @@
  * @module ui/tool-card-registry
  */
 
-import { CardBuilder, addrLink } from './card-builder.js';
+import { CardBuilder, addrLink, escapeHtml } from './card-builder.js';
 import type { RowValueColor } from './card-shell.js';
 import { resolveProtocolFromToolName, resolveProtocolLogo, resolveTokenLogo } from './protocol-logos.js';
 
@@ -34,6 +34,22 @@ export type ToolCategory =
   | 'nft' | 'magicblock' | 'bridge' | 'agent' | 'memory' | 'audit'
   | 'premium' | 'chart' | 'staking' | 'strategy' | 'stream'
   | 'generic-read' | 'generic-write' | 'generic-build';
+
+export type ToolCardCoverageKind = 'specialized' | 'generic-read' | 'generic-write' | 'generic-build';
+
+export interface ToolCardCoverageEntry {
+  readonly toolName: string;
+  readonly coverage: ToolCardCoverageKind;
+  readonly specialized: boolean;
+}
+
+export interface ToolCardCoverageReport {
+  readonly totalTools: number;
+  readonly specializedTools: number;
+  readonly genericTools: number;
+  readonly byCoverage: Readonly<Record<ToolCardCoverageKind, number>>;
+  readonly entries: readonly ToolCardCoverageEntry[];
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -191,7 +207,7 @@ const agentAdapter: ToolCardAdapter = (data, meta) => {
   const protocols = Array.isArray(data.protocols) ? data.protocols as string[] : [];
   const protocolHtml = protocols.map(p => {
     const logo = resolveProtocolLogo(p);
-    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);font-size:9px;color:#eaeef2;font-family:ui-monospace,monospace;margin:1px">${logo} ${p}</span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);font-size:9px;color:#eaeef2;font-family:ui-monospace,monospace;margin:1px">${logo} ${escapeHtml(p)}</span>`;
   }).join(' ');
 
   return new CardBuilder()
@@ -416,6 +432,7 @@ const toolAdapters = new Map<string, ToolCardAdapter>([
   ['sol_get_balance', balanceAdapter],
   ['spl_token_getBalance', balanceAdapter],
   ['magicblock_balance', balanceAdapter],
+  ['magicblock_private_balance', balanceAdapter],
   ['magicblock_privateBalance', balanceAdapter],
   ['sap_payments_prepaid_balance', balanceAdapter],
   ['jupiter_getHoldings', balanceAdapter],
@@ -437,6 +454,7 @@ const toolAdapters = new Map<string, ToolCardAdapter>([
   ['orca_swap', swapAdapter],
   ['sap_adrena_build_swap', swapAdapter],
   ['magicblock_swap', swapAdapter],
+  ['magicblock_swap_quote', swapAdapter],
   ['magicblock_swapQuote', swapAdapter],
   ['raydium_pools_addLiquidity', swapAdapter],
   ['raydium_pools_removeLiquidity', swapAdapter],
@@ -446,6 +464,8 @@ const toolAdapters = new Map<string, ToolCardAdapter>([
   ['adrena_removeCollateral', swapAdapter],
 
   // Transfer
+  ['spl-token_transfer', transferAdapter],
+  ['spl-token_transferSol', transferAdapter],
   ['spl_token_transfer', transferAdapter],
   ['spl_token_transferSol', transferAdapter],
   ['sap_build_sol_transfer', transferAdapter],
@@ -455,6 +475,15 @@ const toolAdapters = new Map<string, ToolCardAdapter>([
   ['magicblock_withdraw', transferAdapter],
 
   // NFT
+  ['metaplex-nft_mintNFT', nftAdapter],
+  ['metaplex-nft_deployCollection', nftAdapter],
+  ['metaplex-nft_updateMetadata', nftAdapter],
+  ['metaplex-nft_verifyCollection', nftAdapter],
+  ['metaplex-nft_verifyCreator', nftAdapter],
+  ['metaplex-nft_configureRoyalties', nftAdapter],
+  ['metaplex-nft_delegateAuthority', nftAdapter],
+  ['metaplex-nft_revokeAuthority', nftAdapter],
+  ['metaplex-nft_setAndVerifyCollection', nftAdapter],
   ['metaplex_nft_mintNFT', nftAdapter],
   ['metaplex_nft_deployCollection', nftAdapter],
   ['metaplex_nft_updateMetadata', nftAdapter],
@@ -511,12 +540,50 @@ const toolAdapters = new Map<string, ToolCardAdapter>([
 // ── Tool name → generic adapter ───────────────────────────────────────────
 
 function resolveGenericAdapter(toolName: string): ToolCardAdapter {
+  const category = resolveGenericCardCoverage(toolName);
+  if (category === 'generic-build') return genericBuildAdapter;
+  if (category === 'generic-write') return genericWriteAdapter;
+  return genericReadAdapter;
+}
+
+export function resolveGenericCardCoverage(toolName: string): Exclude<ToolCardCoverageKind, 'specialized'> {
   const lower = toolName.toLowerCase();
   if (lower.includes('build') || lower.includes('prepare') || lower.includes('preview') || lower.includes('estimate') || lower.includes('simulate') || lower.includes('construct'))
-    return genericBuildAdapter;
-  if (lower.includes('create') || lower.includes('open') || lower.includes('execute') || lower.includes('send') || lower.includes('sign') || lower.includes('submit') || lower.includes('mint') || lower.includes('register') || lower.includes('activate') || lower.includes('deposit') || lower.includes('stake') || lower.includes('swap') || lower.includes('transfer') || lower.includes('cancel') || lower.includes('close') || lower.includes('remove') || lower.includes('delete') || lower.includes('revoke') || lower.includes('deactivate') || lower.includes('withdraw') || lower.includes('unstake') || lower.includes('fund') || lower.includes('settle') || lower.includes('burn') || lower.includes('freeze') || lower.includes('thaw'))
-    return genericWriteAdapter;
-  return genericReadAdapter;
+    return 'generic-build';
+  if (lower.includes('create') || lower.includes('open') || lower.includes('execute') || lower.includes('send') || lower.includes('sign') || lower.includes('submit') || lower.includes('mint') || lower.includes('register') || lower.includes('update') || lower.includes('activate') || lower.includes('deposit') || lower.includes('stake') || lower.includes('swap') || lower.includes('transfer') || lower.includes('cancel') || lower.includes('close') || lower.includes('remove') || lower.includes('delete') || lower.includes('revoke') || lower.includes('deactivate') || lower.includes('withdraw') || lower.includes('unstake') || lower.includes('fund') || lower.includes('settle') || lower.includes('finalize') || lower.includes('call_paid') || lower.includes('burn') || lower.includes('freeze') || lower.includes('thaw'))
+    return 'generic-write';
+  return 'generic-read';
+}
+
+export function classifyToolCardCoverage(toolName: string): ToolCardCoverageKind {
+  return toolAdapters.has(toolName) ? 'specialized' : resolveGenericCardCoverage(toolName);
+}
+
+export function buildToolCardCoverageReport(toolNames: readonly string[]): ToolCardCoverageReport {
+  const uniqueToolNames = [...new Set(toolNames)].sort();
+  const byCoverage: Record<ToolCardCoverageKind, number> = {
+    specialized: 0,
+    'generic-read': 0,
+    'generic-write': 0,
+    'generic-build': 0,
+  };
+  const entries = uniqueToolNames.map((toolName): ToolCardCoverageEntry => {
+    const coverage = classifyToolCardCoverage(toolName);
+    byCoverage[coverage] += 1;
+    return {
+      toolName,
+      coverage,
+      specialized: coverage === 'specialized',
+    };
+  });
+
+  return {
+    totalTools: entries.length,
+    specializedTools: byCoverage.specialized,
+    genericTools: entries.length - byCoverage.specialized,
+    byCoverage,
+    entries,
+  };
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────

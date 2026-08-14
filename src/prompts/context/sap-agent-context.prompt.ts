@@ -263,8 +263,8 @@ function buildContextMessage(options: {
 - Hosted paid tools should be paid through x402/pay.sh from the user's local SAP profile or external signer. Do not silently switch to local stdio just to avoid payment.
 - Hosted remote is accountless: if \`sap_profile_current\` returns \`accountModel: hosted-remote-accountless\`, do not report \`default\` as the user's local profile. To inspect the user's local wallet/profile, call the local \`sap_payments.sap_payments_profile_current\` bridge when it is available.
 - Local stdio is a developer fallback only when the user explicitly asks for local execution or the MCP client cannot perform remote/x402 calls.
-- For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url, transport }\` entry, not a nested \`mcpServers.sap\` object.
-- For Hermes profile YAML, use \`mcp_servers.sap.url\` and \`mcp_servers.sap.transport\`.
+- For Hermes global \`~/.hermes/mcp.json\`, use a flat \`sap: { url }\` entry, not a nested \`mcpServers.sap\` object. Hermes treats URL-only MCP server entries as Streamable HTTP; reserve \`transport\` for SSE.
+- For Hermes profile YAML, use \`mcp_servers.sap.url\` without a \`transport: streamable-http\` key.
 
 ### ✅ Connection Check Behavior
 - If the user only asks whether SAP MCP is connected, keep the answer short: connected yes/no, endpoint, mode, non-custodial status, and the next useful action.
@@ -332,7 +332,7 @@ For transactions, preview first with \`sap_preview_transaction\`; sign only with
 
 ### ⚡ x402 Hosted Payment Fast Path
 - Local stdio MCP tools are free; do not create x402 payment payloads for local stdio calls.
-- SAP MCP skill bootstrap tools are free: use \`sap_skills_list\`, \`sap_skills_bundle\`, and \`sap_skills_install\` directly. Do not route skill installation through \`sap_x402_paid_call\`.
+- SAP MCP skill metadata tools are free: use \`sap_skills_list\`, \`sap_skills_bundle\`, and \`sap_skills_upgrade_plan\` directly. \`sap_skills_install\` writes into a trusted local skills directory, so use it only after explicit user opt-in/confirmation and never route it through \`sap_x402_paid_call\`.
 - Basic wallet balance reads and single-asset price snapshots are free hosted tools: call \`sol_get_balance\`, \`spl-token_getBalance\`, \`spl-token_getTokenAccounts\`, \`jupiter_getPrice\`, \`pyth_getPrice\`, and \`coingecko_getTokenPrice\` directly on hosted SAP MCP. Do not route them through \`sap_payments_call_paid_tool\` or describe balance/price failures as x402 facilitator failures unless a paid tool actually returned the error.
 - Executable quotes, routes, token lists, OHLCV/history, broad discovery, and enriched holdings are paid fresh-data calls; call \`sap_estimate_tool_cost\` or \`sap_pricing_catalog\` first when the user has not already approved paid market context.
 - Hosted paid \`tools/call\` requests return HTTP \`402\` with \`PAYMENT-REQUIRED\` instructions.

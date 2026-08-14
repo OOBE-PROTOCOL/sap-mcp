@@ -2,7 +2,7 @@
  * @module memory-tools
  * @description MCP tools for the local agent memory subsystem.
  *
- * All 17 tools are FREE (no x402 charge) and operate entirely on the local
+ * All 20 tools are FREE (no x402 charge) and operate entirely on the local
  * SQLite database at ~/.config/mcp-sap/memory/agent-memory.db. No data
  * leaves the user's machine.
  *
@@ -14,47 +14,75 @@
  * - Stream buffering (3 tools): sap_stream_buffer, sap_stream_consume,
  *   sap_stream_replay
  * - Audit trail (3 tools): sap_audit_query, sap_audit_record, sap_audit_stats
+ * - Hermes context (2 tools): sap_hermes_search, sap_hermes_recent
+ * - Strategy execution (1 tool): sap_strategy_execute
+ * - Trade journal (2 tools): sap_trade_journal, sap_trade_journal_query
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
 import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '../memory/index.js';
 import type { ToolCallOutcome, MemoryType } from '../memory/types.js';
+import {
+  createStringToolPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+
+type MemoryToolDefinition = ToolFamilyPipelineDefinition;
+type MemoryToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function createMemoryPipelineResponse(
+  body: string,
+  options: { readonly isError?: boolean } = {},
+): ToolFamilyPipelineResult {
+  return createStringToolPipelineResult(body, options);
+}
+
+function registerMemoryPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: MemoryToolDefinition,
+  execute: (input: unknown) => Promise<MemoryToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute);
+}
 
 /**
  * @name registerMemoryTools
- * @description Registers all 17 local memory/strategy/stream/audit MCP tools.
+ * @description Registers local memory/strategy/stream/audit MCP tools.
  * All tools are free, local-only, and require no x402 payment.
  */
 export function registerMemoryTools(server: Server, _context: SapMcpContext): void {
-  registerMemoryRecordTool(server);
-  registerMemorySearchTool(server);
-  registerMemorySummarizeTool(server);
-  registerMemoryRecallTool(server);
-  registerMemoryPruneTool(server);
-  registerStrategySaveTool(server);
-  registerStrategyLoadTool(server);
-  registerStrategyListTool(server);
-  registerStrategyActivateTool(server);
-  registerStreamBufferTool(server);
-  registerStreamConsumeTool(server);
-  registerStreamReplayTool(server);
-  registerAuditQueryTool(server);
-  registerAuditRecordTool(server);
-  registerAuditStatsTool(server);
-  registerHermesSearchTool(server);
-  registerHermesRecentTool(server);
+  registerMemoryRecordTool(server, _context);
+  registerMemorySearchTool(server, _context);
+  registerMemorySummarizeTool(server, _context);
+  registerMemoryRecallTool(server, _context);
+  registerMemoryPruneTool(server, _context);
+  registerStrategySaveTool(server, _context);
+  registerStrategyLoadTool(server, _context);
+  registerStrategyListTool(server, _context);
+  registerStrategyActivateTool(server, _context);
+  registerStreamBufferTool(server, _context);
+  registerStreamConsumeTool(server, _context);
+  registerStreamReplayTool(server, _context);
+  registerAuditQueryTool(server, _context);
+  registerAuditRecordTool(server, _context);
+  registerAuditStatsTool(server, _context);
+  registerHermesSearchTool(server, _context);
+  registerHermesRecentTool(server, _context);
   registerStrategyExecuteTool(server, _context);
-  registerTradeJournalAppendTool(server);
-  registerTradeJournalQueryTool(server);
+  registerTradeJournalAppendTool(server, _context);
+  registerTradeJournalQueryTool(server, _context);
 }
 
 // ── Memory Recording & Search ──────────────────────────────────────────────
 
-function registerMemoryRecordTool(server: Server): void {
-  registerTool(server, 'sap_memory_record', {
+function registerMemoryRecordTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_memory_record', {
     title: 'Record Tool Call',
     description: 'Free local tool. Records a tool call execution in the agent memory database (SQLite FTS5). Auto-call after any paid or significant tool call to build searchable history. No x402 charge.',
     inputSchema: {
@@ -87,15 +115,15 @@ function registerMemoryRecordTool(server: Server): void {
         txSignature: typeof raw['txSignature'] === 'string' ? raw['txSignature'] : null,
         latencyMs: typeof raw['latencyMs'] === 'number' ? raw['latencyMs'] : null,
       });
-      return createTextResponse(JSON.stringify({ success: true, id, degraded: memoryDatabase.isDegraded() }));
+      return createMemoryPipelineResponse(JSON.stringify({ success: true, id, degraded: memoryDatabase.isDegraded() }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerMemorySearchTool(server: Server): void {
-  registerTool(server, 'sap_memory_search', {
+function registerMemorySearchTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_memory_search', {
     title: 'Search Tool Call History',
     description: 'Free local tool. Full-text search (FTS5) across tool call history. Find patterns, failures, and successes by natural language query. No x402 charge.',
     inputSchema: {
@@ -122,15 +150,15 @@ function registerMemorySearchTool(server: Server): void {
         offset: typeof raw['offset'] === 'number' ? raw['offset'] : 0,
         sort: typeof raw['sort'] === 'string' ? raw['sort'] as 'relevance' | 'newest' | 'oldest' : 'relevance',
       });
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify(result, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerMemorySummarizeTool(server: Server): void {
-  registerTool(server, 'sap_memory_summarize', {
+function registerMemorySummarizeTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_memory_summarize', {
     title: 'Create Agent Memory',
     description: 'Free local tool. Creates an LLM-compressed summary memory from tool call patterns. The agent calls this after analyzing search results to persist lessons, patterns, failures, or successes. No x402 charge.',
     inputSchema: {
@@ -156,15 +184,15 @@ function registerMemorySummarizeTool(server: Server): void {
         sourceToolCalls: typeof raw['sourceToolCalls'] === 'string' ? raw['sourceToolCalls'] : null,
         expiresAt: typeof raw['expiresAt'] === 'string' ? raw['expiresAt'] : null,
       }, typeof raw['relevance'] === 'number' ? raw['relevance'] : 0.8);
-      return createTextResponse(JSON.stringify({ success: true, id }));
+      return createMemoryPipelineResponse(JSON.stringify({ success: true, id }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerMemoryRecallTool(server: Server): void {
-  registerTool(server, 'sap_memory_recall', {
+function registerMemoryRecallTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_memory_recall', {
     title: 'Recall Agent Memories',
     description: 'Free local tool. Returns the most relevant memories for a category, ordered by decayed relevance. Use this for prompt injection — the agent gets top N memories for the task at hand. No x402 charge.',
     inputSchema: {
@@ -183,15 +211,15 @@ function registerMemoryRecallTool(server: Server): void {
         String(raw['category']),
         typeof raw['limit'] === 'number' ? raw['limit'] : 5,
       );
-      return createTextResponse(JSON.stringify({ memories, count: memories.length }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ memories, count: memories.length }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerMemoryPruneTool(server: Server): void {
-  registerTool(server, 'sap_memory_prune', {
+function registerMemoryPruneTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_memory_prune', {
     title: 'Prune Old Memories',
     description: 'Free local tool. Removes expired memories and memories with relevance below threshold after decay. Also archives tool call records older than retention period. No x402 charge.',
     inputSchema: {
@@ -207,17 +235,17 @@ function registerMemoryPruneTool(server: Server): void {
       const raw = input as Record<string, unknown>;
       const pruned = memoryStore.prune(typeof raw['minRelevance'] === 'number' ? raw['minRelevance'] : 0.05);
       const archived = toolCallStore.archive(typeof raw['archiveDays'] === 'number' ? raw['archiveDays'] : 90);
-      return createTextResponse(JSON.stringify({ success: true, pruned, archived }));
+      return createMemoryPipelineResponse(JSON.stringify({ success: true, pruned, archived }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
 // ── Strategy Management ─────────────────────────────────────────────────────
 
-function registerStrategySaveTool(server: Server): void {
-  registerTool(server, 'sap_strategy_save', {
+function registerStrategySaveTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_strategy_save', {
     title: 'Save Strategy',
     description: 'Free local tool. Saves or updates a strategy JSON in ~/.config/mcp-sap/strategies/. Strategies persist agent learnings (e.g. buyback rules, slippage thresholds, risk limits) across sessions. No x402 charge.',
     inputSchema: {
@@ -241,15 +269,15 @@ function registerStrategySaveTool(server: Server): void {
         config: String(raw['config']),
         active: raw['activate'] !== false,
       });
-      return createTextResponse(JSON.stringify(result));
+      return createMemoryPipelineResponse(JSON.stringify(result));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerStrategyLoadTool(server: Server): void {
-  registerTool(server, 'sap_strategy_load', {
+function registerStrategyLoadTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_strategy_load', {
     title: 'Load Strategy',
     description: 'Free local tool. Loads a strategy JSON by category and name. Returns the full strategy config including version and active status. No x402 charge.',
     inputSchema: {
@@ -266,15 +294,15 @@ function registerStrategyLoadTool(server: Server): void {
       const raw = input as Record<string, unknown>;
       const { loadStrategy } = await import('../strategies/strategy-store.js');
       const strategy = loadStrategy(String(raw['category']), String(raw['name']));
-      return createTextResponse(JSON.stringify(strategy));
+      return createMemoryPipelineResponse(JSON.stringify(strategy ?? null));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerStrategyListTool(server: Server): void {
-  registerTool(server, 'sap_strategy_list', {
+function registerStrategyListTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_strategy_list', {
     title: 'List Strategies',
     description: 'Free local tool. Lists all strategies, optionally filtered by category and active status. No x402 charge.',
     inputSchema: {
@@ -293,15 +321,15 @@ function registerStrategyListTool(server: Server): void {
         typeof raw['category'] === 'string' ? raw['category'] : undefined,
         raw['activeOnly'] === true,
       );
-      return createTextResponse(JSON.stringify({ strategies, count: strategies.length }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ strategies, count: strategies.length }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerStrategyActivateTool(server: Server): void {
-  registerTool(server, 'sap_strategy_activate', {
+function registerStrategyActivateTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_strategy_activate', {
     title: 'Activate/Deactivate Strategy',
     description: 'Free local tool. Activates or deactivates a strategy by category and name. Inactive strategies are skipped during agent execution. No x402 charge.',
     inputSchema: {
@@ -319,17 +347,17 @@ function registerStrategyActivateTool(server: Server): void {
       const raw = input as Record<string, unknown>;
       const { activateStrategy } = await import('../strategies/strategy-store.js');
       const result = activateStrategy(String(raw['category']), String(raw['name']), raw['active'] === true);
-      return createTextResponse(JSON.stringify(result));
+      return createMemoryPipelineResponse(JSON.stringify(result));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
 // ── Stream Buffering ────────────────────────────────────────────────────────
 
-function registerStreamBufferTool(server: Server): void {
-  registerTool(server, 'sap_stream_buffer', {
+function registerStreamBufferTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_stream_buffer', {
     title: 'Buffer Stream Event',
     description: 'Free local tool. Buffers a premium stream event in the local SQLite database for offline consumption. Deduplicates by (streamType, eventId). No x402 charge.',
     inputSchema: {
@@ -352,15 +380,15 @@ function registerStreamBufferTool(server: Server): void {
         eventType: String(raw['eventType']),
         payload: String(raw['payload']),
       });
-      return createTextResponse(JSON.stringify({ success: true, id, dedup: id === -1 }));
+      return createMemoryPipelineResponse(JSON.stringify({ success: true, id, dedup: id === -1 }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerStreamConsumeTool(server: Server): void {
-  registerTool(server, 'sap_stream_consume', {
+function registerStreamConsumeTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_stream_consume', {
     title: 'Consume Stream Events',
     description: 'Free local tool. Returns unconsumed stream events for a stream type (FIFO order) and marks them consumed. Use this instead of sap_premium_stream_poll for local offline access. No x402 charge.',
     inputSchema: {
@@ -379,15 +407,15 @@ function registerStreamConsumeTool(server: Server): void {
         String(raw['streamType']),
         typeof raw['limit'] === 'number' ? raw['limit'] : 20,
       );
-      return createTextResponse(JSON.stringify({ events, count: events.length }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ events, count: events.length }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerStreamReplayTool(server: Server): void {
-  registerTool(server, 'sap_stream_replay', {
+function registerStreamReplayTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_stream_replay', {
     title: 'Replay Stream Events',
     description: 'Free local tool. Returns all events (consumed + unconsumed) for a stream type within a time range. Used for backtest and analysis. No x402 charge.',
     inputSchema: {
@@ -408,17 +436,17 @@ function registerStreamReplayTool(server: Server): void {
         typeof raw['since'] === 'string' ? raw['since'] : undefined,
         typeof raw['limit'] === 'number' ? raw['limit'] : 100,
       );
-      return createTextResponse(JSON.stringify({ events, count: events.length }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ events, count: events.length }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
 // ── Audit Trail ─────────────────────────────────────────────────────────────
 
-function registerAuditQueryTool(server: Server): void {
-  registerTool(server, 'sap_audit_query', {
+function registerAuditQueryTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_audit_query', {
     title: 'Query Audit Trail',
     description: 'Free local tool. Queries the immutable audit trail for x402 settlements and transaction signatures. Search by tool name, outcome, or time range. No x402 charge.',
     inputSchema: {
@@ -438,15 +466,15 @@ function registerAuditQueryTool(server: Server): void {
         outcome: typeof raw['outcome'] === 'string' ? raw['outcome'] as ToolCallOutcome : undefined,
         limit: typeof raw['limit'] === 'number' ? raw['limit'] : 20,
       });
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify(result, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerAuditRecordTool(server: Server): void {
-  registerTool(server, 'sap_audit_record', {
+function registerAuditRecordTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_audit_record', {
     title: 'Record Audit Entry',
     description: 'Free local tool. Records a manual audit entry in the tool call history. Use this to log custom events (e.g. manual interventions, external transactions, policy decisions). No x402 charge.',
     inputSchema: {
@@ -475,15 +503,15 @@ function registerAuditRecordTool(server: Server): void {
         txSignature: typeof raw['txSignature'] === 'string' ? raw['txSignature'] : null,
         latencyMs: null,
       });
-      return createTextResponse(JSON.stringify({ success: true, id }));
+      return createMemoryPipelineResponse(JSON.stringify({ success: true, id }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerAuditStatsTool(server: Server): void {
-  registerTool(server, 'sap_audit_stats', {
+function registerAuditStatsTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_audit_stats', {
     title: 'Memory & Audit Stats',
     description: 'Free local tool. Returns aggregate statistics about the memory database: tool call counts, memory counts, stream buffer counts, outcome breakdown, DB size. No x402 charge.',
     inputSchema: {},
@@ -502,17 +530,17 @@ function registerAuditStatsTool(server: Server): void {
         degraded: memoryDatabase.isDegraded(),
         hermesAvailable: hermesBridge.isAvailable(),
       };
-      return createTextResponse(JSON.stringify(stats, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify(stats, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
 // ── Hermes Cross-Session Integration ─────────────────────────────────────────
 
-function registerHermesSearchTool(server: Server): void {
-  registerTool(server, 'sap_hermes_search', {
+function registerHermesSearchTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_hermes_search', {
     title: 'Search Hermes Sessions',
     description: 'Free local tool. Searches Hermes Agent session history for relevant past conversations. Enables cross-session context recall. If Hermes is not installed, returns empty results. No x402 charge.',
     inputSchema: {
@@ -531,15 +559,15 @@ function registerHermesSearchTool(server: Server): void {
         String(raw['query'] ?? ''),
         typeof raw['limit'] === 'number' ? raw['limit'] : 5,
       );
-      return createTextResponse(JSON.stringify({ results, count: results.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ results, count: results.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerHermesRecentTool(server: Server): void {
-  registerTool(server, 'sap_hermes_recent', {
+function registerHermesRecentTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_hermes_recent', {
     title: 'Recent Hermes Sessions',
     description: 'Free local tool. Returns recent Hermes Agent sessions for context injection. Use this at session start to recall what the agent worked on recently. If Hermes is not installed, returns empty results. No x402 charge.',
     inputSchema: {
@@ -555,9 +583,9 @@ function registerHermesRecentTool(server: Server): void {
       const sessions = hermesBridge.getRecentSessions(
         typeof raw['limit'] === 'number' ? raw['limit'] : 3,
       );
-      return createTextResponse(JSON.stringify({ sessions, count: sessions.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ sessions, count: sessions.length, hermesAvailable: hermesBridge.isAvailable() }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
@@ -565,7 +593,7 @@ function registerHermesRecentTool(server: Server): void {
 // ── Strategy Execution ──────────────────────────────────────────────────────
 
 function registerStrategyExecuteTool(server: Server, context: SapMcpContext): void {
-  registerTool(server, 'sap_strategy_execute', {
+  registerMemoryPipelineTool(server, context, 'sap_strategy_execute', {
     title: 'Execute Strategy',
     description: 'Free local tool. Loads a saved strategy by category and name, resolves trading parameters, validates against trading policy, and returns either a dry-run simulation or a ready-to-sign transaction. When dryRun is true, returns resolved params only. When dryRun is false, builds a transactionBase64. No x402 charge for this tool itself.',
     inputSchema: {
@@ -586,14 +614,14 @@ function registerStrategyExecuteTool(server: Server, context: SapMcpContext): vo
       const { loadStrategy } = await import('../strategies/strategy-store.js');
       const strategy = loadStrategy(String(raw['category']), String(raw['name']));
       if (!strategy) {
-        return createTextResponse(JSON.stringify({ error: 'Strategy not found', category: raw['category'], name: raw['name'] }), { isError: true });
+        return createMemoryPipelineResponse(JSON.stringify({ error: 'Strategy not found', category: raw['category'], name: raw['name'] }), { isError: true });
       }
 
       let config: Record<string, unknown>;
       try {
         config = JSON.parse(strategy.config);
       } catch {
-        return createTextResponse(JSON.stringify({ error: 'Strategy config is not valid JSON' }), { isError: true });
+        return createMemoryPipelineResponse(JSON.stringify({ error: 'Strategy config is not valid JSON' }), { isError: true });
       }
 
       const market = String(config['market'] ?? '').toUpperCase();
@@ -606,18 +634,18 @@ function registerStrategyExecuteTool(server: Server, context: SapMcpContext): vo
       const dryRun = raw['dryRun'] !== false;
 
       if (!market || !owner) {
-        return createTextResponse(JSON.stringify({ error: 'Strategy config missing required fields: market, owner' }), { isError: true });
+        return createMemoryPipelineResponse(JSON.stringify({ error: 'Strategy config missing required fields: market, owner' }), { isError: true });
       }
 
       try {
         const violation = context.policyEngine.validateTradingPolicy({ market, side, collateralUsd, leverage, hasStopLoss: stopLossPct !== null });
         if (!violation.allowed) {
-          return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+          return createMemoryPipelineResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
         }
       } catch { /* policy not available — proceed */ }
 
       if (dryRun) {
-        return createTextResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, stopLossPct, takeProfitPct, owner }, dryRun: true, message: 'Set dryRun: false to build a ready-to-sign transaction.' }, null, 2));
+        return createMemoryPipelineResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, stopLossPct, takeProfitPct, owner }, dryRun: true, message: 'Set dryRun: false to build a ready-to-sign transaction.' }, null, 2));
       }
 
       const { buildPositionPackage } = await import('../perps/adrena/adrena-builder-trading.js');
@@ -635,17 +663,17 @@ function registerStrategyExecuteTool(server: Server, context: SapMcpContext): vo
       if (stopLossPct !== null) stopLossPriceUsd = side === 'long' ? priceUsd * (1 - stopLossPct / 100) : priceUsd * (1 + stopLossPct / 100);
       if (takeProfitPct !== null) takeProfitPriceUsd = side === 'long' ? priceUsd * (1 + takeProfitPct / 100) : priceUsd * (1 - takeProfitPct / 100);
       const result = await buildPositionPackage(connection, ownerPk, market, collateralToken, collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, null);
-      return createTextResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, oraclePriceUsd: priceUsd }, dryRun: false, transaction: result }, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, oraclePriceUsd: priceUsd }, dryRun: false, transaction: result }, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
 // ── Trade Journal ────────────────────────────────────────────────────────────
 
-function registerTradeJournalAppendTool(server: Server): void {
-  registerTool(server, 'sap_trade_journal', {
+function registerTradeJournalAppendTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_trade_journal', {
     title: 'Append Trade Journal Entry',
     description: 'Free local tool. Appends a trade entry to the journal. Call after every trade open/close/SL/TP/liquidation for tracking and P&L analysis. No x402 charge.',
     inputSchema: {
@@ -691,15 +719,15 @@ function registerTradeJournalAppendTool(server: Server): void {
         notes: raw['notes'] !== undefined ? String(raw['notes']) : undefined,
       };
       const result = appendTradeEntry(entry);
-      return createTextResponse(JSON.stringify({ ...result, ok: true }));
+      return createMemoryPipelineResponse(JSON.stringify({ ...result, ok: true }));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }
 
-function registerTradeJournalQueryTool(server: Server): void {
-  registerTool(server, 'sap_trade_journal_query', {
+function registerTradeJournalQueryTool(server: Server, context: SapMcpContext): void {
+  registerMemoryPipelineTool(server, context, 'sap_trade_journal_query', {
     title: 'Query Trade Journal',
     description: 'Free local tool. Queries the trade journal with filters. Returns matching entries with count and total P&L. No x402 charge.',
     inputSchema: {
@@ -726,9 +754,9 @@ function registerTradeJournalQueryTool(server: Server): void {
         to: raw['to'] !== undefined ? String(raw['to']) : undefined,
         limit: typeof raw['limit'] === 'number' ? raw['limit'] : 100,
       });
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return createMemoryPipelineResponse(JSON.stringify(result, null, 2));
     } catch (error) {
-      return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+      return createMemoryPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
     }
   });
 }

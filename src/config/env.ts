@@ -23,6 +23,13 @@ import {
   getActiveProfile,
   getProfileConfigPath,
 } from './profiles.js';
+import type { SapMcpConfig } from '../core/types.js';
+export type {
+  SapMcpConfig,
+  SapMcpMode,
+  SapMcpMonetizationConfig,
+  SapMcpMonetizationProvider,
+} from '../core/types.js';
 
 // ESM compatibility: __filename equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -178,133 +185,6 @@ export type SapEnvConfig = z.infer<typeof envSchema>;
 // ============================================================================
 // Runtime Configuration (after validation & transformation)
 // ============================================================================
-
-/**
- * Fully resolved runtime configuration consumed by server, policy, signer, and transport modules.
- */
-export interface SapMcpConfig {
-  mode: SapMcpMode;
-  rpcUrl: string;
-  rpcUrlDevnet?: string;
-  rpcUrlTestnet?: string;
-  commitment: 'processed' | 'confirmed' | 'finalized';
-  programId: string;
-  agentPubkey?: string;
-  maxRetries: number;
-  retryDelayMs: number;
-  walletPath?: string;
-  walletEncrypted: boolean;
-  walletPassphraseEnv?: string;
-  externalSignerUrl?: string;
-  externalSignerTimeoutMs: number;
-  enableHttp: boolean;
-  httpPort: number;
-  httpHost: string;
-  httpCorsOrigins?: string[];
-  maxTxValueSol: number;
-  requireApprovalAboveSol: number;
-  dailyLimitSol: number;
-  allowedTools: string[] | 'all';
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
-  logFormat: 'json' | 'pretty';
-  logFile?: string;
-  enableMetrics: boolean;
-  metricsPort: number;
-  enableCache: boolean;
-  cacheTtlSeconds: number;
-  enableRateLimit: boolean;
-  rateLimitPerMinute: number;
-  jupiter: {
-    apiBaseUrl: string;
-    tokensApiBaseUrl?: string;
-    apiKeyConfigured: boolean;
-    timeoutMs: number;
-  };
-  perps: {
-    marketsUrl?: string;
-    positionsUrl?: string;
-    builderUrl?: string;
-    adrenaProgramId: string;
-    apiKeyConfigured: boolean;
-    timeoutMs: number;
-  };
-  /** Priority fee in micro-lamports prepended to Adrena perps transactions (0 = disabled). */
-  priorityFeeMicroLamports: number;
-  /** Trading policy: max collateral in USD per single trade. */
-  maxCollateralUsdPerTrade?: number;
-  /** Trading policy: max leverage allowed. */
-  maxLeverage?: number;
-  /** Trading policy: max simultaneous open positions. */
-  maxOpenPositions?: number;
-  /** Trading policy: allowed market symbols. Empty = all markets. */
-  allowedMarkets?: string[];
-  /** Trading policy: require stop loss on position open. */
-  stopLossRequired?: boolean;
-  /** Trading policy: max slippage in basis points. */
-  maxSlippageBps?: number;
-  /** Trading policy: require human acknowledgment above this USD amount. */
-  requireHumanAckAboveUsd?: number;
-  /** Trading policy: daily loss limit in USD. New trades blocked when exceeded. */
-  dailyLossLimitUsd?: number;
-  /** Trading policy: max drawdown percentage before blocking new trades. */
-  maxDrawdownPct?: number;
-  /** Trading policy: cooldown in minutes after a losing trade. */
-  cooldownMinutes?: number;
-  bento?: {
-    enabled: boolean;
-    apiKey?: string;
-    agentId?: string;
-    endpoint?: string;
-  };
-  policy?: {
-    mode: 'local-only' | 'bento-only' | 'hybrid';
-    failOpen: boolean;
-    logging: boolean;
-  };
-  monetization: SapMcpMonetizationConfig;
-}
-
-/**
- * Supported operating modes for local, delegated, external-signer, and hosted workflows.
- */
-export type SapMcpMode =
-  | 'readonly'
-  | 'local-dev-keypair'
-  | 'external-signer'
-  | 'delegated-session'
-  | 'hosted-api';
-
-/**
- * @name SapMcpMonetizationProvider
- * @description Supported payment rails for hosted remote MCP monetization.
- */
-export type SapMcpMonetizationProvider = 'x402' | 'pay-sh';
-
-/**
- * @name SapMcpMonetizationConfig
- * @description Runtime configuration for x402/pay.sh gated remote MCP tool execution.
- */
-export interface SapMcpMonetizationConfig {
-  enabled: boolean;
-  provider: SapMcpMonetizationProvider;
-  payTo?: string;
-  network?: string;
-  facilitatorUrl?: string;
-  facilitatorAuthToken?: string;
-  maxTimeoutSeconds: number;
-  payShCheckoutUrl?: string;
-  strictTools: boolean;
-  prices: {
-    microReadUsd: number;
-    readPremiumUsd: number;
-    builderUsd: number;
-    valueFixedUsd: number;
-    heavyValueUsd: number;
-    valueBps: number;
-    minUsd: number;
-    maxUsd: number;
-  };
-}
 
 type ConfigFileValue = unknown;
 type ConfigFileData = Partial<SapEnvConfig> & Record<string, ConfigFileValue>;

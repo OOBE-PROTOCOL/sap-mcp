@@ -99,7 +99,7 @@ body{background:${C.bg};color:${C.text};font-family:${C.sans};font-size:12px;lin
 .hl svg{width:28px;height:28px}.hl img{width:28px;height:28px;border-radius:7px;object-fit:cover}
 .ht{font-size:12px;font-weight:600;color:${C.text};letter-spacing:-0.01em}
 .hs{font-size:9px;color:${C.textMuted};text-transform:uppercase;letter-spacing:0.05em;margin-top:1px}
-.hp{display:flex;align-items:center;gap:-4px;margin-left:auto;flex-shrink:0}
+.hp{display:flex;align-items:center;gap:0;margin-left:auto;flex-shrink:0}
 .hp img{width:18px;height:18px;border-radius:50%;object-fit:cover;border:1.5px solid ${C.bg}}
 .hp img:nth-child(2){margin-left:-8px}
 .b{padding:10px 14px;flex:1 1 auto}

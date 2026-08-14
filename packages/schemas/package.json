@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-schemas",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP public schema and protocol contract boundary.",
+  "sapMcp": {
+    "boundaryId": "schemas",
+    "source": "src/schemas",
+    "architectureDomain": "schemas",
+    "rootExport": "./schemas",
+    "apiContract": "config/package-export-contracts.json#./schemas",
+    "boundary": "Public Zod schemas and protocol contracts."
+  }
+}

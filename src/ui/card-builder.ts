@@ -166,19 +166,24 @@ export function shortAddr(a: string): string {
   return `${a.slice(0, 4)}...${a.slice(-4)}`;
 }
 
+export function escapeHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 /**
  * Generate a clickable address with Solscan link icon.
  * Shows the full address truncated to fit, with an external-link icon
  * that opens Solscan in a new tab.
  */
 export function addrLink(addr: string, type: 'tx' | 'address' | 'token' = 'address'): string {
-  if (!addr || addr.length <= 12) return addr;
-  const short = `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+  if (!addr || addr.length <= 12) return escapeHtml(addr);
+  const short = `${escapeHtml(addr.slice(0, 4))}...${escapeHtml(addr.slice(-4))}`;
+  const safePath = encodeURIComponent(addr);
   const url = type === 'tx'
-    ? `https://solscan.io/tx/${addr}`
+    ? `https://solscan.io/tx/${safePath}`
     : type === 'token'
-      ? `https://solscan.io/token/${addr}`
-      : `https://solscan.io/account/${addr}`;
+      ? `https://solscan.io/token/${safePath}`
+      : `https://solscan.io/account/${safePath}`;
   const icon = `<svg width="10" height="10" viewBox="0 0 16 16" fill="none" style="opacity:0.4;vertical-align:middle;margin-left:3px"><path d="M6 3h5a1 1 0 011 1v5M11 3L5 9M9 13H4a1 1 0 01-1-1V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return `<span style="white-space:nowrap">${short}<a href="${url}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center">${icon}</a></span>`;
 }

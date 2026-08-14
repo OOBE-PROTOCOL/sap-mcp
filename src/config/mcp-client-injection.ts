@@ -51,7 +51,7 @@ export interface McpServerInjectionConfig {
  */
 export interface HostedMcpServerConfig {
   url: string;
-  transport: 'streamable-http';
+  transport?: 'streamable-http';
 }
 
 /**
@@ -116,6 +116,7 @@ type JsonRecord = Record<string, unknown>;
 type SupportedPlatform = NodeJS.Platform;
 
 const SAP_SERVER_NAME = 'sap';
+const CLAWPUMP_SAP_SERVER_NAME = 'sap-mcp';
 const SAP_PAYMENT_BRIDGE_SERVER_NAME = 'sap_payments';
 const X402_PAID_CALL_ADDON_ID = 'x402-paid-call';
 const X402_PAID_CALL_COMMAND = 'sap-mcp-x402-paid-call';
@@ -373,6 +374,7 @@ export function createManualMcpJsonSnippets(
     url: hostedUrl,
     transport: 'streamable-http',
   };
+  const hermesHostedConfig = hostedJsonServerConfig({ id: 'hermes' });
 
   return [
     {
@@ -393,7 +395,7 @@ export function createManualMcpJsonSnippets(
       title: 'Hosted SAP MCP JSON (Hermes global mcp.json)',
       description: 'Use this for ~/.hermes/mcp.json, which expects flat server entries rather than a nested mcpServers map.',
       content: formatJson({
-        [SAP_SERVER_NAME]: hostedConfig,
+        [SAP_SERVER_NAME]: hermesHostedConfig,
       }),
     },
     {
@@ -403,7 +405,6 @@ export function createManualMcpJsonSnippets(
         'mcp_servers:',
         `  ${SAP_SERVER_NAME}:`,
         `    url: ${yamlScalar(hostedUrl)}`,
-        `    transport: ${yamlScalar('streamable-http')}`,
         '',
       ].join('\n'),
     },
@@ -415,31 +416,28 @@ export function createManualMcpJsonSnippets(
         '  servers:',
         `    ${SAP_SERVER_NAME}:`,
         `      url: ${yamlScalar(hostedUrl)}`,
-        `      transport: ${yamlScalar('streamable-http')}`,
         '',
       ].join('\n'),
     },
     {
       title: 'Hosted SAP MCP YAML (ClawPump Agent config)',
       description:
-        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and uses the same YAML config shape.',
+        'Use this inside ClawPump Agent / Hermes profile config (~/.hermes/config.yaml or HERMES_HOME/config.yaml) under the top-level mcp_servers section. ClawPump is a Hermes fork and uses the same YAML config shape.',
       content: [
         'mcp_servers:',
-        `  ${SAP_SERVER_NAME}:`,
+        `  ${CLAWPUMP_SAP_SERVER_NAME}:`,
         `    url: ${yamlScalar(hostedUrl)}`,
-        `    transport: ${yamlScalar('streamable-http')}`,
         '',
       ].join('\n'),
     },
     {
       title: 'Local SAP MCP YAML (ClawPump Agent + payment bridge)',
       description:
-        'Use this inside ClawPump Agent (~/.clawpump/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
+        'Use this inside ClawPump Agent / Hermes profile config (~/.hermes/config.yaml or HERMES_HOME/config.yaml) to run the local stdio SAP MCP payment bridge alongside the hosted server. The bridge exposes only sap_payments_* tools for x402 challenge signing.',
       content: [
         'mcp_servers:',
-        `  ${SAP_SERVER_NAME}:`,
+        `  ${CLAWPUMP_SAP_SERVER_NAME}:`,
         `    url: ${yamlScalar(hostedUrl)}`,
-        `    transport: ${yamlScalar('streamable-http')}`,
         `  ${SAP_PAYMENT_BRIDGE_SERVER_NAME}:`,
         `    command: ${yamlScalar(createNpxPaymentBridgeServerConfig().command)}`,
         `    args: [${createNpxPaymentBridgeServerConfig().args.map(shellQuote).join(', ')}]`,
@@ -571,7 +569,6 @@ export function createX402PaidCallAddonSnippets(): ManualMcpClientSnippet[] {
           servers: {
             [SAP_SERVER_NAME]: {
               url: HOSTED_SAP_MCP_URL,
-              transport: 'streamable-http',
             },
             [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
           },
@@ -773,8 +770,8 @@ export function getKnownClientTargets(homeDir = homedir(), platform: SupportedPl
     },
     {
       id: 'clawpump',
-      label: 'ClawPump Agent',
-      path: join(homeDir, '.clawpump', 'config.yaml'),
+      label: 'ClawPump Agent / Hermes Profile',
+      path: join(homeDir, '.hermes', 'config.yaml'),
       format: 'yaml',
       exists: false,
     },
@@ -860,17 +857,29 @@ function mergeEnv(existing: unknown, required: Record<string, string>): Record<s
  * @name mergeServerConfig
  * @description Creates the final server object for JSON config files.
  */
-function mergeServerConfig(existing: unknown, canonical: McpServerInjectionConfig, mode: McpClientInjectionMode): McpServerInjectionConfig {
+function mergeServerConfig(existing: unknown, canonical: McpServerInjectionConfig, mode: McpClientInjectionMode): JsonRecord {
   if (mode === 'override' || !isRecord(existing)) {
-    return canonical;
+    return { ...canonical };
   }
 
-  return {
+  const preserved = { ...existing };
+  delete preserved.command;
+  delete preserved.args;
+  delete preserved.cwd;
+  delete preserved.env;
+
+  const next: JsonRecord = {
+    ...preserved,
     command: canonical.command,
     args: canonical.args,
-    cwd: canonical.cwd,
     env: mergeEnv(existing.env, canonical.env),
   };
+
+  if (canonical.cwd) {
+    next.cwd = canonical.cwd;
+  }
+
+  return next;
 }
 
 /**
@@ -907,10 +916,47 @@ function hostedJsonServerConfig(target: Pick<McpClientTarget, 'id'>): JsonRecord
     };
   }
 
+  if (target.id === 'hermes' || target.id === 'openclaw' || target.id === 'clawpump') {
+    return {
+      url: HOSTED_SAP_MCP_URL,
+    };
+  }
+
   return {
     url: HOSTED_SAP_MCP_URL,
     transport: 'streamable-http',
   };
+}
+
+/**
+ * @name mergeHostedJsonServerConfig
+ * @description Updates a hosted HTTP server entry while preserving client hardening fields.
+ */
+function mergeHostedJsonServerConfig(existing: unknown, target: Pick<McpClientTarget, 'id'>): JsonRecord {
+  const preserved = isRecord(existing) ? { ...existing } : {};
+  delete preserved.command;
+  delete preserved.args;
+  delete preserved.cwd;
+  delete preserved.env;
+  delete preserved.type;
+  delete preserved.transport;
+
+  return {
+    ...preserved,
+    ...hostedJsonServerConfig(target),
+  };
+}
+
+/**
+ * @name mergePaymentBridgeJsonServerConfig
+ * @description Updates the local payment bridge while preserving client hardening fields.
+ */
+function mergePaymentBridgeJsonServerConfig(existing: unknown, canonical: McpServerInjectionConfig): JsonRecord {
+  return mergeServerConfig(existing, canonical, 'merge');
+}
+
+function hostedServerNameForTarget(target: Pick<McpClientTarget, 'id'>): string {
+  return target.id === 'clawpump' ? CLAWPUMP_SAP_SERVER_NAME : SAP_SERVER_NAME;
 }
 
 /**
@@ -953,8 +999,8 @@ function buildHostedPaymentBridgeJsonContent(
     return {
       nextContent: formatJson({
         ...nextRoot,
-        [SAP_SERVER_NAME]: hostedJsonServerConfig(target),
-        [SAP_PAYMENT_BRIDGE_SERVER_NAME]: paymentBridge,
+        [SAP_SERVER_NAME]: mergeHostedJsonServerConfig(nextRoot[SAP_SERVER_NAME], target),
+        [SAP_PAYMENT_BRIDGE_SERVER_NAME]: mergePaymentBridgeJsonServerConfig(nextRoot[SAP_PAYMENT_BRIDGE_SERVER_NAME], paymentBridge),
       }),
       hadSapConfig,
     };
@@ -963,8 +1009,8 @@ function buildHostedPaymentBridgeJsonContent(
   const serversRaw = root.mcpServers;
   const servers = isRecord(serversRaw) ? { ...serversRaw } : {};
   const hadSapConfig = isRecord(servers[SAP_SERVER_NAME]) || isRecord(servers[SAP_PAYMENT_BRIDGE_SERVER_NAME]);
-  servers[SAP_SERVER_NAME] = hostedJsonServerConfig(target);
-  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = paymentBridge;
+  servers[SAP_SERVER_NAME] = mergeHostedJsonServerConfig(servers[SAP_SERVER_NAME], target);
+  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = mergePaymentBridgeJsonServerConfig(servers[SAP_PAYMENT_BRIDGE_SERVER_NAME], paymentBridge);
 
   return {
     nextContent: formatJson({ ...root, mcpServers: servers }),
@@ -990,8 +1036,8 @@ function buildOpenClawHostedPaymentBridgeJsonContent(
       || isRecord(legacyServers[SAP_PAYMENT_BRIDGE_SERVER_NAME])
     ));
 
-  servers[SAP_SERVER_NAME] = hostedJsonServerConfig({ id: 'openclaw' });
-  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = paymentBridge;
+  servers[SAP_SERVER_NAME] = mergeHostedJsonServerConfig(servers[SAP_SERVER_NAME], { id: 'openclaw' });
+  servers[SAP_PAYMENT_BRIDGE_SERVER_NAME] = mergePaymentBridgeJsonServerConfig(servers[SAP_PAYMENT_BRIDGE_SERVER_NAME], paymentBridge);
   mcp.servers = servers;
 
   const nextRoot: JsonRecord = {
@@ -1019,12 +1065,17 @@ function buildOpenClawHostedPaymentBridgeJsonContent(
  * @name yamlServerBlock
  * @description Renders a Hermes-compatible YAML MCP server block.
  */
-function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): string[] {
+function yamlServerBlock(
+  canonical: McpServerInjectionConfig,
+  baseIndent = 0,
+  options: { preservedServerLines?: string[]; existingEnv?: Record<string, string> } = {},
+): string[] {
   const indent = ' '.repeat(baseIndent);
   const child = ' '.repeat(baseIndent + 2);
   const grandchild = ' '.repeat(baseIndent + 4);
   const lines = [
     `${indent}${SAP_SERVER_NAME}:`,
+    ...(options.preservedServerLines ?? []),
     `${child}command: ${yamlScalar(canonical.command)}`,
     `${child}args:`,
   ];
@@ -1038,7 +1089,7 @@ function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): s
   }
 
   lines.push(`${child}env:`);
-  for (const [key, value] of Object.entries(canonical.env)) {
+  for (const [key, value] of Object.entries(mergeEnv(options.existingEnv, canonical.env))) {
     lines.push(`${grandchild}${key}: ${yamlScalar(value)}`);
   }
 
@@ -1049,13 +1100,13 @@ function yamlServerBlock(canonical: McpServerInjectionConfig, baseIndent = 0): s
  * @name yamlHostedServerBlock
  * @description Renders a hosted Streamable HTTP MCP server block for Hermes/OpenClaw YAML configs.
  */
-function yamlHostedServerBlock(serverName: string, baseIndent = 0): string[] {
+function yamlHostedServerBlock(serverName: string, baseIndent = 0, preservedServerLines: string[] = []): string[] {
   const indent = ' '.repeat(baseIndent);
   const child = ' '.repeat(baseIndent + 2);
   return [
     `${indent}${serverName}:`,
+    ...preservedServerLines,
     `${child}url: ${yamlScalar(HOSTED_SAP_MCP_URL)}`,
-    `${child}transport: ${yamlScalar('streamable-http')}`,
   ];
 }
 
@@ -1063,12 +1114,18 @@ function yamlHostedServerBlock(serverName: string, baseIndent = 0): string[] {
  * @name yamlCommandServerBlock
  * @description Renders a command-backed MCP server block for Hermes/OpenClaw YAML configs.
  */
-function yamlCommandServerBlock(serverName: string, canonical: McpServerInjectionConfig, baseIndent = 0): string[] {
+function yamlCommandServerBlock(
+  serverName: string,
+  canonical: McpServerInjectionConfig,
+  baseIndent = 0,
+  options: { preservedServerLines?: string[]; existingEnv?: Record<string, string> } = {},
+): string[] {
   const indent = ' '.repeat(baseIndent);
   const child = ' '.repeat(baseIndent + 2);
   const grandchild = ' '.repeat(baseIndent + 4);
   const lines = [
     `${indent}${serverName}:`,
+    ...(options.preservedServerLines ?? []),
     `${child}command: ${yamlScalar(canonical.command)}`,
     `${child}args:`,
   ];
@@ -1082,7 +1139,7 @@ function yamlCommandServerBlock(serverName: string, canonical: McpServerInjectio
   }
 
   lines.push(`${child}env:`);
-  for (const [key, value] of Object.entries(canonical.env)) {
+  for (const [key, value] of Object.entries(mergeEnv(options.existingEnv, canonical.env))) {
     lines.push(`${grandchild}${key}: ${yamlScalar(value)}`);
   }
 
@@ -1095,6 +1152,84 @@ function yamlCommandServerBlock(serverName: string, canonical: McpServerInjectio
  */
 function countLeadingSpaces(line: string): number {
   return line.length - line.trimStart().length;
+}
+
+function findYamlServerBlock(
+  lines: string[],
+  parentIndex: number,
+  serverName: string,
+  baseIndent: number,
+): { start: number; end: number } | undefined {
+  const serverPattern = new RegExp(`^ {${baseIndent}}${escapeRegExp(serverName)}:\\s*$`);
+  const start = lines.findIndex((line, index) => index > parentIndex && serverPattern.test(line));
+  if (start === -1) {
+    return undefined;
+  }
+
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() && countLeadingSpaces(line) <= baseIndent) {
+      break;
+    }
+    end += 1;
+  }
+
+  return { start, end };
+}
+
+function extractYamlPreservedServerLines(blockLines: string[], baseIndent: number): string[] {
+  const childIndent = baseIndent + 2;
+  const childKeyPattern = new RegExp(`^ {${childIndent}}([A-Za-z0-9_-]+):(?:\\s|$)`);
+  const preservedKeys = new Set(['enabled', 'tools']);
+  const preserved: string[] = [];
+
+  for (let index = 1; index < blockLines.length;) {
+    const line = blockLines[index] ?? '';
+    const match = childKeyPattern.exec(line);
+    if (!match || !preservedKeys.has(match[1] ?? '')) {
+      index += 1;
+      continue;
+    }
+
+    const start = index;
+    index += 1;
+    while (index < blockLines.length) {
+      const nestedLine = blockLines[index] ?? '';
+      if (nestedLine.trim() && countLeadingSpaces(nestedLine) <= childIndent) {
+        break;
+      }
+      index += 1;
+    }
+    preserved.push(...blockLines.slice(start, index));
+  }
+
+  return preserved;
+}
+
+function extractYamlEnvEntries(blockLines: string[], baseIndent: number): Record<string, string> {
+  const childIndent = baseIndent + 2;
+  const grandchildIndent = baseIndent + 4;
+  const envStart = blockLines.findIndex((line, index) => index > 0 && new RegExp(`^ {${childIndent}}env:\\s*$`).test(line));
+  if (envStart === -1) {
+    return {};
+  }
+
+  const entries: Record<string, string> = {};
+  const entryPattern = new RegExp(`^ {${grandchildIndent}}([A-Za-z_][A-Za-z0-9_]*):\\s*(.+)$`);
+  for (let index = envStart + 1; index < blockLines.length; index += 1) {
+    const line = blockLines[index] ?? '';
+    if (line.trim() && countLeadingSpaces(line) <= childIndent) {
+      break;
+    }
+
+    const match = entryPattern.exec(line);
+    if (match) {
+      entries[match[1] ?? ''] = parseQuotedConfigValue(match[2] ?? '');
+    }
+  }
+
+  return entries;
 }
 
 /**
@@ -1114,8 +1249,8 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
     };
   }
 
-  const sapIndex = lines.findIndex((line, index) => index > mcpIndex && /^ {2}sap:\s*$/.test(line));
-  if (sapIndex === -1) {
+  const sapRange = findYamlServerBlock(lines, mcpIndex, SAP_SERVER_NAME, 2);
+  if (!sapRange) {
     const nextLines = [...lines];
     nextLines.splice(mcpIndex + 1, 0, ...yamlServerBlock(canonical, 2));
     return {
@@ -1124,17 +1259,12 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
     };
   }
 
-  let endIndex = sapIndex + 1;
-  while (endIndex < lines.length) {
-    const line = lines[endIndex];
-    if (line.trim() && countLeadingSpaces(line) <= 2) {
-      break;
-    }
-    endIndex += 1;
-  }
-
+  const existingBlock = lines.slice(sapRange.start, sapRange.end);
   const nextLines = [...lines];
-  nextLines.splice(sapIndex, endIndex - sapIndex, ...yamlServerBlock(canonical, 2));
+  nextLines.splice(sapRange.start, sapRange.end - sapRange.start, ...yamlServerBlock(canonical, 2, {
+    preservedServerLines: extractYamlPreservedServerLines(existingBlock, 2),
+    existingEnv: extractYamlEnvEntries(existingBlock, 2),
+  }));
   return {
     nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
     hadSapConfig: true,
@@ -1152,15 +1282,23 @@ function replaceYamlHostedPaymentBridgeBlocks(
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
   const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, target.id);
-  const replacement = [
-    ...yamlHostedServerBlock(SAP_SERVER_NAME, 2),
-    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2),
-  ];
+  const hostedServerName = hostedServerNameForTarget(target);
   const mcpIndex = lines.findIndex((line) => /^mcp_servers:\s*$/.test(line));
+  const replacementFor = (preserved: Map<string, { serverLines: string[]; env: Record<string, string> }>) => [
+    ...yamlHostedServerBlock(
+      hostedServerName,
+      2,
+      preserved.get(hostedServerName)?.serverLines ?? preserved.get(SAP_SERVER_NAME)?.serverLines,
+    ),
+    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 2, {
+      preservedServerLines: preserved.get(SAP_PAYMENT_BRIDGE_SERVER_NAME)?.serverLines,
+      existingEnv: preserved.get(SAP_PAYMENT_BRIDGE_SERVER_NAME)?.env,
+    }),
+  ];
 
   if (mcpIndex === -1) {
     const prefix = content.trimEnd();
-    const appended = ['mcp_servers:', ...replacement].join('\n');
+    const appended = ['mcp_servers:', ...replacementFor(new Map())].join('\n');
     return {
       nextContent: `${prefix ? `${prefix}\n` : ''}${appended}\n`,
       hadSapConfig: false,
@@ -1169,25 +1307,23 @@ function replaceYamlHostedPaymentBridgeBlocks(
 
   const nextLines = [...lines];
   let hadSapConfig = false;
-  for (const serverName of [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]) {
-    const serverIndex = nextLines.findIndex((line, index) => index > mcpIndex && new RegExp(`^ {2}${escapeRegExp(serverName)}:\\s*$`).test(line));
-    if (serverIndex === -1) {
+  const preserved = new Map<string, { serverLines: string[]; env: Record<string, string> }>();
+  for (const serverName of Array.from(new Set([hostedServerName, SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]))) {
+    const range = findYamlServerBlock(nextLines, mcpIndex, serverName, 2);
+    if (!range) {
       continue;
     }
 
     hadSapConfig = true;
-    let endIndex = serverIndex + 1;
-    while (endIndex < nextLines.length) {
-      const line = nextLines[endIndex];
-      if (line.trim() && countLeadingSpaces(line) <= 2) {
-        break;
-      }
-      endIndex += 1;
-    }
-    nextLines.splice(serverIndex, endIndex - serverIndex);
+    const existingBlock = nextLines.slice(range.start, range.end);
+    preserved.set(serverName, {
+      serverLines: extractYamlPreservedServerLines(existingBlock, 2),
+      env: extractYamlEnvEntries(existingBlock, 2),
+    });
+    nextLines.splice(range.start, range.end - range.start);
   }
 
-  nextLines.splice(mcpIndex + 1, 0, ...replacement);
+  nextLines.splice(mcpIndex + 1, 0, ...replacementFor(preserved));
   return {
     nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
     hadSapConfig,
@@ -1204,15 +1340,18 @@ function replaceOpenClawYamlHostedPaymentBridgeBlocks(
 ): { nextContent: string; hadSapConfig: boolean } {
   const lines = content.split(/\r?\n/);
   const paymentBridge = createNpxPaymentBridgeServerConfigForPlatform(platform, 'openclaw');
-  const replacement = [
-    ...yamlHostedServerBlock(SAP_SERVER_NAME, 4),
-    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4),
-  ];
   const mcpIndex = lines.findIndex((line) => /^mcp:\s*$/.test(line));
+  const replacementFor = (preserved: Map<string, { serverLines: string[]; env: Record<string, string> }>) => [
+    ...yamlHostedServerBlock(SAP_SERVER_NAME, 4, preserved.get(SAP_SERVER_NAME)?.serverLines),
+    ...yamlCommandServerBlock(SAP_PAYMENT_BRIDGE_SERVER_NAME, paymentBridge, 4, {
+      preservedServerLines: preserved.get(SAP_PAYMENT_BRIDGE_SERVER_NAME)?.serverLines,
+      existingEnv: preserved.get(SAP_PAYMENT_BRIDGE_SERVER_NAME)?.env,
+    }),
+  ];
 
   if (mcpIndex === -1) {
     const prefix = content.trimEnd();
-    const appended = ['mcp:', '  servers:', ...replacement].join('\n');
+    const appended = ['mcp:', '  servers:', ...replacementFor(new Map())].join('\n');
     return {
       nextContent: `${prefix ? `${prefix}\n` : ''}${appended}\n`,
       hadSapConfig: false,
@@ -1227,25 +1366,23 @@ function replaceOpenClawYamlHostedPaymentBridgeBlocks(
   }
 
   let hadSapConfig = false;
+  const preserved = new Map<string, { serverLines: string[]; env: Record<string, string> }>();
   for (const serverName of [SAP_SERVER_NAME, SAP_PAYMENT_BRIDGE_SERVER_NAME]) {
-    const serverIndex = nextLines.findIndex((line, index) => index > serversIndex && new RegExp(`^ {4}${escapeRegExp(serverName)}:\\s*$`).test(line));
-    if (serverIndex === -1) {
+    const range = findYamlServerBlock(nextLines, serversIndex, serverName, 4);
+    if (!range) {
       continue;
     }
 
     hadSapConfig = true;
-    let endIndex = serverIndex + 1;
-    while (endIndex < nextLines.length) {
-      const line = nextLines[endIndex];
-      if (line.trim() && countLeadingSpaces(line) <= 4) {
-        break;
-      }
-      endIndex += 1;
-    }
-    nextLines.splice(serverIndex, endIndex - serverIndex);
+    const existingBlock = nextLines.slice(range.start, range.end);
+    preserved.set(serverName, {
+      serverLines: extractYamlPreservedServerLines(existingBlock, 4),
+      env: extractYamlEnvEntries(existingBlock, 4),
+    });
+    nextLines.splice(range.start, range.end - range.start);
   }
 
-  nextLines.splice(serversIndex + 1, 0, ...replacement);
+  nextLines.splice(serversIndex + 1, 0, ...replacementFor(preserved));
   return {
     nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
     hadSapConfig,

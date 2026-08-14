@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-wizard-core",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP shared CLI and desktop wizard flow boundary.",
+  "sapMcp": {
+    "boundaryId": "wizard-core",
+    "source": "src/wizard-core",
+    "architectureDomain": "wizard",
+    "rootExport": "./wizard-core",
+    "apiContract": "config/package-export-contracts.json#./wizard-core",
+    "boundary": "Shared CLI and desktop wizard flow boundary."
+  }
+}

@@ -8,9 +8,11 @@ import {
   Keypair,
   PublicKey,
   Transaction,
+  TransactionInstruction,
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
+import { createTransferInstruction } from '@solana/spl-token';
 import { PolicyEnforcingWallet } from './policy-enforcing-wallet.js';
 import type { SignerWallet } from './policy-enforcing-wallet.js';
 
@@ -22,6 +24,19 @@ function makeTransferTx(from: PublicKey, amountSol: number): Transaction {
       toPubkey: Keypair.generate().publicKey,
       lamports: Math.round(amountSol * LAMPORTS_PER_SOL),
     })
+  );
+  return tx;
+}
+
+function makeSplTransferTx(owner: PublicKey): Transaction {
+  const tx = new Transaction();
+  tx.add(
+    createTransferInstruction(
+      Keypair.generate().publicKey,
+      Keypair.generate().publicKey,
+      owner,
+      1_000n,
+    )
   );
   return tx;
 }
@@ -90,6 +105,34 @@ describe('PolicyEnforcingWallet', () => {
     const signed = await wallet.signTransaction(tx);
     expect(signed).toBe(tx);
     expect(policy.checkPermission).not.toHaveBeenCalled();
+  });
+
+  it('blocks SPL token transfers even when no native SOL leaves the signer', async () => {
+    const kp = Keypair.generate();
+    const wrapped = fakeSignerWallet(kp.publicKey);
+    const policy = allowPolicy();
+    const wallet = new PolicyEnforcingWallet(wrapped, policy);
+    const tx = makeSplTransferTx(kp.publicKey);
+
+    await expect(wallet.signTransaction(tx)).rejects.toThrow(/token transfer requires explicit approval/i);
+    expect(policy.checkPermission).not.toHaveBeenCalled();
+    expect(wrapped.signTransaction).not.toHaveBeenCalled();
+  });
+
+  it('blocks non-allowlisted signer-touching programs even when native SOL is zero', async () => {
+    const kp = Keypair.generate();
+    const wrapped = fakeSignerWallet(kp.publicKey);
+    const wallet = new PolicyEnforcingWallet(wrapped, allowPolicy());
+    const tx = new Transaction().add(
+      new TransactionInstruction({
+        programId: Keypair.generate().publicKey,
+        keys: [{ pubkey: kp.publicKey, isSigner: true, isWritable: true }],
+        data: Buffer.alloc(0),
+      })
+    );
+
+    await expect(wallet.signTransaction(tx)).rejects.toThrow(/explicit approval/i);
+    expect(wrapped.signTransaction).not.toHaveBeenCalled();
   });
 
   it('enforces policy on every transaction in signAllTransactions', async () => {

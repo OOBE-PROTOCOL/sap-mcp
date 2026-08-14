@@ -28,6 +28,13 @@ export function checkSpendingLimit(
   config: SapMcpConfig,
   amountSol: number
 ): { allowed: boolean; reason?: string; requiresApproval?: boolean } {
+  if (!Number.isFinite(amountSol) || amountSol < 0) {
+    return {
+      allowed: false,
+      reason: `Amount ${amountSol} SOL is invalid; amount must be a finite non-negative number`,
+    };
+  }
+
   // Check max transaction limit
   const maxTxValueSol = config.maxTxValueSol;
   if (amountSol > maxTxValueSol) {
@@ -62,6 +69,7 @@ export function checkSpendingLimit(
  * @usedBy `spending-limits.ts:checkSpendingLimit`
  */
 export function calculateRiskLevel(amountSol: number): 'safe' | 'low' | 'medium' | 'high' | 'critical' {
+  if (!Number.isFinite(amountSol) || amountSol < 0) return 'critical';
   if (amountSol === 0) return 'safe';
   if (amountSol < 0.1) return 'low';
   if (amountSol < 1.0) return 'medium';

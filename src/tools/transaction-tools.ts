@@ -3,16 +3,56 @@
  * @description MCP tools for decoding, previewing, signing, and submitting Solana transactions.
  */
 
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
+import {
+  AddressLookupTableProgram,
+  ComputeBudgetProgram,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+  VersionedTransaction,
+} from '@solana/web3.js';
 import bs58 from 'bs58';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
+import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { logger } from '../core/logger.js';
 import type { SapMcpContext } from '../core/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import {
+  createStringToolPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
 
 export type TransactionEncoding = 'base64' | 'base58';
 type SolanaTransaction = Transaction | VersionedTransaction;
+type TransactionToolDefinition = ToolFamilyPipelineDefinition;
+type TransactionToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function createTransactionPipelineResponse(
+  body: string,
+  options: { readonly isError?: boolean } = {},
+): ToolFamilyPipelineResult {
+  return createStringToolPipelineResult(body, options);
+}
+
+function registerTransactionPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: TransactionToolDefinition,
+  execute: (input: unknown) => Promise<TransactionToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute);
+}
+
+interface TransactionPolicyContext {
+  config?: {
+    programId?: string;
+  };
+}
 
 interface TransactionInput {
   transaction?: string;
@@ -38,6 +78,10 @@ interface DecodedTransaction {
   recentBlockhash: string;
   feePayer?: string;
   nativeTransferSol: number;
+  tokenTransferCount: number;
+  tokenTransfers: TokenTransferEstimate[];
+  explicitApprovalRiskCount: number;
+  explicitApprovalRisks: ExplicitApprovalRisk[];
   policyAllowed?: boolean;
   policyReason?: string;
 }
@@ -45,6 +89,31 @@ interface DecodedTransaction {
 interface NativeTransferEstimate {
   lamports: bigint;
   sol: number;
+}
+
+export interface TokenTransferEstimate {
+  programId: string;
+  instruction: 'transfer' | 'transferChecked' | 'transferCheckedWithFee';
+  amount: string;
+  source?: string;
+  destination?: string;
+  authority?: string;
+  mint?: string;
+  decimals?: number;
+  feeAmount?: string;
+}
+
+export interface TransactionValueEstimate {
+  nativeTransfer: NativeTransferEstimate;
+  tokenTransfers: TokenTransferEstimate[];
+  explicitApprovalRisks: ExplicitApprovalRisk[];
+}
+
+export interface ExplicitApprovalRisk {
+  kind: 'addressLookupTable' | 'unknownProgram';
+  instructionIndex?: number;
+  programId?: string;
+  reason: string;
 }
 
 export interface FinalizeTransactionInput {
@@ -65,6 +134,14 @@ export interface FinalizeTransactionInput {
 
 const SYSTEM_TRANSFER_INSTRUCTION_INDEX = 2;
 const SYSTEM_TRANSFER_LAYOUT_BYTES = 12;
+const TOKEN_TRANSFER_INSTRUCTION_INDEX = 3;
+const TOKEN_TRANSFER_CHECKED_INSTRUCTION_INDEX = 12;
+const TOKEN_TRANSFER_FEE_EXTENSION_INSTRUCTION_INDEX = 26;
+const TOKEN_TRANSFER_CHECKED_WITH_FEE_INSTRUCTION_INDEX = 1;
+const MEMO_PROGRAM_IDS = new Set([
+  'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+  'Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo',
+]);
 const DEFAULT_CONFIRMATION_TIMEOUT_MS = 90_000;
 const MAX_CONFIRMATION_TIMEOUT_MS = 180_000;
 const DEFAULT_TX_SUBMIT_RELAY_URL = 'https://mcp.sap.oobeprotocol.ai/tx/submit';
@@ -178,6 +255,145 @@ function parseSystemTransferLamports(data: Uint8Array): bigint {
   return view.getBigUint64(4, true);
 }
 
+function readU64Le(data: Uint8Array, offset: number): bigint | null {
+  if (data.byteLength < offset + 8) {
+    return null;
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return view.getBigUint64(offset, true);
+}
+
+function keyToBase58(key: PublicKey | undefined): string | undefined {
+  return key?.toBase58();
+}
+
+function isTokenProgram(programId: PublicKey | undefined): boolean {
+  return Boolean(programId?.equals(TOKEN_PROGRAM_ID) || programId?.equals(TOKEN_2022_PROGRAM_ID));
+}
+
+function getSafeProgramIds(context?: TransactionPolicyContext): Set<string> {
+  const safeProgramIds = new Set([
+    SystemProgram.programId.toBase58(),
+    TOKEN_PROGRAM_ID.toBase58(),
+    TOKEN_2022_PROGRAM_ID.toBase58(),
+    ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
+    ComputeBudgetProgram.programId.toBase58(),
+    AddressLookupTableProgram.programId.toBase58(),
+    ...MEMO_PROGRAM_IDS,
+  ]);
+
+  if (context?.config?.programId) {
+    safeProgramIds.add(context.config.programId);
+  }
+
+  return safeProgramIds;
+}
+
+function signerTouchesLegacyInstruction(instruction: TransactionInstruction, signer?: PublicKey): boolean {
+  if (!signer) return true;
+  return instruction.keys.some(key =>
+    key.pubkey.equals(signer) && (key.isSigner || key.isWritable)
+  );
+}
+
+function signerTouchesVersionedInstruction(
+  transaction: VersionedTransaction,
+  accountKeyIndexes: number[],
+  signer?: PublicKey,
+): boolean {
+  if (!signer) return true;
+  const keys = transaction.message.staticAccountKeys;
+  return accountKeyIndexes.some(index => {
+    const key = keys[index];
+    return Boolean(
+      key?.equals(signer)
+      && (
+        transaction.message.isAccountSigner(index)
+        || transaction.message.isAccountWritable(index)
+      )
+    );
+  });
+}
+
+function signerMatchesAny(signer: PublicKey | undefined, keys: Array<PublicKey | undefined>): boolean {
+  if (!signer) return true;
+  return keys.some(key => key?.equals(signer));
+}
+
+function parseTokenTransferInstruction(
+  programId: PublicKey | undefined,
+  data: Uint8Array,
+  keys: Array<PublicKey | undefined>,
+  signer?: PublicKey,
+): TokenTransferEstimate | null {
+  if (!isTokenProgram(programId) || data.byteLength === 0) {
+    return null;
+  }
+
+  const instructionIndex = data[0];
+  if (instructionIndex === TOKEN_TRANSFER_INSTRUCTION_INDEX) {
+    const amount = readU64Le(data, 1);
+    const authority = keys[2];
+    const multisigSigners = keys.slice(3);
+    if (amount === null || !signerMatchesAny(signer, [authority, ...multisigSigners])) {
+      return null;
+    }
+    return {
+      programId: programId!.toBase58(),
+      instruction: 'transfer',
+      amount: amount.toString(),
+      source: keyToBase58(keys[0]),
+      destination: keyToBase58(keys[1]),
+      authority: keyToBase58(authority),
+    };
+  }
+
+  if (instructionIndex === TOKEN_TRANSFER_CHECKED_INSTRUCTION_INDEX) {
+    const amount = readU64Le(data, 1);
+    const authority = keys[3];
+    const multisigSigners = keys.slice(4);
+    if (amount === null || data.byteLength < 10 || !signerMatchesAny(signer, [authority, ...multisigSigners])) {
+      return null;
+    }
+    return {
+      programId: programId!.toBase58(),
+      instruction: 'transferChecked',
+      amount: amount.toString(),
+      source: keyToBase58(keys[0]),
+      mint: keyToBase58(keys[1]),
+      destination: keyToBase58(keys[2]),
+      authority: keyToBase58(authority),
+      decimals: data[9],
+    };
+  }
+
+  if (
+    instructionIndex === TOKEN_TRANSFER_FEE_EXTENSION_INSTRUCTION_INDEX
+    && data[1] === TOKEN_TRANSFER_CHECKED_WITH_FEE_INSTRUCTION_INDEX
+  ) {
+    const amount = readU64Le(data, 2);
+    const feeAmount = readU64Le(data, 11);
+    const authority = keys[3];
+    const multisigSigners = keys.slice(4);
+    if (amount === null || feeAmount === null || data.byteLength < 19 || !signerMatchesAny(signer, [authority, ...multisigSigners])) {
+      return null;
+    }
+    return {
+      programId: programId!.toBase58(),
+      instruction: 'transferCheckedWithFee',
+      amount: amount.toString(),
+      source: keyToBase58(keys[0]),
+      mint: keyToBase58(keys[1]),
+      destination: keyToBase58(keys[2]),
+      authority: keyToBase58(authority),
+      decimals: data[10],
+      feeAmount: feeAmount.toString(),
+    };
+  }
+
+  return null;
+}
+
 /**
  * @name estimateNativeTransfer
  * @description Estimates native SOL leaving the signer, or all native SOL transfers when no signer filter is supplied.
@@ -227,6 +443,139 @@ export function estimateNativeTransfer(transaction: SolanaTransaction, signer?: 
 }
 
 /**
+ * @name estimateTokenTransfers
+ * @description Estimates SPL Token and Token-2022 transfer instructions controlled by the signer.
+ * @param transaction - Deserialized Solana transaction.
+ * @param signer - Optional owner/authority signer filter.
+ * @returns Token transfer estimates in base units.
+ */
+export function estimateTokenTransfers(transaction: SolanaTransaction, signer?: PublicKey): TokenTransferEstimate[] {
+  const transfers: TokenTransferEstimate[] = [];
+
+  if (transaction instanceof VersionedTransaction) {
+    const keys = transaction.message.staticAccountKeys;
+    for (const instruction of transaction.message.compiledInstructions) {
+      const transfer = parseTokenTransferInstruction(
+        keys[instruction.programIdIndex],
+        instruction.data,
+        instruction.accountKeyIndexes.map(index => keys[index]),
+        signer,
+      );
+      if (transfer) transfers.push(transfer);
+    }
+    return transfers;
+  }
+
+  for (const instruction of transaction.instructions) {
+    const transfer = parseTokenTransferInstruction(
+      instruction.programId,
+      instruction.data,
+      instruction.keys.map(key => key.pubkey),
+      signer,
+    );
+    if (transfer) transfers.push(transfer);
+  }
+
+  return transfers;
+}
+
+export function estimateExplicitApprovalRisks(
+  transaction: SolanaTransaction,
+  signer?: PublicKey,
+  context?: TransactionPolicyContext,
+): ExplicitApprovalRisk[] {
+  const risks: ExplicitApprovalRisk[] = [];
+  const safeProgramIds = getSafeProgramIds(context);
+
+  if (transaction instanceof VersionedTransaction) {
+    const keys = transaction.message.staticAccountKeys;
+    if (transaction.message.addressTableLookups.length > 0) {
+      risks.push({
+        kind: 'addressLookupTable',
+        reason: 'Versioned transaction uses address lookup tables; SAP MCP cannot resolve all runtime account keys locally before signing.',
+      });
+    }
+
+    transaction.message.compiledInstructions.forEach((instruction, instructionIndex) => {
+      const programId = keys[instruction.programIdIndex];
+      if (!programId || safeProgramIds.has(programId.toBase58())) {
+        return;
+      }
+      if (!signerTouchesVersionedInstruction(transaction, instruction.accountKeyIndexes, signer)) {
+        return;
+      }
+      risks.push({
+        kind: 'unknownProgram',
+        instructionIndex,
+        programId: programId.toBase58(),
+        reason: 'Transaction invokes a non-allowlisted program touching the signer; explicit approval is required before signing.',
+      });
+    });
+    return risks;
+  }
+
+  transaction.instructions.forEach((instruction, instructionIndex) => {
+    const programId = instruction.programId.toBase58();
+    if (safeProgramIds.has(programId)) {
+      return;
+    }
+    if (!signerTouchesLegacyInstruction(instruction, signer)) {
+      return;
+    }
+    risks.push({
+      kind: 'unknownProgram',
+      instructionIndex,
+      programId,
+      reason: 'Transaction invokes a non-allowlisted program touching the signer; explicit approval is required before signing.',
+    });
+  });
+
+  return risks;
+}
+
+/**
+ * @name estimateTransactionValue
+ * @description Estimates native SOL and token value movement visible in a transaction.
+ * @param transaction - Deserialized Solana transaction.
+ * @param signer - Optional signer filter for outgoing value movement.
+ * @returns Native SOL and token transfer estimates.
+ */
+export function estimateTransactionValue(
+  transaction: SolanaTransaction,
+  signer?: PublicKey,
+  context?: TransactionPolicyContext,
+): TransactionValueEstimate {
+  return {
+    nativeTransfer: estimateNativeTransfer(transaction, signer),
+    tokenTransfers: estimateTokenTransfers(transaction, signer),
+    explicitApprovalRisks: estimateExplicitApprovalRisks(transaction, signer, context),
+  };
+}
+
+export function tokenTransferPolicyReason(estimate: TransactionValueEstimate): string {
+  const count = estimate.tokenTransfers.length;
+  const preview = estimate.tokenTransfers
+    .slice(0, 3)
+    .map(transfer => {
+      const mint = transfer.mint ? ` mint ${transfer.mint}` : '';
+      return `${transfer.instruction} ${transfer.amount} base units${mint}`;
+    })
+    .join('; ');
+  const suffix = count > 3 ? `; +${count - 3} more` : '';
+  return `SPL/Token-2022 token transfer requires explicit approval before signing (${preview}${suffix})`;
+}
+
+export function explicitApprovalRiskPolicyReason(estimate: TransactionValueEstimate): string {
+  const count = estimate.explicitApprovalRisks.length;
+  const preview = estimate.explicitApprovalRisks
+    .slice(0, 3)
+    .map(risk => risk.programId ? `${risk.kind} ${risk.programId}` : risk.kind)
+    .join('; ');
+  const suffix = count > 3 ? `; +${count - 3} more` : '';
+  return `Transaction requires explicit approval before signing (${preview}${suffix})`;
+}
+
+/**
  * @name assertTransactionPolicy
  * @description Enforces configured transaction value policy before signing or submitting a transaction.
  * @param context - Shared MCP runtime context.
@@ -237,10 +586,18 @@ export async function assertTransactionPolicy(
   context: SapMcpContext,
   transaction: SolanaTransaction,
   signer?: PublicKey
-): Promise<NativeTransferEstimate> {
-  const nativeTransfer = estimateNativeTransfer(transaction, signer);
+): Promise<TransactionValueEstimate> {
+  const valueEstimate = estimateTransactionValue(transaction, signer, context);
+  if (valueEstimate.tokenTransfers.length > 0) {
+    throw new Error(tokenTransferPolicyReason(valueEstimate));
+  }
+  if (valueEstimate.explicitApprovalRisks.length > 0) {
+    throw new Error(explicitApprovalRiskPolicyReason(valueEstimate));
+  }
+
+  const nativeTransfer = valueEstimate.nativeTransfer;
   if (nativeTransfer.sol <= 0) {
-    return nativeTransfer;
+    return valueEstimate;
   }
 
   const policy = await context.policyEngine.checkPermission('transaction:submit', {
@@ -252,7 +609,7 @@ export async function assertTransactionPolicy(
     throw new Error(policy.reason || `Native transfer of ${nativeTransfer.sol} SOL is blocked by policy`);
   }
 
-  return nativeTransfer;
+  return valueEstimate;
 }
 
 /**
@@ -506,6 +863,12 @@ function validateRelayUrl(value: string): void {
   }
 }
 
+function assertPositiveSafeIntegerAmount(value: number, fieldName: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer.`);
+  }
+}
+
 function isRelaySubmitResult(value: unknown): value is RelaySubmitResult {
   if (!value || typeof value !== 'object') {
     return false;
@@ -531,14 +894,21 @@ async function sleep(ms: number): Promise<void> {
  * @returns Transaction metadata safe to expose to MCP clients.
  */
 export function describeTransaction(transaction: SolanaTransaction, context?: SapMcpContext): DecodedTransaction {
-  const nativeTransfer = estimateNativeTransfer(transaction);
+  const valueEstimate = estimateTransactionValue(transaction, undefined, context);
+  const { nativeTransfer, tokenTransfers, explicitApprovalRisks } = valueEstimate;
   const maxTxValueSol = context?.config.maxTxValueSol;
   const policyAllowed = context
-    ? nativeTransfer.sol <= context.config.requireApprovalAboveSol
+    ? tokenTransfers.length === 0
+      && explicitApprovalRisks.length === 0
+      && nativeTransfer.sol <= context.config.requireApprovalAboveSol
       && nativeTransfer.sol <= context.config.maxTxValueSol
     : undefined;
   const policyReason = context && !policyAllowed
-    ? maxTxValueSol !== undefined && nativeTransfer.sol > maxTxValueSol
+    ? tokenTransfers.length > 0
+      ? tokenTransferPolicyReason(valueEstimate)
+      : explicitApprovalRisks.length > 0
+      ? explicitApprovalRiskPolicyReason(valueEstimate)
+      : maxTxValueSol !== undefined && nativeTransfer.sol > maxTxValueSol
       ? `Native transfer ${nativeTransfer.sol} SOL exceeds max ${maxTxValueSol} SOL`
       : `Native transfer ${nativeTransfer.sol} SOL requires approval above ${context.config.requireApprovalAboveSol} SOL`
     : undefined;
@@ -557,6 +927,10 @@ export function describeTransaction(transaction: SolanaTransaction, context?: Sa
       recentBlockhash: transaction.message.recentBlockhash,
       feePayer: accountKeys[0],
       nativeTransferSol: nativeTransfer.sol,
+      tokenTransferCount: tokenTransfers.length,
+      tokenTransfers,
+      explicitApprovalRiskCount: explicitApprovalRisks.length,
+      explicitApprovalRisks,
       policyAllowed,
       policyReason,
     };
@@ -573,6 +947,10 @@ export function describeTransaction(transaction: SolanaTransaction, context?: Sa
     recentBlockhash: transaction.recentBlockhash ?? '',
     feePayer: transaction.feePayer?.toBase58(),
     nativeTransferSol: nativeTransfer.sol,
+    tokenTransferCount: tokenTransfers.length,
+    tokenTransfers,
+    explicitApprovalRiskCount: explicitApprovalRisks.length,
+    explicitApprovalRisks,
     policyAllowed,
     policyReason,
   };
@@ -654,7 +1032,7 @@ export async function finalizeTransactionWithLocalSigner(
   }
 
   const preview = describeTransaction(transaction, context);
-  const nativeTransfer = await assertTransactionPolicy(context, transaction, signer.publicKey);
+  const valueEstimate = await assertTransactionPolicy(context, transaction, signer.publicKey);
   const signedTransaction = await signer.signTransaction(transaction);
   const signedTransactionBase64 = serializeTransaction(signedTransaction);
 
@@ -664,7 +1042,9 @@ export async function finalizeTransactionWithLocalSigner(
     submitted: false,
     signerPublicKey: signer.publicKey.toBase58(),
     signerProfile: signerProfileName ?? null,
-    nativeTransferSol: nativeTransfer.sol,
+    nativeTransferSol: valueEstimate.nativeTransfer.sol,
+    tokenTransferCount: valueEstimate.tokenTransfers.length,
+    tokenTransfers: valueEstimate.tokenTransfers,
     preview: {
       ...preview,
       canSign: true,
@@ -740,8 +1120,9 @@ export async function finalizeTransactionWithLocalSigner(
  * @param context - Runtime context containing Solana connection and optional signer.
  */
 export function registerTransactionTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_decode_transaction',
     {
       title: 'Decode Transaction',
@@ -751,21 +1132,23 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
       },
     },
-    async (input: TransactionInput) => {
+    async (rawInput: unknown) => {
       try {
+        const input = rawInput as TransactionInput;
         if (!input.transaction) {
           throw new Error('transaction is required');
         }
 
-        return createTextResponse(JSON.stringify(describeTransaction(deserializeTransaction(input.transaction, input.encoding), context), null, 2));
+        return createTransactionPipelineResponse(JSON.stringify(describeTransaction(deserializeTransaction(input.transaction, input.encoding), context), null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );
 
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_preview_transaction',
     {
       title: 'Preview Transaction',
@@ -775,27 +1158,29 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
       },
     },
-    async (input: TransactionInput) => {
+    async (rawInput: unknown) => {
       try {
+        const input = rawInput as TransactionInput;
         if (!input.transaction) {
           throw new Error('transaction is required');
         }
 
         const transaction = deserializeTransaction(input.transaction, input.encoding);
         const preview = describeTransaction(transaction, context);
-        return createTextResponse(JSON.stringify({
+        return createTransactionPipelineResponse(JSON.stringify({
           ...preview,
           canSign: Boolean(context.signer),
           signer: context.signer?.publicKey.toBase58(),
         }, null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );
 
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_sign_transaction',
     {
       title: 'Sign Transaction',
@@ -805,8 +1190,9 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         encoding: { type: 'string', enum: ['base64', 'base58'], description: 'Input encoding' },
       },
     },
-    async (input: TransactionInput) => {
+    async (rawInput: unknown) => {
       try {
+        const input = rawInput as TransactionInput;
         if (!context.signer) {
           throw new Error('No signer configured. Use local-dev-keypair or external-signer mode.');
         }
@@ -829,23 +1215,26 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           }
         }
 
-        const nativeTransfer = await assertTransactionPolicy(context, transaction, context.signer.publicKey);
+        const valueEstimate = await assertTransactionPolicy(context, transaction, context.signer.publicKey);
         const signedTransaction = await context.signer.signTransaction(transaction);
-        return createTextResponse(JSON.stringify({
+        return createTransactionPipelineResponse(JSON.stringify({
           success: true,
           publicKey: context.signer.publicKey.toBase58(),
-          nativeTransferSol: nativeTransfer.sol,
+          nativeTransferSol: valueEstimate.nativeTransfer.sol,
+          tokenTransferCount: valueEstimate.tokenTransfers.length,
+          tokenTransfers: valueEstimate.tokenTransfers,
           transaction: serializeTransaction(signedTransaction),
           encoding: 'base64',
         }, null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );
 
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_submit_signed_transaction',
     {
       title: 'Submit Signed Transaction',
@@ -862,8 +1251,9 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         intentId: { type: 'string', description: 'Optional caller-provided id binding submission, confirmation, and audit output.' },
       },
     },
-    async (input: TransactionInput) => {
+    async (rawInput: unknown) => {
       try {
+        const input = rawInput as TransactionInput;
         if (!input.signedTransaction) {
           throw new Error('signedTransaction is required');
         }
@@ -889,9 +1279,9 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
             intentId: input.intentId,
           });
 
-        return createTextResponse(JSON.stringify(result, null, 2), { isError: !result.success });
+        return createTransactionPipelineResponse(JSON.stringify(result, null, 2), { isError: !result.success });
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );
@@ -904,8 +1294,9 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
   // agent signs locally via sap_payments_finalize_transaction or
   // sap_sign_transaction → sap_submit_signed_transaction.
   //
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_build_sol_transfer',
     {
       title: 'Build Native SOL Transfer Transaction',
@@ -941,9 +1332,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         const fromKey = new PublicKey(fromPubkey);
         const toKey = new PublicKey(toPubkey);
 
-        if (lamports <= 0) {
-          throw new Error('lamports must be a positive number.');
-        }
+        assertPositiveSafeIntegerAmount(lamports, 'lamports');
 
         // Build the SystemProgram.transfer instruction.
         const instruction = SystemProgram.transfer({
@@ -970,7 +1359,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         });
         const transactionBase64 = serialized.toString('base64');
 
-        return createTextResponse(JSON.stringify({
+        return createTransactionPipelineResponse(JSON.stringify({
           success: true,
           transactionBase64,
           encoding: 'base64',
@@ -989,7 +1378,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           nextSteps: 'Sign locally with sap_payments_finalize_transaction (hosted mode) or sap_sign_transaction → sap_submit_signed_transaction (local mode). Do not create temporary signing scripts or read keypair JSON.',
         }, null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );
@@ -1000,8 +1389,9 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
   // accountless server. This builder creates an unsigned SPL token transfer
   // transaction that the agent signs locally via sap_payments_finalize_transaction.
   //
-  registerTool(
+  registerTransactionPipelineTool(
     server,
+    context,
     'sap_build_spl_transfer',
     {
       title: 'Build SPL Token Transfer Transaction',
@@ -1042,13 +1432,10 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         if (!sourceOwner || !destinationOwner || !mint || amount === undefined) {
           throw new Error('sourceOwner, destinationOwner, mint, and amount are required.');
         }
-        if (amount <= 0) {
-          throw new Error('amount must be a positive number.');
-        }
+        assertPositiveSafeIntegerAmount(amount, 'amount');
 
-        // Build SPL token transfer instructions using @solana/web3.js only.
-        // We construct the raw instruction data manually to avoid depending on
-        // @solana/spl-token (not in package.json).
+        // Build SPL token transfer instructions using the shared ATA helpers and
+        // official token program layout.
         const sourceOwnerKey = new PublicKey(sourceOwner);
         const destOwnerKey = new PublicKey(destinationOwner);
         const mintKey = new PublicKey(mint);
@@ -1094,7 +1481,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         });
         const transactionBase64 = serialized.toString('base64');
 
-        return createTextResponse(JSON.stringify({
+        return createTransactionPipelineResponse(JSON.stringify({
           success: true,
           transactionBase64,
           encoding: 'base64',
@@ -1119,7 +1506,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           nextSteps: 'Sign locally with sap_payments_finalize_transaction (hosted mode) or sap_sign_transaction → sap_submit_signed_transaction (local mode). Do not create temporary signing scripts or read keypair JSON.',
         }, null, 2));
       } catch (error) {
-        return createTextResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
+        return createTransactionPipelineResponse(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { isError: true });
       }
     }
   );

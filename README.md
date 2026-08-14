@@ -9,7 +9,7 @@ SAP MCP exposes the same typed tool registry through two supported MCP launch mo
 
 It also includes a professional setup wizard, profile-managed config under `~/.config/mcp-sap`, optional Bento policy integration, local and external signing modes, x402 monetization, a self-hosted OOBE facilitator, pay.sh provider YAML generation, and an A2A-compatible discovery card.
 
-User-facing setup docs live in [`USER_DOCS/`](USER_DOCS/00_START_HERE.md). Operator and engineering docs live in [`docs/`](docs/00_README.md).
+User-facing setup docs live in [`USER_DOCS/`](USER_DOCS/00_USER_ONBOARDING_INDEX.md). Operator and engineering docs live in [`docs/`](docs/00_ENGINEERING_DOCUMENTATION_INDEX.md).
 
 ## 1. Status
 
@@ -81,6 +81,7 @@ Inspect the active profile:
 
 ```bash
 npx sap-mcp-config show
+npx sap-mcp-config doctor
 npx sap-mcp-config pubkey
 npx sap-mcp-config profiles
 ```
@@ -161,7 +162,7 @@ SAP_LOG_LEVEL = "info"
 
 On Windows, use `command = "npx.cmd"`.
 
-See [04. Local Stdio Usage](docs/04_LOCAL_STDIO_USAGE.md).
+See [04. Local Stdio MCP Runbook](docs/04_LOCAL_STDIO_MCP_RUNBOOK.md).
 
 ## 5. Remote Server
 
@@ -187,6 +188,8 @@ GET     /.well-known/x402
 GET     /pay/provider.yml
 GET     /.well-known/agent-card.json
 GET     /.well-known/sap-mcp-wizard.json
+GET     /.well-known/sap-mcp-tool-catalog.json
+GET     /tool-catalog.json
 GET     /wizard/install.sh
 POST    /mcp
 GET     /mcp
@@ -203,7 +206,7 @@ secrets: SAP MCP hosted reads work remotely, while paid/write calls use the
 wizard-managed local `sap_payments` bridge, local profile policy, and
 user-controlled signer.
 
-See [05. Remote VPS Deployment](docs/05_REMOTE_VPS_DEPLOYMENT.md) and [07. Endpoints And Clients](docs/07_ENDPOINTS_AND_CLIENTS.md).
+See [05. Hosted Streamable HTTP Deployment](docs/05_HOSTED_STREAMABLE_HTTP_DEPLOYMENT.md) and [07. HTTP Endpoints, MCP Clients, And Smoke Tests](docs/07_HTTP_ENDPOINTS_MCP_CLIENTS_SMOKE_TESTS.md).
 
 ## 6. Monetization
 
@@ -248,7 +251,7 @@ npx sap-mcp-pay-sh-spec \
   --recipient YOUR_SOLANA_USDC_RECIPIENT
 ```
 
-See [06. Payments, x402, And pay.sh](docs/06_PAYMENTS_X402_AND_PAYSH.md).
+See [06. x402/pay.sh Monetization Settlement](docs/06_X402_PAYSH_MONETIZATION_SETTLEMENT.md).
 
 For local agent runtimes that cannot replay x402 challenges natively, install
 the wizard's local `sap_payments` bridge and call `sap_payments_call_paid_tool`.
@@ -290,22 +293,29 @@ Installed binaries:
 
 ## 8. Documentation
 
-Start with [00. Documentation Index](docs/00_README.md).
+Start with [00. Engineering Documentation Index](docs/00_ENGINEERING_DOCUMENTATION_INDEX.md).
 
 | Document | Purpose |
 | --- | --- |
-| [01. Product Overview](docs/01_PRODUCT_OVERVIEW.md) | Product model, users, public/private repo guidance, and wizard distribution. |
-| [02. Architecture And Request Flow](docs/02_ARCHITECTURE_AND_REQUEST_FLOW.md) | Runtime modules, local flow, remote flow, signing, payments, and trust boundaries. |
-| [03. Configuration And Wizard](docs/03_CONFIGURATION_AND_WIZARD.md) | Profile manager, wizard, wallet isolation, client injection, and config CLI. |
-| [04. Local Stdio Usage](docs/04_LOCAL_STDIO_USAGE.md) | Local setup for Claude, Hermes, Codex, OpenClaw, and development agents. |
-| [05. Remote VPS Deployment](docs/05_REMOTE_VPS_DEPLOYMENT.md) | Hosted deployment, reverse proxy, PM2, and customer onboarding. |
-| [06. Payments, x402, And pay.sh](docs/06_PAYMENTS_X402_AND_PAYSH.md) | Pricing, x402 gate, pay.sh provider YAML, facilitator signer, and settlement. |
-| [07. Endpoints And Clients](docs/07_ENDPOINTS_AND_CLIENTS.md) | HTTP endpoints, headers, smoke tests, and client examples. |
-| [08. Security, Policy, And Signing](docs/08_SECURITY_POLICY_AND_SIGNING.md) | Key material rules, signer modes, Bento policy, and transaction safety. |
-| [09. Tools, Skills, And Agent Guide](docs/09_TOOLS_SKILLS_AND_AGENT_GUIDE.md) | Tool families, SDK doc pointers, skills, and agent behavior. |
-| [10. Operations, Release, And PM2](docs/10_OPERATIONS_RELEASE_AND_PM2.md) | Quality gates, PM2, secrets, release packaging, and changelog discipline. |
-| [11. Code Quality Audit](docs/11_CODE_QUALITY_AUDIT.md) | Current engineering scorecard, release gates, quality rules, and residual risks. |
-| [12. On-Chain Agent Chat](docs/12_ONCHAIN_AGENT_CHAT.md) | Signed thematic group chat, room manifests, retrieval, link sharing, privacy boundaries, and SDK roadmap. |
+| [01. Product Scope Deployment Model](docs/01_PRODUCT_SCOPE_DEPLOYMENT_MODEL.md) | Product model, users, public/private repo guidance, and wizard distribution. |
+| [02. Runtime Architecture Trust Boundaries](docs/02_RUNTIME_ARCHITECTURE_TRUST_BOUNDARIES.md) | Runtime modules, local flow, remote flow, signing, payments, and trust boundaries. |
+| [03. Profile Config Wizard Injection](docs/03_PROFILE_CONFIG_WIZARD_INJECTION.md) | Profile manager, wizard, wallet isolation, client injection, and config CLI. |
+| [04. Local Stdio MCP Runbook](docs/04_LOCAL_STDIO_MCP_RUNBOOK.md) | Local setup for Claude, Hermes, Codex, OpenClaw, and development agents. |
+| [05. Hosted Streamable HTTP Deployment](docs/05_HOSTED_STREAMABLE_HTTP_DEPLOYMENT.md) | Hosted deployment, reverse proxy, PM2, and customer onboarding. |
+| [06. x402/pay.sh Monetization Settlement](docs/06_X402_PAYSH_MONETIZATION_SETTLEMENT.md) | Pricing, x402 gate, pay.sh provider YAML, facilitator signer, and settlement. |
+| [07. HTTP Endpoints, MCP Clients, And Smoke Tests](docs/07_HTTP_ENDPOINTS_MCP_CLIENTS_SMOKE_TESTS.md) | HTTP endpoints, headers, smoke tests, and client examples. |
+| [08. Security Policy Signing Runbook](docs/08_SECURITY_POLICY_SIGNING_RUNBOOK.md) | Key material rules, signer modes, Bento policy, and transaction safety. |
+| [09. Tool Skill Routing Agent Operations](docs/09_TOOL_SKILL_ROUTING_AGENT_OPERATIONS.md) | Tool families, SDK doc pointers, skills, and agent behavior. |
+| [10. Release Operations PM2 Runbook](docs/10_RELEASE_OPERATIONS_PM2_RUNBOOK.md) | Quality gates, PM2, secrets, release packaging, and changelog discipline. |
+| [11. Engineering Quality Audit Report](docs/11_ENGINEERING_QUALITY_AUDIT_REPORT.md) | Current engineering scorecard, release gates, quality rules, and residual risks. |
+| [12. Signed Agent Chat Protocol](docs/12_SIGNED_AGENT_CHAT_PROTOCOL.md) | Signed thematic group chat, room manifests, retrieval, link sharing, privacy boundaries, and SDK roadmap. |
+| [13. Bounty Program Technical Spec](docs/13_BOUNTY_PROGRAM_TECHNICAL_SPEC.md) | Partner bounty scope, judging criteria, and technical requirements. |
+| [14. Desktop Wizard Release Artifacts](docs/14_DESKTOP_WIZARD_RELEASE_ARTIFACTS.md) | Native wizard packaging, signing, checksums, and release artifacts. |
+| [15. Demo Dashboard Screenshare Runbook](docs/15_DEMO_DASHBOARD_SCREENSHARE_RUNBOOK.md) | Demo flow for hosted landing page, dashboard, wizard, and payment surfaces. |
+| [16. Agent Identity Registry Pipeline](docs/16_AGENT_IDENTITY_REGISTRY_PIPELINE.md) | Registry source truth, enrichment, validation, and display pipeline. |
+| [18. Premium Plugin Runtime Contracts](docs/18_PREMIUM_PLUGIN_RUNTIME_CONTRACTS.md) | Premium plugin manifest contracts, provider readiness, streams, and webhooks. |
+| [19. Agentic Standards Interoperability](docs/19_AGENTIC_STANDARDS_INTEROPERABILITY.md) | MCP, A2A, marketplace, x402/pay.sh, and runtime alignment. |
+| [20. Engineering Operating Model Boundaries](docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md) | Branch ownership, service contracts, release personas, and company-grade gates. |
 
 ## 9. Repository Layout
 

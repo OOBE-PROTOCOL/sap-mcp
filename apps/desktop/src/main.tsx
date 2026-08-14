@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import sapLogoUrl from '../../../assets/explorer_logo.png';
 import './styles.css';
@@ -7,8 +7,9 @@ const fullSteps = ['Setup', 'Profile', 'Wallet', 'Policy', 'Runtimes', 'Review']
 const paymentsOnlySteps = ['Setup', 'Runtimes', 'Review'] as const;
 type StepName = typeof fullSteps[number];
 type WorkspaceView = 'wizard' | 'profiles';
+type CatalogLoadState = 'idle' | 'loading' | 'success' | 'error';
 
-const hostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
+const defaultHostedUrl = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const wizardVersion = '0.9.38';
 const releaseUrl = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/${wizardVersion}`;
 const initialStateTimeoutMs = 15_000;
@@ -28,6 +29,10 @@ function fieldId(name: string): string {
 
 function App() {
   const [draft, setDraft] = useState<WizardDraft | null>(null);
+  const [hostedDiscovery, setHostedDiscovery] = useState<HostedDiscovery | null>(null);
+  const [hostedToolCatalog, setHostedToolCatalog] = useState<HostedToolCatalogDocument | null>(null);
+  const [catalogLoadState, setCatalogLoadState] = useState<CatalogLoadState>('idle');
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([]);
   const [profiles, setProfiles] = useState<ProfileStatus[]>([]);
   const [step, setStep] = useState<StepName>('Setup');
@@ -66,6 +71,7 @@ function App() {
           configureRuntimes: defaultRuntimes,
           configureCodex: defaultRuntimes.includes('codex'),
         });
+        setHostedDiscovery(state.hostedDiscovery);
         setRuntimes(state.runtimes);
         setProfiles(state.profiles);
       })
@@ -85,12 +91,34 @@ function App() {
   const stepIndex = visibleSteps.indexOf(step);
   const canGoBack = stepIndex > 0 && !saving;
   const canGoForward = stepIndex < visibleSteps.length - 1 && !saving;
+  const hostedUrl = hostedDiscovery?.hostedMcpUrl ?? defaultHostedUrl;
+
+  const loadHostedToolCatalog = useCallback(async (url: string) => {
+    setCatalogLoadState('loading');
+    setCatalogError(null);
+    try {
+      const document = await window.sapMcpWizard.getHostedToolCatalog(url);
+      setHostedToolCatalog(document);
+      setCatalogLoadState('success');
+    } catch (cause) {
+      setHostedToolCatalog(null);
+      setCatalogError(cause instanceof Error ? cause.message : String(cause));
+      setCatalogLoadState('error');
+    }
+  }, []);
 
   useEffect(() => {
     if (draft && !visibleSteps.includes(step)) {
       setStep('Runtimes');
     }
   }, [draft, step, visibleSteps]);
+
+  useEffect(() => {
+    if (!hostedDiscovery?.toolCatalogUrl) {
+      return;
+    }
+    void loadHostedToolCatalog(hostedDiscovery.toolCatalogUrl);
+  }, [hostedDiscovery?.toolCatalogUrl, loadHostedToolCatalog]);
 
   const validation = useMemo(() => {
     if (!draft) return ['Loading wizard state.'];
@@ -264,7 +292,19 @@ function App() {
 
         {view === 'wizard' && !result && (
           <section className="panel" aria-labelledby="panel-title">
-            <StepContent step={step} draft={draft} runtimes={runtimes} update={update} validation={validation} />
+            <StepContent
+              step={step}
+              draft={draft}
+              hostedDiscovery={hostedDiscovery}
+              hostedToolCatalog={hostedToolCatalog}
+              hostedUrl={hostedUrl}
+              catalogLoadState={catalogLoadState}
+              catalogError={catalogError}
+              runtimes={runtimes}
+              update={update}
+              validation={validation}
+              onRetryCatalog={() => hostedDiscovery && loadHostedToolCatalog(hostedDiscovery.toolCatalogUrl)}
+            />
           </section>
         )}
 
@@ -318,15 +358,27 @@ function Shell({ children }: { children: React.ReactNode }) {
 function StepContent({
   step,
   draft,
+  hostedDiscovery,
+  hostedToolCatalog,
+  hostedUrl,
+  catalogLoadState,
+  catalogError,
   runtimes,
   validation,
   update,
+  onRetryCatalog,
 }: {
   step: StepName;
   draft: WizardDraft;
+  hostedDiscovery: HostedDiscovery | null;
+  hostedToolCatalog: HostedToolCatalogDocument | null;
+  hostedUrl: string;
+  catalogLoadState: CatalogLoadState;
+  catalogError: string | null;
   runtimes: RuntimeStatus[];
   validation: string[];
   update: (next: Partial<WizardDraft>) => void;
+  onRetryCatalog: () => void;
 }) {
   function toggleRuntime(runtimeId: RuntimeStatus['id']) {
     const selected = new Set(draft.configureRuntimes);
@@ -476,6 +528,28 @@ function StepContent({
           title="Connect runtimes to SAP MCP"
           copy="Select the agent runtimes to configure. The wizard writes hosted sap plus local sap_payments entries using each runtime's native JSON, TOML, or YAML structure."
         />
+        {hostedDiscovery && (
+          <div className="info-strip">
+            <strong>Hosted tool catalog</strong>
+            <span>Wizard, UI, and agents use the same hosted module and policy catalog generated from {hostedDiscovery.sourceOfTruth}.</span>
+            <code>{hostedDiscovery.toolCatalogUrl}</code>
+            <div className="runtime-actions">
+              <button type="button" className="secondary-button" onClick={() => window.sapMcpWizard.openExternal(hostedDiscovery.toolCatalogUrl)}>
+                Open Catalog
+              </button>
+              <button type="button" className="secondary-button" onClick={() => window.sapMcpWizard.openExternal(hostedDiscovery.wizardDescriptorUrl)}>
+                Open Wizard Descriptor
+              </button>
+            </div>
+          </div>
+        )}
+        <HostedToolCatalogPanel
+          discovery={hostedDiscovery}
+          document={hostedToolCatalog}
+          loadState={catalogLoadState}
+          error={catalogError}
+          onRetry={onRetryCatalog}
+        />
         <div className="runtime-actions">
           <button type="button" className="secondary-button" onClick={() => {
             const detected = runtimes.filter((runtime) => runtime.detected).map((runtime) => runtime.id);
@@ -589,6 +663,163 @@ function ToggleCard({ title, copy, badge, checked, onChange }: { title: string; 
       </span>
       <span>{copy}</span>
     </button>
+  );
+}
+
+function HostedToolCatalogPanel({
+  discovery,
+  document,
+  loadState,
+  error,
+  onRetry,
+}: {
+  discovery: HostedDiscovery | null;
+  document: HostedToolCatalogDocument | null;
+  loadState: CatalogLoadState;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (!discovery) {
+    return (
+      <section className="tool-catalog-panel empty" aria-labelledby="tool-catalog-title">
+        <div>
+          <p className="eyebrow">Tool catalog</p>
+          <h3 id="tool-catalog-title">Hosted discovery is not loaded yet.</h3>
+          <p>The wizard can still configure local runtime files after initial discovery finishes.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (loadState === 'loading' || loadState === 'idle') {
+    return (
+      <section className="tool-catalog-panel" aria-labelledby="tool-catalog-title" aria-busy="true">
+        <div className="tool-catalog-heading">
+          <div>
+            <p className="eyebrow">Tool catalog</p>
+            <h3 id="tool-catalog-title">Loading hosted module plan</h3>
+          </div>
+          <span className="pill">Loading</span>
+        </div>
+        <div className="catalog-skeleton-grid" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </section>
+    );
+  }
+
+  if (loadState === 'error') {
+    return (
+      <section className="tool-catalog-panel attention" aria-labelledby="tool-catalog-title">
+        <div className="tool-catalog-heading">
+          <div>
+            <p className="eyebrow">Tool catalog</p>
+            <h3 id="tool-catalog-title">Catalog check needs retry</h3>
+          </div>
+          <span className="pill warning">Offline</span>
+        </div>
+        <p>{error ?? 'The hosted catalog could not be loaded from this desktop session.'}</p>
+        <div className="runtime-actions">
+          <button type="button" className="secondary-button" onClick={onRetry}>
+            Retry Catalog
+          </button>
+          <button type="button" className="secondary-button" onClick={() => window.sapMcpWizard.openExternal(discovery.toolCatalogUrl)}>
+            Open Catalog
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const catalog = document?.catalog;
+  if (!catalog || catalog.moduleCount === 0) {
+    return (
+      <section className="tool-catalog-panel empty" aria-labelledby="tool-catalog-title">
+        <div className="tool-catalog-heading">
+          <div>
+            <p className="eyebrow">Tool catalog</p>
+            <h3 id="tool-catalog-title">No modules selected for this hosted profile</h3>
+          </div>
+          <span className="pill warning">Empty</span>
+        </div>
+        <p>Hosted discovery responded, but the selected module catalog is empty. Retry before saving runtime configs.</p>
+        <button type="button" className="secondary-button" onClick={onRetry}>
+          Retry Catalog
+        </button>
+      </section>
+    );
+  }
+
+  const blockedToolCount = catalog.policy.hostedAccountlessBlockedTools.length;
+  const localSignerToolCount = catalog.policy.localSignerTools.length;
+  const categories = catalog.categories.slice(0, 6);
+  const modules = catalog.modules.slice(0, 6);
+  const paymentTiers = Object.entries(catalog.policy.paymentTiers)
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return (
+    <section className="tool-catalog-panel" aria-labelledby="tool-catalog-title">
+      <div className="tool-catalog-heading">
+        <div>
+          <p className="eyebrow">Hosted module plan</p>
+          <h3 id="tool-catalog-title">{catalog.profileId}</h3>
+          <p>{catalog.profileDescription}</p>
+        </div>
+        <span className="pill success">Verified</span>
+      </div>
+
+      <div className="catalog-stat-grid" aria-label="Hosted catalog summary">
+        <span><strong>{catalog.moduleCount}</strong> modules</span>
+        <span><strong>{catalog.toolCount}</strong> catalog tools</span>
+        <span><strong>{blockedToolCount}</strong> local signer required</span>
+        <span><strong>{localSignerToolCount}</strong> bridge tools</span>
+      </div>
+
+      <div className="catalog-columns">
+        <div>
+          <h4>Categories</h4>
+          <ul className="catalog-list">
+            {categories.map((category) => (
+              <li key={category.category}>
+                <span>{category.category}</span>
+                <strong>{category.modules} modules · {category.tools} tools</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4>Payment tiers</h4>
+          <ul className="catalog-list">
+            {paymentTiers.map(([tier, count]) => (
+              <li key={tier}>
+                <span>{tier}</span>
+                <strong>{count}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="catalog-modules">
+        <h4>Selected modules</h4>
+        <div className="module-chip-grid">
+          {modules.map((module) => (
+            <span key={module.id} className="module-chip">
+              <strong>{module.title}</strong>
+              <small>{module.category} · {module.expectedTools.length} tools</small>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bridge-tool-row" aria-label="Required local bridge tools">
+        {discovery.requiredLocalBridgeTools.map((tool) => (
+          <code key={tool}>{tool}</code>
+        ))}
+      </div>
+    </section>
   );
 }
 

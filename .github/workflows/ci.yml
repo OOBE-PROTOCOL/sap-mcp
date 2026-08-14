@@ -5,6 +5,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '17 4 * * 1'
 
 permissions:
   contents: read
@@ -20,10 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04]
-        include:
-          - os: windows-2025
-            skip-tests: true
+        os: [ubuntu-24.04, windows-2025]
 
     steps:
       - name: Checkout
@@ -53,12 +52,41 @@ jobs:
       - name: Lint
         run: pnpm run lint
 
-      - name: Test (skip on Windows — path-based tests are Unix-only)
-        if: matrix.skip-tests != true
+      - name: Check architecture boundaries
+        run: pnpm run check:architecture
+
+      - name: Verify tool modules
+        run: pnpm run verify:tool-modules
+
+      - name: Verify workspace packages
+        run: pnpm run verify:workspace-packages
+
+      - name: Verify tool plugin template
+        run: pnpm run verify:tool-plugin-template
+
+      - name: Verify tool execution pipeline
+        run: pnpm run verify:tool-execution-pipeline
+
+      - name: Verify skill workflows
+        run: pnpm run verify:skill-workflows
+
+      - name: Verify company readiness
+        run: pnpm run verify:company-readiness
+
+      - name: Verify readiness report
+        run: pnpm run verify:readiness-report
+
+      - name: Test
         run: pnpm run test:run
 
       - name: Build
         run: pnpm run build
+
+      - name: Verify package exports
+        run: pnpm run verify:exports
+
+      - name: Verify npm package contents
+        run: npm pack --dry-run --cache ./.npm-cache
 
   audit:
     name: Security audit (production deps only)
@@ -85,5 +113,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit production dependencies
+      - name: Audit production dependencies (high gate)
         run: pnpm audit --audit-level high --prod
+
+      - name: Audit production dependencies (moderate triage)
+        continue-on-error: true
+        run: pnpm audit --audit-level moderate --prod

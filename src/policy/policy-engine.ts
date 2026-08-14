@@ -106,6 +106,13 @@ export class PolicyEngine {
     
     // Check spending limits
     if (context?.amountSol !== undefined) {
+      if (!Number.isFinite(context.amountSol) || context.amountSol < 0) {
+        return {
+          allowed: false,
+          reason: `Amount ${context.amountSol} SOL is invalid; amount must be a finite non-negative number`,
+        };
+      }
+
       const maxTxValueSol = this.config.maxTxValueSol;
       if (context.amountSol > maxTxValueSol) {
         return {

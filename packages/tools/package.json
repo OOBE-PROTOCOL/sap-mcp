@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-tools",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP tool module registry and built-in tool catalog boundary.",
+  "sapMcp": {
+    "boundaryId": "tools",
+    "source": "src/tools",
+    "architectureDomain": "tools",
+    "rootExport": "./tools",
+    "apiContract": "config/package-export-contracts.json#./tools",
+    "boundary": "Tool module registry and built-in tool catalog boundary."
+  }
+}

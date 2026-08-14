@@ -143,24 +143,25 @@ function escapeHtml(t: string): string {
  */
 export function resolveProtocolFromToolName(toolName: string): string {
   const lower = toolName.toLowerCase().replace(/^mcp__sap__/, '').replace(/^sap_/, '');
+  const normalized = lower.replace(/-/g, '_');
 
   // Check direct protocol prefixes
-  const directPrefixes = ['jupiter_', 'raydium_', 'orca_', 'meteora_', 'metaplex_', 'magicblock_', 'openbook_', 'manifest_', 'pump_', 'pyth_', 'coingecko_', 'jito_', 'das_', 'blinks_', 'gibwork_', 'lulo_', '3land_', 'send_arcade_', 'bridging_', 'alldomains_', 'sns_'];
+  const directPrefixes = ['jupiter_', 'raydium_', 'orca_', 'meteora_', 'metaplex_', 'metaplex_nft_', 'magicblock_', 'openbook_', 'manifest_', 'pump_', 'pyth_', 'coingecko_', 'jito_', 'das_', 'blinks_', 'gibwork_', 'lulo_', '3land_', 'send_arcade_', 'bridging_', 'alldomains_', 'sns_'];
   for (const prefix of directPrefixes) {
-    if (lower.startsWith(prefix)) return prefix.replace(/_$/, '');
+    if (normalized.startsWith(prefix)) return prefix.replace(/_nft_$/, '').replace(/_$/, '');
   }
 
   // sap_adrena_* -> adrena
-  if (lower.startsWith('adrena')) return 'adrena';
+  if (normalized.startsWith('adrena')) return 'adrena';
 
   // sol_* -> solana
-  if (lower.startsWith('sol_')) return 'solana';
+  if (normalized.startsWith('sol_')) return 'solana';
 
   // spl_* -> spl
-  if (lower.startsWith('spl_')) return 'spl';
+  if (normalized.startsWith('spl_')) return 'spl';
 
   // staking_* -> staking
-  if (lower.startsWith('staking_') || lower.includes('stake')) return 'staking';
+  if (normalized.startsWith('staking_') || normalized.includes('stake')) return 'staking';
 
   // Everything else is SAP generic
   return 'sap';

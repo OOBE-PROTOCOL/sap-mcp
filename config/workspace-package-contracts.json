@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "workspaceGlob": "packages/*",
+  "packageNamePrefix": "@oobe-protocol-labs/sap-mcp-",
+  "packages": [
+    {
+      "id": "core",
+      "packageName": "@oobe-protocol-labs/sap-mcp-core",
+      "path": "packages/core",
+      "source": "src/core",
+      "architectureDomain": "core",
+      "rootExport": "./core",
+      "boundary": "Shared runtime contracts and primitives.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/core",
+        "must not depend on higher-level runtime modules"
+      ]
+    },
+    {
+      "id": "schemas",
+      "packageName": "@oobe-protocol-labs/sap-mcp-schemas",
+      "path": "packages/schemas",
+      "source": "src/schemas",
+      "architectureDomain": "schemas",
+      "rootExport": "./schemas",
+      "boundary": "Public Zod schemas and protocol contracts.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/schemas",
+        "public schema"
+      ]
+    },
+    {
+      "id": "mcp-adapter",
+      "packageName": "@oobe-protocol-labs/sap-mcp-mcp-adapter",
+      "path": "packages/mcp-adapter",
+      "source": "src/adapters/mcp",
+      "architectureDomain": "mcp-adapter",
+      "rootExport": "./mcp-adapter",
+      "boundary": "Model Context Protocol adapter compatibility layer.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/adapters/mcp",
+        "MCP"
+      ]
+    },
+    {
+      "id": "ui-cards",
+      "packageName": "@oobe-protocol-labs/sap-mcp-ui-cards",
+      "path": "packages/ui-cards",
+      "source": "src/ui",
+      "architectureDomain": "ui-cards",
+      "rootExport": "./ui-cards",
+      "boundary": "MCP Apps Card rendering boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/ui",
+        "Apps Card"
+      ]
+    },
+    {
+      "id": "tools",
+      "packageName": "@oobe-protocol-labs/sap-mcp-tools",
+      "path": "packages/tools",
+      "source": "src/tools",
+      "architectureDomain": "tools",
+      "rootExport": "./tools",
+      "boundary": "Tool module registry and built-in tool catalog boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/tools",
+        "ToolModuleDefinition",
+        "plugin"
+      ]
+    },
+    {
+      "id": "config-runtime",
+      "packageName": "@oobe-protocol-labs/sap-mcp-config-runtime",
+      "path": "packages/config-runtime",
+      "source": "src/config",
+      "architectureDomain": "config",
+      "rootExport": "./config-runtime",
+      "boundary": "Profile configuration, runtime doctor, secure config, and client injection boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/config",
+        "runtime-doctor",
+        "client injection",
+        "@oobe-protocol-labs/sap-mcp-server/config-runtime"
+      ]
+    },
+    {
+      "id": "server-runtime",
+      "packageName": "@oobe-protocol-labs/sap-mcp-server-runtime",
+      "path": "packages/server-runtime",
+      "source": "src/server",
+      "architectureDomain": "server",
+      "rootExport": "./server-runtime",
+      "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/server",
+        "createSapMcpServer",
+        "capability registration",
+        "@oobe-protocol-labs/sap-mcp-server/server-runtime"
+      ]
+    },
+    {
+      "id": "hosted-gateway",
+      "packageName": "@oobe-protocol-labs/sap-mcp-hosted-gateway",
+      "path": "packages/hosted-gateway",
+      "source": "src/remote",
+      "architectureDomain": "remote-server",
+      "rootExport": "./hosted-gateway",
+      "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/remote",
+        "Streamable HTTP",
+        "hosted gateway",
+        "@oobe-protocol-labs/sap-mcp-server/hosted-gateway"
+      ]
+    },
+    {
+      "id": "local-bridge",
+      "packageName": "@oobe-protocol-labs/sap-mcp-local-bridge",
+      "path": "packages/local-bridge",
+      "source": "src/local-bridge",
+      "additionalSources": [
+        "src/transports/stdio.ts",
+        "src/bin",
+        "src/runtime"
+      ],
+      "architectureDomain": "local-bridge",
+      "rootExport": "./local-bridge",
+      "boundary": "Local stdio MCP bridge, local payment bridge process, and local runtime entrypoint boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/local-bridge",
+        "src/runtime",
+        "local bridge",
+        "@oobe-protocol-labs/sap-mcp-server/local-bridge"
+      ]
+    },
+    {
+      "id": "wizard-core",
+      "packageName": "@oobe-protocol-labs/sap-mcp-wizard-core",
+      "path": "packages/wizard-core",
+      "source": "src/wizard-core",
+      "architectureDomain": "wizard",
+      "rootExport": "./wizard-core",
+      "boundary": "Shared CLI and desktop wizard flow boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "src/wizard-core",
+        "desktop wizard",
+        "CLI wizard",
+        "@oobe-protocol-labs/sap-mcp-server/wizard-core"
+      ]
+    },
+    {
+      "id": "tool-plugin-template",
+      "packageName": "@oobe-protocol-labs/sap-mcp-tool-plugin-template",
+      "path": "packages/tool-plugin-template",
+      "source": "packages/tool-plugin-template/src",
+      "architectureDomain": null,
+      "rootExport": null,
+      "boundary": "Trusted external tool-family plugin template.",
+      "private": true,
+      "sideEffects": false,
+      "template": true,
+      "requiredScripts": {
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "verify": "pnpm run typecheck"
+      },
+      "requiredSourceFiles": [
+        "src/index.ts"
+      ],
+      "requiredSourceIncludes": [
+        "createPluginToolModule",
+        "expectedTools",
+        "lifecycle"
+      ],
+      "readmeMustContain": [
+        "createPluginToolModule",
+        "createToolModuleRegistrationPlan",
+        "registerToolsWithSummary"
+      ]
+    }
+  ]
+}

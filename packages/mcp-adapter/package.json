@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-mcp-adapter",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP Model Context Protocol adapter boundary.",
+  "sapMcp": {
+    "boundaryId": "mcp-adapter",
+    "source": "src/adapters/mcp",
+    "architectureDomain": "mcp-adapter",
+    "rootExport": "./mcp-adapter",
+    "apiContract": "config/package-export-contracts.json#./mcp-adapter",
+    "boundary": "Model Context Protocol adapter compatibility layer."
+  }
+}

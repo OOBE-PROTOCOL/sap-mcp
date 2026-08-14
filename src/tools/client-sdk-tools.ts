@@ -1,13 +1,13 @@
 /**
  * Client SDK Tools
- * 
+ *
  * Implements 110 Synapse AgentKit tools from @oobe-protocol-labs/synapse-client-sdk:
  * - Token, staking, and bridging tools
  * - NFT, Metaplex, 3.Land, and DAS tools
  * - DeFi protocol tools
  * - Miscellaneous ecosystem tools
  * - Blinks tools
- * 
+ *
  * All tools use real SDK plugin classes.
  */
 
@@ -15,11 +15,49 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey } from '@solana/web3.js';
 import type { ProtocolTool } from '@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse, createUiCardResponse } from '../adapters/mcp/tool-response.js';
 import type { UiCardContext } from '../ui/ui-resources.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
 import { classifyTool } from '../payments/pricing.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+
+type ClientSdkToolDefinition<TInput = unknown> = Omit<
+  ToolFamilyPipelineDefinition<TInput, Record<string, unknown>>,
+  'uiCard'
+>;
+type ClientSdkToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function uiCardFromPipelineMetadata<TOutput extends Record<string, unknown>>(
+  result: ToolFamilyPipelineResult<TOutput>,
+): UiCardContext | undefined {
+  const uiCard = result.metadata?.uiCard;
+  return uiCard && typeof uiCard === 'object' ? uiCard as UiCardContext : undefined;
+}
+
+function registerClientSdkPipelineTool<TInput>(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: ClientSdkToolDefinition<TInput>,
+  execute: (input: TInput) => Promise<ClientSdkToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute, {
+    uiCard: uiCardFromPipelineMetadata,
+  });
+}
+
+function createClientSdkError(toolName: string, error: unknown): ToolFamilyPipelineResult {
+  return createToolFamilyPipelineResult({
+    success: false,
+    toolName,
+    error: error instanceof Error ? error.message : 'Unknown error',
+  }, undefined, { isError: true });
+}
 
 type CommitmentOverride = 'processed' | 'confirmed' | 'finalized';
 
@@ -327,8 +365,9 @@ const AGENTKIT_CONTEXT_BY_NAME = new Map<string, AgentKitToolContext>([
  * @param context - Runtime context containing the configured Solana connection.
  */
 function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerClientSdkPipelineTool<BalanceToolInput>(
     server,
+    context,
     'sol_get_balance',
     {
       title: 'Get SOL Balance',
@@ -369,13 +408,10 @@ function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): v
             : /testnet/i.test(context.config.rpcUrl) ? 'testnet'
             : 'mainnet',
         };
-        return createUiCardResponse(data, cardCtx);
+        return createToolFamilyPipelineResult(data, { uiCard: cardCtx });
       } catch (error) {
         logger.error('Failed to get SOL balance', { error });
-        return createTextResponse(
-          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          { isError: true }
-        );
+        return createClientSdkError('sol_get_balance', error);
       }
     }
   );
@@ -572,8 +608,9 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
       continue;
     }
     try {
-      registerTool(
+      registerClientSdkPipelineTool(
         server,
+        context,
         name,
         {
           title: formatToolTitle(name),
@@ -589,20 +626,15 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
               : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
             const metaCardCtx = buildMetaplexCardContext(name, input, result);
             if (metaCardCtx) {
-              return createUiCardResponse(wrapped, metaCardCtx);
+              return createToolFamilyPipelineResult(wrapped, { uiCard: metaCardCtx });
             }
-            return createTextResponse(
-              typeof result === 'string' ? JSON.stringify(wrapped, null, 2) : JSON.stringify(wrapped, null, 2)
-            );
+            return wrapped;
           } catch (invokeError) {
-            logger.error(`Client SDK tool execution failed: ${name}`, { 
+            logger.error(`Client SDK tool execution failed: ${name}`, {
               error: invokeError,
               input,
             });
-            return createTextResponse(
-              `Error executing ${name}: ${invokeError instanceof Error ? invokeError.message : 'Unknown error'}`,
-              { isError: true }
-            );
+            return createClientSdkError(name, invokeError);
           }
         }
       );
@@ -617,8 +649,9 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
 
   for (const { name, tool } of jupiterProtocolTools) {
     try {
-      registerTool(
+      registerClientSdkPipelineTool(
         server,
+        context,
         name,
         {
           title: formatToolTitle(name),
@@ -634,18 +667,15 @@ export async function registerClientSdkTools(server: Server, context: SapMcpCont
               : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
             const jupCardCtx = buildJupiterCardContext(name, result);
             if (jupCardCtx) {
-              return createUiCardResponse(wrapped, jupCardCtx);
+              return createToolFamilyPipelineResult(wrapped, { uiCard: jupCardCtx });
             }
-            return createTextResponse(JSON.stringify(wrapped, null, 2));
+            return wrapped;
           } catch (invokeError) {
             logger.error(`Jupiter protocol tool execution failed: ${name}`, {
               error: invokeError,
               input,
             });
-            return createTextResponse(
-              `Error executing ${name}: ${invokeError instanceof Error ? invokeError.message : 'Unknown error'}`,
-              { isError: true }
-            );
+            return createClientSdkError(name, invokeError);
           }
         }
       );
@@ -808,21 +838,25 @@ export function normalizeJupiterProtocolToolInput(name: string, input: unknown):
   return normalized;
 }
 
-function enhanceAgentKitInputSchema(name: string, schema: unknown): unknown {
+function enhanceAgentKitInputSchema(name: string, schema: unknown): Record<string, unknown> {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+    return {};
+  }
+
   const aliases = TOOL_INPUT_ALIASES.get(name);
-  if (!aliases || !schema || typeof schema !== 'object' || Array.isArray(schema)) {
-    return schema;
+  if (!aliases) {
+    return schema as Record<string, unknown>;
   }
 
   const cloned = structuredCloneSafe(schema);
   if (!cloned || typeof cloned !== 'object' || Array.isArray(cloned)) {
-    return schema;
+    return {};
   }
 
   const record = cloned as Record<string, unknown>;
   const properties = getSchemaProperties(record);
   if (!properties) {
-    return cloned;
+    return record;
   }
 
   for (const [from, to] of Object.entries(aliases)) {
@@ -838,7 +872,7 @@ function enhanceAgentKitInputSchema(name: string, schema: unknown): unknown {
     }
   }
 
-  return cloned;
+  return record;
 }
 
 function getSchemaProperties(schema: Record<string, unknown>): Record<string, unknown> | undefined {

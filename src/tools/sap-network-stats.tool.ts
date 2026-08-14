@@ -8,10 +8,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { getSapClient } from '../sap/sap-client-manager.js';
-import { logger, redactSensitiveString } from '../core/logger.js';
+import { redactSensitiveString } from '../core/logger.js';
+import { createToolExecutionResult, registerPipelineTool } from './tool-execution-pipeline.js';
 
 const SapNetworkStatsInputSchema = z.object({
   detailed: z.boolean().optional().default(false),
@@ -48,29 +47,18 @@ function jsonReplacer(_key: string, value: unknown): unknown {
  * @description Registers a real SDK-backed SAP network statistics tool.
  */
 export function sapNetworkStatsTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerPipelineTool(
     server,
-    'sap_network_stats',
+    context,
     {
+      name: 'sap_network_stats',
       title: 'Get SAP Network Statistics',
       description: 'Fetch real SAP network statistics using synapse-sap-sdk DiscoveryRegistry and GlobalRegistry.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          detailed: {
-            type: 'boolean',
-            description: 'Include both discovery overview and raw global registry state.',
-            default: false,
-          },
-        },
-      },
-    },
-    async (input: unknown) => {
-      const startedAt = performance.now();
-      try {
-        const parsedInput = SapNetworkStatsInputSchema.parse(input);
+      inputSchema: SapNetworkStatsInputSchema,
+      execute: async ({ input: parsedInput, context: runtimeContext }) => {
+        const startedAt = performance.now();
         const client = getSapClient();
-        const network = getNetworkFromRpcUrl(context.config.rpcUrl);
+        const network = getNetworkFromRpcUrl(runtimeContext.config.rpcUrl);
         const [overview, globalRegistry] = await Promise.all([
           client.discovery.getNetworkOverview(),
           client.agent.fetchGlobalRegistry(),
@@ -80,8 +68,8 @@ export function sapNetworkStatsTool(server: Server, context: SapMcpContext): voi
         const response = parsedInput.detailed
           ? {
             network,
-            rpcUrl: redactSensitiveString(context.config.rpcUrl),
-            programId: context.config.programId,
+            rpcUrl: redactSensitiveString(runtimeContext.config.rpcUrl),
+            programId: runtimeContext.config.programId,
             timestamp: new Date().toISOString(),
             fetchTimeMs,
             source: 'synapse-sap-sdk',
@@ -96,16 +84,14 @@ export function sapNetworkStatsTool(server: Server, context: SapMcpContext): voi
             overview,
           };
 
-        return createTextResponse(JSON.stringify(response, jsonReplacer, 2));
-      } catch (error) {
-        logger.error('Failed to fetch SAP network stats', { error });
-        return createTextResponse(JSON.stringify({
-          error: 'Failed to fetch SAP network statistics',
-          network: getNetworkFromRpcUrl(context.config.rpcUrl),
-          message: error instanceof Error ? error.message : 'Unknown error',
-          source: 'synapse-sap-sdk',
-        }, null, 2), { isError: true });
-      }
-    }
+        return createToolExecutionResult(
+          JSON.parse(JSON.stringify(response, jsonReplacer)) as Record<string, unknown>,
+          {
+            source: 'synapse-sap-sdk',
+            fetchTimeMs,
+          },
+        );
+      },
+    },
   );
 }

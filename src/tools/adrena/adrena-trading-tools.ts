@@ -8,8 +8,12 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineError,
+  adrenaPipelineException,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import {
   buildOpenPositionLong,
   buildOpenPositionShort,
@@ -88,7 +92,7 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_open_long', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_long', {
     description: 'Build an unsigned transaction to open or increase a long perp position on Adrena. Returns transactionBase64 for local signing via sap_payments_finalize_transaction. The agent must sign locally — SAP MCP never signs user-owned perp transactions.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -106,15 +110,15 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
       const hasStopLoss = stopLossPriceUsd !== null;
       const violation = validateTradingPolicyFromContext(context, principalToken, 'long', collateralAmount, leverage, hasStopLoss);
       if (violation) {
-        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        return adrenaPipelineError({ error: 'PolicyViolation', ...violation });
       }
 
       const result = await buildOpenPositionLong(
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, price,
       );
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build open long transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build open long transaction', err);
     }
   });
 }
@@ -140,7 +144,7 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_open_short', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_short', {
     description: 'Build an unsigned transaction to open or increase a short perp position on Adrena. Collateral must be USDC for shorts. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -158,15 +162,15 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
       const hasStopLoss = stopLossPriceUsd !== null;
       const violation = validateTradingPolicyFromContext(context, principalToken, 'short', collateralAmount, leverage, hasStopLoss);
       if (violation) {
-        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        return adrenaPipelineError({ error: 'PolicyViolation', ...violation });
       }
 
       const result = await buildOpenPositionShort(
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, price,
       );
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build open short transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build open short transaction', err);
     }
   });
 }
@@ -189,7 +193,7 @@ export function registerAdrenaCloseLongTool(server: Server, context: SapMcpConte
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_close_long', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_long', {
     description: 'Build an unsigned transaction to close a long perp position on Adrena. Default closes 100% at market price. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -201,9 +205,9 @@ export function registerAdrenaCloseLongTool(server: Server, context: SapMcpConte
       const percentage = args['percentage'] !== undefined ? BigInt(Math.floor(Number(args['percentage']))) : 1_000_000n;
 
       const result = await buildClosePositionLong(getConnection(context), owner, principalToken, price, percentage);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build close long transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build close long transaction', err);
     }
   });
 }
@@ -227,7 +231,7 @@ export function registerAdrenaCloseShortTool(server: Server, context: SapMcpCont
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_close_short', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_short', {
     description: 'Build an unsigned transaction to close a short perp position on Adrena. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -240,9 +244,9 @@ export function registerAdrenaCloseShortTool(server: Server, context: SapMcpCont
       const percentage = args['percentage'] !== undefined ? BigInt(Math.floor(Number(args['percentage']))) : 1_000_000n;
 
       const result = await buildClosePositionShort(getConnection(context), owner, principalToken, collateralToken, price, percentage);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build close short transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build close short transaction', err);
     }
   });
 }
@@ -270,7 +274,7 @@ export function registerAdrenaSetStopLossTool(server: Server, context: SapMcpCon
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_set_stop_loss', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_set_stop_loss', {
     description: 'Build an unsigned transaction to set stop loss on an Adrena position. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -284,9 +288,9 @@ export function registerAdrenaSetStopLossTool(server: Server, context: SapMcpCon
       const closePositionPrice = closePositionPriceUsd !== null ? priceToRaw(closePositionPriceUsd) : null;
 
       const result = await buildSetStopLoss(getConnection(context), owner, principalToken, side as PositionSide, stopLossLimitPrice, closePositionPrice);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build set stop loss transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build set stop loss transaction', err);
     }
   });
 }
@@ -309,7 +313,7 @@ export function registerAdrenaSetTakeProfitTool(server: Server, context: SapMcpC
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_set_take_profit', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_set_take_profit', {
     description: 'Build an unsigned transaction to set take profit on an Adrena position. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -321,9 +325,9 @@ export function registerAdrenaSetTakeProfitTool(server: Server, context: SapMcpC
       const takeProfitLimitPrice = priceToRaw(takeProfitPriceUsd);
 
       const result = await buildSetTakeProfit(getConnection(context), owner, principalToken, side as PositionSide, takeProfitLimitPrice);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build set take profit transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build set take profit transaction', err);
     }
   });
 }
@@ -345,7 +349,7 @@ export function registerAdrenaCancelStopLossTool(server: Server, context: SapMcp
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_cancel_stop_loss', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_stop_loss', {
     description: 'Build an unsigned transaction to cancel stop loss on an Adrena position. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -355,9 +359,9 @@ export function registerAdrenaCancelStopLossTool(server: Server, context: SapMcp
       const side = args['side'] === 'short' ? 'short' : 'long';
 
       const result = await buildCancelStopLoss(getConnection(context), owner, principalToken, side as PositionSide);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build cancel stop loss transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build cancel stop loss transaction', err);
     }
   });
 }
@@ -379,7 +383,7 @@ export function registerAdrenaCancelTakeProfitTool(server: Server, context: SapM
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_cancel_take_profit', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_take_profit', {
     description: 'Build an unsigned transaction to cancel take profit on an Adrena position. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -389,9 +393,9 @@ export function registerAdrenaCancelTakeProfitTool(server: Server, context: SapM
       const side = args['side'] === 'short' ? 'short' : 'long';
 
       const result = await buildCancelTakeProfit(getConnection(context), owner, principalToken, side as PositionSide);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build cancel take profit transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build cancel take profit transaction', err);
     }
   });
 }
@@ -422,7 +426,7 @@ export function registerAdrenaSimulatePositionTool(server: Server, context: SapM
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_simulate_position', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_simulate_position', {
     description: 'FREE dry-run tool (no x402 charge): simulates opening a perp position on Adrena by building the same instructions as the open position builder, then calling connection.simulateTransaction(). Returns Adrena program logs, compute units consumed, whether the position would succeed, and the pre-flight balance check — without serializing or returning transaction bytes. Use this to validate position parameters and diagnose on-chain failures before building a paid transaction.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -438,9 +442,9 @@ export function registerAdrenaSimulatePositionTool(server: Server, context: SapM
       const result = await buildSimulatePosition(
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, side, poolName,
       );
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to simulate position', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to simulate position', err);
     }
   });
 }
@@ -468,7 +472,7 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_position_package', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_position_package', {
     description: 'Build a single unsigned transaction that atomically opens a perp position AND sets stop loss AND take profit in one transaction. 1 payment, 1 signing, 1 submit — instead of 3 separate calls. If stopLossPriceUsd or takeProfitPriceUsd is omitted, that instruction is skipped. Returns transactionBase64 for local signing via sap_payments_finalize_transaction. Includes balanceCheck.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -488,16 +492,16 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
       const hasStopLoss = stopLossPriceUsd !== null;
       const violation = validateTradingPolicyFromContext(context, principalToken, side, collateralAmount, leverage, hasStopLoss);
       if (violation) {
-        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        return adrenaPipelineError({ error: 'PolicyViolation', ...violation });
       }
 
       const result = await buildPositionPackage(
         getConnection(context), owner, principalToken, collateralToken,
         collateralAmount, leverage, side, stopLossPriceUsd, takeProfitPriceUsd, price,
       );
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build position package', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build position package', err);
     }
   });
 }
@@ -509,7 +513,7 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
  * @internal
  */
 export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpContext): void {
-  registerTool(server, 'sap_adrena_trade_intent', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_trade_intent', {
     description: 'Intent-level Adrena trading API. Pass market name, side, USD collateral, and leverage (or "max"). The tool resolves mint addresses, decimals, max leverage from on-chain custody accounts, converts USD collateral to token amounts via oracle price, validates parameters, and returns a ready-to-sign transaction. Supports optional stopLossPct and takeProfitPct for atomic position+SL+TP in one transaction. Reduces 5 tool calls to 1.',
     inputSchema: {
       type: 'object',
@@ -543,7 +547,7 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
       const custodyAddr = getCustodyPublicKey(market, poolName);
       const custodyInfo = await connection.getAccountInfo(custodyAddr, 'confirmed');
       if (!custodyInfo || !custodyInfo.data || custodyInfo.data.length < 184) {
-        return createTextResponse(JSON.stringify({ error: `Custody account for ${market} not found` }), { isError: true });
+        return adrenaPipelineError({ error: `Custody account for ${market} not found` });
       }
       const d = custodyInfo.data;
       const maxInitialLeverageBps = d.readUInt32LE(176);
@@ -558,10 +562,10 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
       } else {
         leverage = Number(leverageInput);
         if (leverage > maxInitialLeverage) {
-          return createTextResponse(JSON.stringify({
+          return adrenaPipelineError({
             error: `Leverage ${leverage} exceeds maxInitialLeverage ${maxInitialLeverage} for ${market}`,
             suggestedLeverage: maxInitialLeverage,
-          }), { isError: true });
+          });
         }
       }
 
@@ -572,14 +576,14 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
       const hasStopLoss = stopLossPct !== null;
       const violation = validateTradingPolicyFromContext(context, market, side, collateralUsd, leverage, hasStopLoss);
       if (violation) {
-        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        return adrenaPipelineError({ error: 'PolicyViolation', ...violation });
       }
 
       // Get oracle price to convert USD → token amount
       const oraclePrice = await fetchOraclePrice(market, side);
       const priceUsd = Number(oraclePrice) / Math.pow(10, 10);
       if (priceUsd <= 0) {
-        return createTextResponse(JSON.stringify({ error: `Oracle price for ${market} unavailable` }), { isError: true });
+        return adrenaPipelineError({ error: `Oracle price for ${market} unavailable` });
       }
 
       // Convert USD collateral to token amount
@@ -635,9 +639,9 @@ export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpCon
         },
       };
 
-      return createTextResponse(JSON.stringify(enrichedResult, null, 2));
+      return adrenaPipelineOk(enrichedResult);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build trade intent', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build trade intent', err);
     }
   });
 }
@@ -665,7 +669,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_trailing_stop', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_trailing_stop', {
     description: 'Build an unsigned transaction to set a trailing stop loss on an Adrena position. Reads the current oracle price and computes the stop loss at the specified percentage distance. For longs: SL below current price. For shorts: SL above current price. Returns transactionBase64 for local signing. Call this repeatedly to keep the stop trailing the price.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -676,7 +680,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
       const trailPct = Number(args['trailPct']);
 
       if (trailPct <= 0 || trailPct > 50) {
-        return createTextResponse(JSON.stringify({ error: 'trailPct must be between 0.1 and 50' }), { isError: true });
+        return adrenaPipelineError({ error: 'trailPct must be between 0.1 and 50' });
       }
 
       // Fetch current oracle price.
@@ -686,7 +690,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
       const currentPriceUsd = Number(oraclePriceRaw) / Math.pow(10, 10);
 
       if (currentPriceUsd <= 0) {
-        return createTextResponse(JSON.stringify({ error: `Could not fetch oracle price for ${principalToken}` }), { isError: true });
+        return adrenaPipelineError({ error: `Could not fetch oracle price for ${principalToken}` });
       }
 
       // Compute trailing stop price.
@@ -700,7 +704,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
         getConnection(context), owner, principalToken, side, stopLossLimitPrice, null,
       );
 
-      return createTextResponse(JSON.stringify({
+      return adrenaPipelineOk({
         ...result,
         trailingStop: {
           currentPriceUsd,
@@ -708,9 +712,9 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
           stopLossPriceUsd,
           side,
         },
-      }, null, 2));
+      });
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build trailing stop transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build trailing stop transaction', err);
     }
   });
 }
@@ -740,7 +744,7 @@ export function registerAdrenaModifyPositionTool(server: Server, context: SapMcp
     additionalProperties: false,
   };
 
-  registerTool(server, 'sap_adrena_build_modify_position', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_modify_position', {
     description: 'Build an unsigned transaction to modify an existing Adrena position by adding collateral. Uses openOrIncreasePosition which atomically adds collateral to an existing position. The leverage parameter can be changed to adjust the position risk. Returns transactionBase64 for local signing.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
@@ -753,14 +757,14 @@ export function registerAdrenaModifyPositionTool(server: Server, context: SapMcp
       const side = (args['side'] === 'short' ? 'short' : 'long') as PositionSide;
 
       if (collateralAmount <= 0) {
-        return createTextResponse(JSON.stringify({ error: 'collateralAmount must be positive' }), { isError: true });
+        return adrenaPipelineError({ error: 'collateralAmount must be positive' });
       }
 
       // Policy validation.
       const hasStopLoss = false; // Modify does not set SL.
       const violation = validateTradingPolicyFromContext(context, principalToken, side, collateralAmount, leverage, hasStopLoss);
       if (violation) {
-        return createTextResponse(JSON.stringify({ error: 'PolicyViolation', ...violation }), { isError: true });
+        return adrenaPipelineError({ error: 'PolicyViolation', ...violation });
       }
 
       // Use the open builder to increase the position (openOrIncreasePosition).
@@ -772,7 +776,7 @@ export function registerAdrenaModifyPositionTool(server: Server, context: SapMcp
         getConnection(context), owner, principalToken, collateralToken, collateralAmount, leverage, null,
       );
 
-      return createTextResponse(JSON.stringify({
+      return adrenaPipelineOk({
         ...result,
         modifyPosition: {
           principalToken,
@@ -781,9 +785,9 @@ export function registerAdrenaModifyPositionTool(server: Server, context: SapMcp
           newLeverage: leverage,
           side,
         },
-      }, null, 2));
+      });
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build modify position transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build modify position transaction', err);
     }
   });
 }

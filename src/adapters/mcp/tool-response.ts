@@ -104,6 +104,7 @@ export function createUiCardResponse<T extends Record<string, unknown>>(
     | { type: 'text'; text: string }
     | { type: 'resource'; resource: { uri: string; mimeType: 'text/html'; text: string } }
   >;
+  structuredContent: T;
   isError?: boolean;
 } {
   const cardResource = buildUiCardResource(cardCtx);
@@ -112,6 +113,7 @@ export function createUiCardResponse<T extends Record<string, unknown>>(
       { type: 'text', text: JSON.stringify(data, null, 2) },
       cardResource,
     ],
+    structuredContent: data,
     isError: options?.isError,
   };
 }

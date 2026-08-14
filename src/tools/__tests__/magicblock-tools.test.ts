@@ -86,10 +86,10 @@ describe('MagicBlock tools registration', () => {
     expect(() => registerMagicBlockTools(server, createMockContext())).not.toThrow();
   });
 
-  it('registers tools in the server store (21 magicblock_ tools)', () => {
+  it('registers tools in the server store (23 magicblock_ tools)', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-    expect(getMagicBlockTools(server)).toHaveLength(21);
+    expect(getMagicBlockTools(server)).toHaveLength(23);
   });
 
   it('registers all 6 ER Router tools', () => {
@@ -110,9 +110,9 @@ describe('MagicBlock tools registration', () => {
     const names = getMagicBlockTools(server).map((t) => t.name);
     const expected = [
       'magicblock_health', 'magicblock_challenge', 'magicblock_login',
-      'magicblock_balance', 'magicblock_privateBalance',
+      'magicblock_balance', 'magicblock_private_balance', 'magicblock_privateBalance',
       'magicblock_deposit', 'magicblock_transfer', 'magicblock_withdraw',
-      'magicblock_swapQuote', 'magicblock_swap',
+      'magicblock_swap_quote', 'magicblock_swapQuote', 'magicblock_swap',
       'magicblock_initializeMint', 'magicblock_isMintInitialized',
     ];
     for (const name of expected) {
@@ -132,7 +132,7 @@ describe('MagicBlock tools registration', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const mbTools = getMagicBlockTools(server);
-    expect(mbTools).toHaveLength(21);
+    expect(mbTools).toHaveLength(23);
     for (const tool of mbTools) {
       expect(tool.description).toBeTruthy();
       expect(tool.description.length).toBeGreaterThan(20);
@@ -186,7 +186,7 @@ describe('MagicBlock tools registration', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const handlers = getMagicBlockHandlers(server);
-    expect(Object.keys(handlers)).toHaveLength(21);
+    expect(Object.keys(handlers)).toHaveLength(23);
   });
 
   it('documents required transfer routing fields and base-unit amount type', () => {

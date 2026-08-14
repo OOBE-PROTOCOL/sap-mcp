@@ -1,0 +1,772 @@
+{
+  "version": 1,
+  "title": "SAP MCP Tool Execution Pipeline Contract",
+  "requiredExportSymbols": [
+    "registerPipelineTool",
+    "createToolExecutionEnvelope",
+    "createToolExecutionErrorEnvelope",
+    "createToolExecutionResult",
+    "registerToolFamilyPipelineTool",
+    "ToolFamilyPipelineResult",
+    "createToolFamilyPipelineResult",
+    "createStringToolPipelineResult",
+    "parseStringToolPayload"
+  ],
+  "requiredEvidence": [
+    {
+      "file": "src/tools/tool-execution-pipeline.ts",
+      "contains": "registerPipelineTool"
+    },
+    {
+      "file": "src/tools/tool-execution-pipeline.test.ts",
+      "contains": "invalid_input"
+    },
+    {
+      "file": "src/tools/index.ts",
+      "contains": "registerPipelineTool"
+    },
+    {
+      "file": "docs/09_TOOL_SKILL_ROUTING_AGENT_OPERATIONS.md",
+      "contains": "registerPipelineTool"
+    },
+    {
+      "file": "packages/README.md",
+      "contains": "registerPipelineTool"
+    },
+    {
+      "file": "src/tools/adrena/adrena-pipeline.ts",
+      "contains": "registerAdrenaPipelineTool"
+    },
+    {
+      "file": "src/tools/tool-family-pipeline.ts",
+      "contains": "registerToolFamilyPipelineTool"
+    }
+  ],
+  "requiredPipelineTools": [
+    {
+      "toolName": "sap_network_stats",
+      "file": "src/tools/sap-network-stats.tool.ts",
+      "moduleId": "sap-network-stats"
+    },
+    {
+      "toolName": "sap_quick_context",
+      "file": "src/tools/quick-context-tool.ts",
+      "moduleId": "quick-context"
+    },
+    {
+      "toolName": "sap_estimate_tool_cost",
+      "file": "src/tools/estimate-tool-cost.ts",
+      "moduleId": "estimate-cost"
+    },
+    {
+      "toolName": "sap_register_agent",
+      "file": "src/tools/sap-sdk-tools.ts",
+      "moduleId": "sap-sdk"
+    },
+    {
+      "toolName": "sap_sns_check_domain",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_batch_check_domains",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_resolve_domain",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_validate_records",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_get_domain_pda",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_get_record_pda",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_register_agent_domain",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_get_domain_records",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_get_record",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_resolve_wallet",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_check_ownership",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_build_manage_record_transaction",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sap_sns_build_set_primary_domain_transaction",
+      "file": "src/tools/sap-sns-tools.ts",
+      "moduleId": "sap-sns"
+    },
+    {
+      "toolName": "sol_get_balance",
+      "file": "src/tools/client-sdk-tools.ts",
+      "moduleId": "client-sdk"
+    },
+    {
+      "toolName": "magicblock_health",
+      "file": "src/tools/magicblock-tools.ts",
+      "moduleId": "magicblock"
+    },
+    {
+      "toolName": "sap_adrena_get_positions",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_pool_info",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_custody_info",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_trader_info",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_trader_leaderboard",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_mutagen",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_mutagen_leaderboard",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_prices",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_trading_prices",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_position_status",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_get_markets",
+      "file": "src/tools/adrena/adrena-data-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_market_snapshot",
+      "file": "src/tools/adrena/adrena-snapshot-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_add_liquidity",
+      "file": "src/tools/adrena/adrena-liquidity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_remove_liquidity",
+      "file": "src/tools/adrena/adrena-liquidity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_swap",
+      "file": "src/tools/adrena/adrena-liquidity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_add_limit_order",
+      "file": "src/tools/adrena/adrena-limit-order-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_cancel_limit_order",
+      "file": "src/tools/adrena/adrena-limit-order-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_open_commodity_long",
+      "file": "src/tools/adrena/adrena-commodity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_open_commodity_short",
+      "file": "src/tools/adrena/adrena-commodity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_close_commodity_long",
+      "file": "src/tools/adrena/adrena-commodity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_close_commodity_short",
+      "file": "src/tools/adrena/adrena-commodity-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_init_user_staking",
+      "file": "src/tools/adrena/adrena-staking-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_add_liquid_stake",
+      "file": "src/tools/adrena/adrena-staking-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_remove_liquid_stake",
+      "file": "src/tools/adrena/adrena-staking-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_add_locked_stake",
+      "file": "src/tools/adrena/adrena-staking-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_claim_stakes",
+      "file": "src/tools/adrena/adrena-staking-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_open_long",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_open_short",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_close_long",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_close_short",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_set_stop_loss",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_set_take_profit",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_cancel_stop_loss",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_cancel_take_profit",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_simulate_position",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_position_package",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_trade_intent",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_trailing_stop",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_adrena_build_modify_position",
+      "file": "src/tools/adrena/adrena-trading-tools.ts",
+      "moduleId": "adrena"
+    },
+    {
+      "toolName": "sap_decode_transaction",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_preview_transaction",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_sign_transaction",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_submit_signed_transaction",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_build_sol_transfer",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_build_spl_transfer",
+      "file": "src/tools/transaction-tools.ts",
+      "moduleId": "transaction"
+    },
+    {
+      "toolName": "sap_chat_derive_room",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_start_room",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_send_message",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_publish_manifest",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_read_latest",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_read_all",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_status",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_chat_seal_room",
+      "file": "src/tools/chat-tools.ts",
+      "moduleId": "chat"
+    },
+    {
+      "toolName": "sap_agent_start",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_agent_runtime_status",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_prepare_action",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_agent_standard_context",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_prepare_mandate",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_pricing_catalog",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_agent_next_action",
+      "file": "src/tools/agent-start-tool.ts",
+      "moduleId": "agent-start"
+    },
+    {
+      "toolName": "sap_profile_current",
+      "file": "src/tools/profile-tools.ts",
+      "moduleId": "profile"
+    },
+    {
+      "toolName": "sap_profile_list",
+      "file": "src/tools/profile-tools.ts",
+      "moduleId": "profile"
+    },
+    {
+      "toolName": "sap_profile_public_key",
+      "file": "src/tools/profile-tools.ts",
+      "moduleId": "profile"
+    },
+    {
+      "toolName": "sap_profile_switch",
+      "file": "src/tools/profile-tools.ts",
+      "moduleId": "profile"
+    },
+    {
+      "toolName": "sap_payments_register_agent",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_update_agent",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_call_external_x402",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_finalize_transaction",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_profile_current",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_wallet_guard",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_readiness",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_process_status",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_call_paid_tool",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_x402_paid_call",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_prepare_challenge",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_sign_challenge",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_verify_receipt",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_prepaid_balance",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_start_prepaid",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "x402-local-helper"
+    },
+    {
+      "toolName": "sap_payments_fund_prepaid",
+      "file": "src/tools/x402-paid-call-tool.ts",
+      "moduleId": "hosted-prepaid"
+    },
+    {
+      "toolName": "sap_premium_plugin_catalog",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_stream_catalog",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_webhook_catalog",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_validate_plugin_manifest",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_plugin_template",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_session_start",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_session_status",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_activate_session",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_close_session",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_webhook_register",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_webhook_unregister",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_webhook_status",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_webhook_relay",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_webhook_relay_status",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_metrics",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_stream_poll",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_premium_stream_flush",
+      "file": "src/tools/premium-tools.ts",
+      "moduleId": "premium"
+    },
+    {
+      "toolName": "sap_memory_record",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_memory_search",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_memory_summarize",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_memory_recall",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_memory_prune",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_strategy_save",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_strategy_load",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_strategy_list",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_strategy_activate",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_stream_buffer",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_stream_consume",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_stream_replay",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_audit_query",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_audit_record",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_audit_stats",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_hermes_search",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_hermes_recent",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_strategy_execute",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_trade_journal",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_trade_journal_query",
+      "file": "src/tools/memory-tools.ts",
+      "moduleId": "memory"
+    },
+    {
+      "toolName": "sap_skills_list",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_skills_bundle",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_skills_install",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_skills_upgrade_plan",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_runtime_repair_plan",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_skills_check_updates",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    },
+    {
+      "toolName": "sap_skills_self_update",
+      "file": "src/tools/skills-tools.ts",
+      "moduleId": "skills"
+    }
+  ],
+  "minimumPipelineToolFiles": 22,
+  "minimumPipelineToolRegistrations": 165,
+  "allowedDirectRegisterPipelineToolFiles": [
+    "src/tools/adrena/adrena-pipeline.ts",
+    "src/tools/sap-network-stats.tool.ts"
+  ],
+  "maximumLegacyRegisterToolFiles": 0,
+  "additionalLegacyRegisterToolAuditFiles": [
+    "packages/tool-plugin-template/src/index.ts"
+  ]
+}

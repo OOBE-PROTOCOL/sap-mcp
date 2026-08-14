@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "title": "SAP MCP Branch Review Contract",
+  "requiredBranchPrefixes": [
+    "feature/hosted-mcp/",
+    "feature/local-bridge/",
+    "feature/wizard/",
+    "feature/mcp-apps-ui/",
+    "feature/payments-x402/",
+    "feature/protocol-tools/",
+    "feature/integrations/",
+    "feature/release-ops/"
+  ],
+  "requiredPullRequestSections": [
+    "Service Boundary",
+    "Runtime Impact",
+    "Contract Changes",
+    "Verification",
+    "Docs And Release Notes",
+    "Secret And Custody Safety",
+    "User Impact"
+  ],
+  "requiredPullRequestChecklistPhrases": [
+    "Hosted sap",
+    "local sap_payments",
+    "wizard-readiness-contracts.json",
+    "runtime-client-injection-contracts.json",
+    "mcp-apps-card-contracts.json",
+    "tool-execution-pipeline-contracts.json",
+    "No keypair bytes",
+    "pnpm run verify:readiness-report"
+  ]
+}

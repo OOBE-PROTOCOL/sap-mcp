@@ -8,7 +8,7 @@
  * @module security/index
  */
 
-export { checkToolPermissions } from './tool-permissions.js';
+export { checkToolPermissions, getRequiredPermission, getToolsForPermission, getPermissionMappedTools, isWriteOperation } from './tool-permissions.js';
 export { isApprovalRequired } from './approval-required.js';
 export { unsafeActionGuard } from './unsafe-action-guard.js';
 export { privateKeyGuard } from './private-key-guard.js';

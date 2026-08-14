@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-hosted-gateway",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP hosted Streamable HTTP gateway and remote deployment boundary.",
+  "sapMcp": {
+    "boundaryId": "hosted-gateway",
+    "source": "src/remote",
+    "architectureDomain": "remote-server",
+    "rootExport": "./hosted-gateway",
+    "apiContract": "config/package-export-contracts.json#./hosted-gateway",
+    "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary."
+  }
+}

@@ -7,8 +7,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineError,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import { getConnection } from './adrena-helpers.js';
 import { adrenaDataApi } from '../../perps/adrena/adrena-data-api.js';
 import { ADRENA_MAIN_POOL_ADDRESS, ADRENA_CUSTODIES } from '../../perps/adrena/adrena-constants.js';
@@ -60,7 +63,7 @@ let snapshotCache: CachedSnapshot | null = null;
  * @internal
  */
 export function registerAdrenaMarketSnapshotTool(server: Server, context: SapMcpContext): void {
-  registerTool(server, 'sap_market_snapshot', {
+  registerAdrenaPipelineTool(server, context, 'sap_market_snapshot', {
     description: 'Returns a complete market snapshot: all Adrena market data (leverage, OI, flags), live oracle prices, and pool health (AUM, LP supply) in one call. Includes a 30-second TTL cache — repeated calls within the cache window return cached data without re-fetching. Reduces market data costs by 20x for polling bots.',
     inputSchema: {
       type: 'object',
@@ -72,9 +75,9 @@ export function registerAdrenaMarketSnapshotTool(server: Server, context: SapMcp
       },
       additionalProperties: false,
     },
-  }, async (args: Record<string, unknown>) => {
+  }, async (input: Record<string, unknown>) => {
     try {
-      const forceRefresh = args['forceRefresh'] === true;
+      const forceRefresh = input['forceRefresh'] === true;
 
       // Check cache first.
       if (!forceRefresh && snapshotCache && Date.now() - snapshotCache.timestamp < SNAPSHOT_CACHE_TTL_MS) {
@@ -83,7 +86,7 @@ export function registerAdrenaMarketSnapshotTool(server: Server, context: SapMcp
           cached: true,
           timestamp: new Date(snapshotCache.timestamp).toISOString(),
         };
-        return createTextResponse(JSON.stringify(cached, null, 2));
+        return adrenaPipelineOk(cached);
       }
 
       const connection = getConnection(context);
@@ -158,9 +161,12 @@ export function registerAdrenaMarketSnapshotTool(server: Server, context: SapMcp
       // Update cache.
       snapshotCache = { data: { ...result }, timestamp: Date.now() };
 
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build market snapshot', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineError({
+        error: 'Failed to build market snapshot',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
     }
   });
 }

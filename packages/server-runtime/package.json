@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-server-runtime",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP server runtime bootstrap and capability registration boundary.",
+  "sapMcp": {
+    "boundaryId": "server-runtime",
+    "source": "src/server",
+    "architectureDomain": "server",
+    "rootExport": "./server-runtime",
+    "apiContract": "config/package-export-contracts.json#./server-runtime",
+    "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary."
+  }
+}

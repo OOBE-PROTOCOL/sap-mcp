@@ -1,0 +1,16 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-config-runtime",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP profile configuration, runtime doctor, secure config, and client injection boundary.",
+  "sapMcp": {
+    "boundaryId": "config-runtime",
+    "source": "src/config",
+    "architectureDomain": "config",
+    "rootExport": "./config-runtime",
+    "apiContract": "config/package-export-contracts.json#./config-runtime",
+    "boundary": "Profile configuration, runtime doctor, secure config, and client injection boundary."
+  }
+}

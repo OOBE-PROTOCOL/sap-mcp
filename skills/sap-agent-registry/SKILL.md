@@ -83,7 +83,7 @@ state, global directory listing, and agent profile inspection.
   `sap_agent_next_action` and `sap_protocol_invariants`, then upgrade the
   SDK/server or use the initializer path before retrying.
 - For full agent identity setup, follow
-  `docs/16_SAP_AGENT_IDENTITY_PIPELINE.md`: SAP registration first, optional
+  `docs/16_AGENT_IDENTITY_REGISTRY_PIPELINE.md`: SAP registration first, optional
   Metaplex/MPL Core identity, optional SNS domain and records, then a final SAP
   update that points `metadataUri` at the public metadata document.
 - "Find XONA Agent" or "find an agent by name" means `sap_discover_agents` with

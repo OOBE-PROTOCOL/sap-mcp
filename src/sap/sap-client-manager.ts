@@ -16,9 +16,8 @@ import { createSapClient as createSdkClient } from '@oobe-protocol-labs/synapse-
 import { Wallet } from '@coral-xyz/anchor';
 import { logger } from '../core/logger.js';
 import { SapClientError } from '../core/errors.js';
-import type { SapMcpConfig } from '../core/types.js';
+import type { SapMcpConfig, SapPolicyEngine } from '../core/types.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
-import type { PolicyEngine } from '../policy/policy-engine.js';
 import { PolicyEnforcingWallet } from '../signer/policy-enforcing-wallet.js';
 
 /**
@@ -83,7 +82,7 @@ export class SapClientManager {
    *
    * @usedBy `createSapClient`, `create-server.ts:createSapMcpServer`.
    */
-  async initialize(config: SapMcpConfig, policyEngine?: PolicyEngine): Promise<SapClient> {
+  async initialize(config: SapMcpConfig, policyEngine?: SapPolicyEngine): Promise<SapClient> {
     if (this.client && this.config && this.isSameClientConfig(this.config, config)) {
       logger.debug('SAP client already initialized');
       return this.client;
@@ -124,7 +123,12 @@ export class SapClientManager {
       // on-chain (agent, escrow, staking, swaps) without patching each tool.
       let effectiveWallet = wallet;
       if (wallet && policyEngine) {
-        effectiveWallet = new PolicyEnforcingWallet(wallet, policyEngine) as unknown as Wallet;
+        effectiveWallet = new PolicyEnforcingWallet(
+          wallet,
+          policyEngine,
+          'sap_sdk_local_signer',
+          config.programId,
+        ) as unknown as Wallet;
       }
 
       // Create SAP client using factory function
@@ -196,7 +200,7 @@ export class SapClientManager {
  *
  * @usedBy `create-server.ts:createSapMcpServer`.
  */
-export async function createSapClient(config: SapMcpConfig, policyEngine?: PolicyEngine): Promise<SapClient> {
+export async function createSapClient(config: SapMcpConfig, policyEngine?: SapPolicyEngine): Promise<SapClient> {
   const manager = SapClientManager.getInstance();
   return manager.initialize(config, policyEngine);
 }

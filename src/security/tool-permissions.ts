@@ -274,7 +274,7 @@ export function getRequiredPermission(toolName: string): SapPermission | undefin
 /**
  * Check if tool is a write operation
  */
-function isWriteOperation(toolName: string): boolean {
+export function isWriteOperation(toolName: string): boolean {
   const requiredPermission = TOOL_PERMISSION_MAP.get(toolName);
   if (requiredPermission) {
     return !requiredPermission.endsWith(':read');

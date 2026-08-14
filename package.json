@@ -23,6 +23,7 @@
     "skills",
     "docs",
     "USER_DOCS",
+    "config",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
@@ -40,6 +41,56 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js",
+      "require": "./dist/schemas/index.js"
+    },
+    "./mcp-adapter": {
+      "types": "./dist/adapters/mcp/index.d.ts",
+      "import": "./dist/adapters/mcp/index.js",
+      "require": "./dist/adapters/mcp/index.js"
+    },
+    "./ui-cards": {
+      "types": "./dist/ui/index.d.ts",
+      "import": "./dist/ui/index.js",
+      "require": "./dist/ui/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "import": "./dist/tools/index.js",
+      "require": "./dist/tools/index.js"
+    },
+    "./config-runtime": {
+      "types": "./dist/config/index.d.ts",
+      "import": "./dist/config/index.js",
+      "require": "./dist/config/index.js"
+    },
+    "./server-runtime": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.js"
+    },
+    "./hosted-gateway": {
+      "types": "./dist/remote/index.d.ts",
+      "import": "./dist/remote/index.js",
+      "require": "./dist/remote/index.js"
+    },
+    "./local-bridge": {
+      "types": "./dist/local-bridge/index.d.ts",
+      "import": "./dist/local-bridge/index.js",
+      "require": "./dist/local-bridge/index.js"
+    },
+    "./wizard-core": {
+      "types": "./dist/wizard-core/desktop-flow.d.ts",
+      "import": "./dist/wizard-core/desktop-flow.js",
+      "require": "./dist/wizard-core/desktop-flow.js"
     }
   },
   "sideEffects": false,
@@ -57,9 +108,19 @@
     "tui:config": "tsx src/tui/config-wizard.tsx",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint src/",
+    "check:architecture": "node scripts/check-architecture-boundaries.mjs",
+    "verify:exports": "node scripts/verify-package-exports.mjs",
+    "verify:workspace-packages": "node scripts/verify-workspace-packages.mjs",
+    "verify:tool-plugin-template": "pnpm --filter @oobe-protocol-labs/sap-mcp-tool-plugin-template run verify",
+    "verify:tool-execution-pipeline": "node scripts/verify-tool-execution-pipeline.mjs",
+    "verify:skill-workflows": "node scripts/verify-skill-workflows.mjs",
+    "verify:company-readiness": "node scripts/verify-company-readiness.mjs",
+    "verify:tool-modules": "tsx scripts/verify-tool-modules.ts",
+    "verify:readiness-report": "tsx scripts/build-readiness-report.ts --check",
     "test": "vitest",
     "test:run": "vitest run",
-    "verify:release": "pnpm run typecheck && pnpm run lint && pnpm run test:run && pnpm run build && npm pack --dry-run --cache ./.npm-cache",
+    "verify:release:offline": "pnpm run typecheck && pnpm run lint && pnpm run check:architecture && pnpm run verify:tool-modules && pnpm run verify:workspace-packages && pnpm run verify:tool-plugin-template && pnpm run verify:tool-execution-pipeline && pnpm run verify:skill-workflows && pnpm run verify:company-readiness && pnpm run verify:readiness-report && pnpm run test:run && pnpm run build && pnpm run verify:exports && npm pack --dry-run --cache ./.npm-cache",
+    "verify:release": "pnpm run verify:release:offline && pnpm audit --audit-level moderate --prod",
     "version:bump": "node scripts/bump-version.mjs",
     "clean": "rm -rf dist"
   },
@@ -152,7 +213,7 @@
     "@hono/node-server": "2.0.10",
     "body-parser": "1.20.6",
     "fast-uri": "3.1.5",
-    "hono": "4.12.27",
+    "hono": "4.12.34",
     "langsmith": "^0.6.0",
     "postcss": "8.5.18",
     "uuid": "^11.1.1",

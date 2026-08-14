@@ -7,13 +7,12 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { execSync } from 'child_process';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
-import type { SapMcpContext } from '../core/types.js';
+import type { SapMcpContext, SapMcpToolCatalogContext } from '../core/types.js';
 import { listPremiumPlugins, publicPremiumProviderStatus } from '../premium/index.js';
 import { listBundledSkillNames, getBundledSkillContents } from './skills-tools.js';
 import { CAPABILITIES } from '../server/server-metadata.js';
+import { registerToolFamilyPipelineTool } from './tool-family-pipeline.js';
 import {
   buildSessionContextPacket,
   normalizeSapAgentIntent,
@@ -87,6 +86,7 @@ interface QuickContextPayload {
   serverCommit: string;
   totalTools: number;
   toolsByCategory: Record<string, number>;
+  toolCatalog: SapMcpToolCatalogContext | null;
   pricingTiers: string[];
   premiumPlugins: number;
   premiumCapabilities: number;
@@ -120,8 +120,9 @@ const DEFAULT_MAX_CHARS = 4000;
  * @param context - Shared runtime context with SAP client, signer, policy, and configuration.
  */
 export function registerQuickContextTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerToolFamilyPipelineTool(
     server,
+    context,
     'sap_quick_context',
     {
       title: 'SAP MCP Quick Context',
@@ -162,6 +163,7 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
           serverCommit: { type: 'string', description: 'Git commit hash of the running server build. Changes on every deploy even without version bump.' },
           totalTools: { type: 'number', description: 'Total number of registered MCP tools.' },
           toolsByCategory: { type: 'object', description: 'Tool counts by category (sap, sns, agentKit, premium, etc.).' },
+          toolCatalog: { type: ['object', 'null'], description: 'Secret-free modular tool catalog summary with selected modules, payment tiers, signer-boundary policy buckets, and hosted/local bridge hints.' },
           pricingTiers: { type: 'array', description: 'Pricing tier names available on the hosted server.', items: { type: 'string' } },
           premiumPlugins: { type: 'number', description: 'Number of discoverable premium plugins.' },
           premiumCapabilities: { type: 'number', description: 'Number of premium capabilities across all plugins.' },
@@ -176,7 +178,7 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
           sessionContextPacket: { type: 'object', description: 'Machine-readable SAP MCP routing, freshness, memory, proof-tape, and forbidden-action rules for this session.' },
           truncated: { type: 'boolean', description: 'Whether the summary was truncated to fit within maxChars.' },
         },
-        required: ['success', 'version', 'serverCommit', 'totalTools', 'toolsByCategory', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'environment', 'recommendedFlow', 'summary', 'nextAction', 'sessionContextPacket', 'truncated'],
+        required: ['success', 'version', 'serverCommit', 'totalTools', 'toolsByCategory', 'toolCatalog', 'pricingTiers', 'premiumPlugins', 'premiumCapabilities', 'premiumProvidersReady', 'skills', 'skillsUpdateRequired', 'environment', 'recommendedFlow', 'summary', 'nextAction', 'sessionContextPacket', 'truncated'],
       },
       annotations: {
         readOnlyHint: true,
@@ -185,10 +187,10 @@ export function registerQuickContextTool(server: Server, context: SapMcpContext)
         openWorldHint: false,
       },
     },
-    async (input: unknown) => {
+    async (input) => {
       const parsed = parseQuickContextInput(input);
       const payload = buildQuickContextPayload(context, parsed);
-      return createStructuredJsonResponse(payload as unknown as Record<string, unknown>);
+      return payload as unknown as Record<string, unknown>;
     },
   );
 }
@@ -274,7 +276,13 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
 
   // Build pricing tiers from the actual monetization config, not hardcoded values.
   // This ensures quick_context and estimate_tool_cost always agree.
-  const monPrices = context.config.monetization.prices;
+  const monPrices = context.config.monetization?.prices ?? {
+    microReadUsd: 0.001,
+    readPremiumUsd: 0.002,
+    builderUsd: 0.006,
+    valueFixedUsd: 0.06,
+    heavyValueUsd: 0.035,
+  };
   const pricingTiers = [
     'free=$0',
     `micro-read=$${monPrices.microReadUsd ?? 0.001}`,
@@ -292,6 +300,7 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     version: MCP_SERVER_VERSION,
     totalTools,
     toolsByCategory,
+    toolCatalog: context.toolCatalog ?? null,
     pricingTiers,
     premiumPlugins: plugins.length,
     premiumCapabilities: premiumCapabilitiesCount,
@@ -306,6 +315,7 @@ function buildQuickContextPayload(context: SapMcpContext, input: QuickContextInp
     serverCommit: getServerCommit(),
     totalTools,
     toolsByCategory,
+    toolCatalog: context.toolCatalog ?? null,
     pricingTiers,
     premiumPlugins: plugins.length,
     premiumCapabilities: premiumCapabilitiesCount,
@@ -338,6 +348,7 @@ interface SummaryParts {
   version: string;
   totalTools: number;
   toolsByCategory: Record<string, number>;
+  toolCatalog: SapMcpToolCatalogContext | null;
   pricingTiers: string[];
   premiumPlugins: number;
   premiumCapabilities: number;
@@ -364,7 +375,10 @@ function buildSummaryString(parts: SummaryParts): { text: string; truncated: boo
     const categoryLines = Object.entries(parts.toolsByCategory)
       .map(([category, count]) => `${category}:${count}`)
       .join(', ');
-    lines.push(`Tools: ${parts.totalTools} total (${categoryLines})`);
+    const moduleCatalog = parts.toolCatalog
+      ? `; modules:${parts.toolCatalog.moduleCount}, catalogTools:${parts.toolCatalog.toolCount}`
+      : '';
+    lines.push(`Tools: ${parts.totalTools} total (${categoryLines}${moduleCatalog})`);
   }
 
   if (parts.sections.has('pricing')) {

@@ -19,10 +19,22 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from '@solana/web3.js';
 import type { SapMcpContext } from '../core/types.js';
-import { createTextResponse, createUiCardResponse } from '../adapters/mcp/tool-response.js';
 import type { UiCardContext } from '../ui/ui-resources.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
 import { logger } from '../core/logger.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+
+type MagicBlockToolHandlerResult = Record<string, unknown> | ToolFamilyPipelineResult;
+
+function magicBlockUiCardFromMetadata(
+  result: ToolFamilyPipelineResult,
+): UiCardContext | undefined {
+  const uiCard = result.metadata?.uiCard;
+  return uiCard && typeof uiCard === 'object' ? uiCard as UiCardContext : undefined;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  Shared Types
@@ -433,6 +445,7 @@ const MAGICBLOCK_READ_TOOLS = new Set([
   'magicblock_getSignatureStatuses',
   'magicblock_health',
   'magicblock_balance',
+  'magicblock_private_balance',
   'magicblock_privateBalance',
   'magicblock_isMintInitialized',
   'magicblock_ensureCrank',
@@ -448,6 +461,7 @@ const MAGICBLOCK_BUILDER_TOOLS = new Set([
 ]);
 
 const MAGICBLOCK_VALUE_ACTION_TOOLS = new Set([
+  'magicblock_swap_quote',
   'magicblock_swap',
 ]);
 
@@ -645,7 +659,7 @@ function normalizeRoutePlanBps(hop: unknown, routePlanLength: number): unknown {
  */
 function buildMagicBlockCardContext(toolName: string, data: unknown): UiCardContext | undefined {
   const d = data as Record<string, unknown>;
-  if (toolName === 'magicblock_swap' || toolName === 'magicblock_swapQuote') {
+  if (toolName === 'magicblock_swap' || toolName === 'magicblock_swap_quote' || toolName === 'magicblock_swapQuote') {
     const quote = d.quoteResponse as Record<string, unknown> | undefined;
     const inputMint = (quote?.inputMint ?? d.inputMint) as string | undefined;
     const outputMint = (quote?.outputMint ?? d.outputMint) as string | undefined;
@@ -695,26 +709,32 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   logger.debug('Registering MagicBlock tools');
   let registered = 0;
 
-  function register<TInput extends object>(
+  function registerMagicBlockPipelineTool<TInput extends object>(
     name: string,
     description: string,
     inputSchema: JsonSchema,
-    handler: (input: TInput) => Promise<unknown>,
+    handler: (input: TInput) => Promise<MagicBlockToolHandlerResult>,
   ): void {
-    registerTool(server, name, { title: name.replace(/_/g, ' '), description, inputSchema }, handler);
+    registerToolFamilyPipelineTool<TInput>(server, context, name, {
+      title: name.replace(/_/g, ' '),
+      description,
+      inputSchema: inputSchema as unknown as Record<string, unknown>,
+    }, handler, {
+      uiCard: magicBlockUiCardFromMetadata,
+    });
     registered++;
   }
 
-  function handleError(toolName: string, error: unknown) {
+  function handleError(toolName: string, error: unknown): ToolFamilyPipelineResult {
     logger.error(`MagicBlock tool failed: ${toolName}`, { error });
     const errorResponse: ToolErrorResponse = {
       error: `MagicBlock tool ${toolName} failed`,
       message: error instanceof Error ? error.message : 'Unknown error',
     };
-    return createTextResponse(JSON.stringify(errorResponse, null, 2), { isError: true });
+    return createToolFamilyPipelineResult(errorResponse as unknown as Record<string, unknown>, undefined, { isError: true });
   }
 
-  function success<T>(data: T, toolName: string) {
+  function success<T>(data: T, toolName: string): ToolFamilyPipelineResult {
     const pricingTier = classifyMagicBlockToolTier(toolName);
     const estimatedPriceUsd = estimateMagicBlockToolPrice(toolName);
     const response: ToolSuccessResponse<T> = {
@@ -729,12 +749,9 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     // Build UI card context for visual tools
     const cardCtx = buildMagicBlockCardContext(toolName, data);
     if (cardCtx) {
-      return createUiCardResponse(
-        response as unknown as Record<string, unknown>,
-        cardCtx,
-      );
+      return createToolFamilyPipelineResult(response as unknown as Record<string, unknown>, { uiCard: cardCtx });
     }
-    return createTextResponse(JSON.stringify(response, null, 2));
+    return createToolFamilyPipelineResult(response as unknown as Record<string, unknown>);
   }
 
   function parseInput<T extends object>(raw: unknown): T {
@@ -745,7 +762,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  ER Router (6 read-only tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<EndpointInput>('magicblock_getRoutes',
+  registerMagicBlockPipelineTool<EndpointInput>('magicblock_getRoutes',
     'List available Ephemeral Rollup nodes from the Magic Router (identity, FQDN, fee, block time, country)..',
     schema({ endpoint: endpointField }),
     async (raw) => {
@@ -757,7 +774,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<EndpointInput>('magicblock_getIdentity',
+  registerMagicBlockPipelineTool<EndpointInput>('magicblock_getIdentity',
     'Get the identity and FQDN of the current ER Validator node..',
     schema({ endpoint: endpointField }),
     async (raw) => {
@@ -769,7 +786,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<AccountInput>('magicblock_getDelegationStatus',
+  registerMagicBlockPipelineTool<AccountInput>('magicblock_getDelegationStatus',
     'Check whether a Solana account is delegated to an Ephemeral Rollup. Returns authority, owner, delegation slot, and lamports..',
     schema({ account: f.pubkey('Account pubkey to check delegation status for'), endpoint: endpointField }, ['account']),
     async (raw) => {
@@ -781,7 +798,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<AccountInfoInput>('magicblock_getAccountInfo',
+  registerMagicBlockPipelineTool<AccountInfoInput>('magicblock_getAccountInfo',
     'Fetch account information (data, lamports, owner, executable, space) via the Magic Router..',
     schema({ account: f.pubkey('Account pubkey to fetch info for'), encoding: f.enum('Encoding for account data', ['base64', 'base64+zstd']), endpoint: endpointField }, ['account']),
     async (raw) => {
@@ -793,7 +810,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<AccountsInput>('magicblock_getBlockhashForAccounts',
+  registerMagicBlockPipelineTool<AccountsInput>('magicblock_getBlockhashForAccounts',
     'Get a blockhash and last valid block height for a batch of account addresses (max 100)..',
     schema({ accounts: f.array('Array of account addresses (max 100)', f.pubkey('Account pubkey')), endpoint: endpointField }, ['accounts']),
     async (raw) => {
@@ -805,7 +822,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<SignaturesInput>('magicblock_getSignatureStatuses',
+  registerMagicBlockPipelineTool<SignaturesInput>('magicblock_getSignatureStatuses',
     'Check the confirmation status (processed/confirmed/finalized) of one or more transaction signatures..',
     schema({ signatures: f.array('Array of transaction signatures', f.string('Transaction signature (base58)')), endpoint: endpointField }, ['signatures']),
     async (raw) => {
@@ -821,7 +838,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  Private Payment API — Meta & Auth (3 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<Record<string, never>>('magicblock_health',
+  registerMagicBlockPipelineTool<Record<string, never>>('magicblock_health',
     'Check the health status of the MagicBlock Private Payments API..',
     schema({}),
     async () => {
@@ -832,7 +849,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<ChallengeInput>('magicblock_challenge',
+  registerMagicBlockPipelineTool<ChallengeInput>('magicblock_challenge',
     'Generate a challenge string for the wallet to sign (step 1 of the PER auth flow)..',
     schema({ pubkey: f.pubkey('Wallet pubkey that will sign the challenge'), cluster: clusterField }, ['pubkey']),
     async (raw) => {
@@ -846,7 +863,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<LoginInput>('magicblock_login',
+  registerMagicBlockPipelineTool<LoginInput>('magicblock_login',
     'Exchange a signed challenge for a bearer token (step 2 of PER auth flow). The token is used for private-balance and private transfers..',
     schema({ pubkey: f.pubkey('Wallet pubkey that signed the challenge'), challenge: f.string('Challenge string from magicblock_challenge'), signature: f.string('Wallet signature over the challenge string'), cluster: clusterField }, ['pubkey', 'challenge', 'signature']),
     async (raw) => {
@@ -864,7 +881,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  Private Payment API — Balance (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<BalanceInput>('magicblock_balance',
+  registerMagicBlockPipelineTool<BalanceInput>('magicblock_balance',
     'Read the base-chain SPL token balance for an address (public, no auth required)..',
     schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField }, ['address', 'mint']),
     async (raw) => {
@@ -876,23 +893,25 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<PrivateBalanceInput>('magicblock_privateBalance',
-    'Read the ephemeral-rollup SPL token balance for an address (requires bearer token from login)..',
-    schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField, authToken: f.string('Bearer token from magicblock_login (required for private reads)') }, ['address', 'mint', 'authToken']),
-    async (raw) => {
-      try {
-        const { address, mint, cluster, authToken } = parseInput<PrivateBalanceInput>(raw);
-        const result = await apiGet<BalanceResponse>('/v1/spl/private-balance', { address, mint, cluster: cluster ?? undefined }, authToken);
-        return success(result, 'magicblock_privateBalance');
-      } catch (e) { return handleError('magicblock_privateBalance', e); }
-    },
-  );
+  for (const toolName of ['magicblock_private_balance', 'magicblock_privateBalance'] as const) {
+    registerMagicBlockPipelineTool<PrivateBalanceInput>(toolName,
+      'Read the ephemeral-rollup SPL token balance for an address (requires bearer token from login)..',
+      schema({ address: f.pubkey('Owner wallet pubkey'), mint: f.string('SPL mint pubkey'), cluster: clusterField, authToken: f.string('Bearer token from magicblock_login (required for private reads)') }, ['address', 'mint', 'authToken']),
+      async (raw) => {
+        try {
+          const { address, mint, cluster, authToken } = parseInput<PrivateBalanceInput>(raw);
+          const result = await apiGet<BalanceResponse>('/v1/spl/private-balance', { address, mint, cluster: cluster ?? undefined }, authToken);
+          return success(result, toolName);
+        } catch (e) { return handleError(toolName, e); }
+      },
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════════
   //  Private Payment API — SPL Token Flows (3 write tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<DepositInput>('magicblock_deposit',
+  registerMagicBlockPipelineTool<DepositInput>('magicblock_deposit',
     'Build an unsigned transaction to deposit SPL tokens from Solana into an Ephemeral Rollup. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Do not create local signing scripts. Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), amount: f.number('Base-unit amount to deposit (integer, minimum 1)'), mint: f.string('SPL mint. Defaults to USDC (mainnet) or devnet USDC'), cluster: clusterField, validator: validatorField, initIfMissing: f.boolean('Initialize the transfer queue if missing (default true)'), initVaultIfMissing: f.boolean('Initialize the vault if missing (default true)'), initAtasIfMissing: f.boolean('Initialize associated token accounts if missing (default true)'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'amount']),
     async (raw) => {
@@ -910,7 +929,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<TransferInput>('magicblock_transfer',
+  registerMagicBlockPipelineTool<TransferInput>('magicblock_transfer',
     'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Private mode defaults: minDelayMs=0, maxDelayMs=0, split=1 — override for delayed or split settlements. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({
       from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
@@ -954,7 +973,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<WithdrawInput>('magicblock_withdraw',
+  registerMagicBlockPipelineTool<WithdrawInput>('magicblock_withdraw',
     'Build an unsigned transaction to withdraw SPL tokens from an Ephemeral Rollup back to Solana. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that owns the tokens and will sign'), mint: f.string('SPL mint on Solana'), amount: f.number('Base-unit amount to withdraw (integer, minimum 1)'), cluster: clusterField, validator: f.string('Optional ER validator pubkey'), initIfMissing: f.boolean('Initialize transfer queue if missing (default true)'), initAtasIfMissing: f.boolean('Initialize ATAs if missing (default true)'), escrowIndex: f.number('Optional escrow index for the withdrawal'), idempotent: f.boolean('Use idempotent variants for preparatory init instructions (default true)') }, ['owner', 'mint', 'amount']),
     async (raw) => {
@@ -977,27 +996,29 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  Private Payment API — Swap (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<SwapQuoteInput>('magicblock_swapQuote',
-    'Get a swap quote between two SPL mints (proxies Triton Metis swap API). Pass the result into magicblock_swap. Lightweight read tier; use this before any value-moving swap.',
-    schema({ inputMint: f.string('Input token mint address'), outputMint: f.string('Output token mint address'), amount: f.string("Raw amount to swap (unsigned integer string, e.g. '1000000')"), slippageBps: f.number('Slippage threshold in basis points (e.g. 50 = 0.5%)'), swapMode: f.enum('Swap mode: fixed input or fixed output amount', ['ExactIn', 'ExactOut']), onlyDirectRoutes: f.boolean('Limit routing to a single hop (default false)'), restrictIntermediateTokens: f.boolean('Restrict intermediate tokens to a more stable set (default false)'), platformFeeBps: f.number('Optional platform fee in basis points'), maxAccounts: f.number('Approximate maximum account budget for the route (default 64)') }, ['inputMint', 'outputMint', 'amount']),
-    async (raw) => {
-      try {
-        const input = parseInput<SwapQuoteInput>(raw);
-        const result = await apiGet<SwapQuoteResponse>('/v1/swap/quote', {
-          inputMint: input.inputMint, outputMint: input.outputMint, amount: input.amount,
-          slippageBps: input.slippageBps != null ? String(input.slippageBps) : undefined,
-          swapMode: input.swapMode,
-          onlyDirectRoutes: input.onlyDirectRoutes ? 'true' : undefined,
-          restrictIntermediateTokens: input.restrictIntermediateTokens ? 'true' : undefined,
-          platformFeeBps: input.platformFeeBps != null ? String(input.platformFeeBps) : undefined,
-          maxAccounts: input.maxAccounts != null ? String(input.maxAccounts) : undefined,
-        });
-        return success(result, 'magicblock_swapQuote');
-      } catch (e) { return handleError('magicblock_swapQuote', e); }
-    },
-  );
+  for (const toolName of ['magicblock_swap_quote', 'magicblock_swapQuote'] as const) {
+    registerMagicBlockPipelineTool<SwapQuoteInput>(toolName,
+      'Get a swap quote between two SPL mints (proxies Triton Metis swap API). Pass the result into magicblock_swap. Lightweight read tier; use this before any value-moving swap.',
+      schema({ inputMint: f.string('Input token mint address'), outputMint: f.string('Output token mint address'), amount: f.string("Raw amount to swap (unsigned integer string, e.g. '1000000')"), slippageBps: f.number('Slippage threshold in basis points (e.g. 50 = 0.5%)'), swapMode: f.enum('Swap mode: fixed input or fixed output amount', ['ExactIn', 'ExactOut']), onlyDirectRoutes: f.boolean('Limit routing to a single hop (default false)'), restrictIntermediateTokens: f.boolean('Restrict intermediate tokens to a more stable set (default false)'), platformFeeBps: f.number('Optional platform fee in basis points'), maxAccounts: f.number('Approximate maximum account budget for the route (default 64)') }, ['inputMint', 'outputMint', 'amount']),
+      async (raw) => {
+        try {
+          const input = parseInput<SwapQuoteInput>(raw);
+          const result = await apiGet<SwapQuoteResponse>('/v1/swap/quote', {
+            inputMint: input.inputMint, outputMint: input.outputMint, amount: input.amount,
+            slippageBps: input.slippageBps != null ? String(input.slippageBps) : undefined,
+            swapMode: input.swapMode,
+            onlyDirectRoutes: input.onlyDirectRoutes ? 'true' : undefined,
+            restrictIntermediateTokens: input.restrictIntermediateTokens ? 'true' : undefined,
+            platformFeeBps: input.platformFeeBps != null ? String(input.platformFeeBps) : undefined,
+            maxAccounts: input.maxAccounts != null ? String(input.maxAccounts) : undefined,
+          });
+          return success(result, toolName);
+        } catch (e) { return handleError(toolName, e); }
+      },
+    );
+  }
 
-  register<SwapInput>('magicblock_swap',
+  registerMagicBlockPipelineTool<SwapInput>('magicblock_swap',
     "Build an unsigned swap transaction from a quote. 'public' mode passes through Jupiter. 'private' mode routes output through a scheduled private transfer: requires destination, minDelayMs (string ms), maxDelayMs (string ms, <= 600000), and split (1-14). The API appends a schedule_private_transfer instruction that registers a one-shot Hydra crank for delivery. Legacy transactions are not allowed in private mode. Agents must continue with sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; never write temporary signing scripts or read keypair JSON. Value-action fee applies.",
     schema({ userPublicKey: f.pubkey('Wallet that will sign the swap transaction'), quoteResponse: f.object('Quote response object from magicblock_swapQuote (pass as-is)', {}), visibility: f.enum("'public' = transparent Jupiter pass-through, 'private' = output routed through scheduled private transfer", ['public', 'private']), destination: f.pubkey("Final private-transfer recipient (required when visibility='private')"), minDelayMs: f.string("Private only. Earliest (ms) the queued transfer may settle"), maxDelayMs: f.string("Private only. Latest (ms) the queued transfer may settle (<= 600000)"), split: f.number('Private only. Number of queue entries to split across (1-14)'), clientRefId: f.string('Private only. Optional u64 client correlation ID'), validator: f.string('Optional validator pubkey for the transfer-queue PDA'), wrapAndUnwrapSol: f.boolean('Auto wrap/unwrap native SOL when needed (default true)'), asLegacyTransaction: f.boolean('Build a legacy transaction (not allowed when visibility=private, default false)') }, ['userPublicKey', 'quoteResponse']),
     async (raw) => {
@@ -1024,7 +1045,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  Private Payment API — Mint Init (2 tools)
   // ═══════════════════════════════════════════════════════════════
 
-  register<InitializeMintInput>('magicblock_initializeMint',
+  registerMagicBlockPipelineTool<InitializeMintInput>('magicblock_initializeMint',
     'Build an unsigned transaction that initializes a validator-scoped transfer queue for a mint. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({ owner: f.pubkey('Wallet pubkey that will sign the transaction'), mint: f.string('SPL mint to initialize a transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['owner', 'mint']),
     async (raw) => {
@@ -1038,7 +1059,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<IsMintInitializedInput>('magicblock_isMintInitialized',
+  registerMagicBlockPipelineTool<IsMintInitializedInput>('magicblock_isMintInitialized',
     'Check whether a mint has a validator-scoped transfer queue on the ephemeral RPC..',
     schema({ mint: f.string('SPL mint to check'), cluster: clusterField, validator: f.string('Optional ER validator pubkey') }, ['mint']),
     async (raw) => {
@@ -1056,7 +1077,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  Private Payment API — Transfer Queue Crank (1 tool)
   // ═══════════════════════════════════════════════════════════════
 
-  register<IsMintInitializedInput>('magicblock_ensureCrank',
+  registerMagicBlockPipelineTool<IsMintInitializedInput>('magicblock_ensureCrank',
     'Force a transfer queue crank attempt for a mint. Use this after a private transfer or private swap if the Hydra delivery crank has not yet delivered funds to the recipient. The API verifies the validator-scoped transfer queue and forces one crank attempt, returning the crank signature. Read-only tier: this does not move funds, it triggers the existing queued delivery..',
     schema({ mint: f.string('SPL mint to crank the transfer queue for'), cluster: clusterField, validator: f.string('Optional ER validator pubkey. Defaults to the well-known MagicBlock validator (MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57)') }, ['mint']),
     async (raw) => {
@@ -1075,7 +1096,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   //  VRF (2 tools — on-chain via @solana/web3.js)
   // ═══════════════════════════════════════════════════════════════
 
-  register<VrfRequestInput>('magicblock_requestRandomness',
+  registerMagicBlockPipelineTool<VrfRequestInput>('magicblock_requestRandomness',
     'Request provably fair on-chain randomness from the MagicBlock VRF oracle (Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz). Builds an unsigned transaction that invokes request_randomness on the VRF program. Use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction; do not create local signing scripts. The oracle queue defaults to the base-layer queue (Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh); set ephemeral=true to use the ER queue for delegated programs. Builder fee applies.',
     schema({
       payer: f.pubkey('Wallet pubkey that will pay for the request and sign the transaction'),
@@ -1170,7 +1191,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
     },
   );
 
-  register<VrfResultInput>('magicblock_getRandomnessResult',
+  registerMagicBlockPipelineTool<VrfResultInput>('magicblock_getRandomnessResult',
     'Check whether a VRF request has been fulfilled by reading the RandomnessRequest account on-chain. Returns fulfilled status, random bytes (if available), and the request metadata..',
     schema({ requestKey: f.pubkey('VRF request PDA key from magicblock_requestRandomness'), endpoint: endpointField }, ['requestKey']),
     async (raw) => {

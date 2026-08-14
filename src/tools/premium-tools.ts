@@ -1,7 +1,12 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createStructuredJsonResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
 import {
   buildPremiumPluginManifestTemplate,
   createPremiumSessionPlan,
@@ -31,6 +36,26 @@ import {
 } from '../premium/index.js';
 
 const CAPABILITY_TYPES = ['stream', 'webhook', 'tool'] as const;
+
+type PremiumToolDefinition = ToolFamilyPipelineDefinition;
+type PremiumToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function createPremiumPipelineResponse(
+  data: Record<string, unknown>,
+  options: { readonly isError?: boolean } = {},
+): ToolFamilyPipelineResult {
+  return createToolFamilyPipelineResult(data, undefined, options);
+}
+
+function registerPremiumPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: PremiumToolDefinition,
+  execute: (input: unknown) => Promise<PremiumToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute);
+}
 
 function parseCapabilityType(value: unknown): PremiumCapabilityType | undefined {
   if (typeof value !== 'string') return undefined;
@@ -250,8 +275,9 @@ const sessionOutputSchema = {
  * @description Registers premium plugin, stream, webhook, and session-planning tools.
  */
 export function registerPremiumTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_plugin_catalog',
     {
       title: 'Premium Plugin Catalog',
@@ -285,7 +311,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         }),
       }));
 
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         version: '1.0.0',
         plugins,
         providerStatus: publicPremiumProviderStatus(),
@@ -294,8 +320,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_stream_catalog',
     {
       title: 'Premium Stream Catalog',
@@ -320,7 +347,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         .flatMap(plugin => plugin.capabilities
           .filter(capability => capability.type === 'stream')
           .map(capability => capabilityForCatalog(capability, plugin.id)));
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         version: '1.0.0',
         type: 'stream',
         capabilities,
@@ -329,8 +356,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_webhook_catalog',
     {
       title: 'Premium Webhook Catalog',
@@ -355,7 +383,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         .flatMap(plugin => plugin.capabilities
           .filter(capability => capability.type === 'webhook')
           .map(capability => capabilityForCatalog(capability, plugin.id)));
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         version: '1.0.0',
         type: 'webhook',
         capabilities,
@@ -364,8 +392,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_validate_plugin_manifest',
     {
       title: 'Validate Premium Plugin Manifest',
@@ -387,12 +416,13 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
     async (input: unknown) => {
       const manifest = (input as { manifest?: unknown } | undefined)?.manifest;
-      return createStructuredJsonResponse({ ...validatePremiumPluginManifest(manifest) });
+      return createPremiumPipelineResponse({ ...validatePremiumPluginManifest(manifest) });
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_plugin_template',
     {
       title: 'Build Premium Plugin Template',
@@ -452,7 +482,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const pluginId = readString(raw.pluginId);
       const capabilityId = readString(raw.capabilityId);
       if (!pluginId || !capabilityId || !capabilityType) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           manifest: null,
           validation: {
             valid: false,
@@ -477,7 +507,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         providerEnv: Array.isArray(raw.providerEnv) ? raw.providerEnv.filter((entry): entry is string => typeof entry === 'string') : undefined,
       });
       const validation = validatePremiumPluginManifest(manifest);
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         manifest,
         validation,
         nextSteps: [
@@ -491,8 +521,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_session_start',
     {
       title: 'Plan Premium Session',
@@ -543,7 +574,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         const capabilityId = readString(raw.capabilityId);
         const capabilityType = parseCapabilityType(raw.capabilityType);
         if (!pluginId || !capabilityId || !capabilityType) {
-          return createStructuredJsonResponse({
+          return createPremiumPipelineResponse({
             session: {
               status: 'invalid_request',
               nextAction: 'Pass pluginId, capabilityId, and capabilityType exactly as returned by the premium catalog tools.',
@@ -563,7 +594,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
           consumer: readString(raw.consumer),
         };
         const session = createPremiumSessionPlan(request);
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           session,
           providerStatus: publicPremiumProviderStatus(),
           monetization: {
@@ -574,7 +605,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
           },
         });
       } catch (error) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           session: {
             status: 'unknown_premium_capability',
             nextAction: error instanceof Error ? error.message : 'Call sap_premium_plugin_catalog and retry with exact ids.',
@@ -586,8 +617,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_session_status',
     {
       title: 'Premium Session Status',
@@ -619,14 +651,15 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     async (input: unknown) => {
       const sessionId = readString((input as { sessionId?: unknown } | undefined)?.sessionId);
       const sessions = sessionId ? [getPremiumSession(sessionId)].filter(Boolean) : listPremiumSessions();
-      return createStructuredJsonResponse({ sessions });
+      return createPremiumPipelineResponse({ sessions });
     },
   );
 
   // --- Session activation (Layer 2: Payment Gate) ---
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_activate_session',
     {
       title: 'Activate Premium Session',
@@ -669,7 +702,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const sessionId = readString(raw.sessionId);
       const paymentReceipt = readString(raw.paymentReceipt);
       if (!sessionId || !paymentReceipt) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           activation: {
             status: 'pending_payment',
             activatedAt: null,
@@ -685,12 +718,13 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         paymentReceipt,
         payerAddress: readString(raw.payerAddress),
       });
-      return createStructuredJsonResponse({ activation });
+      return createPremiumPipelineResponse({ activation });
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_close_session',
     {
       title: 'Close Premium Session',
@@ -729,13 +763,13 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const sessionId = readString(raw.sessionId);
       const reason = readString(raw.reason) ?? 'Closed by agent request.';
       if (!sessionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           closed: { sessionId: null, success: false, reason: 'sessionId is required.' },
         }, { isError: true });
       }
 
       const success = closeSession(sessionId, reason);
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         closed: { sessionId, success, reason: success ? 'Session closed.' : 'Session not found or not active.' },
       });
     },
@@ -743,8 +777,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
   // --- Webhook management (Layer 3: Delivery Rail) ---
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_webhook_register',
     {
       title: 'Register Premium Webhook',
@@ -794,7 +829,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const targetUrl = readString(raw.targetUrl);
       const events = Array.isArray(raw.events) ? raw.events.filter((e): e is string => typeof e === 'string') : [];
       if (!sessionId || !targetUrl || events.length === 0) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           subscription: null,
           reason: 'sessionId, targetUrl, and at least one event id are required.',
         }, { isError: true });
@@ -802,17 +837,18 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       const subscription = await registerWebhook(sessionId, targetUrl, events, readString(raw.signingPublicKey));
       if (!subscription) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           subscription: null,
           reason: 'Session is not active, URL is invalid, or no matching events.',
         }, { isError: true });
       }
-      return createStructuredJsonResponse({ subscription });
+      return createPremiumPipelineResponse({ subscription });
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_webhook_unregister',
     {
       title: 'Unregister Premium Webhook',
@@ -845,19 +881,20 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     async (input: unknown) => {
       const subscriptionId = readString((input as Record<string, unknown>).subscriptionId);
       if (!subscriptionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           unregistered: { subscriptionId: null, success: false },
         }, { isError: true });
       }
       const success = unregisterWebhook(subscriptionId);
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         unregistered: { subscriptionId, success },
       });
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_webhook_status',
     {
       title: 'Premium Webhook Status',
@@ -900,7 +937,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const raw = input as Record<string, unknown>;
       const subscriptionId = readString(raw.subscriptionId);
       if (!subscriptionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           subscription: null,
           deliveries: [],
         }, { isError: true });
@@ -908,7 +945,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const subscription = getWebhookSubscription(subscriptionId);
       const includeDeliveries = raw.includeDeliveries !== false;
       const deliveries = includeDeliveries && subscription ? getWebhookDeliveries(subscriptionId) : [];
-      return createStructuredJsonResponse({ subscription, deliveries });
+      return createPremiumPipelineResponse({ subscription, deliveries });
     },
   );
 
@@ -919,8 +956,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
   // sap_premium_stream_poll / sap_premium_stream_flush — standard MCP tool
   // calls that work over any transport.
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_webhook_relay',
     {
       title: 'Register Premium Webhook Relay (Buffer-Only)',
@@ -971,7 +1009,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const sessionId = readString(raw.sessionId);
       const events = Array.isArray(raw.events) ? raw.events.filter((e): e is string => typeof e === 'string' && e.trim().length > 0) : [];
       if (!sessionId || events.length === 0) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           subscription: null,
           consumption: {
             reason: 'sessionId and at least one event id are required.',
@@ -983,7 +1021,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       const subscription = await registerWebhookRelay(sessionId, events);
       if (!subscription) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           subscription: null,
           consumption: {
             reason: 'Session is not active or no matching events. Activate the session with sap_premium_activate_session first.',
@@ -1001,7 +1039,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         console.error(`[premium-tools] Webhook relay delivery error for ${subscription.subscriptionId}: ${msg}`);
       });
 
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         subscription,
         subscribedEvents: events,
         appliedFilters: {
@@ -1018,8 +1056,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_webhook_relay_status',
     {
       title: 'Premium Webhook Relay Status',
@@ -1065,7 +1104,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const raw = input as Record<string, unknown>;
       const sessionId = readString(raw.sessionId);
       if (!sessionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           sessionId: null,
           relaySubscriptions: [],
           bufferedEventCount: 0,
@@ -1077,7 +1116,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const relaySubscriptions = getRelaySubscriptionsForSession(sessionId);
       const bufferedEvents = getEvents({ sessionId, limit: 100_000 });
 
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         sessionId,
         relaySubscriptions,
         bufferedEventCount: bufferedEvents.length,
@@ -1088,8 +1127,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
   // --- Metrics (Layer 5: Monitoring) ---
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_metrics',
     {
       title: 'Premium Subsystem Metrics',
@@ -1115,7 +1155,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
     async () => {
       const metrics = await getPremiumMetrics();
-      return createStructuredJsonResponse({ metrics });
+      return createPremiumPipelineResponse({ metrics });
     },
   );
 
@@ -1124,8 +1164,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
   // hold open SSE connections. sap_premium_stream_poll and sap_premium_stream_flush
   // let agents consume buffered events via standard tool calls.
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_stream_poll',
     {
       title: 'Poll Premium Stream Events',
@@ -1197,7 +1238,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const raw = input as Record<string, unknown>;
       const sessionId = readString(raw.sessionId);
       if (!sessionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           events: [],
           hasMore: false,
           sessionStatus: 'invalid_request',
@@ -1206,7 +1247,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       const session = getPremiumSession(sessionId);
       if (!session) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           events: [],
           hasMore: false,
           sessionStatus: 'not_found',
@@ -1270,7 +1311,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const hasMore = allEvents.length > maxEvents;
       const batch = hasMore ? allEvents.slice(0, maxEvents) : allEvents;
 
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         events: batch.map((record) => ({
           eventId: record.eventId,
           eventType: record.eventType,
@@ -1288,8 +1329,9 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
     },
   );
 
-  registerTool(
+  registerPremiumPipelineTool(
     server,
+    context,
     'sap_premium_stream_flush',
     {
       title: 'Flush Premium Stream Events',
@@ -1351,7 +1393,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
       const raw = input as Record<string, unknown>;
       const sessionId = readString(raw.sessionId);
       if (!sessionId) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           events: [],
           nextCursor: null,
           sessionStatus: 'invalid_request',
@@ -1361,7 +1403,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       const session = getPremiumSession(sessionId);
       if (!session) {
-        return createStructuredJsonResponse({
+        return createPremiumPipelineResponse({
           events: [],
           nextCursor: null,
           sessionStatus: 'not_found',
@@ -1394,7 +1436,7 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
 
       const nextCursor = records.length > 0 ? records[records.length - 1].eventId : null;
 
-      return createStructuredJsonResponse({
+      return createPremiumPipelineResponse({
         events: records.map((record) => ({
           eventId: record.eventId,
           eventType: record.eventType,

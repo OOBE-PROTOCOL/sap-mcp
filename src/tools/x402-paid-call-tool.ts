@@ -5,8 +5,6 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { PaymentRequired } from '@x402/core/types';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
 import { logger } from '../core/logger.js';
 import { getActiveProfile, getProfileConfigPath } from '../config/profiles.js';
@@ -34,6 +32,33 @@ import {
 import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '../core/constants.js';
 import { getPaymentBridgeProcessStatus } from '../runtime/payment-bridge-process.js';
 import { buildWalletGuardSummary } from '../signer/wallet-guard.js';
+import {
+  createStringToolPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+
+type X402ToolDefinition = ToolFamilyPipelineDefinition;
+type X402ToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function createX402PipelineResponse(
+  body: string,
+  options: { readonly isError?: boolean } = {},
+): ToolFamilyPipelineResult {
+  return createStringToolPipelineResult(body, options);
+}
+
+function registerX402PipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: X402ToolDefinition,
+  execute: (input: unknown) => Promise<X402ToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute);
+}
 
 interface X402PaidCallToolInput {
   endpoint?: string;
@@ -228,9 +253,9 @@ function networkFromRpcUrl(value: string | undefined): string | undefined {
  * The bridge calls sap_payments_fund_prepaid via x402 to create a session here,
  * then passes the sessionId back as X-SAP-Prepaid-Session header for grantAccess.
  */
-export function registerHostedPrepaidTools(server: Server): void {
-  registerPaymentsFundPrepaidTool(server);
-  registerPaymentsPrepaidBalanceTool(server);
+export function registerHostedPrepaidTools(server: Server, context: SapMcpContext): void {
+  registerPaymentsFundPrepaidTool(server, context);
+  registerPaymentsPrepaidBalanceTool(server, context);
   logger.info('Hosted prepaid tools registered (fund + balance)');
 }
 
@@ -245,26 +270,27 @@ export function registerX402PaidCallTool(server: Server, _context: SapMcpContext
   setValidationServer(server);
   registerPaymentsProfileCurrentTool(server, _context);
   registerPaymentsWalletGuardTool(server, _context);
-  registerPaymentsReadinessTool(server);
-  registerPaymentsProcessStatusTool(server);
-  registerPaymentsCallPaidTool(server, 'sap_payments_call_paid_tool');
-  registerPaymentsCallExternalX402Tool(server);
+  registerPaymentsReadinessTool(server, _context);
+  registerPaymentsProcessStatusTool(server, _context);
+  registerPaymentsCallPaidTool(server, _context, 'sap_payments_call_paid_tool');
+  registerPaymentsCallExternalX402Tool(server, _context);
   registerPaymentsRegisterAgentTool(server, _context);
   registerPaymentsUpdateAgentTool(server, _context);
   registerPaymentsFinalizeTransactionTool(server, _context);
-  registerPaymentsPrepareChallengeTool(server);
-  registerPaymentsSignChallengeTool(server);
-  registerPaymentsVerifyReceiptTool(server);
-  registerPaymentsPrepaidBalanceTool(server);
+  registerPaymentsPrepareChallengeTool(server, _context);
+  registerPaymentsSignChallengeTool(server, _context);
+  registerPaymentsVerifyReceiptTool(server, _context);
+  registerPaymentsPrepaidBalanceTool(server, _context);
   registerPaymentsStartPrepaidTool(server, _context);
 
   // Backward-compatible alias used by existing Codex/Hermes/Claude client snippets.
-  registerPaymentsCallPaidTool(server, 'sap_x402_paid_call');
+  registerPaymentsCallPaidTool(server, _context, 'sap_x402_paid_call');
 }
 
 function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_register_agent',
     {
       title: 'Register SAP Agent With Local Signer',
@@ -313,7 +339,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
         const signature = await context.sapClient.agent.register(args);
         const confirmation = await waitForLocalAgentRegistration(context, signature, parsed.confirmationTimeoutMs);
         if (!confirmation.confirmed) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             signature,
             confirmationStatus: confirmation.status,
@@ -351,7 +377,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
 
         const protocolFee = await verifyProtocolRegistrationFee(context, signature);
         if (protocolFee.status === 'missing_or_underpaid') {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             signature,
             confirmationStatus: confirmation.status,
@@ -386,7 +412,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
         }
 
         if (protocolFee.status !== 'verified') {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             signature,
             confirmationStatus: confirmation.status,
@@ -420,7 +446,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
           }, null, 2), { isError: true });
         }
 
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: true,
           signature,
           confirmationStatus: confirmation.status,
@@ -453,7 +479,7 @@ function registerPaymentsRegisterAgentTool(server: Server, context: SapMcpContex
           },
         }, null, 2));
       } catch (error) {
-        return createTextResponse(formatLocalRegistryError(error), { isError: true });
+        return createX402PipelineResponse(formatLocalRegistryError(error), { isError: true });
       }
     },
   );
@@ -527,8 +553,9 @@ async function verifyProtocolRegistrationFee(
 }
 
 function registerPaymentsUpdateAgentTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_update_agent',
     {
       title: 'Update SAP Agent With Local Signer',
@@ -576,7 +603,7 @@ function registerPaymentsUpdateAgentTool(server: Server, context: SapMcpContext)
         const confirmation = await waitForLocalAgentUpdate(context, signature, parsed.confirmationTimeoutMs);
         const update = summarizeAgentUpdate(args);
         if (!confirmation.confirmed) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             signature,
             confirmationStatus: confirmation.status,
@@ -600,7 +627,7 @@ function registerPaymentsUpdateAgentTool(server: Server, context: SapMcpContext)
           }, null, 2), { isError: true });
         }
 
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: true,
           signature,
           confirmationStatus: confirmation.status,
@@ -619,7 +646,7 @@ function registerPaymentsUpdateAgentTool(server: Server, context: SapMcpContext)
           },
         }, null, 2));
       } catch (error) {
-        return createTextResponse(formatLocalRegistryError(error), { isError: true });
+        return createX402PipelineResponse(formatLocalRegistryError(error), { isError: true });
       }
     },
   );
@@ -739,9 +766,10 @@ async function sleep(ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function registerPaymentsCallExternalX402Tool(server: Server): void {
-  registerTool(
+function registerPaymentsCallExternalX402Tool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_call_external_x402',
     {
       title: 'Pay And Call External x402 Endpoint',
@@ -796,17 +824,18 @@ function registerPaymentsCallExternalX402Tool(server: Server): void {
       try {
         const parsed = parseExternalInput(input);
         const result = await executeExternalX402Call(parsed);
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
 }
 
 function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_finalize_transaction',
     {
       title: 'Finalize Transaction With Local Signer',
@@ -897,17 +926,18 @@ function registerPaymentsFinalizeTransactionTool(server: Server, context: SapMcp
       try {
         const parsed = parseFinalizeTransactionInput(input);
         const result = await finalizeTransactionWithLocalSigner(context, parsed);
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatFinalizeTransactionError(error), { isError: true });
+        return createX402PipelineResponse(formatFinalizeTransactionError(error), { isError: true });
       }
     },
   );
 }
 
 function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_profile_current',
     {
       title: 'Show Local SAP Payments Profile',
@@ -973,7 +1003,7 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
         signerPublicKey: currentSignerPubkey,
       });
 
-      return createTextResponse(JSON.stringify({
+      return createX402PipelineResponse(JSON.stringify({
         serverRole: 'local-sap-payments-bridge',
         activeProfile: currentProfile,
         configPath: currentConfigPath,
@@ -999,8 +1029,9 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
 }
 
 function registerPaymentsWalletGuardTool(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_wallet_guard',
     {
       title: 'Show Local Wallet Guardrails',
@@ -1055,7 +1086,7 @@ function registerPaymentsWalletGuardTool(server: Server, context: SapMcpContext)
         activeProfile: profileName,
         signerPublicKey,
       });
-      return createTextResponse(JSON.stringify({
+      return createX402PipelineResponse(JSON.stringify({
         serverRole: 'local-sap-payments-bridge',
         activeProfile: profileName,
         signerConfigured: Boolean(signerPublicKey),
@@ -1067,9 +1098,10 @@ function registerPaymentsWalletGuardTool(server: Server, context: SapMcpContext)
   );
 }
 
-function registerPaymentsReadinessTool(server: Server): void {
-  registerTool(
+function registerPaymentsReadinessTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_readiness',
     {
       title: 'Check Hosted Payment Readiness',
@@ -1112,14 +1144,15 @@ function registerPaymentsReadinessTool(server: Server): void {
       const profileName = typeof record.profileName === 'string' ? record.profileName : undefined;
       const endpoint = typeof record.endpoint === 'string' ? record.endpoint : undefined;
       const result = await getX402PaymentReadiness(profileName, endpoint);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return createX402PipelineResponse(JSON.stringify(result, null, 2));
     },
   );
 }
 
-function registerPaymentsProcessStatusTool(server: Server): void {
-  registerTool(
+function registerPaymentsProcessStatusTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_process_status',
     {
       title: 'Inspect Local Payment Bridge Process',
@@ -1147,13 +1180,14 @@ function registerPaymentsProcessStatusTool(server: Server): void {
         openWorldHint: false,
       },
     },
-    async () => createTextResponse(JSON.stringify(getPaymentBridgeProcessStatus(), null, 2)),
+    async () => createX402PipelineResponse(JSON.stringify(getPaymentBridgeProcessStatus(), null, 2)),
   );
 }
 
-function registerPaymentsCallPaidTool(server: Server, name: 'sap_payments_call_paid_tool' | 'sap_x402_paid_call'): void {
-  registerTool(
+function registerPaymentsCallPaidTool(server: Server, context: SapMcpContext, name: 'sap_payments_call_paid_tool' | 'sap_x402_paid_call'): void {
+  registerX402PipelineTool(
     server,
+    context,
     name,
     {
       title: 'Pay And Call Hosted SAP MCP Tool',
@@ -1178,7 +1212,7 @@ function registerPaymentsCallPaidTool(server: Server, name: 'sap_payments_call_p
         if (parsed.toolName && parsed.arguments && typeof parsed.arguments === 'object') {
           const validation = validateToolArguments(parsed.toolName, parsed.arguments);
           if (!validation.valid) {
-            return createTextResponse(JSON.stringify({
+            return createX402PipelineResponse(JSON.stringify({
               success: false,
               error: 'schema_validation_failed',
               message: 'Tool arguments do not match the expected schema. Payment was NOT charged.',
@@ -1190,17 +1224,18 @@ function registerPaymentsCallPaidTool(server: Server, name: 'sap_payments_call_p
         }
 
         const result = await executeX402PaidCall(parsed);
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
 }
 
-function registerPaymentsPrepareChallengeTool(server: Server): void {
-  registerTool(
+function registerPaymentsPrepareChallengeTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_prepare_challenge',
     {
       title: 'Prepare Hosted x402 Challenge',
@@ -1237,17 +1272,18 @@ function registerPaymentsPrepareChallengeTool(server: Server): void {
     async (input: unknown) => {
       try {
         const result = await probeX402PaymentChallenge(parseProbeInput(input));
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
 }
 
-function registerPaymentsSignChallengeTool(server: Server): void {
-  registerTool(
+function registerPaymentsSignChallengeTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_sign_challenge',
     {
       title: 'Sign Hosted x402 Challenge',
@@ -1290,17 +1326,18 @@ function registerPaymentsSignChallengeTool(server: Server): void {
     async (input: unknown) => {
       try {
         const result = await signX402PaymentChallenge(parseSignInput(input));
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
 }
 
-function registerPaymentsVerifyReceiptTool(server: Server): void {
-  registerTool(
+function registerPaymentsVerifyReceiptTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_verify_receipt',
     {
       title: 'Inspect x402 Payment Receipt',
@@ -1335,17 +1372,18 @@ function registerPaymentsVerifyReceiptTool(server: Server): void {
     async (input: unknown) => {
       try {
         const result = inspectX402Receipt(parseReceiptInput(input));
-        return createTextResponse(JSON.stringify(result, null, 2));
+        return createX402PipelineResponse(JSON.stringify(result, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
 }
 
-function registerPaymentsPrepaidBalanceTool(server: Server): void {
-  registerTool(
+function registerPaymentsPrepaidBalanceTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_prepaid_balance',
     {
       title: 'Check Prepaid Session Balance',
@@ -1380,7 +1418,7 @@ function registerPaymentsPrepaidBalanceTool(server: Server): void {
         const record = input as Record<string, unknown> | undefined;
         const sessionId = record?.sessionId;
         if (!sessionId || typeof sessionId !== 'string') {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'sessionId is required.',
           }, null, 2), { isError: true });
@@ -1389,7 +1427,7 @@ function registerPaymentsPrepaidBalanceTool(server: Server): void {
         const store = getGlobalPrepaidStore();
         const credit = store.getBalance(sessionId);
         if (!credit) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'session_not_found_or_expired',
             sessionId,
@@ -1397,7 +1435,7 @@ function registerPaymentsPrepaidBalanceTool(server: Server): void {
           }, null, 2), { isError: true });
         }
 
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: true,
           sessionId: credit.sessionId,
           remainingUsd: credit.remainingUsd,
@@ -1407,7 +1445,7 @@ function registerPaymentsPrepaidBalanceTool(server: Server): void {
           callCount: credit.callCount,
         }, null, 2));
       } catch (error) {
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: false,
           error: error instanceof Error ? error.message : String(error),
         }, null, 2), { isError: true });
@@ -1416,9 +1454,10 @@ function registerPaymentsPrepaidBalanceTool(server: Server): void {
   );
 }
 
-function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContext): void {
-  registerTool(
+function registerPaymentsStartPrepaidTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_start_prepaid',
     {
       title: 'Start Prepaid Payment Session',
@@ -1465,7 +1504,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
       try {
         const record = input as Record<string, unknown> | undefined;
         if (!record || record.confirm !== true) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'confirm: true is required to start a prepaid session (it triggers a hosted x402 payment).',
           }, null, 2), { isError: true });
@@ -1473,7 +1512,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
 
         const amountUsd = record.amountUsd;
         if (typeof amountUsd !== 'number' || !Number.isFinite(amountUsd) || amountUsd <= 0) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'amountUsd must be a positive number.',
           }, null, 2), { isError: true });
@@ -1499,7 +1538,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
         });
 
         if (!fundResult.success) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'Hosted sap_payments_fund_prepaid call failed.',
             hostedResult: fundResult,
@@ -1509,14 +1548,14 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
         const sessionId = extractHostedPrepaidSessionId(fundResult.response);
 
         if (!sessionId) {
-          return createTextResponse(JSON.stringify({
+          return createX402PipelineResponse(JSON.stringify({
             success: false,
             error: 'Hosted sap_payments_fund_prepaid did not return a sessionId.',
             hostedResult: fundResult,
           }, null, 2), { isError: true });
         }
 
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: true,
           sessionId,
           amountUsd,
@@ -1526,7 +1565,7 @@ function registerPaymentsStartPrepaidTool(server: Server, _context: SapMcpContex
           agentInstruction: `Pass this sessionId as prepaidSessionId to sap_payments_call_paid_tool for future calls. The server will check the prepaid balance and grant access without per-call 402 challenges. Use sap_payments_prepaid_balance to check remaining balance. Each call deducts ${perCallCostUsd} USD from the ${amountUsd} USD deposit.`,
         }, null, 2));
       } catch (error) {
-        return createTextResponse(formatPaidCallError(error), { isError: true });
+        return createX402PipelineResponse(formatPaidCallError(error), { isError: true });
       }
     },
   );
@@ -1595,9 +1634,10 @@ function extractSessionIdFromRecord(value: unknown): string | undefined {
  * sap_payments_call_paid_tool for per-call access without 402 challenges.
  * @internal
  */
-function registerPaymentsFundPrepaidTool(server: Server): void {
-  registerTool(
+function registerPaymentsFundPrepaidTool(server: Server, context: SapMcpContext): void {
+  registerX402PipelineTool(
     server,
+    context,
     'sap_payments_fund_prepaid',
     {
       title: 'Fund Prepaid Payment Session',
@@ -1630,11 +1670,11 @@ function registerPaymentsFundPrepaidTool(server: Server): void {
       try {
         const record = input as Record<string, unknown> | undefined;
         if (!record) {
-          return createTextResponse(JSON.stringify({ error: 'Invalid input' }, null, 2), { isError: true });
+          return createX402PipelineResponse(JSON.stringify({ error: 'Invalid input' }, null, 2), { isError: true });
         }
         const amountUsd = Number(record['amountUsd']);
         if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-          return createTextResponse(JSON.stringify({ error: 'amountUsd must be a positive number' }, null, 2), { isError: true });
+          return createX402PipelineResponse(JSON.stringify({ error: 'amountUsd must be a positive number' }, null, 2), { isError: true });
         }
         const perCallCostUsd = typeof record['perCallCostUsd'] === 'number' && Number.isFinite(record['perCallCostUsd'])
           ? Number(record['perCallCostUsd'])
@@ -1648,7 +1688,6 @@ function registerPaymentsFundPrepaidTool(server: Server): void {
         // the settlement result here, we use a generated UUID as wallet
         // identifier. The server-side prepaid store keys by sessionId, not
         // wallet, so this is fine for the grantAccess flow.
-        const { getGlobalPrepaidStore } = await import('../payments/prepaid-credit-store.js');
         const session = getGlobalPrepaidStore().createSession(
           'x402-payer', // wallet placeholder — the x402 settlement has the real payer
           amountUsd,
@@ -1656,7 +1695,7 @@ function registerPaymentsFundPrepaidTool(server: Server): void {
           ttlHours,
         );
 
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           success: true,
           sessionId: session.sessionId,
           wallet: session.wallet,
@@ -1669,7 +1708,7 @@ function registerPaymentsFundPrepaidTool(server: Server): void {
           agentInstruction: `Pass sessionId as prepaidSessionId to sap_payments_call_paid_tool. Each call deducts ${perCallCostUsd} USD. Balance: ${amountUsd} USD. Expires: ${session.expiresAt}.`,
         }, null, 2));
       } catch (error) {
-        return createTextResponse(JSON.stringify({
+        return createX402PipelineResponse(JSON.stringify({
           error: 'Failed to create prepaid session',
           message: error instanceof Error ? error.message : String(error),
         }, null, 2), { isError: true });

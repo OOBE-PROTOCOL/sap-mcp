@@ -9,6 +9,114 @@
  */
 
 export { registerTools } from './register-tools.js';
+export type { RegisterToolsOptions } from './register-tools.js';
+export { registerToolsWithSummary } from './register-tools.js';
+export {
+  PLUGIN_TOOL_MODULE_ORDER_MAX,
+  PLUGIN_TOOL_MODULE_ORDER_MIN,
+  createToolModuleRegistrationPlan,
+  createPluginToolModule,
+  createToolModule,
+  registerToolModules,
+  resolveRequestedToolModuleMode,
+  selectToolModulesForContext,
+  validateToolModules,
+} from './module-registry.js';
+export type {
+  ToolModuleCategory,
+  ToolModuleDefinition,
+  ToolModuleDependencyEdge,
+  ToolModuleLifecycleEvent,
+  ToolModuleLifecycleHooks,
+  ToolModuleRegister,
+  ToolModuleRegistrationPlan,
+  ToolModuleRegistrationPlanEntry,
+  ToolModuleRegistrationResult,
+  ToolModuleRegistrationSummary,
+} from './module-registry.js';
+export {
+  TOOL_MODULE_CATEGORIES,
+  TOOL_MODULE_MODES,
+  ToolModuleCategorySchema,
+  ToolModuleIdSchema,
+  ToolModuleManifestSchema,
+  ToolModuleModeSchema,
+  ToolModuleToolNameSchema,
+  parseToolModuleManifest,
+} from './tool-module-manifest.js';
+export type {
+  ToolModuleManifest,
+  ToolModuleMode,
+} from './tool-module-manifest.js';
+export {
+  assertToolModuleCatalogValid,
+  validateToolModuleCatalog,
+} from './tool-module-validation.js';
+export type {
+  ToolModuleRuntimeProfile,
+  ToolModuleSelectionSummary,
+  ToolModuleValidationIssue,
+  ToolModuleValidationReport,
+} from './tool-module-validation.js';
+export {
+  buildToolModulePolicyCatalog,
+  classifyToolIntent,
+  describeToolIntent,
+  getToolExecutionMetadata,
+  localSignerEquivalent,
+  priceHintForTier,
+} from './tool-execution-metadata.js';
+export type {
+  ToolExecutionGuidance,
+  ToolExecutionIntent,
+  ToolExecutionMetadata,
+  ToolModulePolicyCatalogEntry,
+} from './tool-execution-metadata.js';
+export {
+  createToolExecutionEnvelope,
+  createToolExecutionErrorEnvelope,
+  createToolExecutionResult,
+  registerPipelineTool,
+} from './tool-execution-pipeline.js';
+export type {
+  SafeParseFailure,
+  SafeParseSuccess,
+  ToolExecutionEnvelope,
+  ToolExecutionPipelineDefinition,
+  ToolExecutionPipelineInput,
+  ToolExecutionPipelineResult,
+  ToolInputParser,
+} from './tool-execution-pipeline.js';
+export {
+  createStringToolPipelineResult,
+  createToolFamilyPipelineResult,
+  parseStringToolPayload,
+  registerToolFamilyPipelineTool,
+} from './tool-family-pipeline.js';
+export type {
+  ToolFamilyPipelineDefinition,
+  ToolFamilyPipelineHandlerResult,
+  ToolFamilyPipelineOptions,
+  ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+export {
+  buildToolCatalog,
+  buildToolCatalogForRuntimeProfiles,
+  summarizeToolCatalog,
+} from './tool-catalog.js';
+export type {
+  ToolCatalog,
+  ToolCatalogCategorySummary,
+  ToolCatalogModuleEntry,
+  ToolCatalogOptions,
+  ToolCatalogPolicySummary,
+  ToolCatalogRuntimeProfile,
+  ToolCatalogToolEntry,
+} from './tool-catalog.js';
+export {
+  BUILTIN_TOOL_MODULES,
+  resolveBuiltinToolModulesForContext,
+} from './builtin-tool-modules.js';
 
 // REAL SAP SDK TOOLS (75 tools)
 export { registerSapSdkTools } from './sap-sdk-tools.js';

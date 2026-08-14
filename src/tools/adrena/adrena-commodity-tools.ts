@@ -7,8 +7,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { createTextResponse } from '../../adapters/mcp/tool-response.js';
-import { registerTool } from '../../adapters/mcp/sdk-compat.js';
+import {
+  adrenaPipelineException,
+  adrenaPipelineOk,
+  registerAdrenaPipelineTool,
+} from './adrena-pipeline.js';
 import {
   buildOpenCommodityLong,
   buildOpenCommodityShort,
@@ -33,7 +36,7 @@ import {
  */
 export function registerAdrenaCommodityTools(server: Server, context: SapMcpContext): void {
   // Open commodity long
-  registerTool(server, 'sap_adrena_build_open_commodity_long', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_commodity_long', {
     description: 'Build an unsigned transaction to open a long position on a synthetic commodity (XAU, XAG, WTI) on Adrena. Uses the commodities pool with USDC collateral. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -57,14 +60,14 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       const result = await buildOpenCommodityLong(getConnection(context), owner, principalToken, collateralAmount, leverage, price);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build commodity long transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build commodity long transaction', err);
     }
   });
 
   // Open commodity short
-  registerTool(server, 'sap_adrena_build_open_commodity_short', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_commodity_short', {
     description: 'Build an unsigned transaction to open a short position on a synthetic commodity (XAU, XAG, WTI) on Adrena. Uses the commodities pool with USDC collateral. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -88,14 +91,14 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
       const price = priceUsd !== null ? priceToRaw(priceUsd) : null;
 
       const result = await buildOpenCommodityShort(getConnection(context), owner, principalToken, collateralAmount, leverage, price);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build commodity short transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build commodity short transaction', err);
     }
   });
 
   // Close commodity long
-  registerTool(server, 'sap_adrena_build_close_commodity_long', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_commodity_long', {
     description: 'Build an unsigned transaction to close a long commodity position on Adrena. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -117,14 +120,14 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
       const percentage = args['percentage'] !== undefined ? BigInt(Math.floor(Number(args['percentage']))) : 1_000_000n;
 
       const result = await buildCloseCommodityLong(getConnection(context), owner, principalToken, price, percentage);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build close commodity long transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build close commodity long transaction', err);
     }
   });
 
   // Close commodity short
-  registerTool(server, 'sap_adrena_build_close_commodity_short', {
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_commodity_short', {
     description: 'Build an unsigned transaction to close a short commodity position on Adrena. Returns transactionBase64 for local signing.',
     inputSchema: {
       type: 'object',
@@ -146,9 +149,9 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
       const percentage = args['percentage'] !== undefined ? BigInt(Math.floor(Number(args['percentage']))) : 1_000_000n;
 
       const result = await buildCloseCommodityShort(getConnection(context), owner, principalToken, price, percentage);
-      return createTextResponse(JSON.stringify(result, null, 2));
+      return adrenaPipelineOk(result);
     } catch (err) {
-      return createTextResponse(JSON.stringify({ error: 'Failed to build close commodity short transaction', message: err instanceof Error ? err.message : 'Unknown error' }), { isError: true });
+      return adrenaPipelineException('Failed to build close commodity short transaction', err);
     }
   });
 }

@@ -117,6 +117,7 @@ app.whenReady().then(() => {
     const core = await loadWizardCore();
     return {
       draft: core.createDefaultDesktopWizardDraft(),
+      hostedDiscovery: core.getDesktopHostedDiscovery(),
       runtimes: core.getDesktopRuntimeStatuses(),
       profiles: core.getDesktopProfileStatuses(),
     };
@@ -132,6 +133,29 @@ app.whenReady().then(() => {
       throw new Error('Only https:// links can be opened from the desktop wizard.');
     }
     await shell.openExternal(url);
+  });
+
+  registerWizardHandler('wizard:get-hosted-tool-catalog', async (_event, url) => {
+    if (typeof url !== 'string' || !url.startsWith('https://')) {
+      throw new Error('Only https:// hosted tool catalog URLs can be loaded by the desktop wizard.');
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'sap-mcp-desktop-wizard',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Hosted tool catalog returned HTTP ${response.status}`);
+    }
+
+    const document = await response.json();
+    if (!document || document.kind !== 'sap-mcp-tool-catalog' || !document.catalog) {
+      throw new Error('Hosted tool catalog response did not match the SAP MCP catalog contract.');
+    }
+
+    return document;
   });
 
   createWindow();

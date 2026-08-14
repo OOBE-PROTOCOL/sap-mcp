@@ -32,10 +32,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../core/logger.js';
 import type { SapMcpContext } from '../../core/types.js';
-import { isHostedAccountlessBlockedTool } from '../../payments/hosted-tool-eligibility.js';
-import { classifyTool, type PaymentTier } from '../../payments/pricing.js';
 import { checkToolPermissions, privateKeyGuard } from '../../security/index.js';
 import { canonicalizeToolName } from '../../tools/tool-aliases.js';
+import { getToolExecutionMetadata } from '../../tools/tool-execution-metadata.js';
 import { recordToolCall, trackInFlight } from '../../observability/metrics.js';
 
 // Track which handlers have been registered to avoid duplicates
@@ -69,6 +68,7 @@ type ResourceContent = {
 type ToolContent = {
   type: string;
   text?: string;
+  resource?: ResourceContent;
 };
 type ToolCallResult = {
   content: ToolContent[];
@@ -220,7 +220,15 @@ function isToolCallResult(value: unknown): value is ToolCallResult {
     ) && (
       // Resource content items have a nested resource object, not a text field
       content.type !== 'resource'
-      || (isPlainObject(content.resource) && typeof content.resource.text === 'string')
+      || (
+        isPlainObject(content.resource)
+        && typeof content.resource.uri === 'string'
+        && (content.resource.mimeType === undefined || typeof content.resource.mimeType === 'string')
+        && (
+          typeof content.resource.text === 'string'
+          || typeof content.resource.blob === 'string'
+        )
+      )
     )
   ));
 }
@@ -554,101 +562,13 @@ function enrichSchemaDescriptions(schema: Tool['inputSchema'], toolTitle: string
   };
 }
 
-function priceHintForTier(tier: PaymentTier): string {
-  switch (tier) {
-    case 'free':
-      return 'free; call directly without x402';
-    case 'read-premium':
-      return 'paid read-premium; estimate first, then use sap_payments_call_paid_tool when the runtime cannot replay x402 natively';
-    case 'builder':
-      return 'paid builder; estimate first, then pay/build and finalize unsigned transactions locally when returned';
-    case 'value-action':
-      return 'paid value-action; preview cost and transaction effects before user confirmation';
-    case 'batch':
-      return 'paid batch; enforce maxPriceUsd and maxTotalUsd caps';
-    default:
-      return 'priced by hosted x402 challenge';
-  }
-}
-
-function localSignerEquivalent(toolName: string): string | undefined {
-  const equivalents: Record<string, string> = {
-    sap_register_agent: 'sap_payments_register_agent',
-    sap_update_agent: 'sap_payments_update_agent',
-    sap_sign_transaction: 'sap_payments_finalize_transaction',
-  };
-  if (equivalents[toolName]) return equivalents[toolName];
-  if (toolName.startsWith('sap_escrow_build_')) return 'sap_payments_finalize_transaction';
-  if (toolName.startsWith('sap_sns_build_')) return 'sap_payments_finalize_transaction';
-  if (toolName.startsWith('sap_x402_build_')) return 'sap_payments_finalize_transaction';
-  return undefined;
-}
-
-function classifyToolIntent(toolName: string): string {
-  if (toolName.startsWith('sap_payments_') || toolName === 'sap_x402_paid_call') {
-    return 'local non-custodial payment/signing bridge';
-  }
-  if (toolName.startsWith('sap_agent_') || toolName.startsWith('sap_runtime_') || toolName.startsWith('sap_skills_')) {
-    return 'agent bootstrap, routing, skills, or repair guidance';
-  }
-  if (toolName.includes('_build_') || toolName.startsWith('sap_escrow_build_') || toolName.startsWith('sap_sns_build_')) {
-    return 'hosted unsigned transaction builder';
-  }
-  if (toolName.includes('swap') || toolName.includes('trade') || toolName.includes('buy') || toolName.includes('sell')) {
-    return 'Solana value-action or trading workflow';
-  }
-  if (toolName.includes('register') || toolName.includes('update') || toolName.includes('mint') || toolName.includes('transfer')) {
-    return 'local-signer write workflow';
-  }
-  if (toolName.includes('list') || toolName.includes('get') || toolName.includes('fetch') || toolName.includes('discover') || toolName.includes('search')) {
-    return 'read/discovery workflow';
-  }
-  return 'SAP MCP tool workflow';
-}
-
-function buildToolIntentGuidance(toolName: string, title: string): {
-  descriptionSuffix: string;
-  schemaDescription: string;
-} {
-  const tier = classifyTool(toolName);
-  const intent = classifyToolIntent(toolName);
-  const localEquivalent = localSignerEquivalent(toolName);
-  const hostedBlocked = isHostedAccountlessBlockedTool(toolName);
-
-  const routing = hostedBlocked
-    ? `Routing: hosted accountless write is blocked; do not call this as a paid hosted write and no x402 payment should be charged. Use ${localEquivalent ?? 'the local sap_payments bridge or a hosted unsigned builder'} when user signing is required.`
-    : toolName.startsWith('sap_payments_')
-      ? 'Routing: local sap_payments bridge. It may sign x402 payment payloads or user-approved transactions locally, and must never expose keypair bytes.'
-      : localEquivalent && toolName.includes('_build_')
-        ? `Routing: hosted-safe builder. If a transaction is returned, preview/sign/submit with ${localEquivalent}; never create temporary signing scripts.`
-        : tier === 'free'
-          ? 'Routing: free hosted call; call directly and keep it small/exact when possible.'
-          : 'Routing: paid hosted call; call sap_estimate_tool_cost first, then use sap_payments_call_paid_tool if the runtime cannot handle x402 natively.';
-
-  const safety = toolName.startsWith('sap_payments_') || hostedBlocked || localEquivalent
-    ? 'Signer boundary: user-controlled local profile or external signer; OOBE hosted MCP remains non-custodial.'
-    : 'Signer boundary: hosted reads/builders never receive keypair bytes; value-moving results must be finalized locally when signing is required.';
-
-  const descriptionSuffix = [
-    `Intent: ${intent}.`,
-    `Pricing: ${priceHintForTier(tier)}.`,
-    routing,
-    safety,
-  ].join(' ');
-
-  return {
-    descriptionSuffix,
-    schemaDescription: `${title} input schema. ${descriptionSuffix} Use exact field names from this schema; do not guess aliases or include private key material.`,
-  };
-}
-
 function enrichToolDefinition(
   name: string,
   title: string,
   description: string,
   inputSchema: Tool['inputSchema'],
 ): { description: string; inputSchema: Tool['inputSchema'] } {
-  const guidance = buildToolIntentGuidance(name, title);
+  const { guidance } = getToolExecutionMetadata(name, title);
   const suffix = `\n\nSAP MCP execution guidance: ${guidance.descriptionSuffix}`;
   const enrichedDescription = description.includes('SAP MCP execution guidance:')
     ? description

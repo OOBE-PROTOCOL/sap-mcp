@@ -7,9 +7,14 @@ import { createHash } from 'crypto';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { RingBufferEntry, SessionContext, WriteResult } from '@oobe-protocol-labs/synapse-sap-sdk/registries/session';
-import { registerTool } from '../adapters/mcp/sdk-compat.js';
-import { createTextResponse } from '../adapters/mcp/tool-response.js';
 import type { SapMcpContext } from '../core/types.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -19,6 +24,8 @@ type ChatVisibility = 'public' | 'private';
 type ChatPayloadEncoding = 'utf8' | 'base64' | 'ciphertext';
 type ChatLinkKind = 'reference' | 'source' | 'attachment' | 'market' | 'execution';
 type ChatEnvelopeType = 'message' | 'room_manifest';
+type ChatToolDefinition = ToolFamilyPipelineDefinition;
+type ChatToolHandlerResult = ToolFamilyPipelineHandlerResult;
 
 interface ChatChunkInfo {
   index: number;
@@ -89,6 +96,16 @@ const CHAT_PROTOCOL_PREFIX = 'sap-chat:v1';
 const MAX_WIRE_BYTES = 700;
 const DEFAULT_CHUNK_BYTES = 420;
 
+function registerChatPipelineTool(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: ChatToolDefinition,
+  execute: (input: unknown) => Promise<ChatToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute);
+}
+
 /**
  * @name registerChatTools
  * @description Registers SAP chat tools backed by the SDK SessionManager and memory ledger.
@@ -96,8 +113,9 @@ const DEFAULT_CHUNK_BYTES = 420;
  * @param context - Runtime context with SAP client and policy engine.
  */
 export function registerChatTools(server: Server, context: SapMcpContext): void {
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_derive_room',
     {
       description: 'Derive a deterministic SAP chat room/session ID. Group and public room IDs are active; DM derivation is reserved for future native support.',
@@ -108,8 +126,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     }),
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_start_room',
     {
       description: 'Start an on-chain SAP chat room by creating the backing vault, session, and ledger if needed.',
@@ -123,8 +142,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_send_message',
     {
       description: 'Send a chunked SAP chat message to a room. Public messages store UTF-8 text; private messages store caller-provided ciphertext bytes.',
@@ -161,8 +181,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_publish_manifest',
     {
       description: 'Publish a signed thematic room/group manifest for discovery indexers, policy-aware agents, and chat clients.',
@@ -195,8 +216,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_read_latest',
     {
       description: 'Read latest SAP chat messages from the room ring buffer.',
@@ -211,8 +233,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_read_all',
     {
       description: 'Read all SAP chat messages from sealed ledger pages plus the latest ring buffer.',
@@ -227,8 +250,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_status',
     {
       description: 'Get backing SAP memory session status for a chat room.',
@@ -242,8 +266,9 @@ export function registerChatTools(server: Server, context: SapMcpContext): void 
     },
   );
 
-  registerTool(
+  registerChatPipelineTool(
     server,
+    context,
     'sap_chat_seal_room',
     {
       description: 'Seal the current chat ring buffer into an immutable SAP ledger page for permanent history.',
@@ -723,10 +748,10 @@ function sha256Hex(value: Buffer): string {
 
 /**
  * @name ok
- * @description Wraps a JSON payload in the MCP text response shape.
+ * @description Wraps a JSON payload in the shared execution pipeline result shape.
  */
-function ok(payload: JsonRecord | Record<string, unknown>) {
-  return createTextResponse(JSON.stringify({ success: true, ...payload }, null, 2));
+function ok(payload: JsonRecord | Record<string, unknown>): ToolFamilyPipelineResult {
+  return createToolFamilyPipelineResult({ success: true, ...payload });
 }
 
 /**
