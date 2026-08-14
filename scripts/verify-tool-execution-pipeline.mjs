@@ -8,7 +8,8 @@ const repoRoot = path.resolve(__dirname, '..');
 const contractPath = 'config/tool-execution-pipeline-contracts.json';
 const contract = JSON.parse(readFileSync(path.join(repoRoot, contractPath), 'utf8'));
 const exportContracts = JSON.parse(readFileSync(path.join(repoRoot, 'config/package-export-contracts.json'), 'utf8'));
-const builtinToolModulesText = readFileSync(path.join(repoRoot, 'src/tools/builtin-tool-modules.ts'), 'utf8');
+const toolSourceRoot = 'packages/tools/src';
+const builtinToolModulesText = readFileSync(path.join(repoRoot, toolSourceRoot, 'builtin-tool-modules.ts'), 'utf8');
 const failures = [];
 const maximumLegacyRegisterToolFiles = contract.maximumLegacyRegisterToolFiles ?? 0;
 const additionalLegacyRegisterToolAuditFiles = contract.additionalLegacyRegisterToolAuditFiles ?? [];
@@ -93,19 +94,19 @@ for (const tool of contract.requiredPipelineTools ?? []) {
   }
 }
 
-const toolSourceFiles = walkSourceFiles(path.join(repoRoot, 'src/tools'))
+const toolSourceFiles = walkSourceFiles(path.join(repoRoot, toolSourceRoot))
   .map((absolutePath) => toRepoRelativePath(absolutePath))
   .filter((relativePath) => ![
-    'src/tools/index.ts',
-    'src/tools/tool-execution-pipeline.ts',
-    'src/tools/tool-family-pipeline.ts',
-    'src/tools/tool-execution-metadata.ts',
-    'src/tools/tool-module-manifest.ts',
-    'src/tools/tool-module-validation.ts',
-    'src/tools/tool-catalog.ts',
-    'src/tools/module-registry.ts',
-    'src/tools/builtin-tool-modules.ts',
-    'src/tools/tool-aliases.ts',
+    `${toolSourceRoot}/index.ts`,
+    `${toolSourceRoot}/tool-execution-pipeline.ts`,
+    `${toolSourceRoot}/tool-family-pipeline.ts`,
+    `${toolSourceRoot}/tool-execution-metadata.ts`,
+    `${toolSourceRoot}/tool-module-manifest.ts`,
+    `${toolSourceRoot}/tool-module-validation.ts`,
+    `${toolSourceRoot}/tool-catalog.ts`,
+    `${toolSourceRoot}/module-registry.ts`,
+    `${toolSourceRoot}/builtin-tool-modules.ts`,
+    `${toolSourceRoot}/tool-aliases.ts`,
   ].includes(relativePath));
 
 const pipelineToolFiles = [];

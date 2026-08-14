@@ -27,8 +27,8 @@ branch prefix, review focus, and user contract.
 | Local bridge | `src/bin/`, `src/transports/stdio.ts`, `src/signer/`, `src/policy/`, `src/memory/` | `sap_payments_*`, local signer preview/sign/finalize, Hermes memory bridge | Return keypair bytes, bypass spending policy, sign opaque risky transactions silently. |
 | Wizard | `src/config/`, `src/tui/`, `src/wizard-core/`, `apps/desktop/` | One profile model across CLI, TUI, and Desktop; safe runtime config injection | Maintain a second wallet/config model or overwrite unrelated client settings. |
 | MCP Apps UI | `src/ui/`, `src/adapters/mcp/` | Valid `ui://` resource blocks plus actual `structuredContent` | Insert unescaped dynamic HTML or require UI support for correctness. |
-| Payments | `src/payments/`, `src/tools/x402-paid-call-tool.ts` | x402/pay.sh challenge, receipt, paid-call replay, pricing catalog | Treat estimated price as final truth when a challenge says otherwise. |
-| Protocol tools | `src/tools/`, `src/sap/`, `src/perps/`, `src/resources/`, `src/schemas/` | Read tools, unsigned builders, transaction preview metadata, SAP protocol invariants | Submit value-moving actions without local approval/signing boundary. |
+| Payments | `src/payments/`, `packages/tools/src/x402-paid-call-tool.ts` | x402/pay.sh challenge, receipt, paid-call replay, pricing catalog | Treat estimated price as final truth when a challenge says otherwise. |
+| Protocol tools | `packages/tools/src/`, `src/sap/`, `src/perps/`, `src/resources/`, `packages/schemas/src/` | Read tools, unsigned builders, transaction preview metadata, SAP protocol invariants | Submit value-moving actions without local approval/signing boundary. |
 | Release ops | `.github/`, `scripts/`, `docs/`, `USER_DOCS/` | CI, desktop artifacts, checksums, npm package, changelog, user docs | Publish unsigned binaries as silent final releases or ship docs that require private secrets. |
 
 ## 20.2.1 Modular Workspace
@@ -44,10 +44,10 @@ Phase 1 package boundaries:
 | Internal package | Current source | Architecture domain | Extraction status |
 | --- | --- | --- | --- |
 | `@oobe-protocol-labs/sap-mcp-core` | `src/core` | `core` | Exposed as `@oobe-protocol-labs/sap-mcp-server/core`. |
-| `@oobe-protocol-labs/sap-mcp-schemas` | `src/schemas` | `schemas` | Exposed as `@oobe-protocol-labs/sap-mcp-server/schemas`. |
+| `@oobe-protocol-labs/sap-mcp-schemas` | `packages/schemas/src` | `schemas` | Exposed as `@oobe-protocol-labs/sap-mcp-server/schemas`. |
 | `@oobe-protocol-labs/sap-mcp-mcp-adapter` | `src/adapters/mcp` | `mcp-adapter` | Exposed as `@oobe-protocol-labs/sap-mcp-server/mcp-adapter`. |
 | `@oobe-protocol-labs/sap-mcp-ui-cards` | `src/ui` | `ui-cards` | Exposed as `@oobe-protocol-labs/sap-mcp-server/ui-cards`; includes rendering-only MCP Apps Card coverage diagnostics. |
-| `@oobe-protocol-labs/sap-mcp-tools` | `src/tools` | `tools` | Exposed as `@oobe-protocol-labs/sap-mcp-server/tools`; owns the module registry, built-in catalog, runtime filtering, and trusted plugin helpers. |
+| `@oobe-protocol-labs/sap-mcp-tools` | `packages/tools/src` | `tools` | Exposed as `@oobe-protocol-labs/sap-mcp-server/tools`; owns the module registry, built-in catalog, runtime filtering, and trusted plugin helpers. |
 | `@oobe-protocol-labs/sap-mcp-config-runtime` | `src/config` | `config` | Exposed as `@oobe-protocol-labs/sap-mcp-server/config-runtime`; owns secure config, profile selection, runtime doctor, and client injection. |
 | `@oobe-protocol-labs/sap-mcp-server-runtime` | `src/server` | `server` | Exposed as `@oobe-protocol-labs/sap-mcp-server/server-runtime`; owns shared MCP server bootstrap, capability registration, and server metadata. |
 | `@oobe-protocol-labs/sap-mcp-hosted-gateway` | `src/remote` | `remote-server` | Exposed as `@oobe-protocol-labs/sap-mcp-server/hosted-gateway`; owns hosted Streamable HTTP MCP, public metadata, premium remote routes, and deployment behavior. |
@@ -153,7 +153,7 @@ of tool names. `config/mcp-apps-card-contracts.json` defines high-value tools
 that must stay on specialized cards plus the minimum specialized-card coverage
 for runtime catalogs. Production UI code must keep this dependency direction
 one-way: the tool catalog may pass expected tool names into `ui-cards`, but
-`src/ui` must not import `src/tools`.
+`src/ui` must not import `packages/tools/src`.
 
 Tool registration is module-driven. Each tool family declares a
 `ToolModuleDefinition` manifest with category, order, optional runtime

@@ -27,10 +27,10 @@ root package:
 | Package | Boundary | Physical source | Compatibility source | Architecture domain | Rule |
 | --- | --- | --- | --- | --- |
 | `@oobe-protocol-labs/sap-mcp-core` | Shared runtime contracts | `packages/core/src` | `src/core` | `core` | No runtime feature dependencies. |
-| `@oobe-protocol-labs/sap-mcp-schemas` | Public schemas and protocol contracts | `packages/schemas/src` | `src/schemas` | `schemas` | May depend on core only. |
+| `@oobe-protocol-labs/sap-mcp-schemas` | Public schemas and protocol contracts | `packages/schemas/src` | `packages/schemas/src` | `schemas` | May depend on core only. |
 | `@oobe-protocol-labs/sap-mcp-mcp-adapter` | MCP SDK compatibility and response helpers | `packages/mcp-adapter/src` | `src/adapters/mcp` | `mcp-adapter` | May depend on core, security, payments, observability, tool aliases, and UI card resources. |
 | `@oobe-protocol-labs/sap-mcp-ui-cards` | MCP Apps Cards and `ui://` resources | `packages/ui-cards/src` | `src/ui` | `ui-cards` | Must stay rendering-only; no signer, remote server, or payment side effects. |
-| `@oobe-protocol-labs/sap-mcp-tools` | Tool module registry and built-in catalog | `packages/tools/src` | `src/tools` | `tools` | Owns tool-family manifests, policy metadata, runtime selection, and trusted plugin integration. |
+| `@oobe-protocol-labs/sap-mcp-tools` | Tool module registry and built-in catalog | `packages/tools/src` | `packages/tools/src` | `tools` | Owns tool-family manifests, policy metadata, runtime selection, and trusted plugin integration. |
 | `@oobe-protocol-labs/sap-mcp-config-runtime` | Profile config, runtime doctor, and client injection | `packages/config-runtime/src` | `src/config` | `config` | Owns one profile model, secret redaction, runtime doctor primitives, and safe client repair. |
 | `@oobe-protocol-labs/sap-mcp-server-runtime` | Shared MCP server runtime | `packages/server-runtime/src` | `src/server` | `server` | Owns server bootstrap, server metadata, and capability registration. |
 | `@oobe-protocol-labs/sap-mcp-hosted-gateway` | Hosted Streamable HTTP gateway | `packages/hosted-gateway/src` | `src/remote` | `remote-server` | Owns hosted routes, public metadata, premium remote routes, and non-custodial hosted behavior. |
@@ -97,7 +97,7 @@ bundled skill discovery, install, repair, and self-update tools. The local
 x402/payment bridge paid-call, challenge, receipt, readiness, transaction
 finalization, registry-write, and prepaid helpers are also covered by the same
 pipeline contract.
-Adrena subfamilies share `src/tools/adrena/adrena-pipeline.ts` for structured
+Adrena subfamilies share `packages/tools/src/adrena/adrena-pipeline.ts` for structured
 success/error responses, optional UI cards, and `responseMode: 'data'`
 registration.
 Application tool modules have a zero-tolerance legacy registration guard:
@@ -115,7 +115,7 @@ Tool families use a validated `ToolModuleDefinition`: `id`, `title`,
 `description`, `category`, `order`, optional `requires`, optional `when`,
 optional `expectedTools`, optional `mode`, and a `register(server, context)`
 callback. New first-party tool classes should be added to
-`src/tools/builtin-tool-modules.ts`; plugin integrations should use
+`packages/tools/src/builtin-tool-modules.ts`; plugin integrations should use
 `createPluginToolModule` with a namespace prefix and pass trusted modules to
 `registerToolsWithSummary(server, context, { additionalModules })`.
 Plugin modules must carry `packageName` and `version` provenance, declare at

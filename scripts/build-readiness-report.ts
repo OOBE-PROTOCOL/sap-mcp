@@ -4,18 +4,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SapMcpConfig, SapMcpContext } from '../src/core/types.js';
 import { MCP_SERVER_VERSION } from '../src/core/constants.js';
-import { BUILTIN_TOOL_MODULES } from '../src/tools/builtin-tool-modules.js';
-import { buildToolCatalogForRuntimeProfiles } from '../src/tools/tool-catalog.js';
-import { buildToolModulePolicyCatalog } from '../src/tools/tool-execution-metadata.js';
-import { assertToolModuleCatalogValid, type ToolModuleRuntimeProfile } from '../src/tools/tool-module-validation.js';
-import { buildToolCardCoverageReport, classifyToolCardCoverage } from '../src/ui/tool-card-registry.js';
-import { createDefaultDesktopWizardDraft, getDesktopHostedDiscovery } from '../src/wizard-core/desktop-flow.js';
+import { BUILTIN_TOOL_MODULES } from '../packages/tools/src/builtin-tool-modules.js';
+import { buildToolCatalogForRuntimeProfiles } from '../packages/tools/src/tool-catalog.js';
+import { buildToolModulePolicyCatalog } from '../packages/tools/src/tool-execution-metadata.js';
+import { assertToolModuleCatalogValid, type ToolModuleRuntimeProfile } from '../packages/tools/src/tool-module-validation.js';
+import { buildToolCardCoverageReport, classifyToolCardCoverage } from '../packages/ui-cards/src/tool-card-registry.js';
+import { createDefaultDesktopWizardDraft, getDesktopHostedDiscovery } from '../packages/wizard-core/src/desktop-flow.js';
 import {
   buildHostedPaymentBridgeContent,
   HOSTED_SAP_MCP_URL,
   validateHostedPaymentBridgeContent,
   type McpClientTarget,
-} from '../src/config/mcp-client-injection.js';
+} from '../packages/config-runtime/src/mcp-client-injection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -207,27 +207,27 @@ const requiredWorkflowCommands = [
 const requiredPluginModulePolicyEvidence = [
   {
     id: 'namespace-kebab-case',
-    file: 'src/tools/module-registry.ts',
+    file: 'packages/tools/src/module-registry.ts',
     contains: 'must use lowercase kebab-case',
   },
   {
     id: 'package-provenance',
-    file: 'src/tools/module-registry.ts',
+    file: 'packages/tools/src/module-registry.ts',
     contains: 'must declare packageName provenance',
   },
   {
     id: 'version-provenance',
-    file: 'src/tools/module-registry.ts',
+    file: 'packages/tools/src/module-registry.ts',
     contains: 'must declare version provenance',
   },
   {
     id: 'expected-tool-sentinels',
-    file: 'src/tools/module-registry.ts',
+    file: 'packages/tools/src/module-registry.ts',
     contains: 'must declare expectedTools sentinels',
   },
   {
     id: 'expected-tool-namespace-prefix',
-    file: 'src/tools/module-registry.ts',
+    file: 'packages/tools/src/module-registry.ts',
     contains: 'must use namespace prefix',
   },
   {
@@ -357,8 +357,8 @@ const branchDoc = readText('docs/BRANCHING_CI_RELEASE_WORKFLOW.md');
 const operatingModel = readText('docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md');
 const userMcpClientMatrixDoc = readText('USER_DOCS/04_MCP_CLIENT_CONFIGURATION_MATRIX.md');
 const pullRequestTemplate = readText('.github/pull_request_template.md');
-const desktopWizardSource = readText('src/wizard-core/desktop-flow.ts');
-const mcpClientInjectionSource = readText('src/config/mcp-client-injection.ts');
+const desktopWizardSource = readText('packages/wizard-core/src/desktop-flow.ts');
+const mcpClientInjectionSource = readText('packages/config-runtime/src/mcp-client-injection.ts');
 const ciWorkflow = readText('.github/workflows/ci.yml');
 const desktopWorkflow = readText('.github/workflows/desktop-release.yml');
 
@@ -367,18 +367,18 @@ const policyCatalog = buildToolModulePolicyCatalog(BUILTIN_TOOL_MODULES);
 const runtimeCatalogs = buildToolCatalogForRuntimeProfiles(BUILTIN_TOOL_MODULES, runtimeProfiles);
 const toolPluginTemplateContract = workspacePackageContracts.packages.find((contract) => contract.id === 'tool-plugin-template');
 const nonToolExecutionAuditFiles = new Set([
-  'src/tools/index.ts',
-  'src/tools/tool-execution-pipeline.ts',
-  'src/tools/tool-family-pipeline.ts',
-  'src/tools/tool-execution-metadata.ts',
-  'src/tools/tool-module-manifest.ts',
-  'src/tools/tool-module-validation.ts',
-  'src/tools/tool-catalog.ts',
-  'src/tools/module-registry.ts',
-  'src/tools/builtin-tool-modules.ts',
-  'src/tools/tool-aliases.ts',
+  'packages/tools/src/index.ts',
+  'packages/tools/src/tool-execution-pipeline.ts',
+  'packages/tools/src/tool-family-pipeline.ts',
+  'packages/tools/src/tool-execution-metadata.ts',
+  'packages/tools/src/tool-module-manifest.ts',
+  'packages/tools/src/tool-module-validation.ts',
+  'packages/tools/src/tool-catalog.ts',
+  'packages/tools/src/module-registry.ts',
+  'packages/tools/src/builtin-tool-modules.ts',
+  'packages/tools/src/tool-aliases.ts',
 ]);
-const toolExecutionSourceFiles = walkSourceFiles(path.join(repoRoot, 'src/tools'))
+const toolExecutionSourceFiles = walkSourceFiles(path.join(repoRoot, 'packages/tools/src'))
   .map((absolutePath) => toRepoRelativePath(absolutePath))
   .filter((relativePath) => !nonToolExecutionAuditFiles.has(relativePath));
 const registerPipelineToolPattern = /\bregisterPipelineTool(?:\s*<[^(\n]+>)?\s*\(/g;

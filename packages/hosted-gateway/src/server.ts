@@ -38,12 +38,32 @@ import { buildToolCatalog } from '../../tools/src/tool-catalog.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
-const LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'explorer_logo.png');
-const OOBE_LOGO_ASSET_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'oobe-logo.png');
-const LOGO_ASSET_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets', 'logos');
-const DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
-const USER_DOCS_ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'USER_DOCS');
-const SMITHERY_CONFIG_SCHEMA_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'smithery.config.schema.json');
+function resolvePublishedRoot(startDir: string): string {
+  let current = startDir;
+  while (true) {
+    if (
+      existsSync(join(current, 'package.json'))
+      && existsSync(join(current, 'assets'))
+      && existsSync(join(current, 'docs'))
+      && existsSync(join(current, 'smithery.config.schema.json'))
+    ) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return startDir;
+    }
+    current = parent;
+  }
+}
+
+const PUBLISHED_ROOT_PATH = resolvePublishedRoot(dirname(fileURLToPath(import.meta.url)));
+const LOGO_ASSET_PATH = join(PUBLISHED_ROOT_PATH, 'assets', 'explorer_logo.png');
+const OOBE_LOGO_ASSET_PATH = join(PUBLISHED_ROOT_PATH, 'assets', 'oobe-logo.png');
+const LOGO_ASSET_ROOT_PATH = join(PUBLISHED_ROOT_PATH, 'assets', 'logos');
+const DOCS_ROOT_PATH = join(PUBLISHED_ROOT_PATH, 'docs');
+const USER_DOCS_ROOT_PATH = join(PUBLISHED_ROOT_PATH, 'USER_DOCS');
+const SMITHERY_CONFIG_SCHEMA_PATH = join(PUBLISHED_ROOT_PATH, 'smithery.config.schema.json');
 const PAYMENT_STATS_CACHE_MS = 15_000;
 const SERVER_CARD_CACHE_MS = 300_000;
 const RELEASE_DOWNLOAD_BASE_URL = `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/download/${MCP_SERVER_VERSION}`;

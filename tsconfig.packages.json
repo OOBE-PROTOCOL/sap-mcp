@@ -18,12 +18,6 @@
     "packages/hosted-gateway/src/**/*.ts",
     "src/observability/**/*.ts",
     "src/security/**/*.ts",
-    "src/tools/tool-aliases.ts",
-    "src/tools/tool-execution-metadata.ts",
-    "src/tools/builtin-tool-modules.ts",
-    "src/tools/tool-module-manifest.ts",
-    "src/tools/tool-module-validation.ts",
-    "src/tools/module-registry.ts",
     "src/runtime/**/*.ts",
     "src/transports/**/*.ts"
   ],

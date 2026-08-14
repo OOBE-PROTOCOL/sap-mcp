@@ -6,10 +6,10 @@
     "baseUrl": ".",
     "paths": {
       "@oobe-protocol-labs/sap-mcp-server/mcp-adapter": [
-        "../../src/adapters/mcp/index.ts"
+        "../../packages/mcp-adapter/src/index.ts"
       ],
       "@oobe-protocol-labs/sap-mcp-server/tools": [
-        "../../src/tools/index.ts"
+        "../../packages/tools/src/index.ts"
       ]
     }
   },

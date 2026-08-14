@@ -4,18 +4,18 @@
   "mcpName": "ai.oobeprotocol.sap.mcp/sap-mcp",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "bin": {
-    "sap-mcp-server": "dist/bin/sap-mcp-server.js",
-    "sap-mcp-config": "dist/config-cli.js",
+    "sap-mcp-server": "dist/src/bin/sap-mcp-server.js",
+    "sap-mcp-config": "dist/src/config-cli.js",
     "sap-mcp-wizard": "dist/tui/config-wizard.js",
-    "sap-signing-proxy": "dist/signer/signing-proxy.js",
-    "sap-mcp-remote": "dist/bin/sap-mcp-remote.js",
-    "sap-mcp-facilitator": "dist/payments/oobe-facilitator-server.js",
-    "sap-mcp-pay-sh-spec": "dist/payments/pay-sh-spec.js",
-    "sap-mcp-x402-paid-call": "dist/payments/x402-paid-call.js"
+    "sap-signing-proxy": "dist/src/signer/signing-proxy.js",
+    "sap-mcp-remote": "dist/src/bin/sap-mcp-remote.js",
+    "sap-mcp-facilitator": "dist/src/payments/oobe-facilitator-server.js",
+    "sap-mcp-pay-sh-spec": "dist/src/payments/pay-sh-spec.js",
+    "sap-mcp-x402-paid-call": "dist/src/payments/x402-paid-call.js"
   },
   "files": [
     "dist",
@@ -38,9 +38,9 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
     },
     "./core": {
       "types": "./dist/packages/core/src/index.d.ts",
@@ -103,7 +103,7 @@
     "desktop:build": "pnpm run build && pnpm run desktop:renderer:build && electron-builder --config apps/desktop/electron-builder.cjs --publish never",
     "desktop:verify-artifact": "node scripts/verify-desktop-artifact.mjs",
     "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js",
+    "start": "node dist/src/cli.js",
     "config": "tsx src/config-cli.ts",
     "tui:config": "tsx src/tui/config-wizard.tsx",
     "typecheck": "tsc --noEmit --skipLibCheck",

@@ -139,8 +139,8 @@ Avoid stubs, fake compatibility wrappers, `any`, TODO-only handlers, and undocum
 ## 09.7 Tool Module Integration Standard
 
 Tool registration is module-driven. First-party tool families live in
-`src/tools/builtin-tool-modules.ts` and are registered through the shared
-registry in `src/tools/module-registry.ts`.
+`packages/tools/src/builtin-tool-modules.ts` and are registered through the shared
+registry in `packages/tools/src/module-registry.ts`.
 
 Each module must declare:
 
@@ -264,7 +264,7 @@ the pipeline while preserving unsigned transaction outputs for local
 preview/sign/submit. Adrena open/close, SL/TP, simulation, position package,
 trade-intent, trailing-stop, and modify-position tools use the same pipeline
 and keep policy violations as structured MCP errors. New Adrena tool families
-should use the shared `src/tools/adrena/adrena-pipeline.ts` helper instead of
+should use the shared `packages/tools/src/adrena/adrena-pipeline.ts` helper instead of
 creating per-file response wrappers. Transaction decode, preview, signing, signed
 submission, and hosted-safe SOL/SPL transfer builders use
 `registerToolFamilyPipelineTool` while preserving the existing policy checks
@@ -291,13 +291,13 @@ helpers. New read-only control-plane tools should follow this pattern before
 lower-level protocol write surfaces are migrated.
 
 Tool execution policy metadata is centralized in
-`src/tools/tool-execution-metadata.ts` and exported through
+`packages/tools/src/tool-execution-metadata.ts` and exported through
 `@oobe-protocol-labs/sap-mcp-server/tools`. Use
 `getToolExecutionMetadata` and `buildToolModulePolicyCatalog` for wizard,
 plugin, UI, and CI surfaces instead of duplicating pricing, hosted/local
 eligibility, signer-boundary, or route guidance.
 
-Runtime catalog generation is centralized in `src/tools/tool-catalog.ts`.
+Runtime catalog generation is centralized in `packages/tools/src/tool-catalog.ts`.
 Use `buildToolCatalog` for a single local/hosted/bridge profile and
 `buildToolCatalogForRuntimeProfiles` for release or wizard matrices. The
 catalog combines selected modules, expected tool sentinels, category counts,
@@ -326,7 +326,7 @@ Required checks for each new module:
 4. Policy metadata check for every `expectedTools` sentinel.
 5. `pnpm run verify:tool-modules`
 6. `pnpm run typecheck`
-7. `pnpm exec vitest run src/tools/module-registry.test.ts src/tools/tool-execution-metadata.test.ts src/tools/tool-catalog.test.ts`
+7. `pnpm exec vitest run packages/tools/src/module-registry.test.ts packages/tools/src/tool-execution-metadata.test.ts packages/tools/src/tool-catalog.test.ts`
 8. `pnpm run verify:exports` after `pnpm run build` when public exports change.
 
 ## 09.8 Language Behavior

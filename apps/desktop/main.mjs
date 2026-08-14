@@ -11,7 +11,7 @@ const rendererDir = join(__dirname, 'dist-renderer');
 let mainWindow = null;
 
 async function loadWizardCore() {
-  const modulePath = join(repoRoot, 'dist', 'wizard-core', 'desktop-flow.js');
+  const modulePath = join(repoRoot, 'dist', 'packages', 'wizard-core', 'src', 'desktop-flow.js');
   return await import(pathToFileURL(modulePath).href);
 }
 

@@ -32,7 +32,7 @@
         { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Normie" },
         { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Developer" },
         { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Agent" },
-        { "file": "src/wizard-core/desktop-flow.ts", "contains": "getDesktopHostedDiscovery" },
+        { "file": "packages/wizard-core/src/desktop-flow.ts", "contains": "getDesktopHostedDiscovery" },
         { "file": "config/wizard-readiness-contracts.json", "contains": "\"requiredLocalBridgeTools\"" },
         { "file": "apps/desktop/src/main.tsx", "contains": "HostedToolCatalogPanel" }
       ]
@@ -63,15 +63,15 @@
       "id": "tools-plugin-validation",
       "description": "Tool families are modular, validated, policy-aware, and extensible through trusted plugin modules.",
       "evidence": [
-        { "file": "src/tools/module-registry.ts", "contains": "createPluginToolModule" },
-        { "file": "src/tools/module-registry.ts", "contains": "must declare packageName provenance" },
-        { "file": "src/tools/module-registry.ts", "contains": "must declare expectedTools sentinels" },
-        { "file": "src/tools/tool-execution-pipeline.ts", "contains": "registerPipelineTool" },
-        { "file": "src/tools/tool-family-pipeline.ts", "contains": "registerToolFamilyPipelineTool" },
+        { "file": "packages/tools/src/module-registry.ts", "contains": "createPluginToolModule" },
+        { "file": "packages/tools/src/module-registry.ts", "contains": "must declare packageName provenance" },
+        { "file": "packages/tools/src/module-registry.ts", "contains": "must declare expectedTools sentinels" },
+        { "file": "packages/tools/src/tool-execution-pipeline.ts", "contains": "registerPipelineTool" },
+        { "file": "packages/tools/src/tool-family-pipeline.ts", "contains": "registerToolFamilyPipelineTool" },
         { "file": "config/tool-execution-pipeline-contracts.json", "contains": "\"sap_network_stats\"" },
         { "file": "scripts/verify-tool-execution-pipeline.mjs", "contains": "Tool execution pipeline OK" },
-        { "file": "src/tools/tool-module-validation.ts", "contains": "assertToolModuleCatalogValid" },
-        { "file": "src/tools/tool-catalog.ts", "contains": "buildToolCatalogForRuntimeProfiles" },
+        { "file": "packages/tools/src/tool-module-validation.ts", "contains": "assertToolModuleCatalogValid" },
+        { "file": "packages/tools/src/tool-catalog.ts", "contains": "buildToolCatalogForRuntimeProfiles" },
         { "file": "packages/tool-plugin-template/src/index.ts", "contains": "createPluginToolModule" },
         { "file": "packages/tool-plugin-template/src/index.ts", "contains": "registerToolFamilyPipelineTool" },
         { "file": "packages/tool-plugin-template/README.md", "contains": "Pass `packageName` and `version`" },
@@ -82,9 +82,9 @@
       "id": "mcp-apps-card-coverage",
       "description": "MCP Apps Cards have structured content, ui resources, and coverage diagnostics.",
       "evidence": [
-        { "file": "src/ui/tool-card-registry.ts", "contains": "buildToolCardCoverageReport" },
+        { "file": "packages/ui-cards/src/tool-card-registry.ts", "contains": "buildToolCardCoverageReport" },
         { "file": "config/mcp-apps-card-contracts.json", "contains": "\"requiredSpecializedTools\"" },
-        { "file": "src/adapters/mcp/tool-response.ts", "contains": "structuredContent" },
+        { "file": "packages/mcp-adapter/src/tool-response.ts", "contains": "structuredContent" },
         { "file": "config/package-export-contracts.json", "contains": "buildToolCardCoverageReport" },
         { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "MCP Apps Card coverage" },
         { "file": "scripts/build-readiness-report.ts", "contains": "buildToolCardCoverageReport" }
@@ -144,8 +144,8 @@
       "evidence": [
         { "file": "docs/08_SECURITY_POLICY_SIGNING_RUNBOOK.md", "contains": "Never ask hosted users to paste keypair bytes" },
         { "file": "skills/README.md", "contains": "Agents must never read keypair JSON files" },
-        { "file": "src/tools/agent-start-tool.ts", "contains": "runtimeDoctor" },
-        { "file": "src/config/runtime-doctor.ts", "contains": "buildDoctorReport" },
+        { "file": "packages/tools/src/agent-start-tool.ts", "contains": "runtimeDoctor" },
+        { "file": "packages/config-runtime/src/runtime-doctor.ts", "contains": "buildDoctorReport" },
         { "file": "src/server/create-server.test.ts", "contains": "not.toContain('keypair')" }
       ]
     }

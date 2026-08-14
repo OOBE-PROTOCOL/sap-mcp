@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 import type { SapMcpConfig, SapMcpContext } from '../src/core/types.js';
-import { BUILTIN_TOOL_MODULES } from '../src/tools/builtin-tool-modules.js';
-import { buildToolCatalogForRuntimeProfiles } from '../src/tools/tool-catalog.js';
-import { buildToolModulePolicyCatalog } from '../src/tools/tool-execution-metadata.js';
-import { assertToolModuleCatalogValid, type ToolModuleRuntimeProfile } from '../src/tools/tool-module-validation.js';
+import { BUILTIN_TOOL_MODULES } from '../packages/tools/src/builtin-tool-modules.js';
+import { buildToolCatalogForRuntimeProfiles } from '../packages/tools/src/tool-catalog.js';
+import { buildToolModulePolicyCatalog } from '../packages/tools/src/tool-execution-metadata.js';
+import { assertToolModuleCatalogValid, type ToolModuleRuntimeProfile } from '../packages/tools/src/tool-module-validation.js';
 
 function config(overrides: Partial<SapMcpConfig> = {}): SapMcpConfig {
   return {

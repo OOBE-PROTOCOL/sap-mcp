@@ -97,7 +97,18 @@ export function parseInput(input: unknown): SkillToolInput {
  */
 function getSkillsRoot(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  return resolve(currentDir, '../../skills');
+  let current = currentDir;
+  while (true) {
+    const candidate = join(current, 'skills');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return resolve(currentDir, '../../skills');
+    }
+    current = parent;
+  }
 }
 
 /**

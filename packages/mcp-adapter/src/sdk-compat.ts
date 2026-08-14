@@ -33,8 +33,8 @@ import {
 import { logger } from '../../core/src/logger.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { checkToolPermissions, privateKeyGuard } from '../../../src/security/index.js';
-import { canonicalizeToolName } from '../../../src/tools/tool-aliases.js';
-import { getToolExecutionMetadata } from '../../../src/tools/tool-execution-metadata.js';
+import { canonicalizeToolName } from '../../tools/src/tool-aliases.js';
+import { getToolExecutionMetadata } from '../../tools/src/tool-execution-metadata.js';
 import { recordToolCall, trackInFlight } from '../../../src/observability/metrics.js';
 
 // Track which handlers have been registered to avoid duplicates

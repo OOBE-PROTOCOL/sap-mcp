@@ -203,7 +203,7 @@ Error responses:
 
 | File | Description |
 |------|-------------|
-| `src/tools/magicblock-tools.ts` | 20 tool registrations with HTTP client |
-| `src/tools/__tests__/magicblock-tools.test.ts` | 10 smoke tests |
-| `src/tools/index.ts` | Barrel export |
-| `src/tools/register-tools.ts` | Registration call during server init |
+| `packages/tools/src/magicblock-tools.ts` | 20 tool registrations with HTTP client |
+| `packages/tools/src/__tests__/magicblock-tools.test.ts` | 10 smoke tests |
+| `packages/tools/src/index.ts` | Barrel export |
+| `packages/tools/src/register-tools.ts` | Registration call during server init |

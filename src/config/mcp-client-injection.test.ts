@@ -245,7 +245,7 @@ describe('MCP client injection', () => {
   });
 
   it('keeps hosted sap plus local sap_payments injection aligned with the runtime contract matrix', () => {
-    const source = readFileSync(join(process.cwd(), 'src/config/mcp-client-injection.ts'), 'utf-8');
+    const source = readFileSync(join(process.cwd(), 'packages/config-runtime/src/mcp-client-injection.ts'), 'utf-8');
     for (const functionName of runtimeClientInjectionContracts.requiredValidationFunctions) {
       expect(source).toContain(functionName);
     }
