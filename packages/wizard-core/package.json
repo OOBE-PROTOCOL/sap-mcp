@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP shared CLI and desktop wizard flow boundary.",
   "sapMcp": {
     "boundaryId": "wizard-core",
-    "source": "src/wizard-core",
+    "source": "packages/wizard-core/src",
     "architectureDomain": "wizard",
     "rootExport": "./wizard-core",
     "apiContract": "config/package-export-contracts.json#./wizard-core",
-    "boundary": "Shared CLI and desktop wizard flow boundary."
+    "boundary": "Shared CLI and desktop wizard flow boundary.",
+    "legacyCompatibilitySource": "src/wizard-core",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP Model Context Protocol adapter boundary.",
   "sapMcp": {
     "boundaryId": "mcp-adapter",
-    "source": "src/adapters/mcp",
+    "source": "packages/mcp-adapter/src",
     "architectureDomain": "mcp-adapter",
     "rootExport": "./mcp-adapter",
     "apiContract": "config/package-export-contracts.json#./mcp-adapter",
-    "boundary": "Model Context Protocol adapter compatibility layer."
+    "boundary": "Model Context Protocol adapter compatibility layer.",
+    "legacyCompatibilitySource": "src/adapters/mcp",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

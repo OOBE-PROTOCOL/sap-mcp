@@ -7,7 +7,7 @@
   "description": "Internal SAP MCP local stdio and payment bridge runtime boundary.",
   "sapMcp": {
     "boundaryId": "local-bridge",
-    "source": "src/local-bridge",
+    "source": "packages/local-bridge/src",
     "additionalSources": [
       "src/transports/stdio.ts",
       "src/bin",
@@ -16,6 +16,11 @@
     "architectureDomain": "local-bridge",
     "rootExport": "./local-bridge",
     "apiContract": "config/package-export-contracts.json#./local-bridge",
-    "boundary": "Local stdio MCP bridge, local payment bridge process, and local runtime entrypoint boundary."
+    "boundary": "Local stdio MCP bridge, local payment bridge process, and local runtime entrypoint boundary.",
+    "legacyCompatibilitySource": "src/local-bridge",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

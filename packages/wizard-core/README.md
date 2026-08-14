@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-wizard-core
 
-Internal package boundary for `src/wizard-core`.
+Internal package boundary for `packages/wizard-core/src`.
 
 This package owns the shared setup flow used by the CLI wizard and desktop
 wizard: hosted discovery metadata, profile defaults, runtime repair inputs, and

@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP Apps Card rendering boundary.",
   "sapMcp": {
     "boundaryId": "ui-cards",
-    "source": "src/ui",
+    "source": "packages/ui-cards/src",
     "architectureDomain": "ui-cards",
     "rootExport": "./ui-cards",
     "apiContract": "config/package-export-contracts.json#./ui-cards",
-    "boundary": "MCP Apps Card rendering boundary."
+    "boundary": "MCP Apps Card rendering boundary.",
+    "legacyCompatibilitySource": "src/ui",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

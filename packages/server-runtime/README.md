@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-server-runtime
 
-Internal package boundary for `src/server`.
+Internal package boundary for `packages/server-runtime/src`.
 
 Owns `createSapMcpServer`, capability registration, server metadata, and the
 shared MCP bootstrap surface used by hosted and local transports.

@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-local-bridge
 
-Internal package boundary for `src/local-bridge`, `src/transports/stdio.ts`,
+Internal package boundary for `packages/local-bridge/src`, `src/transports/stdio.ts`,
 `src/bin`, and `src/runtime`.
 
 Owns the local bridge entrypoints, stdio MCP transport, local runtime process

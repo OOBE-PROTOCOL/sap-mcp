@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +17,29 @@ function readJson(relativePath) {
 
 function addFailure(message) {
   failures.push(message);
+}
+
+function listSourceFiles(relativePath) {
+  const absolutePath = path.join(repoRoot, relativePath);
+  if (!existsSync(absolutePath)) {
+    return [];
+  }
+
+  const stat = statSync(absolutePath);
+  if (stat.isFile()) {
+    return relativePath.endsWith('.ts') && !relativePath.endsWith('.test.ts') ? [relativePath] : [];
+  }
+
+  const files = [];
+  for (const entry of readdirSync(absolutePath, { withFileTypes: true })) {
+    const childPath = `${relativePath}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...listSourceFiles(childPath));
+    } else if (entry.isFile() && childPath.endsWith('.ts') && !childPath.endsWith('.test.ts')) {
+      files.push(childPath);
+    }
+  }
+  return files;
 }
 
 const rootPackageJson = readJson('package.json');
@@ -43,6 +66,10 @@ function stripSourceRoot(sourcePath) {
     : null;
 }
 
+function isPhysicalPackageSource(sourcePath, packagePath) {
+  return sourcePath === `${packagePath}/src` || sourcePath.startsWith(`${packagePath}/src/`);
+}
+
 function architectureDomainCoversSource(domain, sourcePath) {
   const relativeSource = stripSourceRoot(sourcePath);
   if (relativeSource === null) {
@@ -66,6 +93,7 @@ for (const contract of packageContracts) {
   const readmePath = `${contract.path}/README.md`;
   const absoluteSource = path.join(repoRoot, contract.source);
   const additionalSources = contract.additionalSources ?? [];
+  const legacyCompatibilitySource = contract.legacyCompatibilitySource;
 
   if (!actualPackagePaths.has(contract.path)) {
     addFailure(`${contract.path} does not exist under packages/`);
@@ -81,6 +109,18 @@ for (const contract of packageContracts) {
   }
   if (!existsSync(absoluteSource)) {
     addFailure(`${contract.id} source boundary does not exist: ${contract.source}`);
+  }
+  if (contract.physicalSource === true) {
+    if (!isPhysicalPackageSource(contract.source, contract.path)) {
+      addFailure(`${contract.id} physical source must live under ${contract.path}/src`);
+    }
+    const packageSourceFiles = listSourceFiles(contract.source);
+    if (packageSourceFiles.length === 0) {
+      addFailure(`${contract.id} physical source must contain at least one non-test TypeScript source file`);
+    }
+    if (typeof legacyCompatibilitySource !== 'string' || !existsSync(path.join(repoRoot, legacyCompatibilitySource))) {
+      addFailure(`${contract.id} physical source must declare an existing legacyCompatibilitySource`);
+    }
   }
   for (const source of additionalSources) {
     if (!existsSync(path.join(repoRoot, source))) {
@@ -116,6 +156,12 @@ for (const contract of packageContracts) {
   if (sapMcp.source !== contract.source) {
     addFailure(`${packageJsonPath} sapMcp.source must be ${contract.source}`);
   }
+  if ((sapMcp.legacyCompatibilitySource ?? undefined) !== legacyCompatibilitySource) {
+    addFailure(`${packageJsonPath} sapMcp.legacyCompatibilitySource must match the workspace package contract`);
+  }
+  if ((sapMcp.physicalSource ?? false) !== (contract.physicalSource ?? false)) {
+    addFailure(`${packageJsonPath} sapMcp.physicalSource must be ${contract.physicalSource ?? false}`);
+  }
   if (JSON.stringify(sapMcp.additionalSources ?? []) !== JSON.stringify(additionalSources)) {
     addFailure(`${packageJsonPath} sapMcp.additionalSources must match the workspace package contract`);
   }
@@ -141,6 +187,9 @@ for (const contract of packageContracts) {
   }
 
   for (const source of [contract.source, ...additionalSources]) {
+    if (isPhysicalPackageSource(source, contract.path)) {
+      continue;
+    }
     if (stripSourceRoot(source) === null) {
       if (contract.architectureDomain !== null) {
         addFailure(`${contract.id} source boundary ${source} is outside ${architectureBoundaries.root}/ and must use architectureDomain null`);

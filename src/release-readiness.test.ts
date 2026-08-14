@@ -46,29 +46,29 @@ describe('release readiness documentation and package surface', () => {
     expect(packageJson.scripts['verify:release:offline']).toContain('npm pack --dry-run');
     expect(packageJson.scripts['verify:release:offline']).toContain('verify:exports');
     expect(packageJson.exports['./core']).toEqual({
-      types: './dist/core/index.d.ts',
-      import: './dist/core/index.js',
-      require: './dist/core/index.js',
+      types: './dist/packages/core/src/index.d.ts',
+      import: './dist/packages/core/src/index.js',
+      require: './dist/packages/core/src/index.js',
     });
     expect(packageJson.exports['./schemas']).toEqual({
-      types: './dist/schemas/index.d.ts',
-      import: './dist/schemas/index.js',
-      require: './dist/schemas/index.js',
+      types: './dist/packages/schemas/src/index.d.ts',
+      import: './dist/packages/schemas/src/index.js',
+      require: './dist/packages/schemas/src/index.js',
     });
     expect(packageJson.exports['./mcp-adapter']).toEqual({
-      types: './dist/adapters/mcp/index.d.ts',
-      import: './dist/adapters/mcp/index.js',
-      require: './dist/adapters/mcp/index.js',
+      types: './dist/packages/mcp-adapter/src/index.d.ts',
+      import: './dist/packages/mcp-adapter/src/index.js',
+      require: './dist/packages/mcp-adapter/src/index.js',
     });
     expect(packageJson.exports['./ui-cards']).toEqual({
-      types: './dist/ui/index.d.ts',
-      import: './dist/ui/index.js',
-      require: './dist/ui/index.js',
+      types: './dist/packages/ui-cards/src/index.d.ts',
+      import: './dist/packages/ui-cards/src/index.js',
+      require: './dist/packages/ui-cards/src/index.js',
     });
     expect(packageJson.exports['./tools']).toEqual({
-      types: './dist/tools/index.d.ts',
-      import: './dist/tools/index.js',
-      require: './dist/tools/index.js',
+      types: './dist/packages/tools/src/index.d.ts',
+      import: './dist/packages/tools/src/index.js',
+      require: './dist/packages/tools/src/index.js',
     });
   });
 

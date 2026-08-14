@@ -242,6 +242,33 @@ function addIssue(message: string): void {
   issues.push(message);
 }
 
+function listSourceFiles(relativePath: string): string[] {
+  const absolutePath = path.join(repoRoot, relativePath);
+  if (!existsSync(absolutePath)) {
+    return [];
+  }
+
+  const stat = statSync(absolutePath);
+  if (stat.isFile()) {
+    return relativePath.endsWith('.ts') && !relativePath.endsWith('.test.ts') ? [relativePath] : [];
+  }
+
+  const files: string[] = [];
+  for (const entry of readdirSync(absolutePath, { withFileTypes: true })) {
+    const childPath = `${relativePath}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...listSourceFiles(childPath));
+    } else if (entry.isFile() && childPath.endsWith('.ts') && !childPath.endsWith('.test.ts')) {
+      files.push(childPath);
+    }
+  }
+  return files;
+}
+
+function isPhysicalPackageSource(source: string, packagePath: string): boolean {
+  return source === `${packagePath}/src` || source.startsWith(`${packagePath}/src/`);
+}
+
 const packageJson = readJson<{
   version: string;
   scripts: Record<string, string>;
@@ -255,6 +282,8 @@ const workspacePackageContracts = readJson<{
     path: string;
     source: string;
     additionalSources?: readonly string[];
+    legacyCompatibilitySource?: string;
+    physicalSource?: boolean;
     architectureDomain: string | null;
     rootExport: string | null;
     template?: boolean;
@@ -624,8 +653,22 @@ for (const contract of workspacePackageContracts.packages) {
   if (contract.rootExport !== null && !requiredPackageExports.includes(contract.rootExport as typeof requiredPackageExports[number])) {
     addIssue(`Workspace package ${contract.id} root export ${contract.rootExport} is not part of the required package export set.`);
   }
+  if (contract.physicalSource === true) {
+    if (!isPhysicalPackageSource(contract.source, contract.path)) {
+      addIssue(`Workspace package ${contract.id} physical source ${contract.source} must live under ${contract.path}/src.`);
+    }
+    if (listSourceFiles(contract.source).length === 0) {
+      addIssue(`Workspace package ${contract.id} physical source ${contract.source} has no non-test TypeScript files.`);
+    }
+    if (typeof contract.legacyCompatibilitySource !== 'string' || !existsSync(path.join(repoRoot, contract.legacyCompatibilitySource))) {
+      addIssue(`Workspace package ${contract.id} must declare an existing legacyCompatibilitySource while src compatibility remains active.`);
+    }
+  }
   const sourceRootPrefix = `${architectureBoundaries.root}/`;
   for (const source of [contract.source, ...(contract.additionalSources ?? [])]) {
+    if (isPhysicalPackageSource(source, contract.path)) {
+      continue;
+    }
     if (!source.startsWith(sourceRootPrefix)) {
       if (contract.architectureDomain !== null) {
         addIssue(`Workspace package ${contract.id} source ${source} is outside ${architectureBoundaries.root}/ and must use architectureDomain null.`);
@@ -838,6 +881,9 @@ const report = {
       id: contract.id,
       source: contract.source,
       additionalSources: contract.additionalSources ?? [],
+      legacyCompatibilitySource: contract.legacyCompatibilitySource ?? null,
+      physicalSource: contract.physicalSource ?? false,
+      physicalSourceFiles: contract.physicalSource === true ? listSourceFiles(contract.source).length : 0,
       architectureDomain: contract.architectureDomain,
       rootExport: contract.rootExport,
       apiContract: contract.rootExport === null ? null : `config/package-export-contracts.json#${contract.rootExport}`,

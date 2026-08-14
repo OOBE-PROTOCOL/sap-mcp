@@ -2,10 +2,10 @@
 
 /**
  * SAP MCP Server - Configuration Wizard
- * 
+ *
  * Interactive wizard for initial configuration setup.
  * Guides users through secure configuration with explanations.
- * 
+ *
  * Usage:
  *   npx sap-mcp-config wizard
  */
@@ -211,10 +211,10 @@ function askChoice(question: string, choices: string[], defaultIndex: number = 0
         const marker = i === defaultIndex && !alreadyMarked ? ' (recommended)' : '';
         console.log(`  ${paint(`${i + 1})`, 'gray')} ${formatChoiceLabel(choice)}${paint(marker, 'green')}`);
       });
-      
+
       const prompt = `Enter choice (1-${choices.length})`;
       const defaultChoice = defaultIndex + 1;
-      
+
       rl.question(`${paint(`${prompt} [${defaultChoice}]:`, 'gray')} `, (answer) => {
         const raw = answer.trim();
         if (isExitCommand(raw)) {
@@ -365,21 +365,21 @@ function printHeader(title: string, subtitle?: string) {
   const width = WIZARD_WIDTH;
   const line = '═'.repeat(width);
   const space = ' '.repeat(width);
-  
+
   console.log('');
   console.log(paint('╔' + line + '╗', 'aqua'));
   console.log(paint('║', 'aqua') + space + paint('║', 'aqua'));
-  
+
   const titlePadding = Math.floor((width - title.length) / 2);
   const titleLine = ' '.repeat(titlePadding) + title + ' '.repeat(width - titlePadding - title.length);
   console.log(paint('║', 'aqua') + paint(titleLine, 'bold') + paint('║', 'aqua'));
-  
+
   if (subtitle) {
     const subPadding = Math.floor((width - subtitle.length) / 2);
     const subLine = ' '.repeat(subPadding) + subtitle + ' '.repeat(width - subPadding - subtitle.length);
     console.log(paint('║', 'aqua') + paint(subLine, 'gray') + paint('║', 'aqua'));
   }
-  
+
   console.log(paint('║', 'aqua') + space + paint('║', 'aqua'));
   console.log(paint('╚' + line + '╝', 'aqua'));
   console.log('');
@@ -401,7 +401,7 @@ function printSapLogo() {
     '  │  Synapse Agent Protocol  │  MCP     │',
     '  └─────────────────────────────────────┘',
   ];
-  
+
   console.log(logo.map((line) => paint(line, 'aqua')).join('\n'));
   console.log('');
 }
@@ -618,7 +618,7 @@ async function wizardWelcome() {
     'SAP MCP Configuration Wizard',
     'Secure setup for AI agent access to SAP Protocol'
   );
-  
+
   printLead('This guided setup creates a named SAP MCP profile, isolates its wallet, and prepares MCP clients to load the active profile safely.');
   printLead('You can review everything before saving. Secret key bytes are never printed or injected into client configs.');
   printControlHints();
@@ -634,12 +634,12 @@ async function wizardWelcome() {
   printBullet('It will not print, log, or copy keypair bytes.');
   printBullet('It will not write anything until the final confirmation step.');
   console.log('');
-  
+
   const continueResult = await askConfirm('Continue?', true, [
     'Choose yes to create/update a named SAP MCP profile.',
     'Type /exit at any prompt to leave without saving.',
   ]);
-  
+
   if (!continueResult) {
     throw new WizardCancelled();
   }
@@ -697,7 +697,7 @@ async function wizardProfile(): Promise<string> {
     clearConsole();
     printSapLogo();
     printHeader('Step 2: Agent Profile', 'Create or select agent identity');
-    
+
     printLead('Choose a stable profile name for this agent or operator identity.');
     printControlHints();
     console.log('');
@@ -713,7 +713,7 @@ async function wizardProfile(): Promise<string> {
     printBullet('dev-testing-mainnet');
     printBullet('citizen-support-bot');
     console.log('');
-    
+
     const profileName = await askQuestion('Profile name', {
       required: true,
       transform: (value) => value.trim().toLowerCase(),
@@ -724,7 +724,7 @@ async function wizardProfile(): Promise<string> {
         'This name becomes config-<profile>.json and <profile>-keypair.json.',
       ],
     });
-    
+
     return profileName;
   }
 }
@@ -736,7 +736,7 @@ async function wizardMode(): Promise<SapMcpMode> {
   clearConsole();
   printSapLogo();
   printHeader('Step 3: Connection & Signing Mode', 'Where should this SAP MCP profile operate?');
-  
+
   printLead('For most users, choose the hosted SAP MCP Server: agents connect to https://mcp.sap.oobeprotocol.ai/mcp while payments and signatures stay on this machine through the local sap_payments bridge.');
   console.log('');
   printLabel('Mode guidance');
@@ -753,7 +753,7 @@ async function wizardMode(): Promise<SapMcpMode> {
   console.log('');
   printControlHints();
   console.log('');
-  
+
   const choices = [
     `${paint('hosted-api', 'aqua', 'bold')} ${paint('[RECOMMENDED]', 'green', 'bold')} - Connect agents to OOBE hosted MCP; keep signing local.`,
     `${paint('local-dev-keypair', 'aqua', 'bold')} ${paint('[local stdio/dev]', 'yellow')} - Run local tools with this profile's dedicated keypair file.`,
@@ -761,14 +761,14 @@ async function wizardMode(): Promise<SapMcpMode> {
     `${paint('readonly', 'aqua', 'bold')} ${paint('[read-only]', 'blue')} - Read tools only; no payment or transaction signing.`,
     `${paint('delegated-session', 'aqua', 'bold')} ${paint('[advanced]', 'blue')} - Session-scoped permissions and spending limits.`,
   ];
-  
+
   const index = await askChoice(paint('Select operating mode:', 'aqua', 'bold'), choices, 0, [
     'hosted-api is the normal hosted path: remote tools plus local sap_payments signing.',
     'local-dev-keypair is for developers who intentionally run local stdio tools.',
     'external-signer is preferred when a production custody layer owns signing.',
     'readonly is for discovery-only users.',
   ]);
-  
+
   const modes: SapMcpMode[] = ['hosted-api', 'local-dev-keypair', 'external-signer', 'readonly', 'delegated-session'];
   return modes[index];
 }
@@ -780,12 +780,12 @@ async function wizardRpcUrl(mode: SapMcpMode): Promise<string> {
   clearConsole();
   printSapLogo();
   printHeader('Step 4: Solana RPC', 'Blockchain connection settings');
-  
+
   const isDev = mode === 'local-dev-keypair';
-  const defaultRpc = isDev 
+  const defaultRpc = isDev
     ? 'https://api.devnet.solana.com'
     : 'https://api.mainnet-beta.solana.com';
-  
+
   printLead('Select the Solana network and RPC endpoint this profile will use. Tools will report and execute against this configured network.');
   printControlHints();
   console.log('');
@@ -795,7 +795,7 @@ async function wizardRpcUrl(mode: SapMcpMode): Promise<string> {
   printField('Testnet', paint('https://api.testnet.solana.com', 'blue'));
   printField('Custom', 'Your own RPC endpoint');
   console.log('');
-  
+
   const rpcUrl = await askQuestion('RPC URL', {
     defaultValue: defaultRpc,
     required: true,
@@ -806,7 +806,7 @@ async function wizardRpcUrl(mode: SapMcpMode): Promise<string> {
       'Custom RPC endpoints are allowed if they use http:// or https://.',
     ],
   });
-  
+
   return rpcUrl;
 }
 
@@ -820,7 +820,7 @@ async function wizardSignerConfig(
   if (mode === 'readonly') {
     return {};
   }
-  
+
   if (mode === 'local-dev-keypair' || mode === 'hosted-api') {
     clearConsole();
     printSapLogo();
@@ -828,7 +828,7 @@ async function wizardSignerConfig(
       'Step 5: Wallet Configuration',
       mode === 'hosted-api' ? 'Hosted signing profile' : 'Local keypair setup',
     );
-    
+
     printLead(
       mode === 'hosted-api'
         ? 'Hosted SAP MCP runs remotely, but x402 payments and value-moving operations are still authorized by your local profile wallet or external signer.'
@@ -856,7 +856,7 @@ async function wizardSignerConfig(
 
       console.log('');
     }
-    
+
     const useExisting = await askChoice('Choose option:', [
       'Use existing wallet file',
       `Create new wallet for "${profileName}"`,
@@ -865,7 +865,7 @@ async function wizardSignerConfig(
       'Using an existing wallet validates the JSON keypair file and stores only its path.',
       'Do not paste keypair bytes into the terminal.',
     ]);
-    
+
     if (useExisting === 0) {
       // Use existing wallet
       console.log('');
@@ -874,9 +874,9 @@ async function wizardSignerConfig(
       printBullet(`~/.config/mcp-sap/keypairs/${profileName}-keypair.json`);
       printBullet('/path/to/wallet.json');
       console.log('');
-      
+
       const defaultPath = defaultGeneratedWalletPath(profileName);
-      
+
       const walletPath = await askQuestion('Wallet path', {
         defaultValue: defaultPath,
         required: true,
@@ -888,23 +888,23 @@ async function wizardSignerConfig(
           'Use a dedicated SAP MCP wallet, not your Solana CLI id.json.',
         ],
       });
-      
+
       return { walletPath, createNewWallet: false };
     } else {
       // Create new wallet
       const walletFileName = `${profileName}-keypair.json`;
-      
+
       console.log('');
       printSuccess(`Will create a new dedicated wallet for profile "${profileName}".`);
       printField('Wallet path', `~/.config/mcp-sap/keypairs/${walletFileName}`);
       printInfo('This wallet is isolated from the Solana CLI keypair.');
       printWarning('Back up this keypair after creation; it controls funds for this SAP MCP profile.');
       console.log('');
-      
+
       return { createNewWallet: true };
     }
   }
-  
+
   if (mode === 'external-signer') {
     clearConsole();
     printSapLogo();
@@ -912,7 +912,7 @@ async function wizardSignerConfig(
 
     return { externalSignerUrl: await askExternalSignerUrl() };
   }
-  
+
   return {};
 }
 
@@ -947,15 +947,15 @@ async function wizardSecurityLimits(mode: SapMcpMode): Promise<{ maxTxValueSol: 
   if (mode === 'readonly') {
     return { maxTxValueSol: 0, dailyLimitSol: 0 };
   }
-  
+
   clearConsole();
   printSapLogo();
   printHeader('Step 6: Security Limits', 'Transaction spending controls');
-  
+
   printLead('Set guardrails before this profile can sign or submit transactions. These limits are enforced before signing.');
   printControlHints();
   console.log('');
-  
+
   const maxTxValueSol = await askQuestion(
     paint('Maximum transaction value (SOL)', 'aqua'),
     {
@@ -968,7 +968,7 @@ async function wizardSecurityLimits(mode: SapMcpMode): Promise<{ maxTxValueSol: 
       ],
     }
   );
-  
+
   const dailyLimitSol = await askQuestion(
     paint('Daily spending limit (SOL)', 'aqua'),
     {
@@ -981,7 +981,7 @@ async function wizardSecurityLimits(mode: SapMcpMode): Promise<{ maxTxValueSol: 
       ],
     }
   );
-  
+
   return {
     maxTxValueSol: parseFloat(maxTxValueSol) || defaults.maxTxValueSol,
     dailyLimitSol: parseFloat(dailyLimitSol) || defaults.dailyLimitSol,
@@ -995,7 +995,7 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
   clearConsole();
   printSapLogo();
   printHeader('Step 7: Bento Guard Integration', 'Optional AI-powered security layer');
-  
+
   printLead('Bento Guard is optional. When enabled, local deterministic policy still runs and Bento adds AI-assisted intent scoring.');
   printControlHints();
   console.log('');
@@ -1007,12 +1007,12 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
   printBullet('Bento outages follow your configured fail-open/fail-closed policy.');
   printBullet('API keys are redacted in summaries.');
   console.log('');
-  
+
   const enableBento = await askConfirm('Enable Bento Guard integration?', false, [
     'Choose no for local-only policy enforcement.',
     'Choose yes when you have Bento credentials and want hybrid policy checks.',
   ]);
-  
+
   if (!enableBento) {
     console.log('');
     printInfo('Skipping Bento. This profile will use local policy enforcement only.');
@@ -1022,12 +1022,12 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
     console.log('');
     return { enableBento: false };
   }
-  
+
   console.log('');
   printLead('Enter your Bento Guard credentials.');
   printField('Dashboard', 'https://app.bentoguard.xyz');
   console.log('');
-  
+
   const bentoApiKey = await askQuestion(paint('Bento API Key', 'aqua'), {
     required: true,
     help: [
@@ -1035,7 +1035,7 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
       'It is redacted in the summary and can be rotated later.',
     ],
   });
-  
+
   const bentoAgentId = await askQuestion(
     paint('Bento Agent ID', 'aqua'),
     {
@@ -1049,12 +1049,12 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
       ],
     }
   );
-  
+
   console.log('');
   printSuccess('Bento Guard will be used for policy enforcement.');
   printInfo('Local policies still run as deterministic guardrails.');
   console.log('');
-  
+
   return {
     enableBento: true,
     bentoApiKey,
@@ -1065,7 +1065,7 @@ async function wizardBentoIntegration(): Promise<{ enableBento: boolean; bentoAp
 /**
  * Internal helper for the wizard http transport operation.
  */
-async function wizardHttpTransport(_mode: SapMcpMode): Promise<{ enableHttp: boolean; httpPort: number }> {
+async function wizardHttpTransport(): Promise<{ enableHttp: boolean; httpPort: number }> {
   return { enableHttp: false, httpPort: defaults.httpPort };
 }
 
@@ -1076,11 +1076,11 @@ async function wizardLogging(): Promise<{ logLevel: WizardLogLevel; enableMetric
   clearConsole();
   printSapLogo();
   printHeader('Step 8: Logging & Observability', 'Debugging and monitoring');
-  
+
   printLead('Choose how much operational detail SAP MCP should write to logs.');
   printControlHints();
   console.log('');
-  
+
   const logChoices: WizardLogLevel[] = ['debug', 'info', 'warn', 'error'];
   const logIndex = await askChoice(
     'Log level:',
@@ -1095,12 +1095,12 @@ async function wizardLogging(): Promise<{ logLevel: WizardLogLevel; enableMetric
       'error is quietest and best for stable production logs.',
     ]
   );
-  
+
   const enableMetrics = await askConfirm('Enable Prometheus metrics?', false, [
     'Metrics expose operational counters for monitoring.',
     'Enable when deploying behind a trusted network or protected reverse proxy.',
   ]);
-  
+
   return {
     logLevel: logChoices[logIndex],
     enableMetrics,
@@ -1604,10 +1604,10 @@ async function wizardSummary(config: WizardSetupInput) {
   clearConsole();
   printSapLogo();
   printHeader('Configuration Summary', 'Review before saving');
-  
+
   printLead('Review the profile before it becomes active for MCP clients. Values marked redacted are intentionally not displayed.');
   console.log('');
-  
+
   // Pretty print with colors
   const summary: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
@@ -1617,7 +1617,7 @@ async function wizardSummary(config: WizardSetupInput) {
       summary[key] = value;
     }
   }
-  
+
   console.log(JSON.stringify(summary, null, 2));
   console.log('');
   printLabel('Operational impact');
@@ -1631,18 +1631,18 @@ async function wizardSummary(config: WizardSetupInput) {
     printBullet('This profile is for the OOBE hosted MCP endpoint; it does not start a local HTTP server.');
   }
   console.log('');
-  
+
   const confirmed = await askConfirm('Save this configuration?', true, [
     'Choose yes to write the profile config and update .active-profile.',
     'Choose no or type /exit to leave without saving.',
   ]);
-  
+
   if (!confirmed) {
     console.log('');
     printError('Configuration cancelled. Run wizard again to retry.');
     return false;
   }
-  
+
   return true;
 }
 
@@ -1677,31 +1677,31 @@ export async function runWizard() {
       rl.close();
       return;
     }
-    
+
     // Step 2: Profile
     const profileName = await wizardProfile();
-    
+
     // Step 3: Mode
     const mode = await wizardMode();
-    
+
     // Step 4: RPC
     const rpcUrl = await wizardRpcUrl(mode);
-    
+
     // Step 5: Signer (pass profileName for wallet path)
     const signerConfig = await wizardSignerConfig(mode, profileName);
-    
+
     // Step 6: Security
     const securityLimits = await wizardSecurityLimits(mode);
-    
+
     // Step 7: Bento Integration (optional)
     const bentoConfig = await wizardBentoIntegration();
-    
+
     // HTTP transport is disabled for user-hosted profile setup.
-    const httpConfig = await wizardHttpTransport(mode);
-    
+    const httpConfig = await wizardHttpTransport();
+
     // Step 8: Logging
     const loggingConfig = await wizardLogging();
-    
+
     // Build final config
     const config: WizardSetupInput = {
       mode,
@@ -1715,20 +1715,20 @@ export async function runWizard() {
       bentoApiKey: bentoConfig.bentoApiKey,
       bentoAgentId: bentoConfig.bentoAgentId,
     };
-    
+
     // Summary and confirmation
     const confirmed = await wizardSummary(config);
-    
+
     if (!confirmed) {
       rl.close();
       return;
     }
-    
+
     // Save configuration
     clearConsole();
     printSapLogo();
     printHeader('Saving Configuration', 'Please wait...');
-    
+
     const result = await saveWizardSetup(config);
     printSuccess(`Configuration saved to ${result.configPath}`);
     if (result.walletPath) {
@@ -1740,7 +1740,7 @@ export async function runWizard() {
       }
     }
     await wizardMcpClientInjection(result);
-    
+
     console.log('\n');
     printSuccess('Configuration complete!');
     console.log('');
@@ -1763,7 +1763,7 @@ export async function runWizard() {
     printBullet(paint('npx sap-mcp-config profile <name>', 'aqua'));
     printBullet(paint('npx sap-mcp-config set <field> <value>', 'aqua'));
     console.log('');
-    
+
     rl.close();
   } catch (error) {
     if (error instanceof WizardCancelled) {

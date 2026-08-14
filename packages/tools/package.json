@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP tool module registry and built-in tool catalog boundary.",
   "sapMcp": {
     "boundaryId": "tools",
-    "source": "src/tools",
+    "source": "packages/tools/src",
     "architectureDomain": "tools",
     "rootExport": "./tools",
     "apiContract": "config/package-export-contracts.json#./tools",
-    "boundary": "Tool module registry and built-in tool catalog boundary."
+    "boundary": "Tool module registry and built-in tool catalog boundary.",
+    "legacyCompatibilitySource": "src/tools",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

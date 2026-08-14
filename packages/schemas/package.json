@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP public schema and protocol contract boundary.",
   "sapMcp": {
     "boundaryId": "schemas",
-    "source": "src/schemas",
+    "source": "packages/schemas/src",
     "architectureDomain": "schemas",
     "rootExport": "./schemas",
     "apiContract": "config/package-export-contracts.json#./schemas",
-    "boundary": "Public Zod schemas and protocol contracts."
+    "boundary": "Public Zod schemas and protocol contracts.",
+    "legacyCompatibilitySource": "src/schemas",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

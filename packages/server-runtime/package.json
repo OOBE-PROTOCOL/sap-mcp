@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP server runtime bootstrap and capability registration boundary.",
   "sapMcp": {
     "boundaryId": "server-runtime",
-    "source": "src/server",
+    "source": "packages/server-runtime/src",
     "architectureDomain": "server",
     "rootExport": "./server-runtime",
     "apiContract": "config/package-export-contracts.json#./server-runtime",
-    "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary."
+    "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary.",
+    "legacyCompatibilitySource": "src/server",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

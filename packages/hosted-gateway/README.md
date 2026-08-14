@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-hosted-gateway
 
-Internal package boundary for `src/remote`.
+Internal package boundary for `packages/hosted-gateway/src`.
 
 Owns the hosted gateway surface: Streamable HTTP MCP routing, public metadata,
 well-known discovery, premium remote routes, and hosted deployment behavior.

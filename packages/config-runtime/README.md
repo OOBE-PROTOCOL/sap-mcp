@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-config-runtime
 
-Internal package boundary for `src/config`.
+Internal package boundary for `packages/config-runtime/src`.
 
 This package owns secure profile configuration, config defaults, profile
 selection, client injection and repair helpers, runtime-doctor readiness

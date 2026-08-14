@@ -43,59 +43,59 @@
       "require": "./dist/index.js"
     },
     "./core": {
-      "types": "./dist/core/index.d.ts",
-      "import": "./dist/core/index.js",
-      "require": "./dist/core/index.js"
+      "types": "./dist/packages/core/src/index.d.ts",
+      "import": "./dist/packages/core/src/index.js",
+      "require": "./dist/packages/core/src/index.js"
     },
     "./schemas": {
-      "types": "./dist/schemas/index.d.ts",
-      "import": "./dist/schemas/index.js",
-      "require": "./dist/schemas/index.js"
+      "types": "./dist/packages/schemas/src/index.d.ts",
+      "import": "./dist/packages/schemas/src/index.js",
+      "require": "./dist/packages/schemas/src/index.js"
     },
     "./mcp-adapter": {
-      "types": "./dist/adapters/mcp/index.d.ts",
-      "import": "./dist/adapters/mcp/index.js",
-      "require": "./dist/adapters/mcp/index.js"
+      "types": "./dist/packages/mcp-adapter/src/index.d.ts",
+      "import": "./dist/packages/mcp-adapter/src/index.js",
+      "require": "./dist/packages/mcp-adapter/src/index.js"
     },
     "./ui-cards": {
-      "types": "./dist/ui/index.d.ts",
-      "import": "./dist/ui/index.js",
-      "require": "./dist/ui/index.js"
+      "types": "./dist/packages/ui-cards/src/index.d.ts",
+      "import": "./dist/packages/ui-cards/src/index.js",
+      "require": "./dist/packages/ui-cards/src/index.js"
     },
     "./tools": {
-      "types": "./dist/tools/index.d.ts",
-      "import": "./dist/tools/index.js",
-      "require": "./dist/tools/index.js"
+      "types": "./dist/packages/tools/src/index.d.ts",
+      "import": "./dist/packages/tools/src/index.js",
+      "require": "./dist/packages/tools/src/index.js"
     },
     "./config-runtime": {
-      "types": "./dist/config/index.d.ts",
-      "import": "./dist/config/index.js",
-      "require": "./dist/config/index.js"
+      "types": "./dist/packages/config-runtime/src/index.d.ts",
+      "import": "./dist/packages/config-runtime/src/index.js",
+      "require": "./dist/packages/config-runtime/src/index.js"
     },
     "./server-runtime": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js",
-      "require": "./dist/server/index.js"
+      "types": "./dist/packages/server-runtime/src/index.d.ts",
+      "import": "./dist/packages/server-runtime/src/index.js",
+      "require": "./dist/packages/server-runtime/src/index.js"
     },
     "./hosted-gateway": {
-      "types": "./dist/remote/index.d.ts",
-      "import": "./dist/remote/index.js",
-      "require": "./dist/remote/index.js"
+      "types": "./dist/packages/hosted-gateway/src/index.d.ts",
+      "import": "./dist/packages/hosted-gateway/src/index.js",
+      "require": "./dist/packages/hosted-gateway/src/index.js"
     },
     "./local-bridge": {
-      "types": "./dist/local-bridge/index.d.ts",
-      "import": "./dist/local-bridge/index.js",
-      "require": "./dist/local-bridge/index.js"
+      "types": "./dist/packages/local-bridge/src/index.d.ts",
+      "import": "./dist/packages/local-bridge/src/index.js",
+      "require": "./dist/packages/local-bridge/src/index.js"
     },
     "./wizard-core": {
-      "types": "./dist/wizard-core/desktop-flow.d.ts",
-      "import": "./dist/wizard-core/desktop-flow.js",
-      "require": "./dist/wizard-core/desktop-flow.js"
+      "types": "./dist/packages/wizard-core/src/desktop-flow.d.ts",
+      "import": "./dist/packages/wizard-core/src/desktop-flow.js",
+      "require": "./dist/packages/wizard-core/src/desktop-flow.js"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json",
+    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json && pnpm run build:packages",
     "build:core": "tsc",
     "build:tui": "tsc -p tsconfig.tui.json",
     "desktop:renderer": "vite --config apps/desktop/vite.config.ts",
@@ -107,7 +107,7 @@
     "config": "tsx src/config-cli.ts",
     "tui:config": "tsx src/tui/config-wizard.tsx",
     "typecheck": "tsc --noEmit --skipLibCheck",
-    "lint": "eslint src/",
+    "lint": "eslint src/ packages/*/src/",
     "check:architecture": "node scripts/check-architecture-boundaries.mjs",
     "verify:exports": "node scripts/verify-package-exports.mjs",
     "verify:workspace-packages": "node scripts/verify-workspace-packages.mjs",
@@ -122,7 +122,8 @@
     "verify:release:offline": "pnpm run typecheck && pnpm run lint && pnpm run check:architecture && pnpm run verify:tool-modules && pnpm run verify:workspace-packages && pnpm run verify:tool-plugin-template && pnpm run verify:tool-execution-pipeline && pnpm run verify:skill-workflows && pnpm run verify:company-readiness && pnpm run verify:readiness-report && pnpm run test:run && pnpm run build && pnpm run verify:exports && npm pack --dry-run --cache ./.npm-cache",
     "verify:release": "pnpm run verify:release:offline && pnpm audit --audit-level moderate --prod",
     "version:bump": "node scripts/bump-version.mjs",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "build:packages": "tsc -p tsconfig.packages.json"
   },
   "keywords": [
     "mcp",

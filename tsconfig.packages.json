@@ -1,0 +1,37 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "noEmit": false
+  },
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/schemas/src/**/*.ts",
+    "packages/ui-cards/src/**/*.ts",
+    "packages/mcp-adapter/src/**/*.ts",
+    "packages/config-runtime/src/**/*.ts",
+    "packages/wizard-core/src/**/*.ts",
+    "packages/local-bridge/src/**/*.ts",
+    "packages/tools/src/**/*.ts",
+    "packages/server-runtime/src/**/*.ts",
+    "packages/hosted-gateway/src/**/*.ts",
+    "src/observability/**/*.ts",
+    "src/security/**/*.ts",
+    "src/tools/tool-aliases.ts",
+    "src/tools/tool-execution-metadata.ts",
+    "src/tools/builtin-tool-modules.ts",
+    "src/tools/tool-module-manifest.ts",
+    "src/tools/tool-module-validation.ts",
+    "src/tools/module-registry.ts",
+    "src/runtime/**/*.ts",
+    "src/transports/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/tui"
+  ]
+}

@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP profile configuration, runtime doctor, secure config, and client injection boundary.",
   "sapMcp": {
     "boundaryId": "config-runtime",
-    "source": "src/config",
+    "source": "packages/config-runtime/src",
     "architectureDomain": "config",
     "rootExport": "./config-runtime",
     "apiContract": "config/package-export-contracts.json#./config-runtime",
-    "boundary": "Profile configuration, runtime doctor, secure config, and client injection boundary."
+    "boundary": "Profile configuration, runtime doctor, secure config, and client injection boundary.",
+    "legacyCompatibilitySource": "src/config",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

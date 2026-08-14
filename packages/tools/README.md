@@ -1,6 +1,6 @@
 # @oobe-protocol-labs/sap-mcp-tools
 
-Internal package boundary for `src/tools`.
+Internal package boundary for `packages/tools/src`.
 
 This package owns the `ToolModuleDefinition` registry, built-in tool catalog,
 tool execution metadata, runtime profile filtering, and trusted plugin module

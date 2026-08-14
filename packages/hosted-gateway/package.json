@@ -7,10 +7,15 @@
   "description": "Internal SAP MCP hosted Streamable HTTP gateway and remote deployment boundary.",
   "sapMcp": {
     "boundaryId": "hosted-gateway",
-    "source": "src/remote",
+    "source": "packages/hosted-gateway/src",
     "architectureDomain": "remote-server",
     "rootExport": "./hosted-gateway",
     "apiContract": "config/package-export-contracts.json#./hosted-gateway",
-    "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary."
+    "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary.",
+    "legacyCompatibilitySource": "src/remote",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
   }
 }

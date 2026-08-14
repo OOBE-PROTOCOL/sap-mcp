@@ -108,7 +108,8 @@ async function autoStartDelivery(sessionId: string): Promise<boolean> {
       // or the provider iterable ends.
       void (async () => {
         try {
-          for await (const _event of streamEvents(sessionId)) {
+          for await (const event of streamEvents(sessionId)) {
+            void event;
             // Events are already appended to the event store inside streamEvents.
             // This loop just consumes the generator to keep it running.
           }

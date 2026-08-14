@@ -1,44 +1,47 @@
 # SAP MCP Internal Packages
 
 This directory is the modular monorepo target for SAP MCP. The public product
-still ships as `@oobe-protocol-labs/sap-mcp-server`; these packages define
-internal ownership boundaries before each module is physically extracted.
+still ships as `@oobe-protocol-labs/sap-mcp-server`; these packages now contain
+physical TypeScript source for each internal ownership boundary. The legacy
+`src/*` tree remains in place during the transition as the CLI/runtime
+compatibility layer.
 
 The first consumable modular API is exposed through npm subpath exports on the
 root package:
 
 | Import | Runtime Source | Boundary |
 | --- | --- | --- |
-| `@oobe-protocol-labs/sap-mcp-server/core` | `dist/core/index.js` | Shared runtime contracts and primitives. |
-| `@oobe-protocol-labs/sap-mcp-server/schemas` | `dist/schemas/index.js` | Public Zod schemas and protocol contracts. |
-| `@oobe-protocol-labs/sap-mcp-server/mcp-adapter` | `dist/adapters/mcp/index.js` | MCP response and SDK compatibility helpers. |
-| `@oobe-protocol-labs/sap-mcp-server/ui-cards` | `dist/ui/index.js` | MCP Apps Card rendering helpers and `ui://` resources. |
-| `@oobe-protocol-labs/sap-mcp-server/tools` | `dist/tools/index.js` | Tool module registry primitives and built-in tool module catalog. |
-| `@oobe-protocol-labs/sap-mcp-server/config-runtime` | `dist/config/index.js` | Secure config, runtime doctor, profile defaults, and client injection helpers. |
-| `@oobe-protocol-labs/sap-mcp-server/server-runtime` | `dist/server/index.js` | Shared MCP server bootstrap, capability registration, and server metadata. |
-| `@oobe-protocol-labs/sap-mcp-server/hosted-gateway` | `dist/remote/index.js` | Hosted Streamable HTTP gateway, public discovery, and marketplace metadata. |
-| `@oobe-protocol-labs/sap-mcp-server/local-bridge` | `dist/local-bridge/index.js` | Local stdio bridge and `sap_payments` process diagnostics. |
-| `@oobe-protocol-labs/sap-mcp-server/wizard-core` | `dist/wizard-core/desktop-flow.js` | Shared wizard defaults, hosted discovery, runtime detection, and save orchestration. |
+| `@oobe-protocol-labs/sap-mcp-server/core` | `dist/packages/core/src/index.js` | Shared runtime contracts and primitives. |
+| `@oobe-protocol-labs/sap-mcp-server/schemas` | `dist/packages/schemas/src/index.js` | Public Zod schemas and protocol contracts. |
+| `@oobe-protocol-labs/sap-mcp-server/mcp-adapter` | `dist/packages/mcp-adapter/src/index.js` | MCP response and SDK compatibility helpers. |
+| `@oobe-protocol-labs/sap-mcp-server/ui-cards` | `dist/packages/ui-cards/src/index.js` | MCP Apps Card rendering helpers and `ui://` resources. |
+| `@oobe-protocol-labs/sap-mcp-server/tools` | `dist/packages/tools/src/index.js` | Tool module registry primitives and built-in tool module catalog. |
+| `@oobe-protocol-labs/sap-mcp-server/config-runtime` | `dist/packages/config-runtime/src/index.js` | Secure config, runtime doctor, profile defaults, and client injection helpers. |
+| `@oobe-protocol-labs/sap-mcp-server/server-runtime` | `dist/packages/server-runtime/src/index.js` | Shared MCP server bootstrap, capability registration, and server metadata. |
+| `@oobe-protocol-labs/sap-mcp-server/hosted-gateway` | `dist/packages/hosted-gateway/src/index.js` | Hosted Streamable HTTP gateway, public discovery, and marketplace metadata. |
+| `@oobe-protocol-labs/sap-mcp-server/local-bridge` | `dist/packages/local-bridge/src/index.js` | Local stdio bridge and `sap_payments` process diagnostics. |
+| `@oobe-protocol-labs/sap-mcp-server/wizard-core` | `dist/packages/wizard-core/src/desktop-flow.js` | Shared wizard defaults, hosted discovery, runtime detection, and save orchestration. |
 
 ## Phase 1 Packages
 
-| Package | Boundary | Current source | Architecture domain | Rule |
+| Package | Boundary | Physical source | Compatibility source | Architecture domain | Rule |
 | --- | --- | --- | --- | --- |
-| `@oobe-protocol-labs/sap-mcp-core` | Shared runtime contracts | `src/core` | `core` | No runtime feature dependencies. |
-| `@oobe-protocol-labs/sap-mcp-schemas` | Public schemas and protocol contracts | `src/schemas` | `schemas` | May depend on core only. |
-| `@oobe-protocol-labs/sap-mcp-mcp-adapter` | MCP SDK compatibility and response helpers | `src/adapters/mcp` | `mcp-adapter` | May depend on core, security, payments, observability, tool aliases, and UI card resources. |
-| `@oobe-protocol-labs/sap-mcp-ui-cards` | MCP Apps Cards and `ui://` resources | `src/ui` | `ui-cards` | Must stay rendering-only; no signer, remote server, or payment side effects. |
-| `@oobe-protocol-labs/sap-mcp-tools` | Tool module registry and built-in catalog | `src/tools` | `tools` | Owns tool-family manifests, policy metadata, runtime selection, and trusted plugin integration. |
-| `@oobe-protocol-labs/sap-mcp-config-runtime` | Profile config, runtime doctor, and client injection | `src/config` | `config` | Exposed as `@oobe-protocol-labs/sap-mcp-server/config-runtime`; owns one profile model, secret redaction, runtime doctor primitives, and safe client repair. |
-| `@oobe-protocol-labs/sap-mcp-server-runtime` | Shared MCP server runtime | `src/server` | `server` | Exposed as `@oobe-protocol-labs/sap-mcp-server/server-runtime`; owns server bootstrap, server metadata, and capability registration. |
-| `@oobe-protocol-labs/sap-mcp-hosted-gateway` | Hosted Streamable HTTP gateway | `src/remote` | `remote-server` | Exposed as `@oobe-protocol-labs/sap-mcp-server/hosted-gateway`; owns hosted routes, public metadata, premium remote routes, and non-custodial hosted behavior. |
-| `@oobe-protocol-labs/sap-mcp-local-bridge` | Local stdio and payment bridge runtime | `src/local-bridge`, `src/transports/stdio.ts`, `src/bin`, `src/runtime` | `local-bridge` | Exposed as `@oobe-protocol-labs/sap-mcp-server/local-bridge`; owns local entrypoints and bridge process orchestration; signing policy stays in signer/policy modules. |
-| `@oobe-protocol-labs/sap-mcp-wizard-core` | Shared CLI/Desktop wizard flow | `src/wizard-core` | `wizard` | Exposed as `@oobe-protocol-labs/sap-mcp-server/wizard-core`; owns setup flow primitives reused by TUI, Desktop, and repair modes. |
-| `@oobe-protocol-labs/sap-mcp-tool-plugin-template` | Trusted external tool-family template | `packages/tool-plugin-template` | none | Private workspace template; never loaded dynamically from MCP input. |
+| `@oobe-protocol-labs/sap-mcp-core` | Shared runtime contracts | `packages/core/src` | `src/core` | `core` | No runtime feature dependencies. |
+| `@oobe-protocol-labs/sap-mcp-schemas` | Public schemas and protocol contracts | `packages/schemas/src` | `src/schemas` | `schemas` | May depend on core only. |
+| `@oobe-protocol-labs/sap-mcp-mcp-adapter` | MCP SDK compatibility and response helpers | `packages/mcp-adapter/src` | `src/adapters/mcp` | `mcp-adapter` | May depend on core, security, payments, observability, tool aliases, and UI card resources. |
+| `@oobe-protocol-labs/sap-mcp-ui-cards` | MCP Apps Cards and `ui://` resources | `packages/ui-cards/src` | `src/ui` | `ui-cards` | Must stay rendering-only; no signer, remote server, or payment side effects. |
+| `@oobe-protocol-labs/sap-mcp-tools` | Tool module registry and built-in catalog | `packages/tools/src` | `src/tools` | `tools` | Owns tool-family manifests, policy metadata, runtime selection, and trusted plugin integration. |
+| `@oobe-protocol-labs/sap-mcp-config-runtime` | Profile config, runtime doctor, and client injection | `packages/config-runtime/src` | `src/config` | `config` | Owns one profile model, secret redaction, runtime doctor primitives, and safe client repair. |
+| `@oobe-protocol-labs/sap-mcp-server-runtime` | Shared MCP server runtime | `packages/server-runtime/src` | `src/server` | `server` | Owns server bootstrap, server metadata, and capability registration. |
+| `@oobe-protocol-labs/sap-mcp-hosted-gateway` | Hosted Streamable HTTP gateway | `packages/hosted-gateway/src` | `src/remote` | `remote-server` | Owns hosted routes, public metadata, premium remote routes, and non-custodial hosted behavior. |
+| `@oobe-protocol-labs/sap-mcp-local-bridge` | Local stdio and payment bridge runtime | `packages/local-bridge/src` | `src/local-bridge` | `local-bridge` | Owns local entrypoints and bridge process orchestration; signing policy stays in signer/policy modules. |
+| `@oobe-protocol-labs/sap-mcp-wizard-core` | Shared CLI/Desktop wizard flow | `packages/wizard-core/src` | `src/wizard-core` | `wizard` | Owns setup flow primitives reused by TUI, Desktop, and repair modes. |
+| `@oobe-protocol-labs/sap-mcp-tool-plugin-template` | Trusted external tool-family template | `packages/tool-plugin-template/src` | none | none | Private workspace template; never loaded dynamically from MCP input. |
 
-Extraction rule: move one package at a time, keep the root public npm package
-stable, and add/update `check:architecture` rules and subpath export tests
-before moving code.
+Extraction rule: keep the root public npm package stable, compile physical
+package sources with `tsconfig.packages.json`, and keep `src/*` compatibility
+sources synchronized until the final CLI/runtime switchover replaces them with
+thin wrappers.
 
 `check:architecture` also validates the architecture model itself: every
 non-ignored domain must declare an allowed dependency list, every allowed target
@@ -51,14 +54,16 @@ fails when an export target is missing or when a declared symbol is no longer
 importable from the built module.
 
 `config/workspace-package-contracts.json` declares the internal package map:
-package name, source boundary, architecture domain, private release status,
-side-effect policy, the root export that currently exposes the package API, and
-the `sapMcp.apiContract` pointer to `config/package-export-contracts.json`.
+package name, physical source boundary, legacy compatibility source,
+architecture domain, private release status, side-effect policy, the root export
+that currently exposes the package API, and the `sapMcp.apiContract` pointer to
+`config/package-export-contracts.json`.
 `pnpm run verify:workspace-packages` fails when a workspace package is missing
 metadata, drifts from the root version, lacks README ownership language, points
-at a missing source or additional source boundary, maps to an architecture
-domain that does not cover every declared source, or has a root export without a
-stable public symbol contract.
+at a missing source or additional source boundary, marks `physicalSource: true`
+without real non-test `.ts` files under `packages/*/src`, maps a legacy source
+to an invalid architecture domain, or has a root export without a stable public
+symbol contract.
 
 `pnpm run verify:readiness-report` is the aggregate modular readiness gate. It
 combines tool module validation, runtime catalogs, MCP Apps Card coverage,

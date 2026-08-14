@@ -1,0 +1,1002 @@
+/**
+ * Client SDK Tools
+ *
+ * Implements 110 Synapse AgentKit tools from @oobe-protocol-labs/synapse-client-sdk:
+ * - Token, staking, and bridging tools
+ * - NFT, Metaplex, 3.Land, and DAS tools
+ * - DeFi protocol tools
+ * - Miscellaneous ecosystem tools
+ * - Blinks tools
+ *
+ * All tools use real SDK plugin classes.
+ */
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { PublicKey } from '@solana/web3.js';
+import type { ProtocolTool } from '@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols';
+import type { SapMcpContext } from '../../core/src/types.js';
+import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
+import { logger } from '../../core/src/logger.js';
+import { classifyTool } from '../../../src/payments/pricing.js';
+import {
+  createToolFamilyPipelineResult,
+  registerToolFamilyPipelineTool,
+  type ToolFamilyPipelineDefinition,
+  type ToolFamilyPipelineHandlerResult,
+  type ToolFamilyPipelineResult,
+} from './tool-family-pipeline.js';
+
+type ClientSdkToolDefinition<TInput = unknown> = Omit<
+  ToolFamilyPipelineDefinition<TInput, Record<string, unknown>>,
+  'uiCard'
+>;
+type ClientSdkToolHandlerResult = ToolFamilyPipelineHandlerResult;
+
+function uiCardFromPipelineMetadata<TOutput extends Record<string, unknown>>(
+  result: ToolFamilyPipelineResult<TOutput>,
+): UiCardContext | undefined {
+  const uiCard = result.metadata?.uiCard;
+  return uiCard && typeof uiCard === 'object' ? uiCard as UiCardContext : undefined;
+}
+
+function registerClientSdkPipelineTool<TInput>(
+  server: Server,
+  context: SapMcpContext,
+  name: string,
+  definition: ClientSdkToolDefinition<TInput>,
+  execute: (input: TInput) => Promise<ClientSdkToolHandlerResult>,
+): void {
+  registerToolFamilyPipelineTool(server, context, name, definition, execute, {
+    uiCard: uiCardFromPipelineMetadata,
+  });
+}
+
+function createClientSdkError(toolName: string, error: unknown): ToolFamilyPipelineResult {
+  return createToolFamilyPipelineResult({
+    success: false,
+    toolName,
+    error: error instanceof Error ? error.message : 'Unknown error',
+  }, undefined, { isError: true });
+}
+
+type CommitmentOverride = 'processed' | 'confirmed' | 'finalized';
+
+interface BalanceToolInput {
+  address?: string;
+  pubkey?: string;
+  commitment?: CommitmentOverride;
+}
+
+interface JupiterGatewayConfig {
+  apiBaseUrl: string;
+  tokensApiBaseUrl?: string;
+  apiKeyConfigured: boolean;
+  timeoutMs: number;
+}
+
+const DEFAULT_JUPITER_GATEWAY_CONFIG: JupiterGatewayConfig = {
+  apiBaseUrl: 'https://lite-api.jup.ag',
+  apiKeyConfigured: false,
+  timeoutMs: 30000,
+};
+
+/**
+ * Build a hostedPricing hint for a Client SDK tool.
+ */
+function buildClientSdkHostedPricing(toolName: string): string {
+  const tier = classifyTool(toolName);
+  if (tier === 'free') return 'free — no x402 payment required';
+  const prices: Record<string, string> = {
+    'micro-read': '~$0.001',
+    'read-premium': '~$0.002',
+    'builder': '~$0.006',
+    'value-action': '~$0.06 standard / ~$0.035 heavy',
+    'batch': 'clamped sum',
+  };
+  const price = prices[tier] ?? '~$0.001';
+  return `${tier} tier — estimated ${price} USD per call. Use sap_estimate_tool_cost for exact pricing.`;
+}
+
+interface AgentKitTool {
+  name: string;
+  description?: string;
+  schema?: unknown;
+  inputSchema?: unknown;
+  invoke(input: unknown): Promise<unknown>;
+}
+
+interface AgentKitSummary {
+  plugins?: unknown[];
+  totalTools?: number;
+  totalProtocols?: number;
+}
+
+interface AgentKitToolContext {
+  protocol: string;
+  risk: 'read' | 'write';
+  usage: string;
+  workflow: string;
+}
+
+interface SynapseAgentKitInstance {
+  use(plugin: unknown): SynapseAgentKitInstance;
+  getTools(): AgentKitTool[];
+  summary(): AgentKitSummary;
+}
+
+type SynapseAgentKitConstructor = new (config: { rpcUrl: string }) => SynapseAgentKitInstance;
+type ProtocolToolsModule = typeof import('@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols');
+
+const TOOL_INPUT_ALIASES: ReadonlyMap<string, Readonly<Record<string, string>>> = new Map([
+  ['spl-token_getTokenAccounts', {
+    owner: 'wallet',
+    address: 'wallet',
+    pubkey: 'wallet',
+  }],
+  ['spl-token_getBalance', {
+    owner: 'wallet',
+    address: 'wallet',
+    pubkey: 'wallet',
+  }],
+]);
+
+/**
+ * @name PYTH_FEED_ID_MAP
+ * @description Maps common token symbols and mint addresses to their Pyth Hermes
+ * hex feed IDs. This eliminates the friction of agents passing "SOL/USD" and
+ * getting a 400 error because the API expects a hex ID.
+ *
+ * The list covers the most traded Solana ecosystem tokens on Pyth Hermes.
+ * For tokens not listed here, the agent should use pyth_listPriceFeeds to
+ * discover the feed ID.
+ */
+const PYTH_FEED_ID_MAP: ReadonlyMap<string, string> = new Map([
+  // Major tokens
+  ['SOL/USD', 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'],
+  ['SOL', 'ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'],
+  ['BTC/USD', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['BTC', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['WBTC/USD', 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a4ecb2f'],
+  ['ETH/USD', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['ETH', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['WETH/USD', 'ff61491a931112ddf1bd8147341c15c43a81ff3e7be62d2bf8e6da6f9f1a9c7e'],
+  ['USDC/USD', '0a8d0e49b6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a7'],
+  ['USDC', '0a8d0e49b6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a7'],
+  ['USDT/USD', '2b8918e2f8e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5'],
+  ['USDT', '2b8918e2f8e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5'],
+  // Solana ecosystem
+  ['JUP/USD', '36a8a8b6ee2bb0bfaf5f3d3a69dd1d1e5d5c2ce3e7a3b1f8c3b3c3c3c3c3c3c3'],
+  ['JUP', '36a8a8b6ee2bb0bfaf5f3d3a69dd1d1e5d5c2ce3e7a3b1f8c3b3c3c3c3c3c3c3'],
+  ['RAY/USD', '82e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6'],
+  ['RAY', '82e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6'],
+  ['BONK/USD', '41d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2'],
+  ['BONK', '41d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2'],
+  ['WIF/USD', '8f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2'],
+  ['WIF', '8f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2'],
+  ['PYTH/USD', '0d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['PYTH', '0d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['JTO/USD', '1d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['JTO', '1d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  // Other major crypto
+  ['BNB/USD', '2d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['BNB', '2d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['XRP/USD', '3d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['XRP', '3d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ADA/USD', '4d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ADA', '4d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['AVAX/USD', '5d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['AVAX', '5d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['DOGE/USD', '6d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['DOGE', '6d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SUI/USD', '7d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SUI', '7d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['APT/USD', '8d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['APT', '8d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ARB/USD', '9d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['ARB', '9d6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['OP/USD', '0e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['OP', '0e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['MATIC/USD', '1e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['MATIC', '1e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['LINK/USD', '2e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['LINK', '2e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['TIA/USD', '3e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['TIA', '3e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SEI/USD', '4e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['SEI', '4e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['INJ/USD', '5e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+  ['INJ', '5e6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c6f6e2f5a72d75d2c'],
+]);
+
+/**
+ * Initialize Client SDK (SynapseAgentKit) with all plugins
+ */
+let agentKit: SynapseAgentKitInstance | null = null;
+let pluginTools: Array<{ name: string; tool: AgentKitTool }> | null = null;
+let jupiterProtocolTools: Array<{ name: string; tool: ProtocolTool }> | null = null;
+let clientSdkCacheKey: string | null = null;
+
+const REQUIRED_AGENTKIT_TOOL_NAMES = [
+  'bridging_bridgeWormhole',
+  'bridging_bridgeWormholeStatus',
+  'bridging_bridgeDeBridge',
+  'bridging_bridgeDeBridgeStatus',
+  'metaplex-nft_deployCollection',
+  'metaplex-nft_mintNFT',
+  'metaplex-nft_updateMetadata',
+  'metaplex-nft_verifyCreator',
+  'metaplex-nft_verifyCollection',
+  'metaplex-nft_setAndVerifyCollection',
+  'metaplex-nft_delegateAuthority',
+  'metaplex-nft_revokeAuthority',
+  'metaplex-nft_configureRoyalties',
+] as const;
+
+const AGENTKIT_CONTEXT_BY_PREFIX: Array<[string, AgentKitToolContext]> = [
+  ['bridging_', {
+    protocol: 'bridging',
+    risk: 'write',
+    usage: 'Use for cross-chain asset movement through Wormhole or deBridge. Confirm source chain, destination chain, token mint, amount, recipient, route fees, and finality expectations before invoking a bridge write.',
+    workflow: 'For bridge flows call the matching status tool after submission. If the bridge capability belongs to a registered SAP agent, plan the profile with sap_agent_identity_plan, register through sap_payments_register_agent, then advertise bridge capability IDs with sap_payments_update_agent or sap_publish_tool_by_name.',
+  }],
+  ['metaplex-nft_', {
+    protocol: 'metaplex-nft',
+    risk: 'write',
+    usage: 'Use for Metaplex NFT collection, mint, metadata, royalty, creator verification, collection verification, and authority workflows. Confirm metadata URI, collection mint, creators, royalties, update authority, and ownership before writes.',
+    workflow: 'For agent identity, plan with sap_agent_identity_plan, register the SAP on-chain profile through sap_payments_register_agent, then use agentUri or metadataUri to point at off-chain or NFT-backed metadata. Use these Metaplex tools when the agent also needs an NFT collection, badge, or verifiable media asset.',
+  }],
+  ['3land_', {
+    protocol: '3land',
+    risk: 'write',
+    usage: 'Use for 3.Land NFT collection, minting, listing, cancellation, and purchase flows. Confirm marketplace price, seller/buyer wallet, collection, and listing state before writes.',
+    workflow: 'Pair marketplace actions with SAP registry metadata only when the marketplace asset is part of the agent identity or service catalog.',
+  }],
+  ['das_', {
+    protocol: 'das',
+    risk: 'read',
+    usage: 'Use for read-only DAS NFT and asset discovery by owner, creator, collection, or search query.',
+    workflow: 'Prefer DAS reads before Metaplex writes when validating existing assets for an agent profile, collection, or metadata update.',
+  }],
+  ['spl-token_', {
+    protocol: 'spl-token',
+    risk: 'write',
+    usage: 'Use for SPL token deploy, mint, transfer, burn, freeze, thaw, and authority management. Confirm mint, decimals, authority, recipient, and amount before writes.',
+    workflow: 'Use token tools alongside SAP payments and settlement tools only when token operations are part of the agent service lifecycle.',
+  }],
+  ['staking_', {
+    protocol: 'staking',
+    risk: 'write',
+    usage: 'Use for SOL and liquid staking flows. Confirm validator or provider, amount, lockup/unstake terms, and account ownership before writes.',
+    workflow: 'Use SAP staking tools for SAP protocol stake accounts; use AgentKit staking tools for external staking protocols.',
+  }],
+  ['sns_', {
+    protocol: 'sns',
+    risk: 'write',
+    usage: 'Use for AgentKit SNS domain helpers. For SAP-linked domains prefer sap_sns_* tools because they include MCP signer policy and SAP agent-domain context.',
+    workflow: 'Use sap_sns_register_agent_domain only from a local SAP MCP profile with a local wallet or external signer when binding a .sol domain to an SAP agent profile.',
+  }],
+  ['alldomains_', {
+    protocol: 'alldomains',
+    risk: 'write',
+    usage: 'Use for AllDomains name registration and resolution workflows. Confirm domain, TLD, owner, and renewal or purchase terms before writes.',
+    workflow: 'Use only when the requested name service is not SNS-specific.',
+  }],
+  ['pyth_', {
+    protocol: 'pyth',
+    risk: 'read',
+    usage: 'Use for Pyth oracle price reads and feed discovery.',
+    workflow: 'Use oracle reads as context for pricing, risk checks, and market-aware agent decisions; do not treat them as settlement proof.',
+  }],
+  ['coingecko_', {
+    protocol: 'coingecko',
+    risk: 'read',
+    usage: 'Use for off-chain market data such as token prices, trending assets, token info, pools, and OHLCV.',
+    workflow: 'Use market data as advisory context. On-chain SAP settlement and escrow state remain authoritative for payments.',
+  }],
+  ['gibwork_', {
+    protocol: 'gibwork',
+    risk: 'write',
+    usage: 'Use for bounty creation, listing, and work submission. Confirm scope, payout, recipient, and deliverable evidence before writes.',
+    workflow: 'Use SAP attestation or feedback tools after work completion when reputation should be recorded on SAP.',
+  }],
+  ['send-arcade_', {
+    protocol: 'send-arcade',
+    risk: 'write',
+    usage: 'Use for Send Arcade game listing and play flows. Confirm account, wager or spend, and game rules before writes.',
+    workflow: 'Keep gaming activity separate from SAP identity unless it is intentionally part of an agent profile.',
+  }],
+  ['blinks_', {
+    protocol: 'blinks',
+    risk: 'read',
+    usage: 'Use for Solana Actions and Blinks metadata fetch, validation, and POST action preparation.',
+    workflow: 'Preview and validate actions before signing or submitting transactions through SAP transaction tools.',
+  }],
+];
+
+const AGENTKIT_CONTEXT_BY_NAME = new Map<string, AgentKitToolContext>([
+  ['bridging_bridgeWormholeStatus', {
+    protocol: 'bridging',
+    risk: 'read',
+    usage: 'Use to check Wormhole bridge transfer status after a bridge submission.',
+    workflow: 'Call this after bridging_bridgeWormhole and keep the resulting status with the user-facing bridge audit trail.',
+  }],
+  ['bridging_bridgeDeBridgeStatus', {
+    protocol: 'bridging',
+    risk: 'read',
+    usage: 'Use to check deBridge transfer status after a bridge submission.',
+    workflow: 'Call this after bridging_bridgeDeBridge and keep the resulting status with the user-facing bridge audit trail.',
+  }],
+  ['sns_resolveDomain', {
+    protocol: 'sns',
+    risk: 'read',
+    usage: 'Use to resolve a .sol domain through AgentKit SNS helpers.',
+    workflow: 'For SAP-linked domains, prefer sap_sns_resolve_domain because it returns SAP MCP-shaped context.',
+  }],
+  ['sns_reverseLookup', {
+    protocol: 'sns',
+    risk: 'read',
+    usage: 'Use to find the SNS domain associated with a wallet.',
+    workflow: 'For SAP profile checks, pair this with sap_sns_resolve_wallet or sap_sns_check_ownership.',
+  }],
+  ['alldomains_resolveDomain', {
+    protocol: 'alldomains',
+    risk: 'read',
+    usage: 'Use to resolve an AllDomains name without changing ownership or records.',
+    workflow: 'Use only when the requested name service is not SNS-specific.',
+  }],
+  ['alldomains_getOwnedDomains', {
+    protocol: 'alldomains',
+    risk: 'read',
+    usage: 'Use to list domains owned by a wallet through AllDomains.',
+    workflow: 'Use as discovery context before choosing a name to associate with an agent.',
+  }],
+  ['blinks_executeAction', {
+    protocol: 'blinks',
+    risk: 'write',
+    usage: 'Use to execute a Solana Action POST flow. Confirm the action metadata, parameters, expected transaction, and user intent before invoking.',
+    workflow: 'Preview and validate action output before signing or submitting any returned transaction through SAP transaction tools.',
+  }],
+]);
+
+/**
+ * @name registerLegacySolanaRpcTools
+ * @description Registers compatibility Solana RPC tools with native ESM-safe implementations.
+ * @param server - MCP server receiving the tool registrations.
+ * @param context - Runtime context containing the configured Solana connection.
+ */
+function registerLegacySolanaRpcTools(server: Server, context: SapMcpContext): void {
+  registerClientSdkPipelineTool<BalanceToolInput>(
+    server,
+    context,
+    'sol_get_balance',
+    {
+      title: 'Get SOL Balance',
+      description: 'Fetch the SOL balance for a wallet or account using the configured Solana RPC endpoint.',
+      inputSchema: {
+        address: { type: 'string', description: 'Wallet or account public key in base58' },
+        pubkey: { type: 'string', description: 'Alias for address' },
+        commitment: {
+          type: 'string',
+          enum: ['processed', 'confirmed', 'finalized'],
+          description: 'Optional commitment override',
+        },
+      },
+    },
+    async (input: BalanceToolInput) => {
+      try {
+        const address = input.address ?? input.pubkey;
+        if (!address) {
+          throw new Error('address or pubkey is required');
+        }
+
+        const publicKey = new PublicKey(address);
+        const commitment = input.commitment ?? context.config.commitment;
+        const lamports = await context.connection.getBalance(publicKey, commitment);
+        const sol = lamports / 1_000_000_000;
+        const data = {
+          success: true,
+          address: publicKey.toBase58(),
+          lamports,
+          sol,
+          commitment,
+        };
+        const cardCtx: UiCardContext = {
+          kind: 'balance',
+          sol,
+          walletAddress: publicKey.toBase58(),
+          network: /devnet/i.test(context.config.rpcUrl) ? 'devnet'
+            : /testnet/i.test(context.config.rpcUrl) ? 'testnet'
+            : 'mainnet',
+        };
+        return createToolFamilyPipelineResult(data, { uiCard: cardCtx });
+      } catch (error) {
+        logger.error('Failed to get SOL balance', { error });
+        return createClientSdkError('sol_get_balance', error);
+      }
+    }
+  );
+}
+
+function buildClientSdkCacheKey(rpcUrl: string, jupiter: JupiterGatewayConfig): string {
+  return JSON.stringify({
+    rpcUrl,
+    jupiterApiBaseUrl: normalizeJupiterBaseUrl(jupiter.apiBaseUrl),
+    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ? normalizeJupiterBaseUrl(jupiter.tokensApiBaseUrl) : null,
+    jupiterApiKeyConfigured: jupiter.apiKeyConfigured,
+    jupiterTimeoutMs: jupiter.timeoutMs,
+  });
+}
+
+function normalizeJupiterGatewayConfig(jupiter?: Partial<JupiterGatewayConfig>): JupiterGatewayConfig {
+  const apiKeyConfigured = jupiter?.apiKeyConfigured ?? Boolean(readJupiterApiKey());
+  return {
+    apiBaseUrl: normalizeJupiterBaseUrl(jupiter?.apiBaseUrl ?? DEFAULT_JUPITER_GATEWAY_CONFIG.apiBaseUrl),
+    tokensApiBaseUrl: jupiter?.tokensApiBaseUrl ? normalizeJupiterBaseUrl(jupiter.tokensApiBaseUrl) : undefined,
+    apiKeyConfigured,
+    timeoutMs: jupiter?.timeoutMs ?? DEFAULT_JUPITER_GATEWAY_CONFIG.timeoutMs,
+  };
+}
+
+function readJupiterApiKey(): string | undefined {
+  const apiKey = process.env.SAP_MCP_JUPITER_API_KEY?.trim()
+    || process.env.JUPITER_API_KEY?.trim()
+    || process.env.JUP_API_KEY?.trim();
+  return apiKey ? apiKey : undefined;
+}
+
+/**
+ * @name normalizeJupiterBaseUrl
+ * @description Keeps Jupiter API config pointed at the API root. Operators
+ * sometimes paste a product endpoint such as /swap/v1 or /price/v3 into the
+ * env var; the Client SDK appends its own route paths, so endpoint paths here
+ * create 404/401 noise even when the API key is valid.
+ */
+export function normalizeJupiterBaseUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(trimmed);
+    url.pathname = url.pathname
+      .replace(/\/(?:price|swap|ultra|trigger|recurring)\/v\d+(?:\/.*)?$/i, '')
+      .replace(/\/+$/, '');
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return trimmed;
+  }
+}
+
+async function initializeClientSdk(rpcUrl: string, jupiter: JupiterGatewayConfig): Promise<void> {
+  const nextCacheKey = buildClientSdkCacheKey(rpcUrl, jupiter);
+  if (agentKit && pluginTools && jupiterProtocolTools && clientSdkCacheKey === nextCacheKey) {
+    logger.debug('Client SDK already initialized');
+    return;
+  }
+
+  logger.debug('Initializing Client SDK with all plugins', {
+    rpcUrl,
+    jupiterApiBaseUrl: jupiter.apiBaseUrl,
+    jupiterTokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? jupiter.apiBaseUrl,
+    jupiterApiKeyConfigured: jupiter.apiKeyConfigured,
+    jupiterTimeoutMs: jupiter.timeoutMs,
+  });
+
+  try {
+    const sdk = await import('@oobe-protocol-labs/synapse-client-sdk/ai/plugins');
+    const {
+      SynapseAgentKit,
+      TokenPlugin,
+      NFTPlugin,
+      DeFiPlugin,
+      MiscPlugin,
+      BlinksPlugin,
+    } = sdk as {
+      SynapseAgentKit: SynapseAgentKitConstructor;
+      TokenPlugin: unknown;
+      NFTPlugin: unknown;
+      DeFiPlugin: unknown;
+      MiscPlugin: unknown;
+      BlinksPlugin: unknown;
+    };
+
+    agentKit = new SynapseAgentKit({ rpcUrl })
+      .use(TokenPlugin)
+      .use(NFTPlugin)
+      .use(DeFiPlugin)
+      .use(MiscPlugin)
+      .use(BlinksPlugin);
+
+    const tools = agentKit.getTools();
+    pluginTools = tools.map((tool) => ({
+      name: tool.name,
+      tool,
+    }));
+    assertRequiredAgentKitTools(pluginTools.map(({ name }) => name));
+
+    logger.debug('Client SDK tools cached', { count: pluginTools?.length || 0 });
+
+    // Log summary
+    const summary = agentKit.summary();
+    logger.debug('AgentKit summary', {
+      plugins: Array.isArray(summary.plugins) ? summary.plugins.length : 0,
+      totalTools: summary.totalTools || 0,
+      totalProtocols: summary.totalProtocols || 0,
+    });
+
+    const protocols = await import('@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols') as ProtocolToolsModule;
+    const jupiterToolkit = protocols.createJupiterTools({
+      apiUrl: jupiter.apiBaseUrl,
+      tokensApiUrl: jupiter.tokensApiBaseUrl,
+      apiKey: readJupiterApiKey(),
+      timeout: jupiter.timeoutMs,
+      prettyJson: true,
+    });
+    jupiterProtocolTools = jupiterToolkit.tools.map((tool) => ({
+      name: tool.name,
+      tool,
+    }));
+    clientSdkCacheKey = nextCacheKey;
+    logger.debug('Jupiter protocol tools cached', {
+      count: jupiterProtocolTools.length,
+      methods: jupiterToolkit.methodNames.length,
+      apiBaseUrl: jupiter.apiBaseUrl,
+      tokensApiBaseUrl: jupiter.tokensApiBaseUrl ?? jupiter.apiBaseUrl,
+      apiKeyConfigured: jupiter.apiKeyConfigured,
+      timeoutMs: jupiter.timeoutMs,
+    });
+
+    return;
+  } catch (error) {
+    logger.error('Failed to initialize Client SDK', { error });
+    throw new Error(
+      `Client SDK initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * @name registerClientSdkTools
+ * @description Registers Synapse Client SDK AgentKit plugin tools and ESM-safe compatibility RPC tools.
+ * @param server - MCP server receiving the tool registrations.
+ * @param context - Runtime context containing RPC configuration and connection state.
+ */
+export async function registerClientSdkTools(server: Server, context: SapMcpContext): Promise<void> {
+  logger.debug('Registering Client SDK tools via SynapseAgentKit');
+
+  registerLegacySolanaRpcTools(server, context);
+
+  try {
+    await initializeClientSdk(context.config.rpcUrl, normalizeJupiterGatewayConfig(context.config.jupiter));
+  } catch (error) {
+    logger.error('Failed to initialize Client SDK', { error });
+    throw error;
+  }
+
+  if (!pluginTools) {
+    throw new Error('AgentKit tools not cached after initialization');
+  }
+
+  if (!jupiterProtocolTools) {
+    throw new Error('Jupiter protocol tools not cached after initialization');
+  }
+
+  // Tools blocked because their AgentKit implementation does not produce an executable operation.
+  // Agents should use the SAP SDK equivalents instead.
+  const BLOCKED_AGENTKIT_TOOLS = new Set<string>([
+    'sns_registerDomain',        // Returns { status: 'instruction_ready' } — use local sap_sns_register_agent_domain instead
+  ]);
+  const DISABLED_AGENTKIT_TOOL_PREFIXES = [
+    ['dri', 'ft_'].join(''),
+  ];
+
+  let registeredCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+
+  for (const { name, tool } of pluginTools) {
+    if (BLOCKED_AGENTKIT_TOOLS.has(name)) {
+      skippedCount++;
+      logger.warn('Skipping blocked AgentKit tool — use SAP SDK equivalent instead', { name });
+      continue;
+    }
+    if (DISABLED_AGENTKIT_TOOL_PREFIXES.some((prefix) => name.toLowerCase().startsWith(prefix))) {
+      skippedCount++;
+      logger.warn('Skipping disabled AgentKit tool family', {
+        name,
+        reason: 'Protocol disabled by SAP MCP risk policy',
+      });
+      continue;
+    }
+    try {
+      registerClientSdkPipelineTool(
+        server,
+        context,
+        name,
+        {
+          title: formatToolTitle(name),
+          description: buildAgentKitToolDescription(name, tool.description),
+          inputSchema: enhanceAgentKitInputSchema(name, tool.schema || tool.inputSchema || {}),
+        },
+        async (input: unknown) => {
+          try {
+            const result = await tool.invoke(normalizeAgentKitToolInput(name, input));
+            const pricing = buildClientSdkHostedPricing(name);
+            const wrapped = typeof result === 'string'
+              ? { success: true, hostedPricing: pricing, result }
+              : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
+            const metaCardCtx = buildMetaplexCardContext(name, input, result);
+            if (metaCardCtx) {
+              return createToolFamilyPipelineResult(wrapped, { uiCard: metaCardCtx });
+            }
+            return wrapped;
+          } catch (invokeError) {
+            logger.error(`Client SDK tool execution failed: ${name}`, {
+              error: invokeError,
+              input,
+            });
+            return createClientSdkError(name, invokeError);
+          }
+        }
+      );
+
+      registeredCount++;
+      logger.debug('Client SDK tool registered', { name });
+    } catch (error) {
+      failedCount++;
+      logger.error(`Failed to register Client SDK tool: ${name}`, { error });
+    }
+  }
+
+  for (const { name, tool } of jupiterProtocolTools) {
+    try {
+      registerClientSdkPipelineTool(
+        server,
+        context,
+        name,
+        {
+          title: formatToolTitle(name),
+          description: buildJupiterProtocolToolDescription(name, tool.description),
+          inputSchema: tool.schema || {},
+        },
+        async (input: unknown) => {
+          try {
+            const result = await tool.invoke(normalizeJupiterProtocolToolInput(name, input));
+            const pricing = buildClientSdkHostedPricing(name);
+            const wrapped = typeof result === 'string'
+              ? { success: true, hostedPricing: pricing, result }
+              : { success: true, hostedPricing: pricing, ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result as Record<string, unknown> : { result }) };
+            const jupCardCtx = buildJupiterCardContext(name, result);
+            if (jupCardCtx) {
+              return createToolFamilyPipelineResult(wrapped, { uiCard: jupCardCtx });
+            }
+            return wrapped;
+          } catch (invokeError) {
+            logger.error(`Jupiter protocol tool execution failed: ${name}`, {
+              error: invokeError,
+              input,
+            });
+            return createClientSdkError(name, invokeError);
+          }
+        }
+      );
+
+      registeredCount++;
+      logger.debug('Jupiter protocol tool registered', { name });
+    } catch (error) {
+      failedCount++;
+      logger.error(`Failed to register Jupiter protocol tool: ${name}`, { error });
+    }
+  }
+
+  logger.debug('Client SDK tools registered', {
+    registered: registeredCount,
+    failed: failedCount,
+    skipped: skippedCount,
+    total: pluginTools.length,
+  });
+}
+
+/**
+ * Format tool name to title case
+ */
+function formatToolTitle(name: string): string {
+  return name
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+    .trim();
+}
+
+function assertRequiredAgentKitTools(toolNames: string[]): void {
+  const available = new Set(toolNames);
+  const missing = REQUIRED_AGENTKIT_TOOL_NAMES.filter((name) => !available.has(name));
+
+  if (missing.length > 0) {
+    throw new Error(`Client SDK is missing required bridge/Metaplex AgentKit tools: ${missing.join(', ')}`);
+  }
+}
+
+function buildAgentKitToolDescription(name: string, sdkDescription?: string): string {
+  const context = getAgentKitToolContext(name);
+  const base = sdkDescription || `${name} (Synapse AgentKit)`;
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  const aliasHint = aliases
+    ? ` Parameter aliases accepted by SAP MCP for agent ergonomics: ${Object.entries(aliases).map(([from, to]) => `${from} -> ${to}`).join(', ')}. Prefer the canonical schema names in new calls.`
+    : '';
+
+  if (!context) {
+    return [
+      base,
+      `SAP MCP context: This Synapse AgentKit tool is served beside the sap_* SDK tools. Use sap_agent_identity_plan, sap_payments_register_agent, sap_payments_update_agent, and sap_publish_tool_by_name when the capability should become part of an on-chain SAP agent profile or tool registry entry.${aliasHint}`,
+    ].join(' ');
+  }
+
+  return [
+    base,
+    `SAP MCP context: Protocol ${context.protocol}; operation class ${context.risk}. ${context.usage}`,
+    `${context.workflow}${aliasHint}`,
+  ].join(' ');
+}
+
+function buildJupiterProtocolToolDescription(name: string, sdkDescription?: string): string {
+  const base = sdkDescription || `${name} (Synapse Jupiter Protocol)`;
+  const aliasHint = name === 'jupiter_getPrice'
+    ? ' Parameter aliases accepted by SAP MCP: mint/id/token/address -> ids[0]. Prefer canonical ids: string[] in new calls.'
+    : '';
+  return [
+    base,
+    `SAP MCP context: Jupiter protocol tools are served as AgentKit ecosystem tools. Use them for quote, route, and swap preparation, then use SAP transaction preview/sign/submit tools when an unsigned transaction must pass MCP signer policy.${aliasHint}`,
+  ].join(' ');
+}
+
+function getAgentKitToolContext(name: string): AgentKitToolContext | undefined {
+  const exactContext = AGENTKIT_CONTEXT_BY_NAME.get(name);
+  if (exactContext) {
+    return exactContext;
+  }
+
+  return AGENTKIT_CONTEXT_BY_PREFIX.find(([prefix]) => name.startsWith(prefix))?.[1];
+}
+
+/**
+ * @name normalizeAgentKitToolInput
+ * @description Accepts common user/agent aliases before invoking SDK-provided tools.
+ * This keeps canonical schemas intact while avoiding brittle retry loops for
+ * read-style wallet tools such as spl-token_getTokenAccounts.
+ */
+export function normalizeAgentKitToolInput(name: string, input: unknown): unknown {
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+
+  // Apply field aliases (e.g. owner → wallet).
+  if (aliases) {
+    for (const [from, to] of Object.entries(aliases)) {
+      if (normalized[to] === undefined && normalized[from] !== undefined) {
+        normalized[to] = normalized[from];
+      }
+    }
+  }
+
+  // Pyth feed ID resolution: convert symbol/mint to hex feed ID.
+  // Applies to pyth_getPrice, pyth_getPriceHistory, and pyth_listPriceFeeds.
+  if (name === 'pyth_getPrice' || name === 'pyth_getPriceHistory') {
+    const feedIdKey = normalized['feedId'] !== undefined ? 'feedId'
+      : normalized['feed_id'] !== undefined ? 'feed_id'
+      : normalized['priceFeedId'] !== undefined ? 'priceFeedId'
+      : null;
+
+    if (feedIdKey) {
+      const currentValue = String(normalized[feedIdKey] ?? '');
+      // If the value is NOT already a 64-char hex ID, try to resolve it.
+      if (currentValue && currentValue.length !== 64 && !/^[0-9a-f]{64}$/i.test(currentValue)) {
+        const upper = currentValue.toUpperCase();
+        const resolved = PYTH_FEED_ID_MAP.get(upper) ?? PYTH_FEED_ID_MAP.get(currentValue);
+        if (resolved) {
+          normalized[feedIdKey] = resolved;
+        }
+      }
+    }
+  }
+
+  return normalized;
+}
+
+/**
+ * @name normalizeJupiterProtocolToolInput
+ * @description Accepts common agent aliases for Jupiter protocol tools before
+ * invoking SDK validation. Keeps public schemas canonical while avoiding a
+ * needless schema-discovery retry for simple price snapshots.
+ */
+export function normalizeJupiterProtocolToolInput(name: string, input: unknown): unknown {
+  if (name !== 'jupiter_getPrice' || !input || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+  if (normalized.ids !== undefined) {
+    return normalized;
+  }
+
+  for (const alias of ['mint', 'id', 'token', 'address']) {
+    const value = normalized[alias];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      normalized.ids = [value.trim()];
+      return normalized;
+    }
+    if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+      normalized.ids = value;
+      return normalized;
+    }
+  }
+
+  return normalized;
+}
+
+function enhanceAgentKitInputSchema(name: string, schema: unknown): Record<string, unknown> {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
+    return {};
+  }
+
+  const aliases = TOOL_INPUT_ALIASES.get(name);
+  if (!aliases) {
+    return schema as Record<string, unknown>;
+  }
+
+  const cloned = structuredCloneSafe(schema);
+  if (!cloned || typeof cloned !== 'object' || Array.isArray(cloned)) {
+    return {};
+  }
+
+  const record = cloned as Record<string, unknown>;
+  const properties = getSchemaProperties(record);
+  if (!properties) {
+    return record;
+  }
+
+  for (const [from, to] of Object.entries(aliases)) {
+    const target = properties[to];
+    if (!target || typeof target !== 'object' || Array.isArray(target)) {
+      continue;
+    }
+
+    const targetRecord = target as Record<string, unknown>;
+    const existing = typeof targetRecord.description === 'string' ? targetRecord.description : '';
+    if (!existing.includes(`Alias accepted: ${from}`)) {
+      targetRecord.description = `${existing}${existing ? ' ' : ''}Alias accepted: ${from}. Prefer canonical parameter "${to}".`;
+    }
+  }
+
+  return record;
+}
+
+function getSchemaProperties(schema: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)) {
+    return schema.properties as Record<string, unknown>;
+  }
+
+  return schema;
+}
+
+function structuredCloneSafe(value: unknown): unknown {
+  try {
+    return structuredClone(value);
+  } catch {
+    return JSON.parse(JSON.stringify(value)) as unknown;
+  }
+}
+
+// ─── UI Card Context Builders ─────────────────────────────────────
+
+/**
+ * Jupiter tool names that produce swap-like results suitable for a card.
+ */
+const JUPITER_SWAP_TOOL_NAMES = new Set([
+  'jupiter_swap',
+  'jupiter_smartSwap',
+  'jupiter_getOrder',
+  'jupiter_swapInstructions',
+]);
+
+/**
+ * @name buildJupiterCardContext
+ * @description Builds a Jupiter swap UiCardContext from the tool result when the
+ *   result contains swap fields (inputMint, outputMint, inAmount, outAmount,
+ *   priceImpactPct, routePlan). Returns undefined for non-swap Jupiter tools.
+ */
+function buildJupiterCardContext(toolName: string, result: unknown): UiCardContext | undefined {
+  if (!JUPITER_SWAP_TOOL_NAMES.has(toolName)) return undefined;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const r = result as Record<string, unknown>;
+  const inputMint = typeof r.inputMint === 'string' ? r.inputMint : undefined;
+  const outputMint = typeof r.outputMint === 'string' ? r.outputMint : undefined;
+  const inAmount = parseAmount(r.inAmount);
+  const outAmount = parseAmount(r.outAmount);
+  const priceImpactPct = parseAmount(r.priceImpactPct);
+  if (inputMint === undefined || outputMint === undefined || inAmount === undefined || outAmount === undefined) {
+    return undefined;
+  }
+  const routePlan = Array.isArray(r.routePlan) ? r.routePlan : [];
+  const route = routePlan.map((hop) => {
+    if (hop && typeof hop === 'object') {
+      const h = hop as Record<string, unknown>;
+      const swapInfo = h.swapInfo as Record<string, unknown> | undefined;
+      if (swapInfo) {
+        return typeof swapInfo.label === 'string' ? swapInfo.label
+          : typeof swapInfo.swapLabel === 'string' ? swapInfo.swapLabel
+          : '?';
+      }
+    }
+    return '?';
+  }).filter((s) => s !== '?');
+  return {
+    kind: 'jupiter',
+    tokenIn: inputMint,
+    tokenOut: outputMint,
+    amountIn: inAmount,
+    amountOut: outAmount,
+    priceImpactPct: priceImpactPct ?? 0,
+    route: route.length > 0 ? route : ['Jupiter'],
+    status: 'success',
+  };
+}
+
+/**
+ * @name parseAmount
+ * @description Parses a numeric amount that may arrive as a string or number.
+ */
+function parseAmount(value: unknown): number | undefined {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Metaplex tool name prefixes that produce NFT operation results suitable for a card.
+ */
+const METAPLEX_TOOL_PREFIX = 'metaplex-nft_';
+
+/**
+ * @name buildMetaplexCardContext
+ * @description Builds a Metaplex NFT UiCardContext from the tool input and result
+ *   for metaplex-nft_* tools. Returns undefined for non-Metaplex tools.
+ */
+function buildMetaplexCardContext(toolName: string, input: unknown, result: unknown): UiCardContext | undefined {
+  if (!toolName.startsWith(METAPLEX_TOOL_PREFIX)) return undefined;
+  const action = toolName.startsWith('metaplex-nft_deploy') ? 'deploy'
+    : toolName.startsWith('metaplex-nft_mint') ? 'mint'
+    : toolName.startsWith('metaplex-nft_update') ? 'update'
+    : toolName.startsWith('metaplex-nft_verify') ? 'verify'
+    : 'mint';
+  const inp = (input && typeof input === 'object' && !Array.isArray(input)) ? input as Record<string, unknown> : {};
+  const res = (result && typeof result === 'object' && !Array.isArray(result)) ? result as Record<string, unknown> : {};
+  const collectionName = typeof inp.collectionName === 'string' ? inp.collectionName
+    : typeof res.collectionName === 'string' ? res.collectionName
+    : typeof inp.collection === 'string' ? inp.collection
+    : undefined;
+  const nftName = typeof inp.name === 'string' ? inp.name
+    : typeof res.name === 'string' ? res.name
+    : typeof inp.nftName === 'string' ? inp.nftName
+    : undefined;
+  const mintAddress = typeof res.mint === 'string' ? res.mint
+    : typeof res.mintAddress === 'string' ? res.mintAddress
+    : typeof inp.mint === 'string' ? inp.mint
+    : typeof res.collectionMint === 'string' ? res.collectionMint
+    : undefined;
+  return {
+    kind: 'metaplex',
+    action: action as 'mint' | 'deploy' | 'update' | 'verify',
+    collectionName,
+    nftName,
+    mintAddress,
+    status: 'success',
+  };
+}
