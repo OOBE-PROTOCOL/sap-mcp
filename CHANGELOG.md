@@ -2,6 +2,41 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased - Modular Monorepo Phase 3: Package-Name Imports and TSDoc
+
+### Changed
+
+- All 353 inter-package imports converted from relative paths
+  (`../../core/src/logger.js`) to package-name imports
+  (`@oobe-protocol-labs/sap-mcp-core/logger`). Zero relative cross-package
+  imports remain in `packages/*/src/`.
+- `verify-package-exports.mjs` rewritten to verify contract symbols via
+  recursive `export *` chain resolution on `.ts` source files instead of
+  dynamic `import()` on compiled `.js` files. Eliminates the Node.js module
+  resolution issue with `workspace:*` package-name imports.
+- `hasExportedTypeSymbol` regex updated to match `async function` exports.
+- Root `package.json` declares all 30 internal packages as `workspace:*`
+  dependencies so pnpm creates symlinks in root `node_modules`.
+- TSDoc `@name` and `@description` tags added to all exported symbols in
+  `packages/config-runtime/src/runtime-doctor.ts`,
+  `packages/config-runtime/src/env.ts`, and
+  `packages/tool-plugin-template/src/index.ts`. Zero files with exports
+  but no `@name`/`@description` tags remain.
+
+### Verification
+
+- `verify:release:offline` passes with exit code 0 (all 15 gates)
+- typecheck: 0 errors
+- lint: clean
+- tests: 744/744 pass
+- build: clean
+- package boundaries: 248 files, 0 failures
+- workspace packages: 30 packages
+- package exports: OK
+- circular deps: 1 preexisting (mcp-adapter -> tools -> module-registry)
+- npm pack: 3.3 MB, 2112 files
+- TSDoc coverage: 1192 exported symbols, 0 without @name/@description
+
 ## Unreleased - Modular Monorepo Phase 2
 
 ### Added

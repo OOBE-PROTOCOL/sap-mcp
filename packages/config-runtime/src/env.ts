@@ -1,12 +1,7 @@
 /**
- * SAP MCP Server - Configuration Module
- *
- * Enterprise-grade configuration management with:
- * - Environment variable validation via Zod
- * - Config file support (JSON/YAML)
- * - User-specific paths (~/.config/mcp-sap/)
- * - Multi-environment support (dev, staging, prod)
- * - Secure defaults with explicit overrides
+ * @name env
+ * @description Enterprise-grade configuration management with environment variable validation, config file support, multi-environment profiles, and secure defaults.
+ * @module config-runtime/env
  */
 
 import { z } from 'zod';
@@ -76,6 +71,7 @@ const booleanEnvSchema = z.preprocess((value: unknown) => {
 /**
  * Zod schema for environment-driven configuration.
  */
+/** @name envSchema - Zod schema for validating environment variables and configuration file entries. */
 export const envSchema = z.object({
   // Profile/config pointer. Prefer this in MCP client YAML instead of duplicating RPC/wallet values.
   SAP_MCP_PROFILE: z.string().optional(),
@@ -180,6 +176,7 @@ export const envSchema = z.object({
 /**
  * Parsed environment configuration before conversion to runtime config.
  */
+/** @name SapEnvConfig - Inferred configuration type from the env Zod schema. */
 export type SapEnvConfig = z.infer<typeof envSchema>;
 
 // ============================================================================
@@ -226,6 +223,7 @@ function asOptionalNumber(value: unknown): number | undefined {
  * - Linux/macOS: ~/.config/mcp-sap/ or $XDG_CONFIG_HOME/mcp-sap/
  * - Windows: %APPDATA%/mcp-sap/
  */
+/** @name getConfigDir - Returns the canonical configuration directory path for the active platform. */
 export function getConfigDir(): string {
   return getCanonicalConfigDir();
 }
@@ -236,6 +234,7 @@ export function getConfigDir(): string {
  * - Linux/macOS: ~/.local/share/mcp-sap/ or $XDG_DATA_HOME/mcp-sap/
  * - Windows: %LOCALAPPDATA%/mcp-sap/
  */
+/** @name getDataDir - Returns the canonical data directory path for persistent state. */
 export function getDataDir(): string {
   return getCanonicalDataDir();
 }
@@ -243,6 +242,7 @@ export function getDataDir(): string {
 /**
  * Get log directory
  */
+/** @name getLogDir - Returns the log directory path for the active platform. */
 export function getLogDir(): string {
   return join(getDataDir(), 'logs');
 }
@@ -250,6 +250,7 @@ export function getLogDir(): string {
 /**
  * Get cache directory
  */
+/** @name getCacheDir - Returns the cache directory path for the active platform. */
 export function getCacheDir(): string {
   return join(getDataDir(), 'cache');
 }
@@ -266,6 +267,7 @@ export function getCacheDir(): string {
  * 3. .env file in project directory
  * 4. Default values (lowest priority)
  */
+/** @name loadConfig - Loads and validates the SAP MCP configuration from the active profile, merging environment variables and config file values. */
 export function loadConfig(configPath?: string): SapMcpConfig {
   // Load .env from project root
   const projectRoot = join(dirname(__filename), '..');
@@ -699,6 +701,7 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
 /**
  * Ensure all required directories exist
  */
+/** @name ensureDirectories - Creates all required configuration, data, log, and cache directories if they do not exist. */
 export function ensureDirectories(): void {
   ensureConfigDirectories();
 }
@@ -706,6 +709,7 @@ export function ensureDirectories(): void {
 /**
  * Get config file path for writing
  */
+/** @name getConfigFilePath - Returns the path to the active profile configuration file. */
 export function getConfigFilePath(): string {
   return getProfileConfigPath(getActiveProfile());
 }
@@ -713,6 +717,7 @@ export function getConfigFilePath(): string {
 /**
  * Save configuration to file
  */
+/** @name saveConfig - Persists a partial configuration update to the active profile config file with atomic write and validation. */
 export function saveConfig(config: Partial<SapEnvConfig>): void {
   const configPath = getConfigFilePath();
 
@@ -726,6 +731,7 @@ export function saveConfig(config: Partial<SapEnvConfig>): void {
 /**
  * Validate configuration for specific mode
  */
+/** @name validateConfigForMode - Validates that a configuration is complete and correct for the specified runtime mode (hosted, local-dev-keypair, etc.). */
 export function validateConfigForMode(config: SapMcpConfig): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 

@@ -1,9 +1,16 @@
+/**
+ * @name tool-plugin-template
+ * @description Reference template for a trusted external SAP MCP tool plugin module. Demonstrates the createPluginToolModule API with namespace, lifecycle hooks, and pipeline tool registration.
+ * @module tool-plugin-template/index
+ */
+
 import {
   createPluginToolModule,
   registerToolFamilyPipelineTool,
   type ToolModuleDefinition,
 } from '@oobe-protocol-labs/sap-mcp-server/tools';
 
+/** @name acmePriceFeedModule - Example plugin module that registers a single ACME price feed tool using the SAP MCP module registry contract. */
 export const acmePriceFeedModule: ToolModuleDefinition = createPluginToolModule({
   id: 'acme-price-feed',
   title: 'ACME Price Feed',
@@ -45,6 +52,7 @@ export const acmePriceFeedModule: ToolModuleDefinition = createPluginToolModule(
   version: '1.0.0',
 });
 
+/** @name toolModules - Array of all tool modules exported by this plugin package for registration with the SAP MCP server. */
 export const toolModules = [
   acmePriceFeedModule,
 ] as const;

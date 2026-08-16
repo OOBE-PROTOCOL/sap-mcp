@@ -1,10 +1,18 @@
+/**
+ * @name runtime-doctor
+ * @description Runtime doctor module for diagnosing SAP MCP configuration, signer, wallet, policy, and RPC readiness.
+ * @module config-runtime/runtime-doctor
+ */
+
 import { existsSync } from 'fs';
 import { getPreferredConfigDir } from './paths.js';
 import { getActiveProfile, getProfileConfigPath, loadProfileConfig } from './profiles.js';
 import { getConfigManager, type FullConfig } from './secure-config.js';
 
+/** @name DoctorStatus - Result status of a single doctor check. */
 export type DoctorStatus = 'pass' | 'warning' | 'fail';
 
+/** @name DoctorCheck - A single diagnostic check with status, message, and optional remediation action. */
 export interface DoctorCheck {
   id: string;
   label: string;
@@ -13,6 +21,7 @@ export interface DoctorCheck {
   action?: string;
 }
 
+/** @name DoctorReport - Aggregated doctor report with overall status, profile info, checks, and summary. */
 export interface DoctorReport {
   status: DoctorStatus;
   profileName: string;
@@ -26,6 +35,7 @@ export interface DoctorReport {
   };
 }
 
+/** @name DoctorReportInput - Input parameters for building a doctor report from a loaded config. */
 export interface DoctorReportInput {
   config: FullConfig;
   profileName: string;
@@ -34,6 +44,7 @@ export interface DoctorReportInput {
   walletExists?: boolean;
 }
 
+/** @name ActiveDoctorConfig - Active configuration snapshot used by the doctor for diagnostics. */
 export interface ActiveDoctorConfig {
   config: FullConfig;
   profileName: string;
@@ -43,6 +54,7 @@ export interface ActiveDoctorConfig {
 
 const localWalletRequiredModes = new Set<FullConfig['mode']>(['local-dev-keypair']);
 
+/** @name summarizeDoctorStatus - Returns the worst status across all checks (fail > warning > pass). */
 export function summarizeDoctorStatus(checks: readonly DoctorCheck[]): DoctorStatus {
   if (checks.some((check) => check.status === 'fail')) {
     return 'fail';
@@ -55,6 +67,7 @@ export function summarizeDoctorStatus(checks: readonly DoctorCheck[]): DoctorSta
   return 'pass';
 }
 
+/** @name summarizeDoctorChecks - Produces a summary block from an array of doctor checks. */
 export function summarizeDoctorChecks(checks: readonly DoctorCheck[]): DoctorReport['summary'] {
   return {
     pass: checks.filter((check) => check.status === 'pass').length,
@@ -63,6 +76,7 @@ export function summarizeDoctorChecks(checks: readonly DoctorCheck[]): DoctorRep
   };
 }
 
+/** @name loadActiveDoctorConfig - Loads the active profile and its full configuration for doctor analysis. */
 export function loadActiveDoctorConfig(): ActiveDoctorConfig {
   const profileName = getActiveProfile();
   const profileConfig = loadProfileConfig(profileName);
@@ -85,6 +99,7 @@ export function loadActiveDoctorConfig(): ActiveDoctorConfig {
   };
 }
 
+/** @name buildDoctorReport - Builds a complete doctor report from a loaded configuration, checking mode, signer, wallet, policy, RPC, and paid/write readiness. */
 export function buildDoctorReport(input: DoctorReportInput): DoctorReport {
   const { config, profileName, configPath, configRoot } = input;
   const checks: DoctorCheck[] = [];
@@ -193,6 +208,7 @@ export function buildDoctorReport(input: DoctorReportInput): DoctorReport {
   };
 }
 
+/** @name buildActiveDoctorReport - Convenience function that loads the active config and builds a doctor report in one call. */
 export function buildActiveDoctorReport(): DoctorReport {
   return buildDoctorReport(loadActiveDoctorConfig());
 }
