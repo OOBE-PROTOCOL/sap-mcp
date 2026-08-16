@@ -35,7 +35,7 @@ import {
   type McpClientTarget,
 } from './mcp-client-injection.js';
 import { listProfiles } from './profiles.js';
-import { getPaymentBridgeProcessStatus } from '../../../src/runtime/payment-bridge-process.js';
+import { getPaymentBridgeProcessStatus } from '../../runtime/src/payment-bridge-process.js';
 import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 
 type WizardLogLevel = WizardSetupInput['logLevel'];

@@ -8,7 +8,7 @@ import type { PaymentRequired } from '@x402/core/types';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { logger } from '../../core/src/logger.js';
 import { getActiveProfile, getProfileConfigPath } from '../../config-runtime/src/profiles.js';
-import { setValidationServer, validateToolArguments } from '../../../src/payments/schema-validation.js';
+import { setValidationServer, validateToolArguments } from '../../payments/src/schema-validation.js';
 import {
   executeX402PaidCall,
   executeExternalX402Call,
@@ -20,8 +20,8 @@ import {
   type X402ChallengeSignInput,
   type X402ExternalCallInput,
   type X402PaidCallInput,
-} from '../../../src/payments/x402-paid-call.js';
-import { getGlobalPrepaidStore } from '../../../src/payments/prepaid-credit-store.js';
+} from '../../payments/src/x402-paid-call.js';
+import { getGlobalPrepaidStore } from '../../payments/src/prepaid-credit-store.js';
 import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
 import {
   SAP_AGENT_REGISTER_INPUT_SCHEMA,
@@ -30,8 +30,8 @@ import {
   parseUpdateAgentArgs,
 } from './sap-sdk-tools.js';
 import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '../../core/src/constants.js';
-import { getPaymentBridgeProcessStatus } from '../../../src/runtime/payment-bridge-process.js';
-import { buildWalletGuardSummary } from '../../../src/signer/wallet-guard.js';
+import { getPaymentBridgeProcessStatus } from '../../runtime/src/payment-bridge-process.js';
+import { buildWalletGuardSummary } from '../../signer/src/wallet-guard.js';
 import {
   createStringToolPipelineResult,
   registerToolFamilyPipelineTool,
@@ -985,7 +985,7 @@ function registerPaymentsProfileCurrentTool(server: Server, context: SapMcpConte
       // the context.signer reflects the OLD profile. We re-read and re-resolve.
       try {
         const { loadProfileConfig } = await import('../../config-runtime/src/profiles.js');
-        const { resolveSigner } = await import('../../../src/signer/signer-resolver.js');
+        const { resolveSigner } = await import('../../signer/src/signer-resolver.js');
         const profileConfig = loadProfileConfig(currentProfile);
         if (profileConfig) {
           currentConfig = { ...context.config, ...profileConfig };
@@ -1071,7 +1071,7 @@ function registerPaymentsWalletGuardTool(server: Server, context: SapMcpContext)
 
       try {
         const { loadProfileConfig } = await import('../../config-runtime/src/profiles.js');
-        const { resolveSigner } = await import('../../../src/signer/signer-resolver.js');
+        const { resolveSigner } = await import('../../signer/src/signer-resolver.js');
         const profileConfig = loadProfileConfig(profileName);
         if (profileConfig) {
           currentConfig = { ...context.config, ...profileConfig };

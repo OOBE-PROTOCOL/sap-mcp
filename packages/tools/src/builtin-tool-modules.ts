@@ -26,9 +26,9 @@ import { registerSapSdkTools } from './sap-sdk-tools.js';
 import { registerSapSnsTools } from './sap-sns-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerTransactionTools } from './transaction-tools.js';
-import { registerFearGreedTool } from '../../../src/perps/market-intelligence.js';
-import { registerPortfolioRiskTool, registerRiskCheckTool } from '../../../src/perps/risk-engine.js';
-import { registerSignalScoreTool } from '../../../src/perps/signal-engine.js';
+import { registerFearGreedTool } from '../../perps/src/market-intelligence.js';
+import { registerPortfolioRiskTool, registerRiskCheckTool } from '../../perps/src/risk-engine.js';
+import { registerSignalScoreTool } from '../../perps/src/signal-engine.js';
 import { createToolModule, selectToolModulesForContext, type ToolModuleDefinition } from './module-registry.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 

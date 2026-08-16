@@ -1,0 +1,19 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-perps",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP perps domain: Adrena builders, perp analytics, charting, risk engine, and signal engine.",
+  "sapMcp": {
+    "boundaryId": "perps",
+    "source": "packages/perps/src",
+    "architectureDomain": "perps",
+    "boundary": "Perpetual futures analytics, Adrena builders, chart indicators, and risk engine.",
+    "legacyCompatibilitySource": "src/perps",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  }
+}

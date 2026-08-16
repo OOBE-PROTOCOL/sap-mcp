@@ -24,12 +24,12 @@ import {
   MCP_SERVER_WEBSITE_URL,
 } from '../../core/src/constants.js';
 import type { SapMcpConfig, SapMcpContext } from '../../core/src/types.js';
-import { createSapClient } from '../../../src/sap/sap-client-manager.js';
-import { resolveSigner } from '../../../src/signer/signer-resolver.js';
-import { PolicyEngine } from '../../../src/policy/policy-engine.js';
+import { createSapClient } from '../../sap/src/sap-client-manager.js';
+import { resolveSigner } from '../../signer/src/signer-resolver.js';
+import { PolicyEngine } from '../../policy/src/policy-engine.js';
 import { registerCapabilities } from './register-capabilities.js';
 import { setToolExecutionContext } from '../../mcp-adapter/src/sdk-compat.js';
-import { initMetrics, startMetricsExporter } from '../../../src/observability/metrics.js';
+import { initMetrics, startMetricsExporter } from '../../observability/src/metrics.js';
 
 /**
  * @name createSapMcpServer

@@ -1,0 +1,21 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-policy",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP policy module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "policy",
+    "source": "packages/policy/src",
+    "architectureDomain": "policy",
+    "boundary": "Policy engine, spending limits, permission checks, and risk levels.",
+    "legacyCompatibilitySource": "src/policy",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  }
+}

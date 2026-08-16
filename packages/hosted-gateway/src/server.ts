@@ -15,23 +15,23 @@ import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 import { logger, initLogger } from '../../core/src/logger.js';
 import { createSapMcpServer } from '../../server-runtime/src/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
-import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '../../../src/payments/index.js';
-import { generatePayShProviderYaml } from '../../../src/payments/pay-sh-spec.js';
+import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '../../payments/src/index.js';
+import { generatePayShProviderYaml } from '../../payments/src/pay-sh-spec.js';
 import {
   listPremiumPlugins,
   premiumPrivatePluginSupport,
   publicPremiumProviderStatus,
   getPremiumMetrics,
   type PremiumCapabilityType,
-} from '../../../src/premium/index.js';
+} from '../../premium/src/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
-import type { PaymentLedgerEvent } from '../../../src/payments/usage-ledger.js';
+import type { PaymentLedgerEvent } from '../../payments/src/usage-ledger.js';
 import { renderLandingPage } from './public-home/index.js';
 import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
-import { preloadPremiumProviders, disconnectAllProviders } from '../../../src/premium/provider-bridge.js';
-import { asyncMemoryProcessor, memoryDatabase } from '../../../src/memory/index.js';
+import { preloadPremiumProviders, disconnectAllProviders } from '../../premium/src/provider-bridge.js';
+import { asyncMemoryProcessor, memoryDatabase } from '../../memory/src/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { BUILTIN_TOOL_MODULES } from '../../tools/src/builtin-tool-modules.js';
 import { buildToolCatalog } from '../../tools/src/tool-catalog.js';

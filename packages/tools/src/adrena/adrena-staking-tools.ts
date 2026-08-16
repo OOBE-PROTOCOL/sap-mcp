@@ -18,7 +18,7 @@ import {
   buildRemoveLiquidStake,
   buildAddLockedStake,
   buildClaimStakes,
-} from '../../../../src/perps/adrena/index.js';
+} from '../../../perps/src/adrena/index.js';
 import {
   getConnection,
   parsePublicKey,

@@ -17,7 +17,7 @@ import {
   buildOpenCommodityShort,
   buildCloseCommodityLong,
   buildCloseCommodityShort,
-} from '../../../../src/perps/adrena/index.js';
+} from '../../../perps/src/adrena/index.js';
 import {
   COMMODITY_TOKENS,
   priceToRaw,

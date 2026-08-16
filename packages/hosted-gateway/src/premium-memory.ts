@@ -17,12 +17,12 @@
  * @module remote/premium-memory
  */
 
-import { listPremiumSessions } from '../../../src/premium/session-manager.js';
-import { getEventCount, clearAllEvents } from '../../../src/premium/event-store.js';
-import { disconnectAllProviders } from '../../../src/premium/provider-bridge.js';
-import { stopAllStreams } from '../../../src/premium/stream-broker.js';
-import { stopAllWebhooks } from '../../../src/premium/webhook-engine.js';
-import { clearAllSessions } from '../../../src/premium/session-manager.js';
+import { listPremiumSessions } from '../../premium/src/session-manager.js';
+import { getEventCount, clearAllEvents } from '../../premium/src/event-store.js';
+import { disconnectAllProviders } from '../../premium/src/provider-bridge.js';
+import { stopAllStreams } from '../../premium/src/stream-broker.js';
+import { stopAllWebhooks } from '../../premium/src/webhook-engine.js';
+import { clearAllSessions } from '../../premium/src/session-manager.js';
 
 /**
  * @description Default prune interval: 30 seconds.

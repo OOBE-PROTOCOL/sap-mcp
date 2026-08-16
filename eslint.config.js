@@ -11,12 +11,14 @@ export default [
       '.venv/**',
       '.superstack/**',
       'tmp_sdk_docs/**',
+      'packages/tui/**',
+      'packages/tui/src/**',
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'packages/*/src/**/*.{ts,tsx}'],
     rules: {
       'no-console': 'off',
       'no-undef': 'off',

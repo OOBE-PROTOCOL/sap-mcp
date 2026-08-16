@@ -10,9 +10,9 @@
  */
 
 import type { SapPermission } from '../../core/src/types.js';
-import { isHostedAccountlessBlockedTool } from '../../../src/payments/hosted-tool-eligibility.js';
-import { classifyTool, type PaymentTier } from '../../../src/payments/pricing.js';
-import { getRequiredPermission, isWriteOperation } from '../../../src/security/tool-permissions.js';
+import { isHostedAccountlessBlockedTool } from '../../payments/src/hosted-tool-eligibility.js';
+import { classifyTool, type PaymentTier } from '../../payments/src/pricing.js';
+import { getRequiredPermission, isWriteOperation } from '../../security/src/tool-permissions.js';
 import type { ToolModuleDefinition } from './module-registry.js';
 
 export type ToolExecutionIntent =

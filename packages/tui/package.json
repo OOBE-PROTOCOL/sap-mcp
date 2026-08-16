@@ -1,0 +1,19 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-tui",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP tui module — internal workspace package.",
+  "sapMcp": {
+    "boundaryId": "tui",
+    "source": "packages/tui/src",
+    "architectureDomain": null,
+    "boundary": "Terminal UI wizard save helper (legacy, source remains in src/tui).",
+    "legacyCompatibilitySource": "src/tui",
+    "physicalSource": false
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  }
+}

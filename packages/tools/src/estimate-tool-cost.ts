@@ -12,8 +12,8 @@ import {
   formatUsdPrice,
   priceToolCall,
   type PaymentTier,
-} from '../../../src/payments/pricing.js';
-import { isHostedAccountlessBlockedTool } from '../../../src/payments/hosted-tool-eligibility.js';
+} from '../../payments/src/pricing.js';
+import { isHostedAccountlessBlockedTool } from '../../payments/src/hosted-tool-eligibility.js';
 import { canonicalizeToolName } from './tool-aliases.js';
 import {
   createToolFamilyPipelineResult,

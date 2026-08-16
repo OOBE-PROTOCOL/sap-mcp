@@ -1,0 +1,21 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-memory",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP memory module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "memory",
+    "source": "packages/memory/src",
+    "architectureDomain": "memory",
+    "boundary": "Agent memory store, tool call store, stream buffer, and Hermes bridge.",
+    "legacyCompatibilitySource": "src/memory",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  }
+}

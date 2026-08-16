@@ -176,6 +176,10 @@ importers:
         specifier: ^4.1.9
         version: 4.1.10(@types/node@22.20.1)(vite@8.1.0(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.6)(yaml@2.9.0))
 
+  packages/adapters: {}
+
+  packages/bin: {}
+
   packages/config-runtime: {}
 
   packages/core: {}
@@ -186,13 +190,47 @@ importers:
 
   packages/mcp-adapter: {}
 
+  packages/memory: {}
+
+  packages/observability: {}
+
+  packages/payments: {}
+
+  packages/perps: {}
+
+  packages/policy: {}
+
+  packages/premium: {}
+
+  packages/prompts: {}
+
+  packages/resources: {}
+
+  packages/runtime: {}
+
+  packages/sap: {}
+
   packages/schemas: {}
 
+  packages/security: {}
+
   packages/server-runtime: {}
+
+  packages/session: {}
+
+  packages/signer: {}
+
+  packages/solana: {}
+
+  packages/strategies: {}
 
   packages/tool-plugin-template: {}
 
   packages/tools: {}
+
+  packages/transports: {}
+
+  packages/tui: {}
 
   packages/ui-cards: {}
 

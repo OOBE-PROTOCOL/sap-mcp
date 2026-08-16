@@ -33,7 +33,7 @@ import {
   type PremiumCapabilityType,
   type PremiumManifestTemplateRequest,
   type PremiumSessionRequest,
-} from '../../../src/premium/index.js';
+} from '../../premium/src/index.js';
 
 const CAPABILITY_TYPES = ['stream', 'webhook', 'tool'] as const;
 

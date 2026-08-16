@@ -29,7 +29,7 @@ import {
   fetchOraclePrice,
   type PositionSide,
   type AdrenaPool,
-} from '../../../../src/perps/adrena/index.js';
+} from '../../../perps/src/adrena/index.js';
 import {
   MAIN_POOL_TOKENS,
   COMMODITY_TOKENS,
@@ -39,7 +39,7 @@ import {
   parsePublicKey,
   type JsonSchema,
 } from './adrena-helpers.js';
-import type { PolicyViolationResult } from '../../../../src/policy/policy-engine.js';
+import type { PolicyViolationResult } from '../../../policy/src/policy-engine.js';
 
 /**
  * @name validateTradingPolicyFromContext
@@ -684,7 +684,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
       }
 
       // Fetch current oracle price.
-      const { fetchOraclePrice } = await import('../../../../src/perps/adrena/adrena-builder-core.js');
+      const { fetchOraclePrice } = await import('../../../perps/src/adrena/adrena-builder-core.js');
       const oraclePriceRaw = await fetchOraclePrice(principalToken, side);
       // Convert raw price (scaled by 10^10) to USD.
       const currentPriceUsd = Number(oraclePriceRaw) / Math.pow(10, 10);

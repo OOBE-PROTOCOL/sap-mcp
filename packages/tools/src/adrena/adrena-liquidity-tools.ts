@@ -17,7 +17,7 @@ import {
   buildRemoveLiquidity,
   buildSwap,
   type AdrenaPool,
-} from '../../../../src/perps/adrena/index.js';
+} from '../../../perps/src/adrena/index.js';
 import {
   COLLATERAL_TOKENS,
   getConnection,

@@ -6,7 +6,7 @@
  * Signing and spend-policy enforcement remain in signer and policy modules.
  */
 
-export { startStdioTransport } from '../../../src/transports/stdio.js';
+export { startStdioTransport } from '../../transports/src/stdio.js';
 export {
   PaymentBridgeLockError,
   acquirePaymentBridgeProcessLock,
@@ -16,10 +16,10 @@ export {
   releasePaymentBridgeProcessLock,
   resolvePaymentBridgeProfileName,
   resolvePaymentBridgeRuntimeId,
-} from '../../../src/runtime/payment-bridge-process.js';
+} from '../../runtime/src/payment-bridge-process.js';
 
 export type {
   PaymentBridgeLockRecord,
   PaymentBridgeProcessInfo,
   PaymentBridgeProcessStatus,
-} from '../../../src/runtime/payment-bridge-process.js';
+} from '../../runtime/src/payment-bridge-process.js';

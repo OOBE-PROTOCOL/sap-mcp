@@ -13,8 +13,8 @@ import {
   registerAdrenaPipelineTool,
 } from './adrena-pipeline.js';
 import { getConnection } from './adrena-helpers.js';
-import { adrenaDataApi } from '../../../../src/perps/adrena/adrena-data-api.js';
-import { ADRENA_MAIN_POOL_ADDRESS, ADRENA_CUSTODIES } from '../../../../src/perps/adrena/adrena-constants.js';
+import { adrenaDataApi } from '../../../perps/src/adrena/adrena-data-api.js';
+import { ADRENA_MAIN_POOL_ADDRESS, ADRENA_CUSTODIES } from '../../../perps/src/adrena/adrena-constants.js';
 import { logger } from '../../../core/src/logger.js';
 
 /** TTL for the market snapshot cache in milliseconds. */

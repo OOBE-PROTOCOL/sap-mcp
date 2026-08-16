@@ -8,7 +8,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
 import type { SapMcpContext } from '../../core/src/types.js';
-import { getSapClient } from '../../../src/sap/sap-client-manager.js';
+import { getSapClient } from '../../sap/src/sap-client-manager.js';
 import { redactSensitiveString } from '../../core/src/logger.js';
 import { createToolExecutionResult, registerPipelineTool } from './tool-execution-pipeline.js';
 

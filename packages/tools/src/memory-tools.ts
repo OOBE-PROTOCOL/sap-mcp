@@ -21,8 +21,8 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
-import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '../../../src/memory/index.js';
-import type { ToolCallOutcome, MemoryType } from '../../../src/memory/types.js';
+import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '../../memory/src/index.js';
+import type { ToolCallOutcome, MemoryType } from '../../memory/src/types.js';
 import {
   createStringToolPipelineResult,
   registerToolFamilyPipelineTool,
@@ -262,7 +262,7 @@ function registerStrategySaveTool(server: Server, context: SapMcpContext): void 
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { saveStrategy } = await import('../../../src/strategies/strategy-store.js');
+      const { saveStrategy } = await import('../../strategies/src/strategy-store.js');
       const result = saveStrategy({
         category: String(raw['category']),
         name: String(raw['name']),
@@ -292,7 +292,7 @@ function registerStrategyLoadTool(server: Server, context: SapMcpContext): void 
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { loadStrategy } = await import('../../../src/strategies/strategy-store.js');
+      const { loadStrategy } = await import('../../strategies/src/strategy-store.js');
       const strategy = loadStrategy(String(raw['category']), String(raw['name']));
       return createMemoryPipelineResponse(JSON.stringify(strategy ?? null));
     } catch (error) {
@@ -316,7 +316,7 @@ function registerStrategyListTool(server: Server, context: SapMcpContext): void 
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { listStrategies } = await import('../../../src/strategies/strategy-store.js');
+      const { listStrategies } = await import('../../strategies/src/strategy-store.js');
       const strategies = listStrategies(
         typeof raw['category'] === 'string' ? raw['category'] : undefined,
         raw['activeOnly'] === true,
@@ -345,7 +345,7 @@ function registerStrategyActivateTool(server: Server, context: SapMcpContext): v
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { activateStrategy } = await import('../../../src/strategies/strategy-store.js');
+      const { activateStrategy } = await import('../../strategies/src/strategy-store.js');
       const result = activateStrategy(String(raw['category']), String(raw['name']), raw['active'] === true);
       return createMemoryPipelineResponse(JSON.stringify(result));
     } catch (error) {
@@ -611,7 +611,7 @@ function registerStrategyExecuteTool(server: Server, context: SapMcpContext): vo
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { loadStrategy } = await import('../../../src/strategies/strategy-store.js');
+      const { loadStrategy } = await import('../../strategies/src/strategy-store.js');
       const strategy = loadStrategy(String(raw['category']), String(raw['name']));
       if (!strategy) {
         return createMemoryPipelineResponse(JSON.stringify({ error: 'Strategy not found', category: raw['category'], name: raw['name'] }), { isError: true });
@@ -648,8 +648,8 @@ function registerStrategyExecuteTool(server: Server, context: SapMcpContext): vo
         return createMemoryPipelineResponse(JSON.stringify({ strategy: { category: strategy.category, name: strategy.name, version: strategy.version }, resolved: { market, side, collateralUsd, leverage, stopLossPct, takeProfitPct, owner }, dryRun: true, message: 'Set dryRun: false to build a ready-to-sign transaction.' }, null, 2));
       }
 
-      const { buildPositionPackage } = await import('../../../src/perps/adrena/adrena-builder-trading.js');
-      const { fetchOraclePrice } = await import('../../../src/perps/adrena/adrena-builder-core.js');
+      const { buildPositionPackage } = await import('../../perps/src/adrena/adrena-builder-trading.js');
+      const { fetchOraclePrice } = await import('../../perps/src/adrena/adrena-builder-core.js');
       const { getConnection } = await import('./adrena/adrena-helpers.js');
       const { PublicKey } = await import('@solana/web3.js');
       const connection = getConnection(context);
@@ -700,7 +700,7 @@ function registerTradeJournalAppendTool(server: Server, context: SapMcpContext):
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { appendTradeEntry } = await import('../../../src/strategies/trade-journal.js');
+      const { appendTradeEntry } = await import('../../strategies/src/trade-journal.js');
       const entry = {
         timestamp: new Date().toISOString(),
         type: raw['type'] as 'open' | 'close' | 'liquidation' | 'sl_triggered' | 'tp_triggered',
@@ -745,7 +745,7 @@ function registerTradeJournalQueryTool(server: Server, context: SapMcpContext): 
   }, async (input: unknown) => {
     try {
       const raw = input as Record<string, unknown>;
-      const { queryTradeJournal } = await import('../../../src/strategies/trade-journal.js');
+      const { queryTradeJournal } = await import('../../strategies/src/trade-journal.js');
       const result = queryTradeJournal({
         market: raw['market'] !== undefined ? String(raw['market']) : undefined,
         type: raw['type'] !== undefined ? raw['type'] as 'open' | 'close' | 'liquidation' | 'sl_triggered' | 'tp_triggered' : undefined,

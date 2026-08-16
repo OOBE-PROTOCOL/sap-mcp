@@ -24,7 +24,7 @@
  */
 
 import * as http from 'node:http';
-import { readRequestBody, parseJsonBody } from '../../../src/payments/http-adapter.js';
+import { readRequestBody, parseJsonBody } from '../../payments/src/http-adapter.js';
 import {
   activatePremiumSession,
   startStream,
@@ -36,7 +36,7 @@ import {
   startWebhookDelivery,
   getWebhookSubscription,
   getWebhookDeliveries,
-} from '../../../src/premium/index.js';
+} from '../../premium/src/index.js';
 
 /* -------------------------------------------------------------------------- */
 /* Internal HTTP helpers                                                      */

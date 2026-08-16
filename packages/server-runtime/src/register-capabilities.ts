@@ -13,8 +13,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { registerTools } from '../../tools/src/register-tools.js';
-import { registerResources } from '../../../src/resources/register-resources.js';
-import { registerPrompts } from '../../../src/prompts/register-prompts.js';
+import { registerResources } from '../../resources/src/register-resources.js';
+import { registerPrompts } from '../../prompts/src/register-prompts.js';
 import { logger } from '../../core/src/logger.js';
 
 /**

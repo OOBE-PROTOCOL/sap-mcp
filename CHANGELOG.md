@@ -2,6 +2,69 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased - Modular Monorepo Phase 2
+
+### Added
+
+- 19 new internal workspace packages under `packages/`: adapters, bin, memory,
+  observability, perps, payments, policy, premium, prompts, resources, runtime,
+  sap, security, session, signer, solana, strategies, transports, and tui
+  (legacy compatibility entry).
+- `config/workspace-package-contracts.json` now declares all 30 packages with
+  boundary metadata, `physicalSource`, and `legacyCompatibilitySource` entries.
+- `tsconfig.packages.json` includes all 30 package source directories.
+- `eslint.config.js` applies the `@typescript-eslint/no-unused-vars` ignore
+  pattern (`^_`) to `packages/*/src/` in addition to `src/`.
+- `packages/tui/` registered as a non-physical legacy compatibility package
+  (real source remains in `src/tui/` which is excluded from the packages build).
+
+### Changed
+
+- All 19 domains moved from `src/<domain>/` to `packages/<domain>/src/` as
+  physical source. The old `src/<domain>/` files are now thin re-export
+  wrappers (`export * from '../../packages/<domain>/src/...'`).
+- All cross-domain imports from `packages/*/src/` rewritten to point directly
+  to the target package (`../../<domain>/src/...`) instead of going through
+  legacy `src/` wrappers.
+- `packages/bin/src/sap-mcp-remote.ts` now imports from
+  `../../hosted-gateway/src/server.js` instead of `../../../src/remote/server.js`.
+- `packages/local-bridge/src/index.ts` imports from `../../transports/src/` and
+  `../../runtime/src/` instead of legacy `src/` paths.
+- `packages/hosted-gateway/src/` imports from `../../payments/src/`,
+  `../../premium/src/`, and `../../memory/src/` instead of legacy paths.
+- `packages/server-runtime/src/` imports from `../../observability/src/`,
+  `../../resources/src/`, `../../prompts/src/`, `../../sap/src/`,
+  `../../signer/src/`, and `../../policy/src/`.
+- `packages/tools/src/` imports from `../../payments/src/`, `../../perps/src/`,
+  `../../premium/src/`, `../../memory/src/`, `../../sap/src/`,
+  `../../signer/src/`, `../../policy/src/`, `../../security/src/`, and
+  `../../runtime/src/`.
+- `README.md` "Repository Layout" section now reflects the `packages/`
+  modular structure instead of the old flat `src/` layout.
+- `package.json` lint script uses `--no-error-on-unmatched-pattern` to handle
+  the legacy `packages/tui/` directory gracefully.
+
+### Fixed
+
+- `src/transports/stdio.test.ts` mock path updated from `../core/logger.js` to
+  `../../packages/core/src/logger.js` to match the new package import path
+  used by `packages/transports/src/stdio.ts`.
+
+### Verification
+
+- typecheck: 0 errors
+- lint: 0 errors
+- tests: 64 files, 744 tests, 0 failures
+- build: clean
+- npm pack: 3.3 MB, 2112 files
+- package boundaries: 248 files scanned, 0 failures
+- workspace packages: 30 packages verified
+- package exports: OK
+- tool execution pipeline: 165 registrations, 0 legacy
+- skill workflows: 20 skills
+- company readiness: 12 requirements
+- architecture boundaries: OK
+
 ## 0.9.74 - 2026-08-08
 
 ### Fixed

@@ -217,7 +217,7 @@ export async function saveWizardSetup(input: WizardSetupInput): Promise<WizardSe
   // Extract and store agent pubkey
   if (walletPath && existsSync(walletPath)) {
     try {
-      const { loadKeypairFromFile } = await import('../../../src/signer/load-keypair.js');
+      const { loadKeypairFromFile } = await import('../../signer/src/load-keypair.js');
       const keypair = loadKeypairFromFile(walletPath);
       config.agentPubkey = keypair.publicKey.toBase58();
     } catch (error) {

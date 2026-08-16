@@ -319,21 +319,42 @@ Start with [00. Engineering Documentation Index](docs/00_ENGINEERING_DOCUMENTATI
 
 ## 9. Repository Layout
 
+The repository is a modular monorepo. Real source code lives in `packages/*/src/`; the corresponding `src/` directories are thin compatibility wrappers (`export * from '../../packages/...'`) that preserve existing import paths.
+
 ```text
-src/
-  adapters/      MCP and Solana adapter helpers
-  config/        Runtime config, secure config manager, setup wizard pipeline
-  core/          Shared runtime types, errors, logger, constants
-  payments/      x402 monetization, facilitator, usage ledger, pay.sh spec
-  policy/        Local, Bento, and hybrid policy engines
-  remote/        Streamable HTTP MCP server
-  resources/     MCP resources
-  security/      Private-key, unsafe-action, and permission guards
-  server/        MCP server factory and capability registration
-  signer/        Local, delegated, and external signer adapters
-  tools/         SAP, Solana, AgentKit, SNS, profile, skill, chat, and payment tools
-  transports/    stdio and local HTTP transport helpers
+packages/
+  core/              Shared runtime types, errors, logger, constants, guards, result
+  config-runtime/    Runtime config, secure config manager, setup wizard, runtime doctor, client injection
+  server-runtime/    MCP server factory, capability registration, server metadata
+  hosted-gateway/    Streamable HTTP MCP server, public home, premium routes, rate limiter, tx relay
+  local-bridge/      Local stdio MCP bridge, payment bridge process diagnostics
+  mcp-adapter/       Model Context Protocol adapter compatibility layer
+  schemas/           Public Zod schemas and protocol contracts
+  tools/             SAP, Solana, AgentKit, SNS, profile, skill, chat, payment, perps, and premium tools
+  ui-cards/          MCP Apps Card rendering, card builder, templates, protocol logos
+  wizard-core/       Shared CLI and desktop wizard flow
+  tool-plugin-template/  Trusted external tool-family plugin template
+  adapters/          Solana connection and public key adapter utilities
+  bin/               npx-safe bootstrap entrypoints for remote and local servers
+  memory/            Agent memory store, tool call store, stream buffer, Hermes bridge
+  observability/     Metrics collection and exporter
+  perps/             Perpetual futures analytics, Adrena builders, chart indicators, risk engine
+  payments/          x402 monetization, facilitator, usage ledger, pay.sh spec, pricing
+  policy/            Local, Bento, and hybrid policy engines, spending limits, permission checks
+  premium/           Premium runtime plugins, streams, webhooks, session management
+  prompts/           MCP prompt templates for developer, payments, context, execution-proof, registry
+  resources/         MCP resource templates for memory, execution-proof, reputation, profile, registry, stats
+  runtime/           Module resolution and payment bridge process management
+  sap/               SAP SDK client manager, types, and error classes
+  security/          Private-key guard, tool permissions, prompt injection notes, approval gates
+  session/           Session store, delegated sessions, agent sessions, session limits
+  signer/            Local, delegated, and external signer adapters, wallet guard, policy-enforcing wallet
+  solana/            Solana ATA utilities
+  strategies/        Strategy store and trade journal
+  transports/        stdio and HTTP transport layers
 ```
+
+The root `package.json` re-exports all package surfaces so consumers can import from `@oobe-protocol-labs/sap-mcp-server` without referencing internal packages directly.
 
 ## 10. License
 

@@ -1,0 +1,19 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-payments",
+  "version": "0.9.74",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP x402/pay.sh payment gate, pricing catalog, usage ledger, and facilitator server boundary.",
+  "sapMcp": {
+    "boundaryId": "payments",
+    "source": "packages/payments/src",
+    "architectureDomain": "payments",
+    "boundary": "x402 payment facilitation, monetization gate, pricing, and usage ledger.",
+    "legacyCompatibilitySource": "src/payments",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  }
+}

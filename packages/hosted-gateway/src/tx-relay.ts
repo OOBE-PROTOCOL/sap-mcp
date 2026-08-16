@@ -14,7 +14,7 @@ import {
   type TransactionEncoding,
   type TransactionSubmitCommitment,
 } from '../../tools/src/transaction-tools.js';
-import { parseJsonBody, readRequestBody } from '../../../src/payments/http-adapter.js';
+import { parseJsonBody, readRequestBody } from '../../payments/src/http-adapter.js';
 
 export const TX_SUBMIT_PATH = '/tx/submit';
 const TX_SUBMIT_MAX_BODY_BYTES = 512_000;

@@ -7,7 +7,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { buildDoctorReport } from '../../config-runtime/src/runtime-doctor.js';
 import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 import type { SapMcpContext } from '../../core/src/types.js';
-import { buildPricingCatalog } from '../../../src/payments/pricing.js';
+import { buildPricingCatalog } from '../../payments/src/pricing.js';
 import {
   buildActionPreparation,
   buildSessionContextPacket,

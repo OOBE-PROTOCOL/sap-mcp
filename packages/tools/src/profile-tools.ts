@@ -13,9 +13,9 @@ import {
   profileExists,
   setActiveProfile,
 } from '../../config-runtime/src/profiles.js';
-import { createSapClient } from '../../../src/sap/sap-client-manager.js';
-import { resolveSigner } from '../../../src/signer/signer-resolver.js';
-import { PolicyEngine } from '../../../src/policy/policy-engine.js';
+import { createSapClient } from '../../sap/src/sap-client-manager.js';
+import { resolveSigner } from '../../signer/src/signer-resolver.js';
+import { PolicyEngine } from '../../policy/src/policy-engine.js';
 import { loadConfig } from '../../config-runtime/src/env.js';
 import { redactSensitiveString } from '../../core/src/logger.js';
 import {

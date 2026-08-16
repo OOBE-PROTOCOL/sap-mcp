@@ -37,14 +37,14 @@ import type { FairScaleTask } from '@oobe-protocol-labs/synapse-sap-sdk/registri
 import type { ToolCategoryName } from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
 import type { PaymentContext, PreparePaymentOptions, SettleOptions } from '@oobe-protocol-labs/synapse-sap-sdk/registries/x402';
 import type { SapMcpContext } from '../../core/src/types.js';
-import { getSapClient, isSapClientInitialized } from '../../../src/sap/sap-client-manager.js';
+import { getSapClient, isSapClientInitialized } from '../../sap/src/sap-client-manager.js';
 import { logger } from '../../core/src/logger.js';
 import {
   DEFAULT_SAP_PROGRAM_ID,
   SAP_PROTOCOL_TREASURY,
   SAP_REGISTRATION_FEE_LAMPORTS,
 } from '../../core/src/constants.js';
-import { classifyTool } from '../../../src/payments/pricing.js';
+import { classifyTool } from '../../payments/src/pricing.js';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

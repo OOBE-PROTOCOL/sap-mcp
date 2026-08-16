@@ -17,7 +17,7 @@ import type { ProtocolTool } from '@oobe-protocol-labs/synapse-client-sdk/ai/too
 import type { SapMcpContext } from '../../core/src/types.js';
 import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
 import { logger } from '../../core/src/logger.js';
-import { classifyTool } from '../../../src/payments/pricing.js';
+import { classifyTool } from '../../payments/src/pricing.js';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

@@ -984,7 +984,7 @@ export async function finalizeTransactionWithLocalSigner(
 
   if (input.signerProfile) {
     const { loadProfileConfig } = await import('../../config-runtime/src/profiles.js');
-    const { resolveSigner } = await import('../../../src/signer/signer-resolver.js');
+    const { resolveSigner } = await import('../../signer/src/signer-resolver.js');
     const profileConfig = loadProfileConfig(input.signerProfile);
     if (!profileConfig) {
       throw new Error(
@@ -1441,7 +1441,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         const mintKey = new PublicKey(mint);
 
         // Derive ATA addresses using the shared helper for consistency.
-        const { deriveAtaAddress, createAtaIdempotentIx } = await import('../../../src/solana/ata-utils.js');
+        const { deriveAtaAddress, createAtaIdempotentIx } = await import('../../solana/src/ata-utils.js');
         const sourceAta = deriveAtaAddress(sourceOwnerKey, mintKey);
         const destAta = deriveAtaAddress(destOwnerKey, mintKey);
 

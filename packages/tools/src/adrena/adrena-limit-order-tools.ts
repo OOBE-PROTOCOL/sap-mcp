@@ -17,7 +17,7 @@ import {
   buildAddLimitOrder,
   buildCancelLimitOrder,
   type PositionSide,
-} from '../../../../src/perps/adrena/index.js';
+} from '../../../perps/src/adrena/index.js';
 import {
   MAIN_POOL_TOKENS,
   COLLATERAL_TOKENS,

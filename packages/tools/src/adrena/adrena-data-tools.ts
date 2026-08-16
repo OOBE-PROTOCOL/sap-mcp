@@ -16,8 +16,8 @@ import {
 } from './adrena-pipeline.js';
 import {
   adrenaDataApi,
-} from '../../../../src/perps/adrena/index.js';
-import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../../../../src/perps/adrena/adrena-constants.js';
+} from '../../../perps/src/adrena/index.js';
+import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../../../perps/src/adrena/adrena-constants.js';
 import {
   getConnection,
 } from './adrena-helpers.js';
