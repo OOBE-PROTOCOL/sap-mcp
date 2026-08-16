@@ -136,35 +136,46 @@ export class PremiumMemoryManager {
    * sessions, and checks event/delivery counts against caps.
    */
   private async prune(): Promise<void> {
-    const sessions = listPremiumSessions();
-    const eventCount = getEventCount();
+    try {
+      const sessions = listPremiumSessions();
+      const eventCount = getEventCount();
 
-    // If the event store exceeds its cap, flush oldest events.
-    // The event store self-prunes on append, but in low-traffic periods
-    // we want to ensure the store doesn't hold stale data indefinitely.
-    if (eventCount > this.config.maxEvents) {
-      // The event store's internal pruneOldEvents runs on appendEvent.
-      // Here we just log the overflow — the next append will evict.
-    }
+      // If the event store exceeds its cap, flush oldest events.
+      // The event store self-prunes on append, but in low-traffic periods
+      // we want to ensure the store doesn't hold stale data indefinitely.
+      if (eventCount > this.config.maxEvents) {
+        // The event store's internal pruneOldEvents runs on appendEvent.
+        // Here we just log the overflow — the next append will evict.
+      }
 
-    // Log a memory snapshot for operational visibility.
-    const memUsage = process.memoryUsage();
-    const sessionCount = sessions.length;
+      // Log a memory snapshot for operational visibility.
+      const memUsage = process.memoryUsage();
+      const sessionCount = sessions.length;
 
-    if (sessionCount > 0 || eventCount > 0) {
-      // Use console.info instead of the logger to avoid circular import.
-      console.info(
+      if (sessionCount > 0 || eventCount > 0) {
+        // Use console.info instead of the logger to avoid circular import.
+        console.info(
+          JSON.stringify({
+            level: 'info',
+            time: new Date().toISOString(),
+            msg: 'Premium memory snapshot',
+            sessions: sessionCount,
+            events: eventCount,
+            maxSessions: this.config.maxSessions,
+            maxEvents: this.config.maxEvents,
+            rssMb: Math.round(memUsage.rss / 1024 / 1024),
+            heapUsedMb: Math.round(memUsage.heapUsed / 1024 / 1024),
+            heapTotalMb: Math.round(memUsage.heapTotal / 1024 / 1024),
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn(
         JSON.stringify({
-          level: 'info',
+          level: 'warn',
           time: new Date().toISOString(),
-          msg: 'Premium memory snapshot',
-          sessions: sessionCount,
-          events: eventCount,
-          maxSessions: this.config.maxSessions,
-          maxEvents: this.config.maxEvents,
-          rssMb: Math.round(memUsage.rss / 1024 / 1024),
-          heapUsedMb: Math.round(memUsage.heapUsed / 1024 / 1024),
-          heapTotalMb: Math.round(memUsage.heapTotal / 1024 / 1024),
+          msg: 'Premium memory prune failed',
+          error: error instanceof Error ? error.message : String(error),
         }),
       );
     }

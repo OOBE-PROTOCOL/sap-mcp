@@ -230,7 +230,20 @@ export async function saveWizardSetup(input: WizardSetupInput): Promise<WizardSe
   }
 
   await saveProfileConfig(profileName, config);
-  setActiveProfile(profileName);
+
+  try {
+    setActiveProfile(profileName);
+  } catch (error) {
+    // Rollback: remove the profile config that was just saved
+    // so we don't leave an orphaned profile that isn't activated.
+    try {
+      const { rmSync } = await import('node:fs');
+      rmSync(getProfileConfigPath(profileName), { force: true });
+    } catch {
+      // Best-effort cleanup; the profile file may remain but is not activated.
+    }
+    throw new Error(`Failed to activate profile '${profileName}': ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const savedConfig = loadProfileConfig(profileName) ?? config;
 

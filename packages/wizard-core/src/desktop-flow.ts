@@ -449,23 +449,28 @@ export async function saveDesktopWizardDraft(
   ensureConfigDirectories();
 
   const profileName = normalizeDesktopProfileName(draft.profileName);
-  const setup = draft.setupMode === 'full'
-    ? await saveWizardSetup({
-      mode: draft.mode,
-      rpcUrl: draft.rpcUrl,
-      profileName,
-      walletPath: draft.walletPath,
-      createNewWallet: draft.createNewWallet,
-      maxTxValueSol: draft.maxTxValueSol,
-      dailyLimitSol: draft.dailyLimitSol,
-      enableBento: draft.enableBento,
-      bentoApiKey: draft.bentoApiKey,
-      bentoAgentId: draft.bentoAgentId,
-      enableHttp: false,
-      logLevel: draft.logLevel,
-      enableMetrics: draft.enableMetrics,
-    })
-    : undefined;
+  let setup: Awaited<ReturnType<typeof saveWizardSetup>> | undefined;
+  if (draft.setupMode === 'full') {
+    try {
+      setup = await saveWizardSetup({
+        mode: draft.mode,
+        rpcUrl: draft.rpcUrl,
+        profileName,
+        walletPath: draft.walletPath,
+        createNewWallet: draft.createNewWallet,
+        maxTxValueSol: draft.maxTxValueSol,
+        dailyLimitSol: draft.dailyLimitSol,
+        enableBento: draft.enableBento,
+        bentoApiKey: draft.bentoApiKey,
+        bentoAgentId: draft.bentoAgentId,
+        enableHttp: false,
+        logLevel: draft.logLevel,
+        enableMetrics: draft.enableMetrics,
+      });
+    } catch (error) {
+      throw new Error(`Wizard setup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   const runtimeActions: DesktopWizardResult['runtimeActions'] = [];
   const selectedRuntimes = new Set<DesktopRuntimeId>(draft.configureRuntimes);
