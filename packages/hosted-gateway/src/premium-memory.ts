@@ -17,12 +17,12 @@
  * @module remote/premium-memory
  */
 
-import { listPremiumSessions } from '../../premium/src/session-manager.js';
-import { getEventCount, clearAllEvents } from '../../premium/src/event-store.js';
-import { disconnectAllProviders } from '../../premium/src/provider-bridge.js';
-import { stopAllStreams } from '../../premium/src/stream-broker.js';
-import { stopAllWebhooks } from '../../premium/src/webhook-engine.js';
-import { clearAllSessions } from '../../premium/src/session-manager.js';
+import { listPremiumSessions } from '@oobe-protocol-labs/sap-mcp-premium/session-manager';
+import { getEventCount, clearAllEvents } from '@oobe-protocol-labs/sap-mcp-premium/event-store';
+import { disconnectAllProviders } from '@oobe-protocol-labs/sap-mcp-premium/provider-bridge';
+import { stopAllStreams } from '@oobe-protocol-labs/sap-mcp-premium/stream-broker';
+import { stopAllWebhooks } from '@oobe-protocol-labs/sap-mcp-premium/webhook-engine';
+import { clearAllSessions } from '@oobe-protocol-labs/sap-mcp-premium/session-manager';
 
 /**
  * @description Default prune interval: 30 seconds.

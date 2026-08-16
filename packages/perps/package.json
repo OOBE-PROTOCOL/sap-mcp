@@ -96,6 +96,8 @@
   },
   "dependencies": {
     "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
-    "@oobe-protocol-labs/sap-mcp-solana": "workspace:*"
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-solana": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-strategies": "workspace:*"
   }
 }

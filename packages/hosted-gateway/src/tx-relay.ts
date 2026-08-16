@@ -7,14 +7,14 @@
 
 import * as http from 'http';
 import { Connection } from '@solana/web3.js';
-import type { SapMcpConfig } from '../../config-runtime/src/env.js';
+import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
 import {
   decodeInputBytes,
   deserializeTransaction,
   type TransactionEncoding,
   type TransactionSubmitCommitment,
-} from '../../tools/src/transaction-tools.js';
-import { parseJsonBody, readRequestBody } from '../../payments/src/http-adapter.js';
+} from '@oobe-protocol-labs/sap-mcp-tools/transaction-tools';
+import { parseJsonBody, readRequestBody } from '@oobe-protocol-labs/sap-mcp-payments/http-adapter';
 
 export const TX_SUBMIT_PATH = '/tx/submit';
 const TX_SUBMIT_MAX_BODY_BYTES = 512_000;

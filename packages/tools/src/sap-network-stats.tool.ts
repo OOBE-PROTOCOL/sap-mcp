@@ -7,9 +7,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
-import type { SapMcpContext } from '../../core/src/types.js';
-import { getSapClient } from '../../sap/src/sap-client-manager.js';
-import { redactSensitiveString } from '../../core/src/logger.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { getSapClient } from '@oobe-protocol-labs/sap-mcp-sap/sap-client-manager';
+import { redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
 import { createToolExecutionResult, registerPipelineTool } from './tool-execution-pipeline.js';
 
 const SapNetworkStatsInputSchema = z.object({

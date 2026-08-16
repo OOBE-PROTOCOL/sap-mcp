@@ -11,8 +11,8 @@
  * @module session/agent-session
  */
 
-import type { SapAgentSession, SapPermission } from '../../core/src/types.js';
-import { isValidPermission } from '../../core/src/guards.js';
+import type { SapAgentSession, SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { isValidPermission } from '@oobe-protocol-labs/sap-mcp-core/guards';
 
 /**
  * @name createAgentSession

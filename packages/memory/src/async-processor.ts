@@ -18,7 +18,7 @@ import { memoryDatabase } from './database.js';
 import { toolCallStore } from './tool-call-store.js';
 import { memoryStore } from './memory-store.js';
 import { streamBufferStore } from './stream-buffer-store.js';
-import { logger } from '../../core/src/logger.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 /**
  * @name MaintenanceSchedule

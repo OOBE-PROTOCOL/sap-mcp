@@ -23,5 +23,8 @@
       "types": "./src/metrics.ts",
       "default": "./src/metrics.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

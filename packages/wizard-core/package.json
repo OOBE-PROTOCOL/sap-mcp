@@ -23,5 +23,8 @@
       "types": "./src/desktop-flow.ts",
       "default": "./src/desktop-flow.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*"
   }
 }

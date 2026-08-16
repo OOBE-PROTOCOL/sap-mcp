@@ -3,8 +3,8 @@
  * @description Agent-native SAP MCP session context and action planning helpers.
  */
 
-import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
-import type { SapMcpContext } from '../../core/src/types.js';
+import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 

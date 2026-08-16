@@ -20,8 +20,8 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createDecipheriv, scryptSync } from 'crypto';
 import { Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { getConfigDir, getKeypairsDir } from '../../config-runtime/src/paths.js';
-import { loadProfileConfig } from '../../config-runtime/src/profiles.js';
+import { getConfigDir, getKeypairsDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { loadProfileConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
 
 type LogData = Record<string, unknown>;
 type HeaderValue = string | string[] | undefined;

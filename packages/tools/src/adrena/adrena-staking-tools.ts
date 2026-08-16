@@ -6,7 +6,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   adrenaPipelineException,
   adrenaPipelineOk,
@@ -18,7 +18,7 @@ import {
   buildRemoveLiquidStake,
   buildAddLockedStake,
   buildClaimStakes,
-} from '../../../perps/src/adrena/index.js';
+} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
 import {
   getConnection,
   parsePublicKey,

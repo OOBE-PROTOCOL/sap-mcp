@@ -281,4 +281,4 @@ export function deriveStakingLmRewardTokenVaultPda(staking: PublicKey): PublicKe
  * @param mint — Token mint public key.
  * @returns ATA public key.
  */
-export { deriveAtaAddress as deriveAta } from '../../../solana/src/ata-utils.js';
+export { deriveAtaAddress as deriveAta } from '@oobe-protocol-labs/sap-mcp-solana/ata-utils';

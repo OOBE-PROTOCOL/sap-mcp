@@ -7,8 +7,8 @@
  * - Mode restrictions
  */
 
-import { logger } from '../../core/src/logger.js';
-import type { SapMcpContext, SapPermission } from '../../core/src/types.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpContext, SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
 
 /**
  * Tool permission groups for the current SAP MCP tool surface.

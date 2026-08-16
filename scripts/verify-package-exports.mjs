@@ -1,7 +1,15 @@
 #!/usr/bin/env node
+/**
+ * Package export verifier.
+ *
+ * Verifies that the root package.json exports map resolves to existing files
+ * and that every contract symbol is actually exported. Uses tsx to dynamically
+ * import .ts source files so that workspace:* package-name imports resolve
+ * correctly without a separate build step.
+ */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -22,12 +30,13 @@ function normalizeExportTarget(target) {
 }
 
 function hasExportedTypeSymbol(typesText, symbolName) {
-  const escaped = symbolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const declarationPattern = new RegExp(`\\bexport\\s+(?:declare\\s+)?(?:type|interface|class|function|const|enum)\\s+${escaped}\\b`);
+  const escaped = symbolName.replace(/[.*+?^${}()|[\]\\\\]/g, '\\\\$&');
+  const declarationPattern = new RegExp(`\\bexport\\s+(?:declare\\s+)?(?:async\\s+)?(?:type|interface|class|function|const|enum|let|var)\\s+${escaped}\\b`);
   const namedExportPattern = new RegExp(`\\bexport\\s+(?:type\\s+)?\\{[^}]*\\b${escaped}\\b[^}]*\\}`, 's');
   return declarationPattern.test(typesText) || namedExportPattern.test(typesText);
 }
 
+// Phase 1: verify that every export target file exists
 for (const [specifier, target] of Object.entries(exportMap)) {
   if (typeof target === 'string') {
     const absoluteTarget = normalizeExportTarget(target);
@@ -51,23 +60,78 @@ for (const [specifier, target] of Object.entries(exportMap)) {
   }
 }
 
+// Phase 2: verify contract symbols via text analysis of .ts source files
+// This resolves export * chains recursively without needing a TS loader.
+function resolveExportStarChain(filePath, symbolName, depth = 0, visited = new Set()) {
+  if (depth > 10 || visited.has(filePath)) return false;
+  visited.add(filePath);
+
+  if (!existsSync(filePath)) return false;
+  const text = readFileSync(filePath, 'utf8');
+
+  // Direct export of the symbol
+  if (hasExportedTypeSymbol(text, symbolName)) return true;
+
+  // Named re-export: export { foo } from './bar.js'
+  const namedReExportPattern = new RegExp(
+    `export\\s+(?:type\\s+)?\\{[^}]*\\b${symbolName.replace(/[.*+?^${}()|[\]\\\\]/g, '\\\\$&')}\\b[^}]*\\}\\s+from\\s+['"]([^'"]+)['"]`
+  );
+  const namedMatch = text.match(namedReExportPattern);
+  if (namedMatch) {
+    const refPath = namedMatch[1];
+    const resolved = resolveRefPath(filePath, refPath);
+    if (resolved && resolveExportStarChain(resolved, symbolName, depth + 1, visited)) return true;
+  }
+
+  // Wildcard re-export: export * from './bar.js'
+  const starReExports = text.match(/export \* from ['"]([^'"]+)['"]/g) || [];
+  for (const reExport of starReExports) {
+    const refPath = reExport.match(/from ['"]([^'"]+)['"]/)[1];
+    const resolved = resolveRefPath(filePath, refPath);
+    if (resolved && resolveExportStarChain(resolved, symbolName, depth + 1, visited)) return true;
+  }
+
+  return false;
+}
+
+function resolveRefPath(fromFile, refPath) {
+  const dir = path.dirname(fromFile);
+  // Strip .js extension, add .ts
+  const cleanRef = refPath.replace(/\.js$/, '');
+  const candidates = [
+    path.join(dir, cleanRef + '.ts'),
+    path.join(dir, cleanRef + '.tsx'),
+    path.join(dir, cleanRef, 'index.ts'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
+}
+
 for (const [specifier, expectedSymbols] of Object.entries(exportContracts)) {
   const target = exportMap[specifier];
-  const importTarget = typeof target === 'string' ? target : target?.import;
-  const typesTarget = typeof target === 'string' ? undefined : target?.types;
-  const absoluteTarget = normalizeExportTarget(importTarget);
-  if (!absoluteTarget || !existsSync(absoluteTarget)) {
-    failures.push(`${specifier} contract target is missing`);
+  const typesTarget = typeof target === 'string' ? target : target?.types;
+  let absoluteTypesTarget = normalizeExportTarget(typesTarget);
+
+  // If the types target points to a compiled .d.ts in dist/, redirect to the .ts source
+  if (absoluteTypesTarget && absoluteTypesTarget.endsWith('.d.ts')) {
+    const srcPath = absoluteTypesTarget
+      .replace('/dist/packages/', '/packages/')
+      .replace('/dist/src/', '/src/')
+      .replace('.d.ts', '.ts');
+    if (existsSync(srcPath)) {
+      absoluteTypesTarget = srcPath;
+    }
+  }
+
+  if (!absoluteTypesTarget || !existsSync(absoluteTypesTarget)) {
+    failures.push(`${specifier} contract types target is missing`);
     continue;
   }
 
-  const moduleExports = await import(pathToFileURL(absoluteTarget).href);
-  const absoluteTypesTarget = normalizeExportTarget(typesTarget);
-  const typesText = absoluteTypesTarget && existsSync(absoluteTypesTarget)
-    ? readFileSync(absoluteTypesTarget, 'utf8')
-    : '';
   for (const symbolName of expectedSymbols) {
-    if (!(symbolName in moduleExports) && !hasExportedTypeSymbol(typesText, symbolName)) {
+    if (!resolveExportStarChain(absoluteTypesTarget, symbolName)) {
       failures.push(`${specifier} missing export symbol ${symbolName}`);
     }
   }

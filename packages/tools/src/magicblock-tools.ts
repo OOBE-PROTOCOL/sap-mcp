@@ -18,9 +18,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey, TransactionInstruction, Transaction, SystemProgram } from '@solana/web3.js';
-import type { SapMcpContext } from '../../core/src/types.js';
-import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
-import { logger } from '../../core/src/logger.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

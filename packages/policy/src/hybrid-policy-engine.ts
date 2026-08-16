@@ -11,7 +11,7 @@
 
 import { LocalPolicyEngine, PolicyConfig, PolicyDecision, PolicyContext } from './local-policy-engine.js';
 import { BentoPolicyEngine, BentoConfig, BentoUnavailableError } from './bento-policy-engine.js';
-import { logger } from '../../core/src/logger.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 /**
  * @name HybridPolicyConfig

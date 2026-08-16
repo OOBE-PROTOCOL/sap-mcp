@@ -10,7 +10,7 @@
  */
 
 import { existsSync, statSync } from 'node:fs';
-import type { SapMcpConfig } from '../../config-runtime/src/env.js';
+import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
 
 export type WalletStorageClass =
   | 'none'

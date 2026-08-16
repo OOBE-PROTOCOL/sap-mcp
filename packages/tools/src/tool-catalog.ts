@@ -9,7 +9,7 @@
  * @module tools/tool-catalog
  */
 
-import type { SapMcpContext, SapMcpMode, SapMcpToolCatalogContext } from '../../core/src/types.js';
+import type { SapMcpContext, SapMcpMode, SapMcpToolCatalogContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   selectToolModulesForContext,
   validateToolModules,

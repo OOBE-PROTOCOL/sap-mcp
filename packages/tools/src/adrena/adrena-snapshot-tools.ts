@@ -6,16 +6,16 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   adrenaPipelineError,
   adrenaPipelineOk,
   registerAdrenaPipelineTool,
 } from './adrena-pipeline.js';
 import { getConnection } from './adrena-helpers.js';
-import { adrenaDataApi } from '../../../perps/src/adrena/adrena-data-api.js';
-import { ADRENA_MAIN_POOL_ADDRESS, ADRENA_CUSTODIES } from '../../../perps/src/adrena/adrena-constants.js';
-import { logger } from '../../../core/src/logger.js';
+import { adrenaDataApi } from '@oobe-protocol-labs/sap-mcp-perps/adrena/adrena-data-api';
+import { ADRENA_MAIN_POOL_ADDRESS, ADRENA_CUSTODIES } from '@oobe-protocol-labs/sap-mcp-perps/adrena/adrena-constants';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 /** TTL for the market snapshot cache in milliseconds. */
 const SNAPSHOT_CACHE_TTL_MS = 30_000;

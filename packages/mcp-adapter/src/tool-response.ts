@@ -8,8 +8,8 @@
  * @module adapters/mcp/tool-response
  */
 
-import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
-import { buildUiCardResource } from '../../ui-cards/src/ui-resources.js';
+import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import { buildUiCardResource } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
 
 /**
  * @name createTextResponse

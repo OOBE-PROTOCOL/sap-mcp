@@ -20,8 +20,8 @@ import type {
   VerifyResponse,
 } from '@x402/core/types';
 import { registerExactSvmScheme } from '@x402/svm/exact/server';
-import type { SapMcpConfig, SapMcpMonetizationConfig } from '../../config-runtime/src/env.js';
-import { logger } from '../../core/src/logger.js';
+import type { SapMcpConfig, SapMcpMonetizationConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 import { getHttpHeader, NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
 import { evaluateHostedToolEligibility } from './hosted-tool-eligibility.js';
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';

@@ -55,5 +55,8 @@
       "types": "./src/card-templates.ts",
       "default": "./src/card-templates.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

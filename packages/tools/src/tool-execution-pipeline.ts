@@ -12,10 +12,10 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import type { SapMcpContext } from '../../core/src/types.js';
-import { createStructuredJsonResponse, createUiCardResponse } from '../../mcp-adapter/src/tool-response.js';
-import { registerTool } from '../../mcp-adapter/src/sdk-compat.js';
-import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { createStructuredJsonResponse, createUiCardResponse } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/tool-response';
+import { registerTool } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
+import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
 import { getToolExecutionMetadata, type ToolExecutionMetadata } from './tool-execution-metadata.js';
 
 export interface SafeParseSuccess<TInput> {

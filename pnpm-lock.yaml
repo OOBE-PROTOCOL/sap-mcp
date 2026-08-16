@@ -36,6 +36,96 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.30.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@oobe-protocol-labs/sap-mcp-adapters':
+        specifier: workspace:*
+        version: link:packages/adapters
+      '@oobe-protocol-labs/sap-mcp-bin':
+        specifier: workspace:*
+        version: link:packages/bin
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:packages/config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@oobe-protocol-labs/sap-mcp-hosted-gateway':
+        specifier: workspace:*
+        version: link:packages/hosted-gateway
+      '@oobe-protocol-labs/sap-mcp-local-bridge':
+        specifier: workspace:*
+        version: link:packages/local-bridge
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:packages/mcp-adapter
+      '@oobe-protocol-labs/sap-mcp-memory':
+        specifier: workspace:*
+        version: link:packages/memory
+      '@oobe-protocol-labs/sap-mcp-observability':
+        specifier: workspace:*
+        version: link:packages/observability
+      '@oobe-protocol-labs/sap-mcp-payments':
+        specifier: workspace:*
+        version: link:packages/payments
+      '@oobe-protocol-labs/sap-mcp-perps':
+        specifier: workspace:*
+        version: link:packages/perps
+      '@oobe-protocol-labs/sap-mcp-policy':
+        specifier: workspace:*
+        version: link:packages/policy
+      '@oobe-protocol-labs/sap-mcp-premium':
+        specifier: workspace:*
+        version: link:packages/premium
+      '@oobe-protocol-labs/sap-mcp-prompts':
+        specifier: workspace:*
+        version: link:packages/prompts
+      '@oobe-protocol-labs/sap-mcp-resources':
+        specifier: workspace:*
+        version: link:packages/resources
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:packages/runtime
+      '@oobe-protocol-labs/sap-mcp-sap':
+        specifier: workspace:*
+        version: link:packages/sap
+      '@oobe-protocol-labs/sap-mcp-schemas':
+        specifier: workspace:*
+        version: link:packages/schemas
+      '@oobe-protocol-labs/sap-mcp-security':
+        specifier: workspace:*
+        version: link:packages/security
+      '@oobe-protocol-labs/sap-mcp-server-runtime':
+        specifier: workspace:*
+        version: link:packages/server-runtime
+      '@oobe-protocol-labs/sap-mcp-session':
+        specifier: workspace:*
+        version: link:packages/session
+      '@oobe-protocol-labs/sap-mcp-signer':
+        specifier: workspace:*
+        version: link:packages/signer
+      '@oobe-protocol-labs/sap-mcp-solana':
+        specifier: workspace:*
+        version: link:packages/solana
+      '@oobe-protocol-labs/sap-mcp-strategies':
+        specifier: workspace:*
+        version: link:packages/strategies
+      '@oobe-protocol-labs/sap-mcp-tool-plugin-template':
+        specifier: workspace:*
+        version: link:packages/tool-plugin-template
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:packages/tools
+      '@oobe-protocol-labs/sap-mcp-transports':
+        specifier: workspace:*
+        version: link:packages/transports
+      '@oobe-protocol-labs/sap-mcp-tui':
+        specifier: workspace:*
+        version: link:packages/tui
+      '@oobe-protocol-labs/sap-mcp-ui-cards':
+        specifier: workspace:*
+        version: link:packages/ui-cards
+      '@oobe-protocol-labs/sap-mcp-wizard-core':
+        specifier: workspace:*
+        version: link:packages/wizard-core
       '@oobe-protocol-labs/synapse-client-sdk':
         specifier: ^2.0.6
         version: 2.0.6(@coral-xyz/anchor@0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(@langchain/core@0.3.80(ws@8.21.2(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(@oobe-protocol-labs/synapse-sap-sdk@1.0.3(@noble/hashes@2.3.0)(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(ioredis@5.11.1)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
@@ -182,34 +272,127 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/bin: {}
+  packages/bin:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:../runtime
 
-  packages/config-runtime: {}
+  packages/config-runtime:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:../runtime
 
   packages/core: {}
 
-  packages/hosted-gateway: {}
+  packages/hosted-gateway:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@oobe-protocol-labs/sap-mcp-payments':
+        specifier: workspace:*
+        version: link:../payments
+      '@oobe-protocol-labs/sap-mcp-premium':
+        specifier: workspace:*
+        version: link:../premium
+      '@oobe-protocol-labs/sap-mcp-server-runtime':
+        specifier: workspace:*
+        version: link:../server-runtime
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:../tools
 
-  packages/local-bridge: {}
+  packages/local-bridge:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@oobe-protocol-labs/sap-mcp-transports':
+        specifier: workspace:*
+        version: link:../transports
 
-  packages/mcp-adapter: {}
+  packages/mcp-adapter:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@oobe-protocol-labs/sap-mcp-security':
+        specifier: workspace:*
+        version: link:../security
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@oobe-protocol-labs/sap-mcp-ui-cards':
+        specifier: workspace:*
+        version: link:../ui-cards
 
-  packages/memory: {}
+  packages/memory:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/observability: {}
+  packages/observability:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/payments: {}
+  packages/payments:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
+      '@oobe-protocol-labs/sap-mcp-signer':
+        specifier: workspace:*
+        version: link:../signer
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:../tools
 
   packages/perps:
     dependencies:
       '@oobe-protocol-labs/sap-mcp-core':
         specifier: workspace:*
         version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
       '@oobe-protocol-labs/sap-mcp-solana':
         specifier: workspace:*
         version: link:../solana
+      '@oobe-protocol-labs/sap-mcp-strategies':
+        specifier: workspace:*
+        version: link:../strategies
 
-  packages/policy: {}
+  packages/policy:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/premium: {}
 
@@ -240,48 +423,166 @@ importers:
         specifier: workspace:*
         version: link:../sap
 
-  packages/runtime: {}
+  packages/runtime:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/sap: {}
+  packages/sap:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-signer':
+        specifier: workspace:*
+        version: link:../signer
 
   packages/schemas: {}
 
-  packages/security: {}
+  packages/security:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/server-runtime: {}
+  packages/server-runtime:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
+      '@oobe-protocol-labs/sap-mcp-observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@oobe-protocol-labs/sap-mcp-policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@oobe-protocol-labs/sap-mcp-prompts':
+        specifier: workspace:*
+        version: link:../prompts
+      '@oobe-protocol-labs/sap-mcp-resources':
+        specifier: workspace:*
+        version: link:../resources
+      '@oobe-protocol-labs/sap-mcp-sap':
+        specifier: workspace:*
+        version: link:../sap
+      '@oobe-protocol-labs/sap-mcp-signer':
+        specifier: workspace:*
+        version: link:../signer
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:../tools
 
-  packages/session: {}
+  packages/session:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/signer: {}
+  packages/signer:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-tools':
+        specifier: workspace:*
+        version: link:../tools
 
   packages/solana: {}
 
-  packages/strategies: {}
+  packages/strategies:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/tool-plugin-template: {}
 
   packages/tools:
     dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
       '@oobe-protocol-labs/sap-mcp-core':
         specifier: workspace:*
         version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
+      '@oobe-protocol-labs/sap-mcp-memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@oobe-protocol-labs/sap-mcp-payments':
+        specifier: workspace:*
+        version: link:../payments
       '@oobe-protocol-labs/sap-mcp-perps':
         specifier: workspace:*
         version: link:../perps
       '@oobe-protocol-labs/sap-mcp-policy':
         specifier: workspace:*
         version: link:../policy
+      '@oobe-protocol-labs/sap-mcp-premium':
+        specifier: workspace:*
+        version: link:../premium
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@oobe-protocol-labs/sap-mcp-sap':
+        specifier: workspace:*
+        version: link:../sap
+      '@oobe-protocol-labs/sap-mcp-security':
+        specifier: workspace:*
+        version: link:../security
+      '@oobe-protocol-labs/sap-mcp-server-runtime':
+        specifier: workspace:*
+        version: link:../server-runtime
+      '@oobe-protocol-labs/sap-mcp-signer':
+        specifier: workspace:*
+        version: link:../signer
       '@oobe-protocol-labs/sap-mcp-ui-cards':
         specifier: workspace:*
         version: link:../ui-cards
 
-  packages/transports: {}
+  packages/transports:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-payments':
+        specifier: workspace:*
+        version: link:../payments
+      '@oobe-protocol-labs/sap-mcp-runtime':
+        specifier: workspace:*
+        version: link:../runtime
 
   packages/tui: {}
 
-  packages/ui-cards: {}
+  packages/ui-cards:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
-  packages/wizard-core: {}
+  packages/wizard-core:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
 
 packages:
 

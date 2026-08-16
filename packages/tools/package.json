@@ -177,9 +177,19 @@
     }
   },
   "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
     "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-memory": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-payments": "workspace:*",
     "@oobe-protocol-labs/sap-mcp-perps": "workspace:*",
     "@oobe-protocol-labs/sap-mcp-policy": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-premium": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-sap": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-security": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-server-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-signer": "workspace:*",
     "@oobe-protocol-labs/sap-mcp-ui-cards": "workspace:*"
   }
 }

@@ -3,7 +3,7 @@
  * @description Guards hosted accountless SAP MCP from charging for tools it cannot execute.
  */
 
-import type { SapMcpConfig } from '../../config-runtime/src/env.js';
+import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
 import type { ParsedMcpRequest } from './json-rpc.js';
 
 export interface HostedToolEligibilityFailure {

@@ -15,7 +15,7 @@ import {
   MCP_SERVER_TITLE,
   MCP_SERVER_VERSION,
   MCP_SERVER_WEBSITE_URL,
-} from '../../core/src/constants.js';
+} from '@oobe-protocol-labs/sap-mcp-core/constants';
 
 /**
  * @name SERVER_METADATA

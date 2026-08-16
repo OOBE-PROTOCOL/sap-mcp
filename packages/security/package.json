@@ -43,5 +43,8 @@
       "types": "./src/unsafe-action-guard.ts",
       "default": "./src/unsafe-action-guard.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

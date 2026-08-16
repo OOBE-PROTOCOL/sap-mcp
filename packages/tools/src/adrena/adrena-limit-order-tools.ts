@@ -7,7 +7,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   adrenaPipelineException,
   adrenaPipelineOk,
@@ -17,7 +17,7 @@ import {
   buildAddLimitOrder,
   buildCancelLimitOrder,
   type PositionSide,
-} from '../../../perps/src/adrena/index.js';
+} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
 import {
   MAIN_POOL_TOKENS,
   COLLATERAL_TOKENS,

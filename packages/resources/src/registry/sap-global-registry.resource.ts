@@ -14,9 +14,9 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerResourceTemplate } from '../../../mcp-adapter/src/sdk-compat.js';
-import { logger } from '../../../core/src/logger.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
+import { registerResourceTemplate } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import { PublicKey } from '@solana/web3.js';
 
 /**

@@ -59,5 +59,8 @@
       "types": "./src/policy-engine.ts",
       "default": "./src/policy-engine.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

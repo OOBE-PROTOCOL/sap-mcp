@@ -10,8 +10,8 @@
  * replace with Redis or database-backed implementation.
  */
 
-import { logger } from '../../core/src/logger.js';
-import type { SapAgentSession } from '../../core/src/types.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapAgentSession } from '@oobe-protocol-labs/sap-mcp-core/types';
 
 class SessionStore {
   private sessions: Map<string, SapAgentSession> = new Map();

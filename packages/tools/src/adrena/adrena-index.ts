@@ -7,8 +7,8 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
-import { logger } from '../../../core/src/logger.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 import { registerAdrenaOpenLongTool } from './adrena-trading-tools.js';
 import { registerAdrenaOpenShortTool } from './adrena-trading-tools.js';

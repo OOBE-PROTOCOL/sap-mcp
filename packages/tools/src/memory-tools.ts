@@ -20,9 +20,9 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../core/src/types.js';
-import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '../../memory/src/index.js';
-import type { ToolCallOutcome, MemoryType } from '../../memory/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { toolCallStore, memoryStore, streamBufferStore, memoryDatabase, hermesBridge } from '@oobe-protocol-labs/sap-mcp-memory';
+import type { ToolCallOutcome, MemoryType } from '@oobe-protocol-labs/sap-mcp-memory/types';
 import {
   createStringToolPipelineResult,
   registerToolFamilyPipelineTool,

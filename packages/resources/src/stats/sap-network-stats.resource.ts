@@ -6,10 +6,10 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerResourceTemplate } from '../../../mcp-adapter/src/sdk-compat.js';
-import { logger, redactSensitiveString } from '../../../core/src/logger.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
-import { getSapClient } from '../../../sap/src/sap-client-manager.js';
+import { registerResourceTemplate } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
+import { logger, redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { getSapClient } from '@oobe-protocol-labs/sap-mcp-sap/sap-client-manager';
 
 type Network = 'devnet' | 'mainnet-beta' | 'testnet' | 'localnet';
 

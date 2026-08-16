@@ -21,8 +21,8 @@
  */
 
 import { Redis } from 'ioredis';
-import { logger } from '../../core/src/logger.js';
-import type { SapAgentSession } from '../../core/src/types.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapAgentSession } from '@oobe-protocol-labs/sap-mcp-core/types';
 
 /**
  * @name RedisSessionStoreConfig

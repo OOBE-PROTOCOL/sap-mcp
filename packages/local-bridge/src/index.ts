@@ -6,7 +6,7 @@
  * Signing and spend-policy enforcement remain in signer and policy modules.
  */
 
-export { startStdioTransport } from '../../transports/src/stdio.js';
+export { startStdioTransport } from '@oobe-protocol-labs/sap-mcp-transports/stdio';
 export {
   PaymentBridgeLockError,
   acquirePaymentBridgeProcessLock,
@@ -16,10 +16,10 @@ export {
   releasePaymentBridgeProcessLock,
   resolvePaymentBridgeProfileName,
   resolvePaymentBridgeRuntimeId,
-} from '../../runtime/src/payment-bridge-process.js';
+} from '@oobe-protocol-labs/sap-mcp-runtime/payment-bridge-process';
 
 export type {
   PaymentBridgeLockRecord,
   PaymentBridgeProcessInfo,
   PaymentBridgeProcessStatus,
-} from '../../runtime/src/payment-bridge-process.js';
+} from '@oobe-protocol-labs/sap-mcp-runtime/payment-bridge-process';

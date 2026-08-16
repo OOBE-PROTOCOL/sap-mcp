@@ -43,5 +43,12 @@
       "types": "./src/resource-response.ts",
       "default": "./src/resource-response.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-observability": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-security": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-ui-cards": "workspace:*"
   }
 }

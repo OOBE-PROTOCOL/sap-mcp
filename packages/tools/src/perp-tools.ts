@@ -6,7 +6,7 @@
  * @module tools/perp-tools
  */
 
-export { registerPerpTools } from '../../perps/src/perp-analytics-tools.js';
-export { ADRENA_POSITION_OWNER_MEMCMP_OFFSET } from '../../perps/src/perp-constants.js';
-export { decodeAdrenaCustodyAccount, decodeAdrenaPositionAccount, discToBase58, readAdrenaLimitedString } from '../../perps/src/perp-decoders.js';
-export { normalizePerpProviderMarkets } from '../../perps/src/perp-constants.js';
+export { registerPerpTools } from '@oobe-protocol-labs/sap-mcp-perps/perp-analytics-tools';
+export { ADRENA_POSITION_OWNER_MEMCMP_OFFSET } from '@oobe-protocol-labs/sap-mcp-perps/perp-constants';
+export { decodeAdrenaCustodyAccount, decodeAdrenaPositionAccount, discToBase58, readAdrenaLimitedString } from '@oobe-protocol-labs/sap-mcp-perps/perp-decoders';
+export { normalizePerpProviderMarkets } from '@oobe-protocol-labs/sap-mcp-perps/perp-constants';

@@ -11,7 +11,7 @@
  */
 
 import type { FacilitatorSvmSigner } from '@x402/svm';
-import { logger, redactSensitiveString } from '../../core/src/logger.js';
+import { logger, redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 /**
  * @name FacilitatorRpcEndpoint

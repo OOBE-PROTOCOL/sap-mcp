@@ -7,7 +7,7 @@ import { createHash } from 'crypto';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { RingBufferEntry, SessionContext, WriteResult } from '@oobe-protocol-labs/synapse-sap-sdk/registries/session';
-import type { SapMcpContext } from '../../core/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

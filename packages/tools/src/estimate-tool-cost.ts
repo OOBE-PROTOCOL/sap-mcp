@@ -6,14 +6,14 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
-import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
-import type { SapMcpContext } from '../../core/src/types.js';
+import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   formatUsdPrice,
   priceToolCall,
   type PaymentTier,
-} from '../../payments/src/pricing.js';
-import { isHostedAccountlessBlockedTool } from '../../payments/src/hosted-tool-eligibility.js';
+} from '@oobe-protocol-labs/sap-mcp-payments/pricing';
+import { isHostedAccountlessBlockedTool } from '@oobe-protocol-labs/sap-mcp-payments/hosted-tool-eligibility';
 import { canonicalizeToolName } from './tool-aliases.js';
 import {
   createToolFamilyPipelineResult,

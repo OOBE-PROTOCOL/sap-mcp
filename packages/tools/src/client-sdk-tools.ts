@@ -14,10 +14,10 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey } from '@solana/web3.js';
 import type { ProtocolTool } from '@oobe-protocol-labs/synapse-client-sdk/ai/tools/protocols';
-import type { SapMcpContext } from '../../core/src/types.js';
-import type { UiCardContext } from '../../ui-cards/src/ui-resources.js';
-import { logger } from '../../core/src/logger.js';
-import { classifyTool } from '../../payments/src/pricing.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { classifyTool } from '@oobe-protocol-labs/sap-mcp-payments/pricing';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

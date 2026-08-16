@@ -22,7 +22,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { getStrategiesDir } from '../../config-runtime/src/paths.js';
+import { getStrategiesDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
 
 /**
  * @name StrategyRecord

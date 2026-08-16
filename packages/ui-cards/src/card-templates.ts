@@ -14,7 +14,7 @@
  * @module ui/card-templates
  */
 
-import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
+import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
 import {
   SOL_LOGO_URI,
   USDC_LOGO_URI,

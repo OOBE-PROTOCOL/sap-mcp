@@ -21,8 +21,8 @@ import { createKeyPairSignerFromBytes } from '@solana/kit';
 import { Keypair } from '@solana/web3.js';
 import { toFacilitatorSvmSigner } from '@x402/svm';
 import { registerExactSvmScheme } from '@x402/svm/exact/facilitator';
-import { logger, initLogger, redactSensitiveString } from '../../core/src/logger.js';
-import { getKeypairsDir } from '../../config-runtime/src/paths.js';
+import { logger, initLogger, redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { getKeypairsDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
 import {
   createResilientFacilitatorSigner,
   parseRpcFallbackUrls,

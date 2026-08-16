@@ -27,5 +27,9 @@
       "types": "./src/trade-journal.ts",
       "default": "./src/trade-journal.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

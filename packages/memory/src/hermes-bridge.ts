@@ -15,7 +15,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createRequire } from 'module';
-import { logger } from '../../core/src/logger.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
 
 const require = createRequire(import.meta.url);
 

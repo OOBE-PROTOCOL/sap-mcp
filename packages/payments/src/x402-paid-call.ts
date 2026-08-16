@@ -12,11 +12,11 @@ import type { PaymentPayload, PaymentRequired, PaymentRequirements, SettleRespon
 import { registerExactSvmScheme } from '@x402/svm/exact/client';
 import { createKeyPairSignerFromBytes } from '@solana/kit';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { loadConfig, type SapMcpConfig } from '../../config-runtime/src/env.js';
-import { getActiveProfile, getProfileConfigPath } from '../../config-runtime/src/profiles.js';
-import { getPreferredConfigDir } from '../../config-runtime/src/paths.js';
-import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
-import { buildWalletGuardSummary, type WalletGuardSummary } from '../../signer/src/wallet-guard.js';
+import { loadConfig, type SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
+import { getActiveProfile, getProfileConfigPath } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
+import { getPreferredConfigDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import { buildWalletGuardSummary, type WalletGuardSummary } from '@oobe-protocol-labs/sap-mcp-signer/wallet-guard';
 import { getCachedSession, cacheSession, invalidateSession } from './mcp-session-cache.js';
 
 export const DEFAULT_X402_PAID_CALL_ENDPOINT = 'https://mcp.sap.oobeprotocol.ai/mcp';

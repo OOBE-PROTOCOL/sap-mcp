@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { defaults } from '../../config-runtime/src/defaults.js';
-import { defaultGeneratedWalletPath, getPreferredConfigDirForPlatform, ensureConfigDirectories } from '../../config-runtime/src/paths.js';
-import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '../../config-runtime/src/setup.js';
+import { defaults } from '@oobe-protocol-labs/sap-mcp-config-runtime/defaults';
+import { defaultGeneratedWalletPath, getPreferredConfigDirForPlatform, ensureConfigDirectories } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { saveWizardSetup, type WizardSetupInput, type WizardSetupResult } from '@oobe-protocol-labs/sap-mcp-config-runtime/setup';
 import {
   discoverMcpClientTargets,
   installCodexHostedPaymentBridgeConfig,
@@ -10,8 +10,8 @@ import {
   installX402PaidCallAddon,
   validateHostedPaymentBridgeContent,
   type McpClientTarget,
-} from '../../config-runtime/src/mcp-client-injection.js';
-import type { SapMcpMode } from '../../config-runtime/src/env.js';
+} from '@oobe-protocol-labs/sap-mcp-config-runtime/mcp-client-injection';
+import type { SapMcpMode } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
 
 const HOSTED_BASE_URL = 'https://mcp.sap.oobeprotocol.ai';
 const HOSTED_MCP_URL = `${HOSTED_BASE_URL}/mcp`;

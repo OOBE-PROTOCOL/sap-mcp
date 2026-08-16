@@ -15,7 +15,7 @@
  */
 
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
-import type { SapAgentSession } from '../../core/src/types.js';
+import type { SapAgentSession } from '@oobe-protocol-labs/sap-mcp-core/types';
 
 /**
  * @name Signer

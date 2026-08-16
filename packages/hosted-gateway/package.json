@@ -63,5 +63,14 @@
       "types": "./src/public-home/escape.ts",
       "default": "./src/public-home/escape.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-memory": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-payments": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-premium": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-server-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*"
   }
 }

@@ -27,5 +27,8 @@
       "types": "./src/sap-mcp-server.ts",
       "default": "./src/sap-mcp-server.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*"
   }
 }

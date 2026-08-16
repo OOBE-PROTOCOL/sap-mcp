@@ -4,7 +4,7 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpConfig, SapMcpContext } from '../../core/src/types.js';
+import type { SapMcpConfig, SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   getActiveProfile,
   getProfileConfigPath,
@@ -12,12 +12,12 @@ import {
   loadProfileConfig,
   profileExists,
   setActiveProfile,
-} from '../../config-runtime/src/profiles.js';
-import { createSapClient } from '../../sap/src/sap-client-manager.js';
-import { resolveSigner } from '../../signer/src/signer-resolver.js';
-import { PolicyEngine } from '../../policy/src/policy-engine.js';
-import { loadConfig } from '../../config-runtime/src/env.js';
-import { redactSensitiveString } from '../../core/src/logger.js';
+} from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
+import { createSapClient } from '@oobe-protocol-labs/sap-mcp-sap/sap-client-manager';
+import { resolveSigner } from '@oobe-protocol-labs/sap-mcp-signer/signer-resolver';
+import { PolicyEngine } from '@oobe-protocol-labs/sap-mcp-policy/policy-engine';
+import { loadConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
+import { redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
 import {
   registerToolFamilyPipelineTool,
   type ToolFamilyPipelineDefinition,

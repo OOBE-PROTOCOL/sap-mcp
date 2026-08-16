@@ -59,5 +59,9 @@
       "types": "./src/stream-buffer-store.ts",
       "default": "./src/stream-buffer-store.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

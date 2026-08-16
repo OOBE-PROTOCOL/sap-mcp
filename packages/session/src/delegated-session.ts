@@ -12,9 +12,9 @@
  * @module session/delegated-session
  */
 
-import { logger } from '../../core/src/logger.js';
-import { PolicyError } from '../../core/src/errors.js';
-import type { SapAgentSession, SapMcpContext, SapPermission } from '../../core/src/types.js';
+import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { PolicyError } from '@oobe-protocol-labs/sap-mcp-core/errors';
+import type { SapAgentSession, SapMcpContext, SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
 import { createAgentSession } from './agent-session.js';
 
 /**

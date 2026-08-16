@@ -51,5 +51,8 @@
       "types": "./src/session-limits.ts",
       "default": "./src/session-limits.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

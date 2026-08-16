@@ -4,10 +4,10 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { buildDoctorReport } from '../../config-runtime/src/runtime-doctor.js';
-import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
-import type { SapMcpContext } from '../../core/src/types.js';
-import { buildPricingCatalog } from '../../payments/src/pricing.js';
+import { buildDoctorReport } from '@oobe-protocol-labs/sap-mcp-config-runtime/runtime-doctor';
+import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { buildPricingCatalog } from '@oobe-protocol-labs/sap-mcp-payments/pricing';
 import {
   buildActionPreparation,
   buildSessionContextPacket,

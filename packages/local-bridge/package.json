@@ -28,5 +28,9 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-transports": "workspace:*"
   }
 }

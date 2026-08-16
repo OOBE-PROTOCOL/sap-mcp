@@ -7,7 +7,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '../../../core/src/types.js';
+import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
 import {
   adrenaPipelineError,
   adrenaPipelineException,
@@ -29,7 +29,7 @@ import {
   fetchOraclePrice,
   type PositionSide,
   type AdrenaPool,
-} from '../../../perps/src/adrena/index.js';
+} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
 import {
   MAIN_POOL_TOKENS,
   COMMODITY_TOKENS,
@@ -39,7 +39,7 @@ import {
   parsePublicKey,
   type JsonSchema,
 } from './adrena-helpers.js';
-import type { PolicyViolationResult } from '../../../policy/src/policy-engine.js';
+import type { PolicyViolationResult } from '@oobe-protocol-labs/sap-mcp-policy/policy-engine';
 
 /**
  * @name validateTradingPolicyFromContext
