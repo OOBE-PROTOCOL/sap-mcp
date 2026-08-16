@@ -15,5 +15,11 @@
     "architectureDomain": null,
     "rootExport": null,
     "boundary": "Trusted external tool-family plugin template."
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }

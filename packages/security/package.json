@@ -17,5 +17,31 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./private-key-guard": {
+      "types": "./src/private-key-guard.ts",
+      "default": "./src/private-key-guard.ts"
+    },
+    "./tool-permissions": {
+      "types": "./src/tool-permissions.ts",
+      "default": "./src/tool-permissions.ts"
+    },
+    "./prompt-injection-notes": {
+      "types": "./src/prompt-injection-notes.ts",
+      "default": "./src/prompt-injection-notes.ts"
+    },
+    "./approval-required": {
+      "types": "./src/approval-required.ts",
+      "default": "./src/approval-required.ts"
+    },
+    "./unsafe-action-guard": {
+      "types": "./src/unsafe-action-guard.ts",
+      "default": "./src/unsafe-action-guard.ts"
+    }
   }
 }

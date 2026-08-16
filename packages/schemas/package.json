@@ -17,5 +17,55 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./identity.schema": {
+      "types": "./src/identity.schema.ts",
+      "default": "./src/identity.schema.ts"
+    },
+    "./developer.schema": {
+      "types": "./src/developer.schema.ts",
+      "default": "./src/developer.schema.ts"
+    },
+    "./registry.schema": {
+      "types": "./src/registry.schema.ts",
+      "default": "./src/registry.schema.ts"
+    },
+    "./common.schema": {
+      "types": "./src/common.schema.ts",
+      "default": "./src/common.schema.ts"
+    },
+    "./transaction.schema": {
+      "types": "./src/transaction.schema.ts",
+      "default": "./src/transaction.schema.ts"
+    },
+    "./reputation.schema": {
+      "types": "./src/reputation.schema.ts",
+      "default": "./src/reputation.schema.ts"
+    },
+    "./tool-schema.schema": {
+      "types": "./src/tool-schema.schema.ts",
+      "default": "./src/tool-schema.schema.ts"
+    },
+    "./memory.schema": {
+      "types": "./src/memory.schema.ts",
+      "default": "./src/memory.schema.ts"
+    },
+    "./payments.schema": {
+      "types": "./src/payments.schema.ts",
+      "default": "./src/payments.schema.ts"
+    },
+    "./settlement.schema": {
+      "types": "./src/settlement.schema.ts",
+      "default": "./src/settlement.schema.ts"
+    },
+    "./execution-proof.schema": {
+      "types": "./src/execution-proof.schema.ts",
+      "default": "./src/execution-proof.schema.ts"
+    }
   }
 }

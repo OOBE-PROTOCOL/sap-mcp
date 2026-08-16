@@ -17,5 +17,26 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./solana/connection": {
+      "types": "./src/solana/connection.ts",
+      "default": "./src/solana/connection.ts"
+    },
+    "./solana/public-key": {
+      "types": "./src/solana/public-key.ts",
+      "default": "./src/solana/public-key.ts"
+    },
+    "./solana/commitment": {
+      "types": "./src/solana/commitment.ts",
+      "default": "./src/solana/commitment.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
   }
 }

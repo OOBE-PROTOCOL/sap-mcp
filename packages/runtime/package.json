@@ -17,5 +17,15 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./module-resolution": {
+      "types": "./src/module-resolution.ts",
+      "default": "./src/module-resolution.ts"
+    },
+    "./payment-bridge-process": {
+      "types": "./src/payment-bridge-process.ts",
+      "default": "./src/payment-bridge-process.ts"
+    }
   }
 }

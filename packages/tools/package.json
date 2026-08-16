@@ -17,5 +17,169 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./register-tools": {
+      "types": "./src/register-tools.ts",
+      "default": "./src/register-tools.ts"
+    },
+    "./profile-tools": {
+      "types": "./src/profile-tools.ts",
+      "default": "./src/profile-tools.ts"
+    },
+    "./x402-paid-call-tool": {
+      "types": "./src/x402-paid-call-tool.ts",
+      "default": "./src/x402-paid-call-tool.ts"
+    },
+    "./tool-catalog": {
+      "types": "./src/tool-catalog.ts",
+      "default": "./src/tool-catalog.ts"
+    },
+    "./sap-sdk-tools": {
+      "types": "./src/sap-sdk-tools.ts",
+      "default": "./src/sap-sdk-tools.ts"
+    },
+    "./agent-start-tool": {
+      "types": "./src/agent-start-tool.ts",
+      "default": "./src/agent-start-tool.ts"
+    },
+    "./skills-tools": {
+      "types": "./src/skills-tools.ts",
+      "default": "./src/skills-tools.ts"
+    },
+    "./sap-sns-tools": {
+      "types": "./src/sap-sns-tools.ts",
+      "default": "./src/sap-sns-tools.ts"
+    },
+    "./tool-execution-metadata": {
+      "types": "./src/tool-execution-metadata.ts",
+      "default": "./src/tool-execution-metadata.ts"
+    },
+    "./adrena-tools": {
+      "types": "./src/adrena-tools.ts",
+      "default": "./src/adrena-tools.ts"
+    },
+    "./session-context-packet": {
+      "types": "./src/session-context-packet.ts",
+      "default": "./src/session-context-packet.ts"
+    },
+    "./memory-tools": {
+      "types": "./src/memory-tools.ts",
+      "default": "./src/memory-tools.ts"
+    },
+    "./premium-tools": {
+      "types": "./src/premium-tools.ts",
+      "default": "./src/premium-tools.ts"
+    },
+    "./client-sdk-tools": {
+      "types": "./src/client-sdk-tools.ts",
+      "default": "./src/client-sdk-tools.ts"
+    },
+    "./chat-tools": {
+      "types": "./src/chat-tools.ts",
+      "default": "./src/chat-tools.ts"
+    },
+    "./tool-family-pipeline": {
+      "types": "./src/tool-family-pipeline.ts",
+      "default": "./src/tool-family-pipeline.ts"
+    },
+    "./sap-network-stats.tool": {
+      "types": "./src/sap-network-stats.tool.ts",
+      "default": "./src/sap-network-stats.tool.ts"
+    },
+    "./builtin-tool-modules": {
+      "types": "./src/builtin-tool-modules.ts",
+      "default": "./src/builtin-tool-modules.ts"
+    },
+    "./estimate-tool-cost": {
+      "types": "./src/estimate-tool-cost.ts",
+      "default": "./src/estimate-tool-cost.ts"
+    },
+    "./tool-module-manifest": {
+      "types": "./src/tool-module-manifest.ts",
+      "default": "./src/tool-module-manifest.ts"
+    },
+    "./tool-aliases": {
+      "types": "./src/tool-aliases.ts",
+      "default": "./src/tool-aliases.ts"
+    },
+    "./module-registry": {
+      "types": "./src/module-registry.ts",
+      "default": "./src/module-registry.ts"
+    },
+    "./perp-tools": {
+      "types": "./src/perp-tools.ts",
+      "default": "./src/perp-tools.ts"
+    },
+    "./transaction-tools": {
+      "types": "./src/transaction-tools.ts",
+      "default": "./src/transaction-tools.ts"
+    },
+    "./tool-module-validation": {
+      "types": "./src/tool-module-validation.ts",
+      "default": "./src/tool-module-validation.ts"
+    },
+    "./quick-context-tool": {
+      "types": "./src/quick-context-tool.ts",
+      "default": "./src/quick-context-tool.ts"
+    },
+    "./tool-execution-pipeline": {
+      "types": "./src/tool-execution-pipeline.ts",
+      "default": "./src/tool-execution-pipeline.ts"
+    },
+    "./magicblock-tools": {
+      "types": "./src/magicblock-tools.ts",
+      "default": "./src/magicblock-tools.ts"
+    },
+    "./adrena/adrena-pipeline": {
+      "types": "./src/adrena/adrena-pipeline.ts",
+      "default": "./src/adrena/adrena-pipeline.ts"
+    },
+    "./adrena/adrena-staking-tools": {
+      "types": "./src/adrena/adrena-staking-tools.ts",
+      "default": "./src/adrena/adrena-staking-tools.ts"
+    },
+    "./adrena/adrena-index": {
+      "types": "./src/adrena/adrena-index.ts",
+      "default": "./src/adrena/adrena-index.ts"
+    },
+    "./adrena/adrena-data-tools": {
+      "types": "./src/adrena/adrena-data-tools.ts",
+      "default": "./src/adrena/adrena-data-tools.ts"
+    },
+    "./adrena/adrena-limit-order-tools": {
+      "types": "./src/adrena/adrena-limit-order-tools.ts",
+      "default": "./src/adrena/adrena-limit-order-tools.ts"
+    },
+    "./adrena/adrena-commodity-tools": {
+      "types": "./src/adrena/adrena-commodity-tools.ts",
+      "default": "./src/adrena/adrena-commodity-tools.ts"
+    },
+    "./adrena/adrena-trading-tools": {
+      "types": "./src/adrena/adrena-trading-tools.ts",
+      "default": "./src/adrena/adrena-trading-tools.ts"
+    },
+    "./adrena/adrena-snapshot-tools": {
+      "types": "./src/adrena/adrena-snapshot-tools.ts",
+      "default": "./src/adrena/adrena-snapshot-tools.ts"
+    },
+    "./adrena/adrena-liquidity-tools": {
+      "types": "./src/adrena/adrena-liquidity-tools.ts",
+      "default": "./src/adrena/adrena-liquidity-tools.ts"
+    },
+    "./adrena/adrena-helpers": {
+      "types": "./src/adrena/adrena-helpers.ts",
+      "default": "./src/adrena/adrena-helpers.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-perps": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-policy": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-ui-cards": "workspace:*"
   }
 }

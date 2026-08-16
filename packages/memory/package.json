@@ -17,5 +17,47 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./memory-store": {
+      "types": "./src/memory-store.ts",
+      "default": "./src/memory-store.ts"
+    },
+    "./tool-call-store": {
+      "types": "./src/tool-call-store.ts",
+      "default": "./src/tool-call-store.ts"
+    },
+    "./utils": {
+      "types": "./src/utils.ts",
+      "default": "./src/utils.ts"
+    },
+    "./auto-record": {
+      "types": "./src/auto-record.ts",
+      "default": "./src/auto-record.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./database": {
+      "types": "./src/database.ts",
+      "default": "./src/database.ts"
+    },
+    "./async-processor": {
+      "types": "./src/async-processor.ts",
+      "default": "./src/async-processor.ts"
+    },
+    "./hermes-bridge": {
+      "types": "./src/hermes-bridge.ts",
+      "default": "./src/hermes-bridge.ts"
+    },
+    "./stream-buffer-store": {
+      "types": "./src/stream-buffer-store.ts",
+      "default": "./src/stream-buffer-store.ts"
+    }
   }
 }

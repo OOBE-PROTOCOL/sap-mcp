@@ -1,11 +1,7 @@
 # SAP MCP tui
 
+Terminal UI wizard save helper. The real source remains in `src/tui/wizard-save.ts`
+because it is excluded from the packages build (`tsconfig.packages.json` excludes `src/tui`).
 
-
-This is an internal workspace package. It is not published independently.
-The public API surface is re-exported through the root `@oobe-protocol-labs/sap-mcp-server` package.
-
-## Boundary
-
-Source of truth: `packages/tui/src/`
-Compatibility wrapper: `src/tui/` (thin re-exports)
+This package entry exists only to satisfy the workspace package contract. It has
+`physicalSource: false` and no source files under `packages/tui/src/`.

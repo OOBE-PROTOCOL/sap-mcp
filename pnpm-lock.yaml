@@ -176,7 +176,11 @@ importers:
         specifier: ^4.1.9
         version: 4.1.10(@types/node@22.20.1)(vite@8.1.0(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.6)(yaml@2.9.0))
 
-  packages/adapters: {}
+  packages/adapters:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/bin: {}
 
@@ -196,15 +200,45 @@ importers:
 
   packages/payments: {}
 
-  packages/perps: {}
+  packages/perps:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-solana':
+        specifier: workspace:*
+        version: link:../solana
 
   packages/policy: {}
 
   packages/premium: {}
 
-  packages/prompts: {}
+  packages/prompts:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
 
-  packages/resources: {}
+  packages/resources:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-config-runtime':
+        specifier: workspace:*
+        version: link:../config-runtime
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-mcp-adapter':
+        specifier: workspace:*
+        version: link:../mcp-adapter
+      '@oobe-protocol-labs/sap-mcp-sap':
+        specifier: workspace:*
+        version: link:../sap
 
   packages/runtime: {}
 
@@ -226,7 +260,20 @@ importers:
 
   packages/tool-plugin-template: {}
 
-  packages/tools: {}
+  packages/tools:
+    dependencies:
+      '@oobe-protocol-labs/sap-mcp-core':
+        specifier: workspace:*
+        version: link:../core
+      '@oobe-protocol-labs/sap-mcp-perps':
+        specifier: workspace:*
+        version: link:../perps
+      '@oobe-protocol-labs/sap-mcp-policy':
+        specifier: workspace:*
+        version: link:../policy
+      '@oobe-protocol-labs/sap-mcp-ui-cards':
+        specifier: workspace:*
+        version: link:../ui-cards
 
   packages/transports: {}
 

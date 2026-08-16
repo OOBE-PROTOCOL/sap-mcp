@@ -17,5 +17,11 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./ata-utils": {
+      "types": "./src/ata-utils.ts",
+      "default": "./src/ata-utils.ts"
+    }
   }
 }

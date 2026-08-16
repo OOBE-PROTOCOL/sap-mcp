@@ -15,5 +15,87 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./chart-tools": {
+      "types": "./src/chart-tools.ts",
+      "default": "./src/chart-tools.ts"
+    },
+    "./perp-constants": {
+      "types": "./src/perp-constants.ts",
+      "default": "./src/perp-constants.ts"
+    },
+    "./signal-engine": {
+      "types": "./src/signal-engine.ts",
+      "default": "./src/signal-engine.ts"
+    },
+    "./perp-decoders": {
+      "types": "./src/perp-decoders.ts",
+      "default": "./src/perp-decoders.ts"
+    },
+    "./market-intelligence": {
+      "types": "./src/market-intelligence.ts",
+      "default": "./src/market-intelligence.ts"
+    },
+    "./chart-indicators": {
+      "types": "./src/chart-indicators.ts",
+      "default": "./src/chart-indicators.ts"
+    },
+    "./perp-analytics-tools": {
+      "types": "./src/perp-analytics-tools.ts",
+      "default": "./src/perp-analytics-tools.ts"
+    },
+    "./risk-engine": {
+      "types": "./src/risk-engine.ts",
+      "default": "./src/risk-engine.ts"
+    },
+    "./adrena": {
+      "types": "./src/adrena/index.ts",
+      "default": "./src/adrena/index.ts"
+    },
+    "./adrena/adrena-pda": {
+      "types": "./src/adrena/adrena-pda.ts",
+      "default": "./src/adrena/adrena-pda.ts"
+    },
+    "./adrena/adrena-builder-core": {
+      "types": "./src/adrena/adrena-builder-core.ts",
+      "default": "./src/adrena/adrena-builder-core.ts"
+    },
+    "./adrena/adrena-constants": {
+      "types": "./src/adrena/adrena-constants.ts",
+      "default": "./src/adrena/adrena-constants.ts"
+    },
+    "./adrena/adrena-builder": {
+      "types": "./src/adrena/adrena-builder.ts",
+      "default": "./src/adrena/adrena-builder.ts"
+    },
+    "./adrena/adrena-builder-trading": {
+      "types": "./src/adrena/adrena-builder-trading.ts",
+      "default": "./src/adrena/adrena-builder-trading.ts"
+    },
+    "./adrena/adrena-builder-commodity": {
+      "types": "./src/adrena/adrena-builder-commodity.ts",
+      "default": "./src/adrena/adrena-builder-commodity.ts"
+    },
+    "./adrena/adrena-idl": {
+      "types": "./src/adrena/adrena-idl.ts",
+      "default": "./src/adrena/adrena-idl.ts"
+    },
+    "./adrena/adrena-builder-liquidity": {
+      "types": "./src/adrena/adrena-builder-liquidity.ts",
+      "default": "./src/adrena/adrena-builder-liquidity.ts"
+    },
+    "./adrena/adrena-builder-staking": {
+      "types": "./src/adrena/adrena-builder-staking.ts",
+      "default": "./src/adrena/adrena-builder-staking.ts"
+    },
+    "./adrena/adrena-data-api": {
+      "types": "./src/adrena/adrena-data-api.ts",
+      "default": "./src/adrena/adrena-data-api.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-solana": "workspace:*"
   }
 }

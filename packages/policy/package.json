@@ -17,5 +17,47 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./hybrid-policy-engine": {
+      "types": "./src/hybrid-policy-engine.ts",
+      "default": "./src/hybrid-policy-engine.ts"
+    },
+    "./local-policy-engine": {
+      "types": "./src/local-policy-engine.ts",
+      "default": "./src/local-policy-engine.ts"
+    },
+    "./bento-policy-engine": {
+      "types": "./src/bento-policy-engine.ts",
+      "default": "./src/bento-policy-engine.ts"
+    },
+    "./spending-limits": {
+      "types": "./src/spending-limits.ts",
+      "default": "./src/spending-limits.ts"
+    },
+    "./policy-types": {
+      "types": "./src/policy-types.ts",
+      "default": "./src/policy-types.ts"
+    },
+    "./risk-level": {
+      "types": "./src/risk-level.ts",
+      "default": "./src/risk-level.ts"
+    },
+    "./default-policies": {
+      "types": "./src/default-policies.ts",
+      "default": "./src/default-policies.ts"
+    },
+    "./permission-checks": {
+      "types": "./src/permission-checks.ts",
+      "default": "./src/permission-checks.ts"
+    },
+    "./policy-engine": {
+      "types": "./src/policy-engine.ts",
+      "default": "./src/policy-engine.ts"
+    }
   }
 }

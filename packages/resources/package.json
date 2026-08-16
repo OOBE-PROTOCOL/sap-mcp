@@ -17,5 +17,57 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./register-resources": {
+      "types": "./src/register-resources.ts",
+      "default": "./src/register-resources.ts"
+    },
+    "./memory/sap-memory.resource": {
+      "types": "./src/memory/sap-memory.resource.ts",
+      "default": "./src/memory/sap-memory.resource.ts"
+    },
+    "./execution-proof/sap-execution-record.resource": {
+      "types": "./src/execution-proof/sap-execution-record.resource.ts",
+      "default": "./src/execution-proof/sap-execution-record.resource.ts"
+    },
+    "./reputation/sap-reputation.resource": {
+      "types": "./src/reputation/sap-reputation.resource.ts",
+      "default": "./src/reputation/sap-reputation.resource.ts"
+    },
+    "./tool-schema/sap-tool-schema.resource": {
+      "types": "./src/tool-schema/sap-tool-schema.resource.ts",
+      "default": "./src/tool-schema/sap-tool-schema.resource.ts"
+    },
+    "./current/sap-current-config.resource": {
+      "types": "./src/current/sap-current-config.resource.ts",
+      "default": "./src/current/sap-current-config.resource.ts"
+    },
+    "./profile/sap-active-profile.resource": {
+      "types": "./src/profile/sap-active-profile.resource.ts",
+      "default": "./src/profile/sap-active-profile.resource.ts"
+    },
+    "./registry/sap-global-registry.resource": {
+      "types": "./src/registry/sap-global-registry.resource.ts",
+      "default": "./src/registry/sap-global-registry.resource.ts"
+    },
+    "./registry/sap-agent.resource": {
+      "types": "./src/registry/sap-agent.resource.ts",
+      "default": "./src/registry/sap-agent.resource.ts"
+    },
+    "./stats/sap-network-stats.resource": {
+      "types": "./src/stats/sap-network-stats.resource.ts",
+      "default": "./src/stats/sap-network-stats.resource.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-sap": "workspace:*"
   }
 }

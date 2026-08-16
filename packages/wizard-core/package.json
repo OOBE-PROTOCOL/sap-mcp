@@ -17,5 +17,11 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./desktop-flow": {
+      "types": "./src/desktop-flow.ts",
+      "default": "./src/desktop-flow.ts"
+    }
   }
 }

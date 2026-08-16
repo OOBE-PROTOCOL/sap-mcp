@@ -17,5 +17,43 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./load-keypair": {
+      "types": "./src/load-keypair.ts",
+      "default": "./src/load-keypair.ts"
+    },
+    "./signing-proxy": {
+      "types": "./src/signing-proxy.ts",
+      "default": "./src/signing-proxy.ts"
+    },
+    "./external-signer": {
+      "types": "./src/external-signer.ts",
+      "default": "./src/external-signer.ts"
+    },
+    "./signer-resolver": {
+      "types": "./src/signer-resolver.ts",
+      "default": "./src/signer-resolver.ts"
+    },
+    "./wallet-guard": {
+      "types": "./src/wallet-guard.ts",
+      "default": "./src/wallet-guard.ts"
+    },
+    "./local-keypair-signer": {
+      "types": "./src/local-keypair-signer.ts",
+      "default": "./src/local-keypair-signer.ts"
+    },
+    "./policy-enforcing-wallet": {
+      "types": "./src/policy-enforcing-wallet.ts",
+      "default": "./src/policy-enforcing-wallet.ts"
+    },
+    "./signer-types": {
+      "types": "./src/signer-types.ts",
+      "default": "./src/signer-types.ts"
+    }
   }
 }

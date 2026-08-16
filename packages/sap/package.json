@@ -17,5 +17,23 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sap-errors": {
+      "types": "./src/sap-errors.ts",
+      "default": "./src/sap-errors.ts"
+    },
+    "./sap-types": {
+      "types": "./src/sap-types.ts",
+      "default": "./src/sap-types.ts"
+    },
+    "./sap-client-manager": {
+      "types": "./src/sap-client-manager.ts",
+      "default": "./src/sap-client-manager.ts"
+    }
   }
 }

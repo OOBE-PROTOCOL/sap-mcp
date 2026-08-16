@@ -17,5 +17,23 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./create-server": {
+      "types": "./src/create-server.ts",
+      "default": "./src/create-server.ts"
+    },
+    "./register-capabilities": {
+      "types": "./src/register-capabilities.ts",
+      "default": "./src/register-capabilities.ts"
+    },
+    "./server-metadata": {
+      "types": "./src/server-metadata.ts",
+      "default": "./src/server-metadata.ts"
+    }
   }
 }

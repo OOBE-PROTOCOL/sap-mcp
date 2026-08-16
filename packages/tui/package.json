@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "description": "SAP MCP tui module — internal workspace package.",
+  "description": "SAP MCP tui module \u2014 internal workspace package.",
   "sapMcp": {
     "boundaryId": "tui",
     "source": "packages/tui/src",
@@ -15,5 +15,15 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./wizard-save.d": {
+      "types": "./src/wizard-save.d.ts",
+      "default": "./src/wizard-save.d.ts"
+    },
+    "./wizard-save": {
+      "types": "./src/wizard-save.ts",
+      "default": "./src/wizard-save.ts"
+    }
   }
 }

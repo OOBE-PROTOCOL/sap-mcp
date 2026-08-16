@@ -17,5 +17,31 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sdk-compat": {
+      "types": "./src/sdk-compat.ts",
+      "default": "./src/sdk-compat.ts"
+    },
+    "./prompt-response": {
+      "types": "./src/prompt-response.ts",
+      "default": "./src/prompt-response.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "default": "./src/errors.ts"
+    },
+    "./tool-response": {
+      "types": "./src/tool-response.ts",
+      "default": "./src/tool-response.ts"
+    },
+    "./resource-response": {
+      "types": "./src/resource-response.ts",
+      "default": "./src/resource-response.ts"
+    }
   }
 }

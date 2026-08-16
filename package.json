@@ -112,6 +112,7 @@
     "verify:exports": "node scripts/verify-package-exports.mjs",
     "verify:workspace-packages": "node scripts/verify-workspace-packages.mjs",
     "verify:package-boundaries": "node scripts/verify-package-boundaries.mjs",
+    "verify:circular-deps": "npx madge --circular --extensions ts packages/*/src/ src/*.ts",
     "verify:tool-plugin-template": "pnpm --filter @oobe-protocol-labs/sap-mcp-tool-plugin-template run verify",
     "verify:tool-execution-pipeline": "node scripts/verify-tool-execution-pipeline.mjs",
     "verify:skill-workflows": "node scripts/verify-skill-workflows.mjs",

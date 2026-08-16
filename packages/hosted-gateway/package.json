@@ -17,5 +17,51 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./premium-routes": {
+      "types": "./src/premium-routes.ts",
+      "default": "./src/premium-routes.ts"
+    },
+    "./premium-memory": {
+      "types": "./src/premium-memory.ts",
+      "default": "./src/premium-memory.ts"
+    },
+    "./rate-limiter": {
+      "types": "./src/rate-limiter.ts",
+      "default": "./src/rate-limiter.ts"
+    },
+    "./tx-relay": {
+      "types": "./src/tx-relay.ts",
+      "default": "./src/tx-relay.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./public-home/scripts": {
+      "types": "./src/public-home/scripts.ts",
+      "default": "./src/public-home/scripts.ts"
+    },
+    "./public-home/styles": {
+      "types": "./src/public-home/styles.ts",
+      "default": "./src/public-home/styles.ts"
+    },
+    "./public-home/types": {
+      "types": "./src/public-home/types.ts",
+      "default": "./src/public-home/types.ts"
+    },
+    "./public-home/sections": {
+      "types": "./src/public-home/sections.ts",
+      "default": "./src/public-home/sections.ts"
+    },
+    "./public-home/escape": {
+      "types": "./src/public-home/escape.ts",
+      "default": "./src/public-home/escape.ts"
+    }
   }
 }

@@ -17,5 +17,51 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "default": "./src/schema.ts"
+    },
+    "./runtime-doctor": {
+      "types": "./src/runtime-doctor.ts",
+      "default": "./src/runtime-doctor.ts"
+    },
+    "./profiles": {
+      "types": "./src/profiles.ts",
+      "default": "./src/profiles.ts"
+    },
+    "./defaults": {
+      "types": "./src/defaults.ts",
+      "default": "./src/defaults.ts"
+    },
+    "./setup": {
+      "types": "./src/setup.ts",
+      "default": "./src/setup.ts"
+    },
+    "./wizard": {
+      "types": "./src/wizard.ts",
+      "default": "./src/wizard.ts"
+    },
+    "./secure-config": {
+      "types": "./src/secure-config.ts",
+      "default": "./src/secure-config.ts"
+    },
+    "./mcp-client-injection": {
+      "types": "./src/mcp-client-injection.ts",
+      "default": "./src/mcp-client-injection.ts"
+    },
+    "./paths": {
+      "types": "./src/paths.ts",
+      "default": "./src/paths.ts"
+    },
+    "./env": {
+      "types": "./src/env.ts",
+      "default": "./src/env.ts"
+    }
   }
 }

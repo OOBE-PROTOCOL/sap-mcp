@@ -17,5 +17,15 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./sap-mcp-remote": {
+      "types": "./src/sap-mcp-remote.ts",
+      "default": "./src/sap-mcp-remote.ts"
+    },
+    "./sap-mcp-server": {
+      "types": "./src/sap-mcp-server.ts",
+      "default": "./src/sap-mcp-server.ts"
+    }
   }
 }

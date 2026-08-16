@@ -17,5 +17,15 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./strategy-store": {
+      "types": "./src/strategy-store.ts",
+      "default": "./src/strategy-store.ts"
+    },
+    "./trade-journal": {
+      "types": "./src/trade-journal.ts",
+      "default": "./src/trade-journal.ts"
+    }
   }
 }

@@ -17,5 +17,39 @@
   },
   "scripts": {
     "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./redis-session-store": {
+      "types": "./src/redis-session-store.ts",
+      "default": "./src/redis-session-store.ts"
+    },
+    "./session-permissions": {
+      "types": "./src/session-permissions.ts",
+      "default": "./src/session-permissions.ts"
+    },
+    "./session-store": {
+      "types": "./src/session-store.ts",
+      "default": "./src/session-store.ts"
+    },
+    "./session-types": {
+      "types": "./src/session-types.ts",
+      "default": "./src/session-types.ts"
+    },
+    "./delegated-session": {
+      "types": "./src/delegated-session.ts",
+      "default": "./src/delegated-session.ts"
+    },
+    "./agent-session": {
+      "types": "./src/agent-session.ts",
+      "default": "./src/agent-session.ts"
+    },
+    "./session-limits": {
+      "types": "./src/session-limits.ts",
+      "default": "./src/session-limits.ts"
+    }
   }
 }
