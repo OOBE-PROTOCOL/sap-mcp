@@ -19,7 +19,8 @@ type LogLevel = FullConfig['logLevel'];
 const PROFILE_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
- * Raw answers collected by the CLI or TUI setup wizard before persistence.
+ * @name WizardSetupInput
+ * @description Raw answers collected by the CLI or TUI setup wizard before persistence.
  */
 export interface WizardSetupInput {
   mode: SapMcpMode;
@@ -101,7 +102,8 @@ function normalizeWizardPath(path: string | undefined): string | undefined {
 }
 
 /**
- * Result returned after the wizard writes config and optional wallet material.
+ * @name WizardSetupResult
+ * @description Result returned after the wizard writes config and optional wallet material.
  */
 export interface WizardSetupResult {
   config: FullConfig;
@@ -129,7 +131,8 @@ function writeGeneratedWallet(walletPath: string): void {
 }
 
 /**
- * Converts wizard answers into a complete, schema-valid runtime config object.
+ * @name buildWizardConfig
+ * @description Converts wizard answers into a complete, schema-valid runtime config object.
  */
 export function buildWizardConfig(input: WizardSetupInput): FullConfig {
   const now = new Date().toISOString();
@@ -197,7 +200,8 @@ export function buildWizardConfig(input: WizardSetupInput): FullConfig {
 }
 
 /**
- * Persists wizard output to the preferred config directory and creates a dedicated wallet when requested.
+ * @name saveWizardSetup
+ * @description Persists wizard output to the preferred config directory and creates a dedicated wallet when requested.
  */
 export async function saveWizardSetup(input: WizardSetupInput): Promise<WizardSetupResult> {
   ensureConfigDirectories();

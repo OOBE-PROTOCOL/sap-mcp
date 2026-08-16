@@ -1317,6 +1317,7 @@ function ensureGlobalBinaryAvailable(): void {
   }
 }
 
+/** @name runPaymentBridgeRepair - Repairs the payment bridge process by clearing stale locks and restarting the bridge if needed. */
 export function runPaymentBridgeRepair(options: { clear?: boolean } = {}): void {
   if (options.clear !== false) {
     clearConsole();
@@ -1651,7 +1652,8 @@ async function wizardSummary(config: WizardSetupInput) {
 // ============================================================================
 
 /**
- * Executes the run wizard operation.
+ * @name runWizard
+ * @description Executes the interactive CLI wizard, guiding the user through profile, wallet, policy, runtime, and payment bridge setup.
  */
 export async function runWizard() {
   try {

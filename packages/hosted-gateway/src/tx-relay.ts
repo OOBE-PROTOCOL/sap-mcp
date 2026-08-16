@@ -16,11 +16,13 @@ import {
 } from '@oobe-protocol-labs/sap-mcp-tools/transaction-tools';
 import { parseJsonBody, readRequestBody } from '@oobe-protocol-labs/sap-mcp-payments/http-adapter';
 
+/** @name TX_SUBMIT_PATH - HTTP path for the transaction submit relay endpoint. */
 export const TX_SUBMIT_PATH = '/tx/submit';
 const TX_SUBMIT_MAX_BODY_BYTES = 512_000;
 const TX_SUBMIT_DEFAULT_CONFIRMATION_TIMEOUT_MS = 90_000;
 const TX_SUBMIT_MAX_CONFIRMATION_TIMEOUT_MS = 180_000;
 
+/** @name TxSubmitRelayInput - Parsed input for the tx submit relay, containing the signed transaction bytes and commitment level. */
 export interface TxSubmitRelayInput {
   signedTransaction?: string;
   transaction?: string;
@@ -32,6 +34,7 @@ export interface TxSubmitRelayInput {
   intentId?: string;
 }
 
+/** @name TxSubmitRelayResult - Result of submitting a signed transaction through the relay, including signature and confirmation status. */
 export interface TxSubmitRelayResult {
   success: boolean;
   submitted: true;
@@ -52,6 +55,7 @@ export interface TxSubmitRelayResult {
   };
 }
 
+/** @name submitSignedTransactionFromHttp - Accepts a pre-signed transaction from an HTTP request, submits it to the Solana network, and polls for confirmation. Never signs or receives keypair bytes. */
 export async function submitSignedTransactionFromHttp(
   req: http.IncomingMessage,
   config: SapMcpConfig,
@@ -104,6 +108,7 @@ export async function submitSignedTransactionFromHttp(
   };
 }
 
+/** @name parseTxSubmitRelayInput - Validates and parses the raw HTTP input into a TxSubmitRelayInput, checking commitment level and encoding format. */
 export function parseTxSubmitRelayInput(value: unknown): TxSubmitRelayInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('JSON object body is required.');
