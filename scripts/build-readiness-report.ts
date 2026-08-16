@@ -2,8 +2,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SapMcpConfig, SapMcpContext } from '../src/core/types.js';
-import { MCP_SERVER_VERSION } from '../src/core/constants.js';
+import type { SapMcpConfig, SapMcpContext } from '../packages/core/src/types.js';
+import { MCP_SERVER_VERSION } from '../packages/core/src/constants.js';
 import { BUILTIN_TOOL_MODULES } from '../packages/tools/src/builtin-tool-modules.js';
 import { buildToolCatalogForRuntimeProfiles } from '../packages/tools/src/tool-catalog.js';
 import { buildToolModulePolicyCatalog } from '../packages/tools/src/tool-execution-metadata.js';
@@ -177,6 +177,7 @@ const requiredReleaseScripts = [
   'check:architecture',
   'verify:tool-modules',
   'verify:workspace-packages',
+  'verify:package-boundaries',
   'verify:tool-plugin-template',
   'verify:tool-execution-pipeline',
   'verify:skill-workflows',
@@ -193,6 +194,7 @@ const requiredWorkflowCommands = [
   'pnpm run check:architecture',
   'pnpm run verify:tool-modules',
   'pnpm run verify:workspace-packages',
+  'pnpm run verify:package-boundaries',
   'pnpm run verify:tool-plugin-template',
   'pnpm run verify:tool-execution-pipeline',
   'pnpm run verify:skill-workflows',
@@ -635,6 +637,9 @@ if (!packageJson.scripts['verify:readiness-report']?.includes('build-readiness-r
 }
 if (!packageJson.scripts['verify:workspace-packages']?.includes('verify-workspace-packages.mjs')) {
   addIssue('verify:workspace-packages script is missing or does not run the workspace package verifier.');
+}
+if (!packageJson.scripts['verify:package-boundaries']?.includes('verify-package-boundaries.mjs')) {
+  addIssue('verify:package-boundaries script is missing or does not run the package boundary verifier.');
 }
 if (!packageJson.scripts['verify:tool-plugin-template']?.includes('@oobe-protocol-labs/sap-mcp-tool-plugin-template')) {
   addIssue('verify:tool-plugin-template script is missing or does not target the tool plugin template package.');

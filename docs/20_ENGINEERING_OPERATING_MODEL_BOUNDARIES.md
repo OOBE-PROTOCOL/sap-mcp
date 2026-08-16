@@ -90,6 +90,13 @@ root release, verifies `sapMcp` ownership metadata, confirms each package
 confirms each source boundary, additional source boundary, architecture-domain
 mapping, and README fast-resolution phrase still exists.
 
+Physical packages must not import legacy compatibility wrappers in `src/*` for
+package-owned domains. This is enforced by:
+
+```bash
+pnpm run verify:package-boundaries
+```
+
 Trusted tool plugin template compatibility is enforced by:
 
 ```bash
@@ -120,7 +127,7 @@ The report cross-checks runtime tool catalogs, module policy metadata, MCP Apps
 Card coverage, package subpath contracts, workspace package contracts,
 architecture-domain package mappings, architecture domain model consistency,
 package public symbol ownership, CI workflow commands, branch prefixes, service
-contracts, tool plugin template status, tool execution pipeline adoption, Wizard readiness contracts, runtime client injection contracts, and release personas. It is part of both
+contracts, package boundary status, tool plugin template status, tool execution pipeline adoption, Wizard readiness contracts, runtime client injection contracts, and release personas. It is part of both
 local release gates and GitHub workflow gates.
 
 Skill workflow contracts are enforced by:

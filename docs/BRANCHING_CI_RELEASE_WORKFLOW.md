@@ -62,13 +62,13 @@ migration note or a breaking-change entry in the release branch changelog.
 
 | Workflow | File | Triggers | Purpose |
 |---|---|---|---|
-| **CI** | `ci.yml` | push to main/develop, PR to main/develop | typecheck, lint, architecture, tool modules, workspace packages, tool plugin template, skill workflow contracts, company readiness, readiness report, test, build, package exports, npm pack dry-run, audit |
+| **CI** | `ci.yml` | push to main/develop, PR to main/develop | typecheck, lint, architecture, tool modules, workspace packages, package boundaries, tool plugin template, skill workflow contracts, company readiness, readiness report, test, build, package exports, npm pack dry-run, audit |
 | **CodeQL** | GitHub default setup | push, PR, weekly cron | security analysis (JS/TS + Actions) — configured in repo Settings → Security → Code security |
 | **Desktop Release** | `desktop-release.yml` | tag push, workflow_dispatch | build desktop binaries, publish to GitHub Release |
 
 ### CI (`ci.yml`)
 
-- Runs on: Ubuntu and Windows with full typecheck, lint, architecture, tool module, workspace package, tool plugin template, skill workflow contract, company readiness, readiness report, test, build, package export, and npm pack dry-run gates.
+- Runs on: Ubuntu and Windows with full typecheck, lint, architecture, tool module, workspace package, package boundary, tool plugin template, skill workflow contract, company readiness, readiness report, test, build, package export, and npm pack dry-run gates.
 - Audit: `pnpm audit --audit-level high --prod` (production deps only)
 - Concurrency group cancels stale runs on same ref
 
@@ -84,6 +84,12 @@ Check internal package extraction contracts directly when moving boundaries:
 
 ```bash
 pnpm run verify:workspace-packages
+```
+
+Check that physical packages do not import legacy compatibility wrappers:
+
+```bash
+pnpm run verify:package-boundaries
 ```
 
 Check the trusted external tool-family template before adding or changing plugin
@@ -133,7 +139,7 @@ pnpm run verify:release
 ```
 
 The full gate runs typecheck, lint, architecture boundaries, tool module
-validation, workspace package contracts, tool plugin template typecheck, skill
+validation, workspace package contracts, package boundary checks, tool plugin template typecheck, skill
 workflow contracts, company readiness, readiness report, test, build, package
 export verification, npm pack dry-run, and production dependency audit at
 `moderate` severity.
@@ -154,7 +160,7 @@ The release gate runs this check automatically before the full test suite.
 
 - Triggers on: tag push (`*`) or manual dispatch
 - Matrix: macOS 15, Windows 2025, Ubuntu 24.04
-- Verify gates: typecheck + lint + architecture + tool modules + workspace packages + tool plugin template + skill workflow contracts + company readiness + readiness report + test + build + exports + npm pack dry-run
+- Verify gates: typecheck + lint + architecture + tool modules + workspace packages + package boundaries + tool plugin template + skill workflow contracts + company readiness + readiness report + test + build + exports + npm pack dry-run
 - Audit: production deps only, high severity
 - Publish job: downloads all 3 OS artifacts, generates SHA256 checksums, attaches to GitHub Release
 - Signing: optional (uses secrets if available, warns if unsigned)

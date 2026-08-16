@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import type { SapMcpConfig, SapMcpContext } from '../src/core/types.js';
+import type { SapMcpConfig, SapMcpContext } from '../packages/core/src/types.js';
 import { BUILTIN_TOOL_MODULES } from '../packages/tools/src/builtin-tool-modules.js';
 import { buildToolCatalogForRuntimeProfiles } from '../packages/tools/src/tool-catalog.js';
 import { buildToolModulePolicyCatalog } from '../packages/tools/src/tool-execution-metadata.js';

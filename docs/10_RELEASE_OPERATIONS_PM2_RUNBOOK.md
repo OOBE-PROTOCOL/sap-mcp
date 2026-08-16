@@ -26,6 +26,7 @@ For a focused release contract audit, run:
 
 ```bash
 pnpm run verify:workspace-packages
+pnpm run verify:package-boundaries
 pnpm run verify:tool-plugin-template
 pnpm run verify:tool-execution-pipeline
 pnpm run verify:skill-workflows
@@ -34,8 +35,8 @@ pnpm run verify:readiness-report
 ```
 
 This prints a JSON report covering runtime tool catalogs, MCP Apps Card
-coverage, package exports, workspace package contracts, skill workflow
-contracts, tool plugin template typecheck status, tool execution pipeline
+coverage, package exports, workspace package contracts, package boundary status,
+skill workflow contracts, tool plugin template typecheck status, tool execution pipeline
 adoption, company readiness
 requirements, CI workflow command coverage, package export verification, npm
 pack dry-run coverage, branch prefixes, service contracts, and release personas.

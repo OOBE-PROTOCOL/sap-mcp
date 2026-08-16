@@ -154,6 +154,7 @@
     "check:architecture",
     "verify:tool-modules",
     "verify:workspace-packages",
+    "verify:package-boundaries",
     "verify:tool-plugin-template",
     "verify:tool-execution-pipeline",
     "verify:skill-workflows",
@@ -163,6 +164,7 @@
     "verify:release:offline"
   ],
   "requiredWorkflowCommands": [
+    "pnpm run verify:package-boundaries",
     "pnpm run verify:tool-plugin-template",
     "pnpm run verify:tool-execution-pipeline",
     "pnpm run verify:company-readiness",

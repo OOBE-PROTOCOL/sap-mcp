@@ -13,6 +13,7 @@ This audit records the current engineering posture for SAP MCP Server `0.9.74`.
 | Architecture boundaries | Pass | `check:architecture` enforces allowed imports, known allowed-domain targets, and source-file domain assignment across core, config, server, hosted, local bridge, tools, UI, payments, policy, and security domains. |
 | Tool modules | Pass | `verify:tool-modules` validates first-party module manifests, runtime profile selection, policy metadata, and plugin registration contracts. |
 | Workspace packages | Pass | `verify:workspace-packages` validates package-level service boundaries, architecture domains, and stable subpath exports. |
+| Package boundaries | Pass | `verify:package-boundaries` prevents physical packages from importing legacy `src/*` compatibility wrappers for package-owned domains. |
 | Skill workflows | Pass | `verify:skill-workflows` validates bundled SAP skills, routing docs, branch families, and workflow governance. |
 | Company readiness | Pass | `verify:company-readiness` validates the requirement-to-evidence matrix for modularity, hosted/local bridge separation, wizard personas, MCP Apps Cards, release docs, and secret boundaries. |
 | Readiness report | Pass | `verify:readiness-report` emits a machine-readable release scorecard covering modules, runtime profiles, card coverage, package exports, workspace packages, skills, workflows, npm pack dry-run coverage, and company readiness. |

@@ -65,10 +65,15 @@ without real non-test `.ts` files under `packages/*/src`, maps a legacy source
 to an invalid architecture domain, or has a root export without a stable public
 symbol contract.
 
+`pnpm run verify:package-boundaries` fails when a physical package imports a
+legacy `src/*` compatibility wrapper for a package-owned domain. Packages
+should import peer package source boundaries directly until they are published
+as independent workspace packages.
+
 `pnpm run verify:readiness-report` is the aggregate modular readiness gate. It
 combines tool module validation, runtime catalogs, MCP Apps Card coverage,
-package export contracts, workspace package contracts, tool plugin template
-typecheck status, tool execution pipeline adoption, branch prefixes, CI workflow commands, service contracts, and
+package export contracts, workspace package contracts, package boundary status,
+tool plugin template typecheck status, tool execution pipeline adoption, branch prefixes, CI workflow commands, service contracts, and
 release personas into one JSON report.
 MCP Apps Card coverage is governed by `config/mcp-apps-card-contracts.json`,
 which keeps high-value balance, transfer, swap, agent, MagicBlock, and Adrena

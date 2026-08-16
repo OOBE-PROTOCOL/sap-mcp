@@ -61,6 +61,9 @@ jobs:
       - name: Verify workspace packages
         run: pnpm run verify:workspace-packages
 
+      - name: Verify package boundaries
+        run: pnpm run verify:package-boundaries
+
       - name: Verify tool plugin template
         run: pnpm run verify:tool-plugin-template
 
