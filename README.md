@@ -352,6 +352,7 @@ packages/
   solana/            Solana ATA utilities
   strategies/        Strategy store and trade journal
   transports/        stdio and HTTP transport layers
+  tui/               Terminal UI wizard save helper (legacy, source in src/tui/)
 ```
 
 The root `package.json` re-exports all package surfaces so consumers can import from `@oobe-protocol-labs/sap-mcp-server` without referencing internal packages directly.
