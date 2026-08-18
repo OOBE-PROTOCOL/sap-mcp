@@ -18,13 +18,13 @@ import {
   getActiveProfile,
   getProfileConfigPath,
 } from './profiles.js';
-import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpConfig } from '../../core/src/types.js';
 export type {
   SapMcpConfig,
   SapMcpMode,
   SapMcpMonetizationConfig,
   SapMcpMonetizationProvider,
-} from '@oobe-protocol-labs/sap-mcp-core/types';
+} from '../../core/src/types.js';
 
 // ESM compatibility: __filename equivalent
 const __filename = fileURLToPath(import.meta.url);

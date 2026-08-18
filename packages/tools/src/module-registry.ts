@@ -10,8 +10,8 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { getRegisteredTools } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { getRegisteredTools } from '../../mcp-adapter/src/sdk-compat.js';
 import { ToolModuleIdSchema, parseToolModuleManifest, type ToolModuleCategory, type ToolModuleManifest, type ToolModuleMode } from './tool-module-manifest.js';
 export type { ToolModuleCategory, ToolModuleMode } from './tool-module-manifest.js';
 

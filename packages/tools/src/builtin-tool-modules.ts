@@ -26,11 +26,11 @@ import { registerSapSdkTools } from './sap-sdk-tools.js';
 import { registerSapSnsTools } from './sap-sns-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerTransactionTools } from './transaction-tools.js';
-import { registerFearGreedTool } from '@oobe-protocol-labs/sap-mcp-perps/market-intelligence';
-import { registerPortfolioRiskTool, registerRiskCheckTool } from '@oobe-protocol-labs/sap-mcp-perps/risk-engine';
-import { registerSignalScoreTool } from '@oobe-protocol-labs/sap-mcp-perps/signal-engine';
+import { registerFearGreedTool } from '../../perps/src/market-intelligence.js';
+import { registerPortfolioRiskTool, registerRiskCheckTool } from '../../perps/src/risk-engine.js';
+import { registerSignalScoreTool } from '../../perps/src/signal-engine.js';
 import { createToolModule, selectToolModulesForContext, type ToolModuleDefinition } from './module-registry.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 
 export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
   createToolModule({

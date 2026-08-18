@@ -14,7 +14,7 @@
  * @module session/session-permissions
  */
 
-import type { SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapPermission } from '../../core/src/types.js';
 
 /**
  * @name ALL_PERMISSIONS

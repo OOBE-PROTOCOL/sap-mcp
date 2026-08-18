@@ -6,7 +6,7 @@
  * @module perps/perp-constants
  */
 
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Constants

@@ -18,8 +18,8 @@ import { homedir, tmpdir } from 'os';
 import { execFileSync } from 'child_process';
 import { mkdtempSync } from 'fs';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
+import type { SapMcpContext } from '../../core/src/types.js';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

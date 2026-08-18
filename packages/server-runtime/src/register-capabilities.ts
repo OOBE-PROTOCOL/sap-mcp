@@ -11,11 +11,11 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { registerTools } from '@oobe-protocol-labs/sap-mcp-tools/register-tools';
-import { registerResources } from '@oobe-protocol-labs/sap-mcp-resources/register-resources';
-import { registerPrompts } from '@oobe-protocol-labs/sap-mcp-prompts/register-prompts';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { registerTools } from '../../tools/src/register-tools.js';
+import { registerResources } from '../../resources/src/register-resources.js';
+import { registerPrompts } from '../../prompts/src/register-prompts.js';
+import { logger } from '../../core/src/logger.js';
 
 /**
  * @name registerCapabilities

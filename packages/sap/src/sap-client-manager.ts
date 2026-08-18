@@ -14,11 +14,11 @@
 
 import { createSapClient as createSdkClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 import { Wallet } from '@coral-xyz/anchor';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { SapClientError } from '@oobe-protocol-labs/sap-mcp-core/errors';
-import type { SapMcpConfig, SapPolicyEngine } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import { SapClientError } from '../../core/src/errors.js';
+import type { SapMcpConfig, SapPolicyEngine } from '../../core/src/types.js';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
-import { PolicyEnforcingWallet } from '@oobe-protocol-labs/sap-mcp-signer/policy-enforcing-wallet';
+import { PolicyEnforcingWallet } from '../../signer/src/policy-enforcing-wallet.js';
 
 /**
  * @name SapClientManager

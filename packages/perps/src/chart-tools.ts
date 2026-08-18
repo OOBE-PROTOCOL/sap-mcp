@@ -6,9 +6,9 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { createTextResponse } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/tool-response';
-import { registerTool } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { createTextResponse } from '../../mcp-adapter/src/tool-response.js';
+import { registerTool } from '../../mcp-adapter/src/sdk-compat.js';
 import {
   DEFAULT_VP_BUCKETS,
   DEXSCREENER_API_URL,

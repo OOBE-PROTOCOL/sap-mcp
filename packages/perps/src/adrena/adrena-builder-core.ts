@@ -19,7 +19,7 @@ import {
 import { AnchorProvider, Program, type Idl } from '@coral-xyz/anchor';
 import BN from 'bn.js';
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../../core/src/logger.js';
 import {
   ADRENA_PROGRAM_ID,
   ADRENA_MAIN_POOL_ADDRESS,

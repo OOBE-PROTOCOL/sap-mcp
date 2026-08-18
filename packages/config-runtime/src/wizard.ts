@@ -35,8 +35,8 @@ import {
   type McpClientTarget,
 } from './mcp-client-injection.js';
 import { listProfiles } from './profiles.js';
-import { getPaymentBridgeProcessStatus } from '@oobe-protocol-labs/sap-mcp-runtime/payment-bridge-process';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import { getPaymentBridgeProcessStatus } from '../../runtime/src/payment-bridge-process.js';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 
 type WizardLogLevel = WizardSetupInput['logLevel'];
 type WizardSetupPath = 'full-hosted' | 'repair-payments' | 'manual-snippets';

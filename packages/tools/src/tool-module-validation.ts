@@ -8,7 +8,7 @@
  * @module tools/tool-module-validation
  */
 
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 import {
   selectToolModulesForContext,
   validateToolModules,

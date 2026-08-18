@@ -3,7 +3,7 @@
  * @description Pricing registry for hosted SAP MCP tool monetization.
  */
 
-import type { SapMcpMonetizationConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
+import type { SapMcpMonetizationConfig } from '../../config-runtime/src/env.js';
 import type { McpToolCall, ParsedMcpRequest } from './json-rpc.js';
 import { isRecord } from './json-rpc.js';
 

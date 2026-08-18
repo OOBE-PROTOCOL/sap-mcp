@@ -5,10 +5,10 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { PaymentRequired } from '@x402/core/types';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { getActiveProfile, getProfileConfigPath } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
-import { setValidationServer, validateToolArguments } from '@oobe-protocol-labs/sap-mcp-payments/schema-validation';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { logger } from '../../core/src/logger.js';
+import { getActiveProfile, getProfileConfigPath } from '../../config-runtime/src/profiles.js';
+import { setValidationServer, validateToolArguments } from '../../payments/src/schema-validation.js';
 import {
   executeX402PaidCall,
   executeExternalX402Call,
@@ -20,8 +20,8 @@ import {
   type X402ChallengeSignInput,
   type X402ExternalCallInput,
   type X402PaidCallInput,
-} from '@oobe-protocol-labs/sap-mcp-payments/x402-paid-call';
-import { getGlobalPrepaidStore } from '@oobe-protocol-labs/sap-mcp-payments/prepaid-credit-store';
+} from '../../payments/src/x402-paid-call.js';
+import { getGlobalPrepaidStore } from '../../payments/src/prepaid-credit-store.js';
 import { finalizeTransactionWithLocalSigner, type TransactionEncoding } from './transaction-tools.js';
 import {
   SAP_AGENT_REGISTER_INPUT_SCHEMA,
@@ -29,9 +29,9 @@ import {
   parseRegisterAgentArgs,
   parseUpdateAgentArgs,
 } from './sap-sdk-tools.js';
-import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '@oobe-protocol-labs/sap-mcp-core/constants';
-import { getPaymentBridgeProcessStatus } from '@oobe-protocol-labs/sap-mcp-runtime/payment-bridge-process';
-import { buildWalletGuardSummary } from '@oobe-protocol-labs/sap-mcp-signer/wallet-guard';
+import { SAP_PROTOCOL_TREASURY, SAP_REGISTRATION_FEE_LAMPORTS } from '../../core/src/constants.js';
+import { getPaymentBridgeProcessStatus } from '../../runtime/src/payment-bridge-process.js';
+import { buildWalletGuardSummary } from '../../signer/src/wallet-guard.js';
 import {
   createStringToolPipelineResult,
   registerToolFamilyPipelineTool,

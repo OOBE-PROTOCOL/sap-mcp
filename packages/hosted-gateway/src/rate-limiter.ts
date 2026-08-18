@@ -4,7 +4,7 @@
  */
 
 import { Redis } from 'ioredis';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 
 /**
  * @name RemoteRateLimitConfig

@@ -15,8 +15,8 @@ import {
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapMcpContext } from '../../core/src/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   createStringToolPipelineResult,

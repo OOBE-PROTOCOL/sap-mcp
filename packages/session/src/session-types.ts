@@ -10,7 +10,7 @@
  * @module session/session-types
  */
 
-import type { SapAgentSession, SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapAgentSession, SapPermission } from '../../core/src/types.js';
 
 /**
  * @name CreateSessionRequest

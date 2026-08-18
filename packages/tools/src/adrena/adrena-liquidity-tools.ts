@@ -6,7 +6,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../../core/src/types.js';
 import {
   adrenaPipelineException,
   adrenaPipelineOk,
@@ -17,7 +17,7 @@ import {
   buildRemoveLiquidity,
   buildSwap,
   type AdrenaPool,
-} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
+} from '../../../perps/src/adrena/index.js';
 import {
   COLLATERAL_TOKENS,
   getConnection,

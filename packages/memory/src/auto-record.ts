@@ -13,7 +13,7 @@
 
 import { toolCallStore } from './tool-call-store.js';
 import { memoryDatabase } from './database.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 import type { ToolCallOutcome } from './types.js';
 
 /**

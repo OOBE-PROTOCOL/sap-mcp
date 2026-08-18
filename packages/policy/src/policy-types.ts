@@ -9,7 +9,7 @@
  * @module policy/policy-types
  */
 
-import type { SapPermission, SapRiskLevel } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapPermission, SapRiskLevel } from '../../core/src/types.js';
 
 /**
  * @name Policy

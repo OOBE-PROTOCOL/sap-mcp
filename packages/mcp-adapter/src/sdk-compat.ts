@@ -30,12 +30,12 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { checkToolPermissions, privateKeyGuard } from '@oobe-protocol-labs/sap-mcp-security';
-import { canonicalizeToolName } from '@oobe-protocol-labs/sap-mcp-tools/tool-aliases';
-import { getToolExecutionMetadata } from '@oobe-protocol-labs/sap-mcp-tools/tool-execution-metadata';
-import { recordToolCall, trackInFlight } from '@oobe-protocol-labs/sap-mcp-observability/metrics';
+import { logger } from '../../core/src/logger.js';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { checkToolPermissions, privateKeyGuard } from '../../security/src/index.js';
+import { canonicalizeToolName } from '../../tools/src/tool-aliases.js';
+import { getToolExecutionMetadata } from '../../tools/src/tool-execution-metadata.js';
+import { recordToolCall, trackInFlight } from '../../observability/src/metrics.js';
 
 // Track which handlers have been registered to avoid duplicates
 const handlerRegistry = new WeakMap<Server, {

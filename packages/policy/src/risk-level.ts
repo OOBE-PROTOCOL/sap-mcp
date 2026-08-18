@@ -8,7 +8,7 @@
  * @module policy/risk-level
  */
 
-import type { SapRiskLevel } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapRiskLevel } from '../../core/src/types.js';
 
 /**
  * @name calculateRiskLevel

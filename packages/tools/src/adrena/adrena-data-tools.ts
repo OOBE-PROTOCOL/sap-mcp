@@ -7,8 +7,8 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { PublicKey } from '@solana/web3.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import type { SapMcpContext } from '../../../core/src/types.js';
+import type { UiCardContext } from '../../../ui-cards/src/ui-resources.js';
 import {
   adrenaPipelineError,
   adrenaPipelineOk,
@@ -16,8 +16,8 @@ import {
 } from './adrena-pipeline.js';
 import {
   adrenaDataApi,
-} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
-import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '@oobe-protocol-labs/sap-mcp-perps/adrena/adrena-constants';
+} from '../../../perps/src/adrena/index.js';
+import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../../../perps/src/adrena/adrena-constants.js';
 import {
   getConnection,
 } from './adrena-helpers.js';

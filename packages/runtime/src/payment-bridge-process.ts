@@ -10,9 +10,9 @@
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, closeSync, unlinkSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
-import { getDataDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
-import { getActiveProfile } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import { getDataDir } from '../../config-runtime/src/paths.js';
+import { getActiveProfile } from '../../config-runtime/src/profiles.js';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 
 export interface PaymentBridgeLockRecord {
   pid: number;

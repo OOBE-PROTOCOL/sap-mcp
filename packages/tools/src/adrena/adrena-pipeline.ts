@@ -6,8 +6,8 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import type { UiCardContext } from '@oobe-protocol-labs/sap-mcp-ui-cards/ui-resources';
+import type { SapMcpContext } from '../../../core/src/types.js';
+import type { UiCardContext } from '../../../ui-cards/src/ui-resources.js';
 import {
   createToolExecutionResult,
   registerPipelineTool,
