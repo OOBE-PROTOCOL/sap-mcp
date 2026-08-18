@@ -145,7 +145,7 @@ Each release should document:
 
 ## 10.8 Current Release Notes
 
-Version `0.9.74` includes:
+Version `0.9.80` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.

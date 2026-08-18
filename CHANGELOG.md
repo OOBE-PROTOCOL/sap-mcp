@@ -2,6 +2,81 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.80 - 2026-08-18
+
+### Security
+
+- Resolved all 10 CodeQL polynomial regex alerts by replacing regex
+  patterns with linear-time alternatives (indexOf, slice, for-loops)
+  across 7 files: mcp-client-injection.ts, mcp-session-cache.ts,
+  monetization-gate.ts, permission-checks.ts, payment-bridge-process.ts,
+  client-sdk-tools.ts, wizard-save.ts, desktop-flow.ts.
+- Replaced URL substring check (`includes`) with proper `new URL().hostname`
+  validation in runtime-doctor.ts RPC endpoint security check.
+- Windows path separator fix in private-manifest-loader.ts symlink escape
+  prevention (hardcoded `/` replaced with `path.sep`).
+
+### Added
+
+- 30 internal workspace packages with physical source code under
+  `packages/*/src/`, explicit `exports` and `dependencies` (`workspace:*`)
+  in every `package.json`, and thin re-export wrappers in `src/` for
+  backward compatibility.
+- 353 inter-package imports using package-name imports
+  (`@oobe-protocol-labs/sap-mcp-*`), 0 relative cross-package imports.
+- Package boundary verification gate (`verify:package-boundaries`)
+  scanning 248 files across 28 checked packages with 0 failures.
+- Circular dependency detection via madge added to release gate chain.
+- TSDoc `@name` and `@description` tags on all 1192 exported symbols
+  across all 30 packages (2503 tags, 2174 TSDoc blocks, 0 gaps).
+- Co-located test file at `packages/wizard-core/src/__tests__/desktop-flow.test.ts`.
+
+### Fixed
+
+- Corrupted `bentoApiKey` expression in `desktop-flow.ts:462`
+  (`draft....Key` restored to `draft.bentoApiKey`).
+- Corrupted ternary in `setup.ts:171` with `***` literals
+  (restored to `input.enableBento ? input.bentoApiKey : undefined`).
+- `saveDesktopWizardDraft()`: wrapped `saveWizardSetup()` in try/catch
+  with descriptive error message.
+- `saveWizardSetup()`: added rollback for `setActiveProfile()` failure
+  (removes saved profile config to prevent orphaned profiles).
+- `PremiumMemoryManager.prune()`: wrapped in try/catch with structured
+  console.warn so failed prune cycles log instead of silently crashing.
+- Cross-platform test assertions for Windows (`npx.cmd`, config dir paths,
+  keypairs dir, verify-package-exports path normalization).
+- `verify-package-exports.mjs`: rewritten to resolve `export *` chains on
+  `.ts` source files with cross-platform backslash-to-forward-slash
+  normalization for Windows path support.
+
+### Changed
+
+- `verify-package-exports.mjs` uses recursive text analysis on `.ts` source
+  instead of dynamic `import()` on compiled `.js` files.
+- Root `package.json` declares all 30 internal packages as `workspace:*`
+  dependencies for pnpm symlink resolution.
+- README repository layout updated to reflect 30-package modular structure.
+- `mcp-client-injection.ts`: 6 regex-based trailing newline removals
+  replaced with `.trimEnd()`. Comment stripping and TOML/YAML key-value
+  parsing rewritten with `indexOf` + `slice` for linear time.
+
+### Verification
+
+- `verify:release:offline` passes with exit code 0 (all 15 gates)
+- CI passes on ubuntu-24.04 and windows-2025
+- CodeQL passes with 0 alerts
+- npm audit: 0 vulnerabilities (high and moderate)
+- typecheck: 0 errors
+- lint: clean
+- tests: 750/750 pass (65 files)
+- build: clean
+- npm pack: 3.3 MB, 2112 files
+- package boundaries: 248 files, 0 failures
+- workspace packages: 30 packages
+- tool execution pipeline: 165 registrations, 0 legacy
+- skill workflows: 20 skills
+- company readiness: 12 requirements
+
 ## Unreleased - Modular Monorepo Phase 3: Package-Name Imports and TSDoc
 
 ### Changed
