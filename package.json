@@ -1,21 +1,21 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-server",
-  "version": "0.9.74",
+  "version": "0.9.80",
   "mcpName": "ai.oobeprotocol.sap.mcp/sap-mcp",
   "description": "Official MCP gateway for OOBE Protocol SAP — AI agents can interact with SAP identity, registry, reputation, tools, memory, payments, settlement, and proof-of-execution on Solana",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "module": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "bin": {
-    "sap-mcp-server": "dist/bin/sap-mcp-server.js",
-    "sap-mcp-config": "dist/config-cli.js",
+    "sap-mcp-server": "dist/src/bin/sap-mcp-server.js",
+    "sap-mcp-config": "dist/src/config-cli.js",
     "sap-mcp-wizard": "dist/tui/config-wizard.js",
-    "sap-signing-proxy": "dist/signer/signing-proxy.js",
-    "sap-mcp-remote": "dist/bin/sap-mcp-remote.js",
-    "sap-mcp-facilitator": "dist/payments/oobe-facilitator-server.js",
-    "sap-mcp-pay-sh-spec": "dist/payments/pay-sh-spec.js",
-    "sap-mcp-x402-paid-call": "dist/payments/x402-paid-call.js"
+    "sap-signing-proxy": "dist/src/signer/signing-proxy.js",
+    "sap-mcp-remote": "dist/src/bin/sap-mcp-remote.js",
+    "sap-mcp-facilitator": "dist/src/payments/oobe-facilitator-server.js",
+    "sap-mcp-pay-sh-spec": "dist/src/payments/pay-sh-spec.js",
+    "sap-mcp-x402-paid-call": "dist/src/payments/x402-paid-call.js"
   },
   "files": [
     "dist",
@@ -23,6 +23,7 @@
     "skills",
     "docs",
     "USER_DOCS",
+    "config",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
@@ -37,14 +38,64 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "require": "./dist/src/index.js"
+    },
+    "./core": {
+      "types": "./dist/packages/core/src/index.d.ts",
+      "import": "./dist/packages/core/src/index.js",
+      "require": "./dist/packages/core/src/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/packages/schemas/src/index.d.ts",
+      "import": "./dist/packages/schemas/src/index.js",
+      "require": "./dist/packages/schemas/src/index.js"
+    },
+    "./mcp-adapter": {
+      "types": "./dist/packages/mcp-adapter/src/index.d.ts",
+      "import": "./dist/packages/mcp-adapter/src/index.js",
+      "require": "./dist/packages/mcp-adapter/src/index.js"
+    },
+    "./ui-cards": {
+      "types": "./dist/packages/ui-cards/src/index.d.ts",
+      "import": "./dist/packages/ui-cards/src/index.js",
+      "require": "./dist/packages/ui-cards/src/index.js"
+    },
+    "./tools": {
+      "types": "./dist/packages/tools/src/index.d.ts",
+      "import": "./dist/packages/tools/src/index.js",
+      "require": "./dist/packages/tools/src/index.js"
+    },
+    "./config-runtime": {
+      "types": "./dist/packages/config-runtime/src/index.d.ts",
+      "import": "./dist/packages/config-runtime/src/index.js",
+      "require": "./dist/packages/config-runtime/src/index.js"
+    },
+    "./server-runtime": {
+      "types": "./dist/packages/server-runtime/src/index.d.ts",
+      "import": "./dist/packages/server-runtime/src/index.js",
+      "require": "./dist/packages/server-runtime/src/index.js"
+    },
+    "./hosted-gateway": {
+      "types": "./dist/packages/hosted-gateway/src/index.d.ts",
+      "import": "./dist/packages/hosted-gateway/src/index.js",
+      "require": "./dist/packages/hosted-gateway/src/index.js"
+    },
+    "./local-bridge": {
+      "types": "./dist/packages/local-bridge/src/index.d.ts",
+      "import": "./dist/packages/local-bridge/src/index.js",
+      "require": "./dist/packages/local-bridge/src/index.js"
+    },
+    "./wizard-core": {
+      "types": "./dist/packages/wizard-core/src/desktop-flow.d.ts",
+      "import": "./dist/packages/wizard-core/src/desktop-flow.js",
+      "require": "./dist/packages/wizard-core/src/desktop-flow.js"
     }
   },
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json",
+    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json && pnpm run build:packages",
     "build:core": "tsc",
     "build:tui": "tsc -p tsconfig.tui.json",
     "desktop:renderer": "vite --config apps/desktop/vite.config.ts",
@@ -52,16 +103,29 @@
     "desktop:build": "pnpm run build && pnpm run desktop:renderer:build && electron-builder --config apps/desktop/electron-builder.cjs --publish never",
     "desktop:verify-artifact": "node scripts/verify-desktop-artifact.mjs",
     "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js",
+    "start": "node dist/src/cli.js",
     "config": "tsx src/config-cli.ts",
     "tui:config": "tsx src/tui/config-wizard.tsx",
     "typecheck": "tsc --noEmit --skipLibCheck",
-    "lint": "eslint src/",
+    "lint": "eslint src/ packages/*/src/ --no-error-on-unmatched-pattern",
+    "check:architecture": "node scripts/check-architecture-boundaries.mjs",
+    "verify:exports": "node scripts/verify-package-exports.mjs",
+    "verify:workspace-packages": "node scripts/verify-workspace-packages.mjs",
+    "verify:package-boundaries": "node scripts/verify-package-boundaries.mjs",
+    "verify:circular-deps": "npx madge --circular --extensions ts packages/*/src/ src/*.ts",
+    "verify:tool-plugin-template": "pnpm --filter @oobe-protocol-labs/sap-mcp-tool-plugin-template run verify",
+    "verify:tool-execution-pipeline": "node scripts/verify-tool-execution-pipeline.mjs",
+    "verify:skill-workflows": "node scripts/verify-skill-workflows.mjs",
+    "verify:company-readiness": "node scripts/verify-company-readiness.mjs",
+    "verify:tool-modules": "tsx scripts/verify-tool-modules.ts",
+    "verify:readiness-report": "tsx scripts/build-readiness-report.ts --check",
     "test": "vitest",
     "test:run": "vitest run",
-    "verify:release": "pnpm run typecheck && pnpm run lint && pnpm run test:run && pnpm run build && npm pack --dry-run --cache ./.npm-cache",
+    "verify:release:offline": "pnpm run typecheck && pnpm run lint && pnpm run check:architecture && pnpm run verify:tool-modules && pnpm run verify:workspace-packages && pnpm run verify:package-boundaries && pnpm run verify:tool-plugin-template && pnpm run verify:tool-execution-pipeline && pnpm run verify:skill-workflows && pnpm run verify:company-readiness && pnpm run verify:readiness-report && pnpm run test:run && pnpm run build && pnpm run verify:exports && npm pack --dry-run --cache ./.npm-cache",
+    "verify:release": "pnpm run verify:release:offline && pnpm audit --audit-level moderate --prod",
     "version:bump": "node scripts/bump-version.mjs",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "build:packages": "tsc -p tsconfig.packages.json"
   },
   "keywords": [
     "mcp",
@@ -116,7 +180,37 @@
     "react-dom": "^19.2.7",
     "tweetnacl": "^1.0.3",
     "ws": "^8.21.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@oobe-protocol-labs/sap-mcp-signer": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-payments": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-sap": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-memory": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-bin": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-security": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tui": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-strategies": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-transports": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-resources": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-solana": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-observability": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-schemas": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-adapters": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-server-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-prompts": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-wizard-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-perps": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-ui-cards": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-local-bridge": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tool-plugin-template": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-premium": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-policy": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-hosted-gateway": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-session": "workspace:*"
   },
   "devDependencies": {
     "@electron/notarize": "2.5.0",
@@ -152,7 +246,7 @@
     "@hono/node-server": "2.0.10",
     "body-parser": "1.20.6",
     "fast-uri": "3.1.5",
-    "hono": "4.12.27",
+    "hono": "4.12.34",
     "langsmith": "^0.6.0",
     "postcss": "8.5.18",
     "uuid": "^11.1.1",

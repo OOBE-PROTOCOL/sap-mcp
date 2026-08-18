@@ -1,0 +1,43 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-sap",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP sap module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "sap",
+    "source": "packages/sap/src",
+    "architectureDomain": "sap",
+    "boundary": "SAP SDK client manager, types, and error classes.",
+    "legacyCompatibilitySource": "src/sap",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sap-errors": {
+      "types": "./src/sap-errors.ts",
+      "default": "./src/sap-errors.ts"
+    },
+    "./sap-types": {
+      "types": "./src/sap-types.ts",
+      "default": "./src/sap-types.ts"
+    },
+    "./sap-client-manager": {
+      "types": "./src/sap-client-manager.ts",
+      "default": "./src/sap-client-manager.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-signer": "workspace:*"
+  }
+}

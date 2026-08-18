@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "title": "SAP MCP Runtime Client Injection Contract",
+  "hostedUrl": "https://mcp.sap.oobeprotocol.ai/mcp",
+  "hostedServerName": "sap",
+  "paymentBridgeServerName": "sap_payments",
+  "requiredBridgeEnv": {
+    "SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE": "false",
+    "SAP_MCP_PAYMENTS_BRIDGE_ONLY": "true",
+    "SAP_ALLOWED_TOOLS": "all"
+  },
+  "requiredValidationFunctions": [
+    "buildHostedPaymentBridgeContent",
+    "resolveHostedPaymentBridgeContent",
+    "validateHostedPaymentBridgeContent",
+    "installHostedPaymentBridgeConfigs"
+  ],
+  "forbiddenRuntimeConfigContent": [
+    "mcp-remote",
+    "SAP_WALLET_PATH",
+    "SAP_MCP_WALLET_PATH",
+    "SAP_RPC_URL",
+    "SAP_MCP_RPC_URL",
+    "SAP_MCP_CONFIG_PATH"
+  ],
+  "requiredRuntimeProfiles": [
+    {
+      "id": "codex",
+      "label": "Codex",
+      "format": "toml",
+      "pathSuffix": ".codex/config.toml",
+      "runtimeId": "codex",
+      "requiredMarkers": [
+        "[mcp_servers.sap]",
+        "[mcp_servers.sap_payments]",
+        "startup_timeout_sec = 300",
+        "tool_timeout_sec = 300",
+        "SAP_MCP_RUNTIME_ID = \"codex\""
+      ]
+    },
+    {
+      "id": "claude",
+      "label": "Claude Desktop",
+      "format": "json",
+      "pathSuffix": ".config/Claude/claude_desktop_config.json",
+      "runtimeId": "claude",
+      "requiredMarkers": [
+        "\"mcpServers\"",
+        "\"sap\"",
+        "\"sap_payments\"",
+        "\"type\": \"http\"",
+        "\"SAP_MCP_RUNTIME_ID\": \"claude\""
+      ]
+    },
+    {
+      "id": "hermes",
+      "label": "Hermes Global MCP",
+      "format": "json",
+      "pathSuffix": ".hermes/mcp.json",
+      "runtimeId": "hermes",
+      "requiredMarkers": [
+        "\"sap\"",
+        "\"sap_payments\"",
+        "\"SAP_MCP_RUNTIME_ID\": \"hermes\""
+      ]
+    },
+    {
+      "id": "hermes",
+      "label": "Hermes Profile",
+      "format": "yaml",
+      "pathSuffix": ".hermes/profiles/default/config.yaml",
+      "runtimeId": "hermes",
+      "requiredMarkers": [
+        "mcp_servers:",
+        "  sap:",
+        "  sap_payments:",
+        "SAP_MCP_RUNTIME_ID: \"hermes\""
+      ]
+    },
+    {
+      "id": "openclaw",
+      "label": "OpenClaw",
+      "format": "yaml",
+      "pathSuffix": ".openclaw/config.yaml",
+      "runtimeId": "openclaw",
+      "requiredMarkers": [
+        "mcp:",
+        "  servers:",
+        "    sap:",
+        "    sap_payments:",
+        "SAP_MCP_RUNTIME_ID: \"openclaw\""
+      ]
+    },
+    {
+      "id": "openclaw",
+      "label": "OpenClaw MCP",
+      "format": "json",
+      "pathSuffix": ".openclaw/mcp.json",
+      "runtimeId": "openclaw",
+      "requiredMarkers": [
+        "\"mcp\"",
+        "\"servers\"",
+        "\"sap\"",
+        "\"sap_payments\"",
+        "\"SAP_MCP_RUNTIME_ID\": \"openclaw\""
+      ]
+    },
+    {
+      "id": "clawpump",
+      "label": "ClawPump Agent / Hermes Profile",
+      "format": "yaml",
+      "pathSuffix": ".hermes/config.yaml",
+      "runtimeId": "clawpump",
+      "hostedServerName": "sap-mcp",
+      "requiredMarkers": [
+        "mcp_servers:",
+        "  sap-mcp:",
+        "  sap_payments:",
+        "SAP_MCP_RUNTIME_ID: \"clawpump\""
+      ]
+    }
+  ]
+}

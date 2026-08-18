@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "title": "SAP MCP Company Readiness Contract",
+  "requirements": [
+    {
+      "id": "modular-monorepo-boundaries",
+      "description": "The repo is modular, with package boundaries, architecture domains, and stable subpath exports for core server surfaces.",
+      "evidence": [
+        { "file": "config/workspace-package-contracts.json", "contains": "\"@oobe-protocol-labs/sap-mcp-hosted-gateway\"" },
+        { "file": "config/workspace-package-contracts.json", "contains": "\"@oobe-protocol-labs/sap-mcp-local-bridge\"" },
+        { "file": "config/package-export-contracts.json", "contains": "\"./wizard-core\"" },
+        { "file": "config/architecture-boundaries.json", "contains": "\"local-bridge\"" },
+        { "file": "packages/README.md", "contains": "@oobe-protocol-labs/sap-mcp-server/hosted-gateway" }
+      ]
+    },
+    {
+      "id": "hosted-local-bridge-trust-boundary",
+      "description": "Hosted SAP MCP and local sap_payments bridge are separate non-custodial service boundaries.",
+      "evidence": [
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "hosted Streamable HTTP MCP" },
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "local stdio/payment/signing bridge" },
+        { "file": "USER_DOCS/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP.md", "contains": "Hosted remote is accountless" },
+        { "file": "config/runtime-client-injection-contracts.json", "contains": "\"paymentBridgeServerName\"" },
+        { "file": "skills/sap-mcp/SKILL.md", "contains": "sap_payments_call_paid_tool" },
+        { "file": "skills/sap-mcp/SKILL.md", "contains": "must not read or print wallet paths" }
+      ]
+    },
+    {
+      "id": "wizard-personas",
+      "description": "Wizard setup supports non-technical users, developers, and agents without creating parallel config models.",
+      "evidence": [
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Normie" },
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Developer" },
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "Agent" },
+        { "file": "packages/wizard-core/src/desktop-flow.ts", "contains": "getDesktopHostedDiscovery" },
+        { "file": "config/wizard-readiness-contracts.json", "contains": "\"requiredLocalBridgeTools\"" },
+        { "file": "apps/desktop/src/main.tsx", "contains": "HostedToolCatalogPanel" }
+      ]
+    },
+    {
+      "id": "wizard-readiness-contracts",
+      "description": "Desktop and CLI wizard readiness keeps hosted discovery, local bridge tools, default mode, runtime actions, and recovery statuses contract-checked.",
+      "evidence": [
+        { "file": "config/wizard-readiness-contracts.json", "contains": "\"requiredHostedDiscoveryUrls\"" },
+        { "file": "config/wizard-readiness-contracts.json", "contains": "\"sap_payments_update_agent\"" },
+        { "file": "src/wizard-core/desktop-flow.test.ts", "contains": "wizardReadinessContracts" },
+        { "file": "scripts/build-readiness-report.ts", "contains": "wizardReadiness" },
+        { "file": "docs/14_DESKTOP_WIZARD_RELEASE_ARTIFACTS.md", "contains": "config/wizard-readiness-contracts.json" }
+      ]
+    },
+    {
+      "id": "runtime-client-injection-contracts",
+      "description": "Runtime client injection keeps Codex, Claude, Hermes, OpenClaw, and ClawPump on native hosted SAP MCP plus local sap_payments bridge configs.",
+      "evidence": [
+        { "file": "config/runtime-client-injection-contracts.json", "contains": "\"requiredRuntimeProfiles\"" },
+        { "file": "config/runtime-client-injection-contracts.json", "contains": "\"openclaw\"" },
+        { "file": "config/runtime-client-injection-contracts.json", "contains": "\"clawpump\"" },
+        { "file": "src/config/mcp-client-injection.test.ts", "contains": "runtimeClientInjectionContracts" },
+        { "file": "scripts/build-readiness-report.ts", "contains": "runtimeClientInjection" }
+      ]
+    },
+    {
+      "id": "tools-plugin-validation",
+      "description": "Tool families are modular, validated, policy-aware, and extensible through trusted plugin modules.",
+      "evidence": [
+        { "file": "packages/tools/src/module-registry.ts", "contains": "createPluginToolModule" },
+        { "file": "packages/tools/src/module-registry.ts", "contains": "must declare packageName provenance" },
+        { "file": "packages/tools/src/module-registry.ts", "contains": "must declare expectedTools sentinels" },
+        { "file": "packages/tools/src/tool-execution-pipeline.ts", "contains": "registerPipelineTool" },
+        { "file": "packages/tools/src/tool-family-pipeline.ts", "contains": "registerToolFamilyPipelineTool" },
+        { "file": "config/tool-execution-pipeline-contracts.json", "contains": "\"sap_network_stats\"" },
+        { "file": "scripts/verify-tool-execution-pipeline.mjs", "contains": "Tool execution pipeline OK" },
+        { "file": "packages/tools/src/tool-module-validation.ts", "contains": "assertToolModuleCatalogValid" },
+        { "file": "packages/tools/src/tool-catalog.ts", "contains": "buildToolCatalogForRuntimeProfiles" },
+        { "file": "packages/tool-plugin-template/src/index.ts", "contains": "createPluginToolModule" },
+        { "file": "packages/tool-plugin-template/src/index.ts", "contains": "registerToolFamilyPipelineTool" },
+        { "file": "packages/tool-plugin-template/README.md", "contains": "Pass `packageName` and `version`" },
+        { "file": "docs/09_TOOL_SKILL_ROUTING_AGENT_OPERATIONS.md", "contains": "ToolModuleManifestSchema" }
+      ]
+    },
+    {
+      "id": "mcp-apps-card-coverage",
+      "description": "MCP Apps Cards have structured content, ui resources, and coverage diagnostics.",
+      "evidence": [
+        { "file": "packages/ui-cards/src/tool-card-registry.ts", "contains": "buildToolCardCoverageReport" },
+        { "file": "config/mcp-apps-card-contracts.json", "contains": "\"requiredSpecializedTools\"" },
+        { "file": "packages/mcp-adapter/src/tool-response.ts", "contains": "structuredContent" },
+        { "file": "config/package-export-contracts.json", "contains": "buildToolCardCoverageReport" },
+        { "file": "docs/20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md", "contains": "MCP Apps Card coverage" },
+        { "file": "scripts/build-readiness-report.ts", "contains": "buildToolCardCoverageReport" }
+      ]
+    },
+    {
+      "id": "skill-workflow-governance",
+      "description": "Bundled SAP skills, routing docs, and workflow branches are contract-checked.",
+      "evidence": [
+        { "file": "config/skill-workflow-contracts.json", "contains": "\"sap-mcp\"" },
+        { "file": "config/skill-workflow-contracts.json", "contains": "\"sap-clawpump-bridge\"" },
+        { "file": "scripts/verify-skill-workflows.mjs", "contains": "Skill workflows OK" },
+        { "file": "skills/README.md", "contains": "`sap-clawpump-bridge`" },
+        { "file": "docs/BRANCHING_CI_RELEASE_WORKFLOW.md", "contains": "pnpm run verify:skill-workflows" }
+      ]
+    },
+    {
+      "id": "branch-ci-release-workflows",
+      "description": "Branch families, CI/CD gates, desktop release, and release operation docs are explicit and enforced.",
+      "evidence": [
+        { "file": "docs/BRANCHING_CI_RELEASE_WORKFLOW.md", "contains": "feature/hosted-mcp/*" },
+        { "file": "config/branch-review-contracts.json", "contains": "\"requiredPullRequestSections\"" },
+        { "file": ".github/pull_request_template.md", "contains": "Service Boundary" },
+        { "file": ".github/workflows/ci.yml", "contains": "pnpm run verify:readiness-report" },
+        { "file": ".github/workflows/desktop-release.yml", "contains": "pnpm run verify:skill-workflows" },
+        { "file": "docs/10_RELEASE_OPERATIONS_PM2_RUNBOOK.md", "contains": "pnpm run verify:release:offline" },
+        { "file": "package.json", "contains": "verify:release:offline" }
+      ]
+    },
+    {
+      "id": "release-for-normies-devs-agents",
+      "description": "User docs, developer docs, agent skills, desktop artifacts, and npm package surfaces are release-ready.",
+      "evidence": [
+        { "file": "USER_DOCS/00_USER_ONBOARDING_INDEX.md", "contains": "sap-mcp-config doctor" },
+        { "file": "docs/README.md", "contains": "Native Desktop Wizard" },
+        { "file": "docs/14_DESKTOP_WIZARD_RELEASE_ARTIFACTS.md", "contains": "desktop wizard" },
+        { "file": "USER_DOCS/04_MCP_CLIENT_CONFIGURATION_MATRIX.md", "contains": "sap_payments_fund_prepaid" },
+        { "file": "package.json", "contains": "\"config\"" },
+        { "file": "skills/sap-mcp/SKILL.md", "contains": "sap_skills_upgrade_plan" },
+        { "file": "package.json", "contains": "\"sap-mcp-wizard\"" }
+      ]
+    },
+    {
+      "id": "technical-doc-naming",
+      "description": "Documentation names are professional, specific, and optimized for fast resolution.",
+      "evidence": [
+        { "file": "docs/00_ENGINEERING_DOCUMENTATION_INDEX.md", "contains": "ENGINEERING" },
+        { "file": "docs/_sidebar.md", "contains": "20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md" },
+        { "file": "src/release-readiness.test.ts", "contains": "uses technical documentation names for fast incident resolution" },
+        { "file": "docs/11_ENGINEERING_QUALITY_AUDIT_REPORT.md", "contains": "Engineering Quality Audit Report" },
+        { "file": "USER_DOCS/04_MCP_CLIENT_CONFIGURATION_MATRIX.md", "contains": "MCP Client" }
+      ]
+    },
+    {
+      "id": "security-secret-boundary",
+      "description": "Public docs, skills, hosted metadata, and runtime outputs preserve signer and secret boundaries.",
+      "evidence": [
+        { "file": "docs/08_SECURITY_POLICY_SIGNING_RUNBOOK.md", "contains": "Never ask hosted users to paste keypair bytes" },
+        { "file": "skills/README.md", "contains": "Agents must never read keypair JSON files" },
+        { "file": "packages/tools/src/agent-start-tool.ts", "contains": "runtimeDoctor" },
+        { "file": "packages/config-runtime/src/runtime-doctor.ts", "contains": "buildDoctorReport" },
+        { "file": "src/server/create-server.test.ts", "contains": "not.toContain('keypair')" }
+      ]
+    }
+  ],
+  "requiredScripts": [
+    "check:architecture",
+    "verify:tool-modules",
+    "verify:workspace-packages",
+    "verify:package-boundaries",
+    "verify:tool-plugin-template",
+    "verify:tool-execution-pipeline",
+    "verify:skill-workflows",
+    "verify:readiness-report",
+    "verify:company-readiness",
+    "verify:exports",
+    "verify:release:offline"
+  ],
+  "requiredWorkflowCommands": [
+    "pnpm run verify:package-boundaries",
+    "pnpm run verify:tool-plugin-template",
+    "pnpm run verify:tool-execution-pipeline",
+    "pnpm run verify:company-readiness",
+    "pnpm run verify:exports",
+    "npm pack --dry-run"
+  ],
+  "minimumRequirementCount": 10
+}

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "@oobe-protocol-labs/sap-mcp-server/mcp-adapter": [
+        "../../packages/mcp-adapter/src/index.ts"
+      ],
+      "@oobe-protocol-labs/sap-mcp-server/tools": [
+        "../../packages/tools/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

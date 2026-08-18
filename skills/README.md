@@ -37,6 +37,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-agent-chat` | Signed thematic group rooms, manifest discovery, link sharing, ledger history, sealing |
 | `sap-sns` | SNS domain checks, records, wallet resolution, agent domain registration |
 | `sap-agentkit` | Synapse AgentKit Solana, NFT, DeFi, market, staking, gaming, social tools |
+| `sap-clawpump-bridge` | ClawPump/OpenClaw integration routing, optional MCP manifest setup, and bridge review context |
 | `sap-agent-registry` | Agent registration, profile inspection, activation, global agent directory |
 | `sap-discovery-indexing` | Network overview, global directory, protocol/capability/category indexes |
 | `sap-tool-registry` | Publish, update, fetch, deactivate, and report SAP tool descriptors |
@@ -69,7 +70,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 - Call `sap_agent_next_action` before retrying after `payment_required`,
   `hosted_local_signer_required`, transient Solana RPC errors, a missing local
   bridge, or a submitted signature that has not confirmed.
-- Use `skills/sap-mcp/TOOL_REFERENCE.md` and `USER_DOCS/05_SKILLS_AND_TOOLS.md`
+- Use `skills/sap-mcp/TOOL_REFERENCE.md` and `USER_DOCS/05_AGENT_SKILLS_TOOL_ROUTING.md`
   as the bundled routing maps when deciding which SAP MCP tool or skill domain
   applies to a user request.
 

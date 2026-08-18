@@ -1,0 +1,34 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-bin",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP bin module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "bin",
+    "source": "packages/bin/src",
+    "architectureDomain": "bin",
+    "boundary": "npx-safe bootstrap entrypoints for remote and local servers.",
+    "legacyCompatibilitySource": "src/bin",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./sap-mcp-remote": {
+      "types": "./src/sap-mcp-remote.ts",
+      "default": "./src/sap-mcp-remote.ts"
+    },
+    "./sap-mcp-server": {
+      "types": "./src/sap-mcp-server.ts",
+      "default": "./src/sap-mcp-server.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*"
+  }
+}

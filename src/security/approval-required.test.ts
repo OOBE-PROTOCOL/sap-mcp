@@ -121,9 +121,13 @@ describe('isApprovalRequired', () => {
     expect(isApprovalRequired(buildContext({ requireApprovalAboveSol: 1 }), -1)).toBe(false);
   });
 
-  it('returns true for negative amount when threshold is very negative', () => {
+  it('returns false for negative amount even when threshold is very negative', () => {
     const ctx = buildContext({ requireApprovalAboveSol: -10 });
-    expect(isApprovalRequired(ctx, -5)).toBe(true);
+    expect(isApprovalRequired(ctx, -5)).toBe(false);
     expect(isApprovalRequired(ctx, -10)).toBe(false);
+  });
+
+  it('returns false for non-finite amounts', () => {
+    expect(isApprovalRequired(buildContext({ requireApprovalAboveSol: 1 }), Number.POSITIVE_INFINITY)).toBe(false);
   });
 });

@@ -1,0 +1,84 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-payments",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP x402/pay.sh payment gate, pricing catalog, usage ledger, and facilitator server boundary.",
+  "sapMcp": {
+    "boundaryId": "payments",
+    "source": "packages/payments/src",
+    "architectureDomain": "payments",
+    "boundary": "x402 payment facilitation, monetization gate, pricing, and usage ledger.",
+    "legacyCompatibilitySource": "src/payments",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./http-adapter": {
+      "types": "./src/http-adapter.ts",
+      "default": "./src/http-adapter.ts"
+    },
+    "./json-rpc": {
+      "types": "./src/json-rpc.ts",
+      "default": "./src/json-rpc.ts"
+    },
+    "./schema-validation": {
+      "types": "./src/schema-validation.ts",
+      "default": "./src/schema-validation.ts"
+    },
+    "./pricing": {
+      "types": "./src/pricing.ts",
+      "default": "./src/pricing.ts"
+    },
+    "./oobe-facilitator-server": {
+      "types": "./src/oobe-facilitator-server.ts",
+      "default": "./src/oobe-facilitator-server.ts"
+    },
+    "./pay-sh-spec": {
+      "types": "./src/pay-sh-spec.ts",
+      "default": "./src/pay-sh-spec.ts"
+    },
+    "./x402-paid-call": {
+      "types": "./src/x402-paid-call.ts",
+      "default": "./src/x402-paid-call.ts"
+    },
+    "./mcp-session-cache": {
+      "types": "./src/mcp-session-cache.ts",
+      "default": "./src/mcp-session-cache.ts"
+    },
+    "./monetization-gate": {
+      "types": "./src/monetization-gate.ts",
+      "default": "./src/monetization-gate.ts"
+    },
+    "./prepaid-credit-store": {
+      "types": "./src/prepaid-credit-store.ts",
+      "default": "./src/prepaid-credit-store.ts"
+    },
+    "./hosted-tool-eligibility": {
+      "types": "./src/hosted-tool-eligibility.ts",
+      "default": "./src/hosted-tool-eligibility.ts"
+    },
+    "./usage-ledger": {
+      "types": "./src/usage-ledger.ts",
+      "default": "./src/usage-ledger.ts"
+    },
+    "./facilitator-rpc-fallback": {
+      "types": "./src/facilitator-rpc-fallback.ts",
+      "default": "./src/facilitator-rpc-fallback.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-signer": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*"
+  }
+}

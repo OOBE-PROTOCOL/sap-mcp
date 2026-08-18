@@ -1,0 +1,41 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-transports",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP transports module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "transports",
+    "source": "packages/transports/src",
+    "architectureDomain": "transports",
+    "boundary": "stdio and HTTP transport layers.",
+    "legacyCompatibilitySource": "src/transports",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./stdio": {
+      "types": "./src/stdio.ts",
+      "default": "./src/stdio.ts"
+    },
+    "./http": {
+      "types": "./src/http.ts",
+      "default": "./src/http.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-payments": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-runtime": "workspace:*"
+  }
+}

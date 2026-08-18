@@ -1,0 +1,87 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-premium",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP premium module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "premium",
+    "source": "packages/premium/src",
+    "architectureDomain": "premium",
+    "boundary": "Premium runtime plugins, streams, webhooks, and session management.",
+    "legacyCompatibilitySource": "src/premium",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./provider-bridge": {
+      "types": "./src/provider-bridge.ts",
+      "default": "./src/provider-bridge.ts"
+    },
+    "./trading-capabilities": {
+      "types": "./src/trading-capabilities.ts",
+      "default": "./src/trading-capabilities.ts"
+    },
+    "./private-manifest-loader": {
+      "types": "./src/private-manifest-loader.ts",
+      "default": "./src/private-manifest-loader.ts"
+    },
+    "./activation-manager": {
+      "types": "./src/activation-manager.ts",
+      "default": "./src/activation-manager.ts"
+    },
+    "./webhook-engine": {
+      "types": "./src/webhook-engine.ts",
+      "default": "./src/webhook-engine.ts"
+    },
+    "./stream-broker": {
+      "types": "./src/stream-broker.ts",
+      "default": "./src/stream-broker.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./session-manager": {
+      "types": "./src/session-manager.ts",
+      "default": "./src/session-manager.ts"
+    },
+    "./plugin-validator": {
+      "types": "./src/plugin-validator.ts",
+      "default": "./src/plugin-validator.ts"
+    },
+    "./meme-radar-capabilities": {
+      "types": "./src/meme-radar-capabilities.ts",
+      "default": "./src/meme-radar-capabilities.ts"
+    },
+    "./manifest-builder": {
+      "types": "./src/manifest-builder.ts",
+      "default": "./src/manifest-builder.ts"
+    },
+    "./event-store": {
+      "types": "./src/event-store.ts",
+      "default": "./src/event-store.ts"
+    },
+    "./metrics": {
+      "types": "./src/metrics.ts",
+      "default": "./src/metrics.ts"
+    },
+    "./builtin-plugins": {
+      "types": "./src/builtin-plugins.ts",
+      "default": "./src/builtin-plugins.ts"
+    },
+    "./tech-fundamentals-capabilities": {
+      "types": "./src/tech-fundamentals-capabilities.ts",
+      "default": "./src/tech-fundamentals-capabilities.ts"
+    }
+  }
+}

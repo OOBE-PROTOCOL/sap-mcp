@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "title": "SAP MCP Apps Card Coverage Contract",
+  "minimumSpecializedToolsAcrossRuntimeProfiles": 12,
+  "requiredSpecializedTools": [
+    "sol_get_balance",
+    "sap_payments_prepaid_balance",
+    "sap_register_agent",
+    "sap_update_agent",
+    "sap_get_agent",
+    "sap_adrena_get_positions",
+    "sap_adrena_get_position_status",
+    "sap_adrena_build_swap",
+    "sap_build_sol_transfer",
+    "sap_build_spl_transfer",
+    "magicblock_balance",
+    "magicblock_private_balance",
+    "magicblock_transfer",
+    "magicblock_swap",
+    "magicblock_swap_quote"
+  ]
+}

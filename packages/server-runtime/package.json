@@ -1,0 +1,50 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-server-runtime",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP server runtime bootstrap and capability registration boundary.",
+  "sapMcp": {
+    "boundaryId": "server-runtime",
+    "source": "packages/server-runtime/src",
+    "architectureDomain": "server",
+    "rootExport": "./server-runtime",
+    "apiContract": "config/package-export-contracts.json#./server-runtime",
+    "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary.",
+    "legacyCompatibilitySource": "src/server",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./create-server": {
+      "types": "./src/create-server.ts",
+      "default": "./src/create-server.ts"
+    },
+    "./register-capabilities": {
+      "types": "./src/register-capabilities.ts",
+      "default": "./src/register-capabilities.ts"
+    },
+    "./server-metadata": {
+      "types": "./src/server-metadata.ts",
+      "default": "./src/server-metadata.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-observability": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-policy": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-prompts": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-resources": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-sap": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-signer": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*"
+  }
+}

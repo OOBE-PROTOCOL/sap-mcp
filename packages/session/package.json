@@ -1,0 +1,58 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-session",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP session module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "session",
+    "source": "packages/session/src",
+    "architectureDomain": "session",
+    "boundary": "Session store, delegated sessions, agent sessions, and session limits.",
+    "legacyCompatibilitySource": "src/session",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./redis-session-store": {
+      "types": "./src/redis-session-store.ts",
+      "default": "./src/redis-session-store.ts"
+    },
+    "./session-permissions": {
+      "types": "./src/session-permissions.ts",
+      "default": "./src/session-permissions.ts"
+    },
+    "./session-store": {
+      "types": "./src/session-store.ts",
+      "default": "./src/session-store.ts"
+    },
+    "./session-types": {
+      "types": "./src/session-types.ts",
+      "default": "./src/session-types.ts"
+    },
+    "./delegated-session": {
+      "types": "./src/delegated-session.ts",
+      "default": "./src/delegated-session.ts"
+    },
+    "./agent-session": {
+      "types": "./src/agent-session.ts",
+      "default": "./src/agent-session.ts"
+    },
+    "./session-limits": {
+      "types": "./src/session-limits.ts",
+      "default": "./src/session-limits.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

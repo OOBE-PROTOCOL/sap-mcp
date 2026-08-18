@@ -1,0 +1,469 @@
+{
+  "version": 1,
+  "workspaceGlob": "packages/*",
+  "packageNamePrefix": "@oobe-protocol-labs/sap-mcp-",
+  "packages": [
+    {
+      "id": "core",
+      "packageName": "@oobe-protocol-labs/sap-mcp-core",
+      "path": "packages/core",
+      "source": "packages/core/src",
+      "architectureDomain": "core",
+      "rootExport": "./core",
+      "boundary": "Shared runtime contracts and primitives.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/core/src",
+        "must not depend on higher-level runtime modules"
+      ],
+      "legacyCompatibilitySource": "src/core",
+      "physicalSource": true
+    },
+    {
+      "id": "schemas",
+      "packageName": "@oobe-protocol-labs/sap-mcp-schemas",
+      "path": "packages/schemas",
+      "source": "packages/schemas/src",
+      "architectureDomain": "schemas",
+      "rootExport": "./schemas",
+      "boundary": "Public Zod schemas and protocol contracts.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/schemas/src",
+        "public schema"
+      ],
+      "legacyCompatibilitySource": "src/schemas",
+      "physicalSource": true
+    },
+    {
+      "id": "mcp-adapter",
+      "packageName": "@oobe-protocol-labs/sap-mcp-mcp-adapter",
+      "path": "packages/mcp-adapter",
+      "source": "packages/mcp-adapter/src",
+      "architectureDomain": "mcp-adapter",
+      "rootExport": "./mcp-adapter",
+      "boundary": "Model Context Protocol adapter compatibility layer.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/mcp-adapter/src",
+        "MCP"
+      ],
+      "legacyCompatibilitySource": "src/adapters/mcp",
+      "physicalSource": true
+    },
+    {
+      "id": "ui-cards",
+      "packageName": "@oobe-protocol-labs/sap-mcp-ui-cards",
+      "path": "packages/ui-cards",
+      "source": "packages/ui-cards/src",
+      "architectureDomain": "ui-cards",
+      "rootExport": "./ui-cards",
+      "boundary": "MCP Apps Card rendering boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/ui-cards/src",
+        "Apps Card"
+      ],
+      "legacyCompatibilitySource": "src/ui",
+      "physicalSource": true
+    },
+    {
+      "id": "tools",
+      "packageName": "@oobe-protocol-labs/sap-mcp-tools",
+      "path": "packages/tools",
+      "source": "packages/tools/src",
+      "architectureDomain": "tools",
+      "rootExport": "./tools",
+      "boundary": "Tool module registry and built-in tool catalog boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/tools/src",
+        "ToolModuleDefinition",
+        "plugin"
+      ],
+      "legacyCompatibilitySource": "src/tools",
+      "physicalSource": true
+    },
+    {
+      "id": "config-runtime",
+      "packageName": "@oobe-protocol-labs/sap-mcp-config-runtime",
+      "path": "packages/config-runtime",
+      "source": "packages/config-runtime/src",
+      "architectureDomain": "config",
+      "rootExport": "./config-runtime",
+      "boundary": "Profile configuration, runtime doctor, secure config, and client injection boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/config-runtime/src",
+        "runtime-doctor",
+        "client injection",
+        "@oobe-protocol-labs/sap-mcp-server/config-runtime"
+      ],
+      "legacyCompatibilitySource": "src/config",
+      "physicalSource": true
+    },
+    {
+      "id": "server-runtime",
+      "packageName": "@oobe-protocol-labs/sap-mcp-server-runtime",
+      "path": "packages/server-runtime",
+      "source": "packages/server-runtime/src",
+      "architectureDomain": "server",
+      "rootExport": "./server-runtime",
+      "boundary": "Shared MCP server bootstrap, capability registration, and server metadata boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/server-runtime/src",
+        "createSapMcpServer",
+        "capability registration",
+        "@oobe-protocol-labs/sap-mcp-server/server-runtime"
+      ],
+      "legacyCompatibilitySource": "src/server",
+      "physicalSource": true
+    },
+    {
+      "id": "hosted-gateway",
+      "packageName": "@oobe-protocol-labs/sap-mcp-hosted-gateway",
+      "path": "packages/hosted-gateway",
+      "source": "packages/hosted-gateway/src",
+      "architectureDomain": "remote-server",
+      "rootExport": "./hosted-gateway",
+      "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/hosted-gateway/src",
+        "Streamable HTTP",
+        "hosted gateway",
+        "@oobe-protocol-labs/sap-mcp-server/hosted-gateway"
+      ],
+      "legacyCompatibilitySource": "src/remote",
+      "physicalSource": true
+    },
+    {
+      "id": "local-bridge",
+      "packageName": "@oobe-protocol-labs/sap-mcp-local-bridge",
+      "path": "packages/local-bridge",
+      "source": "packages/local-bridge/src",
+      "additionalSources": [
+        "src/transports/stdio.ts",
+        "src/bin",
+        "src/runtime"
+      ],
+      "architectureDomain": "local-bridge",
+      "rootExport": "./local-bridge",
+      "boundary": "Local stdio MCP bridge, local payment bridge process, and local runtime entrypoint boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/local-bridge/src",
+        "src/runtime",
+        "local bridge",
+        "@oobe-protocol-labs/sap-mcp-server/local-bridge"
+      ],
+      "legacyCompatibilitySource": "src/local-bridge",
+      "physicalSource": true
+    },
+    {
+      "id": "wizard-core",
+      "packageName": "@oobe-protocol-labs/sap-mcp-wizard-core",
+      "path": "packages/wizard-core",
+      "source": "packages/wizard-core/src",
+      "architectureDomain": "wizard",
+      "rootExport": "./wizard-core",
+      "boundary": "Shared CLI and desktop wizard flow boundary.",
+      "private": true,
+      "sideEffects": false,
+      "readmeMustContain": [
+        "packages/wizard-core/src",
+        "desktop wizard",
+        "CLI wizard",
+        "@oobe-protocol-labs/sap-mcp-server/wizard-core"
+      ],
+      "legacyCompatibilitySource": "src/wizard-core",
+      "physicalSource": true
+    },
+    {
+      "id": "tool-plugin-template",
+      "packageName": "@oobe-protocol-labs/sap-mcp-tool-plugin-template",
+      "path": "packages/tool-plugin-template",
+      "source": "packages/tool-plugin-template/src",
+      "architectureDomain": null,
+      "rootExport": null,
+      "boundary": "Trusted external tool-family plugin template.",
+      "private": true,
+      "sideEffects": false,
+      "template": true,
+      "requiredScripts": {
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "verify": "pnpm run typecheck"
+      },
+      "requiredSourceFiles": [
+        "src/index.ts"
+      ],
+      "requiredSourceIncludes": [
+        "createPluginToolModule",
+        "expectedTools",
+        "lifecycle"
+      ],
+      "readmeMustContain": [
+        "createPluginToolModule",
+        "createToolModuleRegistrationPlan",
+        "registerToolsWithSummary"
+      ]
+    },
+    {
+      "id": "tui",
+      "packageName": "@oobe-protocol-labs/sap-mcp-tui",
+      "path": "packages/tui",
+      "source": "packages/tui/src",
+      "architectureDomain": null,
+      "rootExport": null,
+      "boundary": "Terminal UI wizard save helper (legacy, source remains in src/tui).",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/tui",
+      "physicalSource": false
+    },
+    {
+      "id": "adapters",
+      "packageName": "@oobe-protocol-labs/sap-mcp-adapters",
+      "path": "packages/adapters",
+      "source": "packages/adapters/src",
+      "architectureDomain": "adapters",
+      "boundary": "Solana connection and public key adapter utilities.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/adapters/solana",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "bin",
+      "packageName": "@oobe-protocol-labs/sap-mcp-bin",
+      "path": "packages/bin",
+      "source": "packages/bin/src",
+      "architectureDomain": "bin",
+      "boundary": "npx-safe bootstrap entrypoints for remote and local servers.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/bin",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "memory",
+      "packageName": "@oobe-protocol-labs/sap-mcp-memory",
+      "path": "packages/memory",
+      "source": "packages/memory/src",
+      "architectureDomain": "memory",
+      "boundary": "Agent memory store, tool call store, stream buffer, and Hermes bridge.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/memory",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "observability",
+      "packageName": "@oobe-protocol-labs/sap-mcp-observability",
+      "path": "packages/observability",
+      "source": "packages/observability/src",
+      "architectureDomain": "observability",
+      "boundary": "Metrics collection and exporter.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/observability",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "perps",
+      "packageName": "@oobe-protocol-labs/sap-mcp-perps",
+      "path": "packages/perps",
+      "source": "packages/perps/src",
+      "architectureDomain": "perps",
+      "boundary": "Perpetual futures analytics, Adrena builders, chart indicators, and risk engine.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/perps",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "payments",
+      "packageName": "@oobe-protocol-labs/sap-mcp-payments",
+      "path": "packages/payments",
+      "source": "packages/payments/src",
+      "architectureDomain": "payments",
+      "boundary": "x402 payment facilitation, monetization gate, pricing, and usage ledger.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/payments",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "policy",
+      "packageName": "@oobe-protocol-labs/sap-mcp-policy",
+      "path": "packages/policy",
+      "source": "packages/policy/src",
+      "architectureDomain": "policy",
+      "boundary": "Policy engine, spending limits, permission checks, and risk levels.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/policy",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "premium",
+      "packageName": "@oobe-protocol-labs/sap-mcp-premium",
+      "path": "packages/premium",
+      "source": "packages/premium/src",
+      "architectureDomain": "premium",
+      "boundary": "Premium runtime plugins, streams, webhooks, and session management.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/premium",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "prompts",
+      "packageName": "@oobe-protocol-labs/sap-mcp-prompts",
+      "path": "packages/prompts",
+      "source": "packages/prompts/src",
+      "architectureDomain": "prompts",
+      "boundary": "MCP prompt templates for developer, payments, context, execution-proof, and registry.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/prompts",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "resources",
+      "packageName": "@oobe-protocol-labs/sap-mcp-resources",
+      "path": "packages/resources",
+      "source": "packages/resources/src",
+      "architectureDomain": "resources",
+      "boundary": "MCP resource templates for memory, execution-proof, reputation, profile, registry, and stats.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/resources",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "runtime",
+      "packageName": "@oobe-protocol-labs/sap-mcp-runtime",
+      "path": "packages/runtime",
+      "source": "packages/runtime/src",
+      "architectureDomain": "runtime",
+      "boundary": "Module resolution and payment bridge process management.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/runtime",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "sap",
+      "packageName": "@oobe-protocol-labs/sap-mcp-sap",
+      "path": "packages/sap",
+      "source": "packages/sap/src",
+      "architectureDomain": "sap",
+      "boundary": "SAP SDK client manager, types, and error classes.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/sap",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "security",
+      "packageName": "@oobe-protocol-labs/sap-mcp-security",
+      "path": "packages/security",
+      "source": "packages/security/src",
+      "architectureDomain": "security",
+      "boundary": "Private key guard, tool permissions, prompt injection notes, and approval gates.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/security",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "session",
+      "packageName": "@oobe-protocol-labs/sap-mcp-session",
+      "path": "packages/session",
+      "source": "packages/session/src",
+      "architectureDomain": "session",
+      "boundary": "Session store, delegated sessions, agent sessions, and session limits.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/session",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "signer",
+      "packageName": "@oobe-protocol-labs/sap-mcp-signer",
+      "path": "packages/signer",
+      "source": "packages/signer/src",
+      "architectureDomain": "signer",
+      "boundary": "Signer resolver, signing proxy, external signer, wallet guard, and policy-enforcing wallet.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/signer",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "solana",
+      "packageName": "@oobe-protocol-labs/sap-mcp-solana",
+      "path": "packages/solana",
+      "source": "packages/solana/src",
+      "architectureDomain": "solana",
+      "boundary": "Solana ATA utilities.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/solana",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "strategies",
+      "packageName": "@oobe-protocol-labs/sap-mcp-strategies",
+      "path": "packages/strategies",
+      "source": "packages/strategies/src",
+      "architectureDomain": "strategies",
+      "boundary": "Strategy store and trade journal.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/strategies",
+      "physicalSource": true,
+      "rootExport": null
+    },
+    {
+      "id": "transports",
+      "packageName": "@oobe-protocol-labs/sap-mcp-transports",
+      "path": "packages/transports",
+      "source": "packages/transports/src",
+      "architectureDomain": "transports",
+      "boundary": "stdio and HTTP transport layers.",
+      "private": true,
+      "sideEffects": false,
+      "legacyCompatibilitySource": "src/transports",
+      "physicalSource": true,
+      "rootExport": null
+    }
+  ]
+}

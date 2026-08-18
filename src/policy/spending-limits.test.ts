@@ -140,10 +140,16 @@ describe('checkSpendingLimit', () => {
 
   // ── Edge cases ────────────────────────────────────────────────────
 
-  it('allows negative amounts (treated as within limits)', () => {
-    // -1 is not > 10 and not > 1
+  it('blocks negative amounts', () => {
     const result = checkSpendingLimit(baseConfig(), -1);
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('invalid');
+  });
+
+  it('blocks non-finite amounts', () => {
+    const result = checkSpendingLimit(baseConfig(), Number.NaN);
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain('finite non-negative');
   });
 
   it('handles very large amounts correctly', () => {
@@ -203,7 +209,11 @@ describe('calculateRiskLevel (spending-limits)', () => {
     expect(calculateRiskLevel(0.0001)).toBe('low');
   });
 
-  it('returns "low" for negative amounts', () => {
-    expect(calculateRiskLevel(-1)).toBe('low');
+  it('returns "critical" for negative amounts', () => {
+    expect(calculateRiskLevel(-1)).toBe('critical');
+  });
+
+  it('returns "critical" for non-finite amounts', () => {
+    expect(calculateRiskLevel(Number.POSITIVE_INFINITY)).toBe('critical');
   });
 });

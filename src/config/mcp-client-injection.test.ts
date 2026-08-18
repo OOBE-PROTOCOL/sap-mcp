@@ -23,10 +23,30 @@ import {
 } from './mcp-client-injection.js';
 
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
+const runtimeClientInjectionContracts = JSON.parse(readFileSync(
+  join(process.cwd(), 'config/runtime-client-injection-contracts.json'),
+  'utf-8',
+)) as {
+  hostedUrl: string;
+  hostedServerName: string;
+  paymentBridgeServerName: string;
+  requiredBridgeEnv: Record<string, string>;
+  requiredValidationFunctions: string[];
+  forbiddenRuntimeConfigContent: string[];
+  requiredRuntimeProfiles: Array<{
+    id: McpClientTarget['id'];
+    label: string;
+    format: McpClientTarget['format'];
+    pathSuffix: string;
+    runtimeId: string;
+    hostedServerName?: string;
+    requiredMarkers: string[];
+  }>;
+};
 
 // Bridge commands always use npx --package (reverted from absolute-path in 0.9.70
 // due to Hermes stdio tool registration regression #51587).
-const EXPECTED_BRIDGE_COMMAND = 'npx';
+const EXPECTED_BRIDGE_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const EXPECTED_BRIDGE_ARGS = ['--yes', '--package', NPM_PACKAGE, 'sap-mcp-server'];
 
 let tempDirs: string[] = [];
@@ -186,14 +206,17 @@ describe('MCP client injection', () => {
     expect(JSON.parse(hermesGlobal?.content ?? '{}')).toEqual({
       sap: {
         url: 'https://mcp.sap.oobeprotocol.ai/mcp',
-        transport: 'streamable-http',
       },
     });
     expect(codexHosted?.content).toContain('[mcp_servers.sap]');
     expect(codexHosted?.content).toContain('url = "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(codexHosted?.content).not.toContain('transport = "streamable-http"');
-    expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"\n    transport: "streamable-http"');
-    expect(openClawProfile?.content).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"\n      transport: "streamable-http"');
+    expect(hermesProfile?.content).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(openClawProfile?.content).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(hermesProfile?.content).not.toContain('transport: "streamable-http"');
+    expect(openClawProfile?.content).not.toContain('transport: "streamable-http"');
+    expect(snippets.find((snippet) => snippet.title === 'Hosted SAP MCP YAML (ClawPump Agent config)')?.content)
+      .toContain('mcp_servers:\n  sap-mcp:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
     expect(JSON.parse(local?.content ?? '{}').mcpServers.sap.env).toEqual({
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
@@ -219,6 +242,40 @@ describe('MCP client injection', () => {
       SAP_MCP_ALLOW_ENV_CONFIG_OVERRIDE: 'false',
       SAP_LOG_LEVEL: 'info',
     });
+  });
+
+  it('keeps hosted sap plus local sap_payments injection aligned with the runtime contract matrix', () => {
+    const source = readFileSync(join(process.cwd(), 'packages/config-runtime/src/mcp-client-injection.ts'), 'utf-8');
+    for (const functionName of runtimeClientInjectionContracts.requiredValidationFunctions) {
+      expect(source).toContain(functionName);
+    }
+
+    for (const profile of runtimeClientInjectionContracts.requiredRuntimeProfiles) {
+      const targetConfig: McpClientTarget = {
+        id: profile.id,
+        label: profile.label,
+        path: join('/tmp', profile.pathSuffix),
+        format: profile.format,
+        exists: true,
+      };
+      const built = buildHostedPaymentBridgeContent(targetConfig, profile.format === 'json' ? '{}' : '', 'darwin');
+      const issues = validateHostedPaymentBridgeContent(targetConfig, built.nextContent, 'darwin');
+
+      expect(issues, `${profile.label} ${profile.format}`).toEqual([]);
+      expect(built.nextContent).toContain(runtimeClientInjectionContracts.hostedUrl);
+      expect(built.nextContent).toContain(profile.hostedServerName ?? runtimeClientInjectionContracts.hostedServerName);
+      expect(built.nextContent).toContain(runtimeClientInjectionContracts.paymentBridgeServerName);
+      for (const marker of profile.requiredMarkers) {
+        expect(built.nextContent, `${profile.label} ${marker}`).toContain(marker);
+      }
+      for (const [key, value] of Object.entries(runtimeClientInjectionContracts.requiredBridgeEnv)) {
+        expect(built.nextContent).toContain(key);
+        expect(built.nextContent).toContain(value);
+      }
+      for (const forbidden of runtimeClientInjectionContracts.forbiddenRuntimeConfigContent) {
+        expect(built.nextContent).not.toContain(forbidden);
+      }
+    }
   });
 
   it('provides local payment bridge snippets and installs the reference bundle', () => {
@@ -407,6 +464,49 @@ describe('MCP client injection', () => {
     expect(JSON.stringify(parsed)).not.toContain('SAP_WALLET_PATH');
   });
 
+  it('preserves JSON client hardening while repairing hosted MCP plus payment bridge', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'claude',
+      label: 'Claude Desktop',
+      path: '/tmp/claude_desktop_config.json',
+      format: 'json',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, JSON.stringify({
+      mcpServers: {
+        sap: {
+          enabled: false,
+          tools: { include: ['sap_discover_agents'] },
+          command: 'old',
+          transport: 'streamable-http',
+        },
+        sap_payments: {
+          enabled: false,
+          tools: { include: ['sap_payments_call_paid_tool'] },
+          command: 'old',
+          env: {
+            CUSTOM_BRIDGE_FLAG: 'keep',
+            SAP_RPC_URL: 'https://api.devnet.solana.com',
+          },
+        },
+      },
+    }));
+    const parsed = JSON.parse(built.nextContent);
+
+    expect(parsed.mcpServers.sap.enabled).toBe(false);
+    expect(parsed.mcpServers.sap.tools).toEqual({ include: ['sap_discover_agents'] });
+    expect(parsed.mcpServers.sap.command).toBeUndefined();
+    expect(parsed.mcpServers.sap.transport).toBeUndefined();
+    expect(parsed.mcpServers.sap.type).toBe('http');
+    expect(parsed.mcpServers.sap.url).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(parsed.mcpServers.sap_payments.enabled).toBe(false);
+    expect(parsed.mcpServers.sap_payments.tools).toEqual({ include: ['sap_payments_call_paid_tool'] });
+    expect(parsed.mcpServers.sap_payments.env.CUSTOM_BRIDGE_FLAG).toBe('keep');
+    expect(parsed.mcpServers.sap_payments.env.SAP_RPC_URL).toBeUndefined();
+    expect(parsed.mcpServers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
+    expect(parsed.mcpServers.sap_payments.env.SAP_ALLOWED_TOOLS).toBe('all');
+  });
+
   it('builds Hermes global JSON hosted MCP plus local payment bridge config', () => {
     const targetConfig: McpClientTarget = {
       id: 'hermes',
@@ -420,7 +520,6 @@ describe('MCP client injection', () => {
 
     expect(parsed.sap).toEqual({
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
-      transport: 'streamable-http',
     });
     expect(parsed.sap_payments.command).toBe(EXPECTED_BRIDGE_COMMAND);
   });
@@ -458,7 +557,6 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(parsed.sap).toEqual({
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
-      transport: 'streamable-http',
     });
     expect(parsed.sap_payments.command).toBe('npx.cmd');
     expect(parsed.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
@@ -479,7 +577,6 @@ describe('MCP client injection', () => {
       },
       sap: {
         url: 'https://mcp.sap.oobeprotocol.ai/mcp',
-        transport: 'streamable-http',
       },
       sap_payments: createNpxCodexServerConfig(),
     });
@@ -542,12 +639,72 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.hadSapConfig).toBe(true);
-    expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"\n    transport: "streamable-http"');
+    expect(built.nextContent).toContain('mcp_servers:\n  sap:\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(built.nextContent).not.toContain('transport: "streamable-http"');
     expect(built.nextContent).toContain('  sap_payments:\n    command:');
     expect(built.nextContent).toContain(`      - "${NPM_PACKAGE}"`);
     expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).toContain('  keep:\n    command: keep');
     expect(built.nextContent).not.toContain('command: old');
+  });
+
+  it('preserves Hermes YAML hardening while repairing hosted MCP plus payment bridge', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'hermes',
+      label: 'Hermes Profile: locked',
+      path: '/tmp/config.yaml',
+      format: 'yaml',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, [
+      'mcp_servers:',
+      '  sap:',
+      '    enabled: false',
+      '    tools:',
+      '      include:',
+      '        - sap_discover_agents',
+      '    transport: "streamable-http"',
+      '    command: old',
+      '  sap_payments:',
+      '    enabled: false',
+      '    tools:',
+      '      include:',
+      '        - sap_payments_call_paid_tool',
+      '    command: old',
+      '    env:',
+      '      CUSTOM_BRIDGE_FLAG: "keep"',
+      '      SAP_RPC_URL: "https://api.devnet.solana.com"',
+      '',
+    ].join('\n'));
+
+    expect(built.nextContent).toContain('  sap:\n    enabled: false\n    tools:\n      include:\n        - sap_discover_agents\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(built.nextContent).toContain(`  sap_payments:\n    enabled: false\n    tools:\n      include:\n        - sap_payments_call_paid_tool\n    command: "${EXPECTED_BRIDGE_COMMAND}"`);
+    expect(built.nextContent).toContain('      CUSTOM_BRIDGE_FLAG: "keep"');
+    expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: "all"');
+    expect(built.nextContent).not.toContain('transport: "streamable-http"');
+    expect(built.nextContent).not.toContain('SAP_RPC_URL');
+  });
+
+  it('uses the reviewed sap-mcp server key for ClawPump YAML while migrating legacy sap', () => {
+    const targetConfig: McpClientTarget = {
+      id: 'clawpump',
+      label: 'ClawPump Agent / Hermes Profile',
+      path: '/tmp/config.yaml',
+      format: 'yaml',
+      exists: true,
+    };
+    const built = buildHostedPaymentBridgeContent(targetConfig, [
+      'mcp_servers:',
+      '  sap:',
+      '    enabled: false',
+      '    url: "https://mcp.sap.oobeprotocol.ai/mcp"',
+      '',
+    ].join('\n'));
+
+    expect(built.nextContent).toContain('mcp_servers:\n  sap-mcp:\n    enabled: false\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(built.nextContent).toContain(`  sap_payments:\n    command: "${EXPECTED_BRIDGE_COMMAND}"`);
+    expect(built.nextContent).toContain(`      SAP_MCP_RUNTIME_ID: "clawpump"`);
+    expect(built.nextContent).not.toContain('  sap:\n');
   });
 
   it('builds OpenClaw YAML hosted MCP plus local payment bridge config under mcp.servers', () => {
@@ -570,7 +727,8 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.hadSapConfig).toBe(true);
-    expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"\n      transport: "streamable-http"');
+    expect(built.nextContent).toContain('mcp:\n  servers:\n    sap:\n      url: "https://mcp.sap.oobeprotocol.ai/mcp"');
+    expect(built.nextContent).not.toContain('transport: "streamable-http"');
     expect(built.nextContent).toContain('    sap_payments:\n      command:');
     expect(built.nextContent).toContain(`        - "${NPM_PACKAGE}"`);
     expect(built.nextContent).toContain('        SAP_ALLOWED_TOOLS: "all"');
@@ -597,7 +755,6 @@ describe('MCP client injection', () => {
     expect(built.hadSapConfig).toBe(true);
     expect(parsed.mcp.servers.sap).toEqual({
       url: 'https://mcp.sap.oobeprotocol.ai/mcp',
-      transport: 'streamable-http',
     });
     expect(parsed.mcp.servers.sap_payments.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY).toBe('true');
     expect(parsed.mcp.servers.sap_payments.env.SAP_MCP_RUNTIME_ID).toBe('openclaw');
@@ -699,5 +856,22 @@ describe('MCP client injection', () => {
     expect(written).toContain('SAP_MCP_RUNTIME_ID = "codex"');
     expect(written).toContain('SAP_ALLOWED_TOOLS = "all"');
     expect(written).not.toContain('command = "old"');
+  });
+
+  it('keeps the ClawPump integration assets aligned with upstream review constraints', () => {
+    const script = readFileSync(join(process.cwd(), 'integration/clawpump/scripts/sap-mcp-setup.sh'), 'utf-8');
+    const manifest = readFileSync(join(process.cwd(), 'integration/clawpump/optional-mcps/sap-mcp/manifest.yaml'), 'utf-8');
+    const defaultTools = /default_enabled:[\s\S]*?post_install:/u.exec(manifest)?.[0] ?? '';
+
+    expect(script).toContain('SAP_MCP_VERSION="0.9.74"');
+    expect(script).toContain('save_config(data)');
+    expect(script).toContain('sap.pop("transport", None)');
+    expect(script).toContain('"SAP_MCP_RUNTIME_ID": "clawpump"');
+    expect(script).not.toContain('@latest');
+    expect(script).not.toContain('~/.clawpump');
+    expect(script).not.toContain('sap-mcp-config repair --runtime clawpump');
+    expect(manifest).toContain('npx @oobe-protocol-labs/sap-mcp-server@0.9.74 sap-mcp-config wizard');
+    expect(manifest).toContain('Installing skills writes into ~/.hermes/skills/ and is opt-in.');
+    expect(defaultTools).not.toContain('sap_skills_install');
   });
 });

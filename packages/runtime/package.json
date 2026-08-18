@@ -1,0 +1,35 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-runtime",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP runtime module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "runtime",
+    "source": "packages/runtime/src",
+    "architectureDomain": "runtime",
+    "boundary": "Module resolution and payment bridge process management.",
+    "legacyCompatibilitySource": "src/runtime",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./module-resolution": {
+      "types": "./src/module-resolution.ts",
+      "default": "./src/module-resolution.ts"
+    },
+    "./payment-bridge-process": {
+      "types": "./src/payment-bridge-process.ts",
+      "default": "./src/payment-bridge-process.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

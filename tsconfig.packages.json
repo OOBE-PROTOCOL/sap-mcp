@@ -1,0 +1,45 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist",
+    "noEmit": false
+  },
+  "include": [
+    "packages/core/src/**/*.ts",
+    "packages/schemas/src/**/*.ts",
+    "packages/ui-cards/src/**/*.ts",
+    "packages/mcp-adapter/src/**/*.ts",
+    "packages/config-runtime/src/**/*.ts",
+    "packages/wizard-core/src/**/*.ts",
+    "packages/local-bridge/src/**/*.ts",
+    "packages/tools/src/**/*.ts",
+    "packages/server-runtime/src/**/*.ts",
+    "packages/hosted-gateway/src/**/*.ts",
+    "packages/adapters/src/**/*.ts",
+    "packages/bin/src/**/*.ts",
+    "packages/memory/src/**/*.ts",
+    "packages/observability/src/**/*.ts",
+    "packages/perps/src/**/*.ts",
+    "packages/policy/src/**/*.ts",
+    "packages/premium/src/**/*.ts",
+    "packages/prompts/src/**/*.ts",
+    "packages/resources/src/**/*.ts",
+    "packages/runtime/src/**/*.ts",
+    "packages/sap/src/**/*.ts",
+    "packages/security/src/**/*.ts",
+    "packages/session/src/**/*.ts",
+    "packages/signer/src/**/*.ts",
+    "packages/solana/src/**/*.ts",
+    "packages/strategies/src/**/*.ts",
+    "packages/transports/src/**/*.ts",
+    "packages/payments/src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "src/tui"
+  ]
+}

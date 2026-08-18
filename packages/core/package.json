@@ -1,0 +1,51 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-core",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP core contracts and shared primitives.",
+  "sapMcp": {
+    "boundaryId": "core",
+    "source": "packages/core/src",
+    "architectureDomain": "core",
+    "rootExport": "./core",
+    "apiContract": "config/package-export-contracts.json#./core",
+    "boundary": "Shared runtime contracts and primitives.",
+    "legacyCompatibilitySource": "src/core",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "default": "./src/errors.ts"
+    },
+    "./result": {
+      "types": "./src/result.ts",
+      "default": "./src/result.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./logger": {
+      "types": "./src/logger.ts",
+      "default": "./src/logger.ts"
+    },
+    "./constants": {
+      "types": "./src/constants.ts",
+      "default": "./src/constants.ts"
+    },
+    "./guards": {
+      "types": "./src/guards.ts",
+      "default": "./src/guards.ts"
+    }
+  }
+}

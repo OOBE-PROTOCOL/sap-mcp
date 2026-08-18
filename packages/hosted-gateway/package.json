@@ -1,0 +1,76 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-hosted-gateway",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP hosted Streamable HTTP gateway and remote deployment boundary.",
+  "sapMcp": {
+    "boundaryId": "hosted-gateway",
+    "source": "packages/hosted-gateway/src",
+    "architectureDomain": "remote-server",
+    "rootExport": "./hosted-gateway",
+    "apiContract": "config/package-export-contracts.json#./hosted-gateway",
+    "boundary": "Hosted Streamable HTTP MCP gateway, public metadata, premium routes, and remote deployment boundary.",
+    "legacyCompatibilitySource": "src/remote",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./premium-routes": {
+      "types": "./src/premium-routes.ts",
+      "default": "./src/premium-routes.ts"
+    },
+    "./premium-memory": {
+      "types": "./src/premium-memory.ts",
+      "default": "./src/premium-memory.ts"
+    },
+    "./rate-limiter": {
+      "types": "./src/rate-limiter.ts",
+      "default": "./src/rate-limiter.ts"
+    },
+    "./tx-relay": {
+      "types": "./src/tx-relay.ts",
+      "default": "./src/tx-relay.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./public-home/scripts": {
+      "types": "./src/public-home/scripts.ts",
+      "default": "./src/public-home/scripts.ts"
+    },
+    "./public-home/styles": {
+      "types": "./src/public-home/styles.ts",
+      "default": "./src/public-home/styles.ts"
+    },
+    "./public-home/types": {
+      "types": "./src/public-home/types.ts",
+      "default": "./src/public-home/types.ts"
+    },
+    "./public-home/sections": {
+      "types": "./src/public-home/sections.ts",
+      "default": "./src/public-home/sections.ts"
+    },
+    "./public-home/escape": {
+      "types": "./src/public-home/escape.ts",
+      "default": "./src/public-home/escape.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-memory": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-payments": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-premium": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-server-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*"
+  }
+}
