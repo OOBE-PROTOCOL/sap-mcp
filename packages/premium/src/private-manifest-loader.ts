@@ -35,7 +35,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { basename, extname, join, resolve } from 'node:path';
+import { basename, extname, join, resolve, sep } from 'node:path';
 import { validatePremiumPluginManifest } from './plugin-validator.js';
 import type { PremiumPluginManifest, PremiumValidationIssue } from './types.js';
 
@@ -226,7 +226,7 @@ function discoverManifestFiles(root: string): string[] {
       const fileRealPath = realpathSync(filePath);
 
       // Symlink escape prevention: file must be under the root directory.
-      if (!fileRealPath.startsWith(`${rootRealPath}/`)) continue;
+      if (!fileRealPath.startsWith(rootRealPath + sep)) continue;
 
       files.push(fileRealPath);
       if (files.length >= MAX_PRIVATE_MANIFEST_FILES) return files;
