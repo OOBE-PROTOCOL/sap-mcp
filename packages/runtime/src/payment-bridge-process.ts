@@ -72,7 +72,20 @@ let exitHandlersRegistered = false;
 let orphanWatchdog: NodeJS.Timeout | undefined;
 
 function sanitizeLockPart(value: string): string {
-  return value.trim().replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'default';
+  const result = value.trim();
+  // Replace non-alphanumeric/underscore/dot/dash chars with dash
+  let cleaned = '';
+  for (const ch of result) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch === '_' || ch === '.' || ch === '-') {
+      cleaned += ch;
+    } else {
+      cleaned += '-';
+    }
+  }
+  // Trim leading/trailing dashes
+  while (cleaned.startsWith('-')) cleaned = cleaned.slice(1);
+  while (cleaned.endsWith('-')) cleaned = cleaned.slice(0, -1);
+  return cleaned.slice(0, 96) || 'default';
 }
 
 export function resolvePaymentBridgeProfileName(): string {

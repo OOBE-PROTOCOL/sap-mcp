@@ -96,5 +96,9 @@ export function getSessionCacheStats(): { size: number; endpoints: string[] } {
 
 function normalizeEndpoint(endpoint: string): string {
   // Strip trailing slash for consistent cache keys
-  return endpoint.replace(/\/+$/, '');
+  let result = endpoint;
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  return result;
 }

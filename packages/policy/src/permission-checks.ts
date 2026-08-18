@@ -71,16 +71,26 @@ export function checkToolAllowed(
 }
 
 /**
+ * Extract the segment between a prefix and a delimiter using indexOf.
+ * Avoids polynomial regex backtracking on uncontrolled input.
+ */
+function extractSegmentAfterPrefix(input: string, prefix: string, delimiter: string): string {
+  if (!input.startsWith(prefix)) return '';
+  const rest = input.slice(prefix.length);
+  const delimIndex = rest.indexOf(delimiter);
+  if (delimIndex <= 0) return '';
+  return rest.slice(0, delimIndex);
+}
+
+/**
  * Map tool name to permission
  */
 function toolNameToPermission(toolName: string): SapPermission {
   // Extract action from tool name (e.g., sap_get_agent -> get, sap_register_agent -> register)
-  const actionMatch = toolName.match(/sap_(\w+)_/);
-  const action = actionMatch ? actionMatch[1] : '';
-  
-  // Extract category from tool name (e.g., sap_registry_get -> registry)
-  const categoryMatch = toolName.match(/sap_(\w+)-/);
-  const category = categoryMatch ? categoryMatch[1] : '';
+  // Extract action from tool name (e.g., sap_registry_get -> registry)
+  // Use indexOf instead of regex to avoid polynomial backtracking on long inputs.
+  const action = extractSegmentAfterPrefix(toolName, 'sap_', '_');
+  const category = extractSegmentAfterPrefix(toolName, 'sap_', '-');
   
   // Map category to permission namespace
   const categoryMap: Record<string, string> = {

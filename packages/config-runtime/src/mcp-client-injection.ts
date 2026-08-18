@@ -241,8 +241,9 @@ function parseQuotedConfigValue(value: string): string {
     }
   }
 
-  const hashIndex = trimmed.search(/\s+#/u);
-  return hashIndex >= 0 ? trimmed.slice(0, hashIndex).trim() : trimmed.trim();
+  const hashIndex = trimmed.indexOf(' #');
+  if (hashIndex < 0) return trimmed.trim();
+  return trimmed.slice(0, hashIndex).trim();
 }
 
 /**
@@ -285,14 +286,16 @@ function textSapEndpointMatchesHostedUrl(content: string): boolean {
       continue;
     }
 
-    const tomlMatch = /^url\s*=\s*(.+)$/u.exec(line);
-    if (tomlMatch && parseQuotedConfigValue(tomlMatch[1] ?? '') === HOSTED_SAP_MCP_URL) {
-      return true;
+    const eqIndex = line.indexOf('=');
+    if (eqIndex > 0 && line.slice(0, eqIndex).trim() === 'url') {
+      const rawValue = line.slice(eqIndex + 1).trim();
+      if (parseQuotedConfigValue(rawValue) === HOSTED_SAP_MCP_URL) return true;
     }
 
-    const yamlMatch = /^url\s*:\s*(.+)$/u.exec(line);
-    if (yamlMatch && parseQuotedConfigValue(yamlMatch[1] ?? '') === HOSTED_SAP_MCP_URL) {
-      return true;
+    const colonIndex = line.indexOf(':');
+    if (colonIndex > 0 && line.slice(0, colonIndex).trim() === 'url') {
+      const rawValue = line.slice(colonIndex + 1).trim();
+      if (parseQuotedConfigValue(rawValue) === HOSTED_SAP_MCP_URL) return true;
     }
   }
 

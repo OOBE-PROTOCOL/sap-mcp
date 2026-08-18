@@ -133,12 +133,32 @@ export interface DesktopWizardResult {
  * @description Produces a safe suggested profile name while preserving validation in saveWizardSetup.
  */
 export function normalizeDesktopProfileName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
+  const result = value.trim().toLowerCase();
+  // Replace non-alphanumeric/dash chars with dash
+  let cleaned = '';
+  for (const ch of result) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch === '-') {
+      cleaned += ch;
+    } else {
+      cleaned += '-';
+    }
+  }
+  // Trim leading/trailing dashes
+  while (cleaned.startsWith('-')) cleaned = cleaned.slice(1);
+  while (cleaned.endsWith('-')) cleaned = cleaned.slice(0, -1);
+  // Collapse consecutive dashes
+  let collapsed = '';
+  let prevDash = false;
+  for (const ch of cleaned) {
+    if (ch === '-') {
+      if (!prevDash) collapsed += ch;
+      prevDash = true;
+    } else {
+      collapsed += ch;
+      prevDash = false;
+    }
+  }
+  return collapsed;
 }
 
 /**

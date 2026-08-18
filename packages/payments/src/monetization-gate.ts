@@ -1307,7 +1307,11 @@ function buildFacilitatorUrl(config: SapMcpMonetizationConfig, path: 'verify' | 
   if (!baseUrl) {
     throw new Error('SAP MCP monetization requires SAP_MCP_X402_FACILITATOR_URL');
   }
-  return `${baseUrl.replace(/\/+$/, '')}/${path}`;
+  let cleanBaseUrl = baseUrl;
+  while (cleanBaseUrl.endsWith('/')) {
+    cleanBaseUrl = cleanBaseUrl.slice(0, -1);
+  }
+  return `${cleanBaseUrl}/${path}`;
 }
 
 function buildFacilitatorHeaders(config: SapMcpMonetizationConfig): Record<string, string> {

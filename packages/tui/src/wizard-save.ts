@@ -134,11 +134,20 @@ export function profileConfigPath(profileName: string): string {
  * @usedBy `defaultWalletPath`, `profileConfigPath`, `saveTuiWizardConfig`.
  */
 export function normalizeProfileName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  const result = value.trim().toLowerCase();
+  // Replace non-alphanumeric/dash chars with dash
+  let cleaned = '';
+  for (const ch of result) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch === '-') {
+      cleaned += ch;
+    } else {
+      cleaned += '-';
+    }
+  }
+  // Trim leading/trailing dashes
+  while (cleaned.startsWith('-')) cleaned = cleaned.slice(1);
+  while (cleaned.endsWith('-')) cleaned = cleaned.slice(0, -1);
+  return cleaned;
 }
 
 /**

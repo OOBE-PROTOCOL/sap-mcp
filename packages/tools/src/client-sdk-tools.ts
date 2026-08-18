@@ -451,16 +451,27 @@ function readJupiterApiKey(): string | undefined {
  * env var; the Client SDK appends its own route paths, so endpoint paths here
  * create 404/401 noise even when the API key is valid.
  */
+function stripTrailingSlashes(s: string): string {
+  let result = s;
+  while (result.endsWith('/')) result = result.slice(0, -1);
+  return result;
+}
+
 export function normalizeJupiterBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '');
+  const trimmed = stripTrailingSlashes(value.trim());
   try {
     const url = new URL(trimmed);
-    url.pathname = url.pathname
-      .replace(/\/(?:price|swap|ultra|trigger|recurring)\/v\d+(?:\/.*)?$/i, '')
-      .replace(/\/+$/, '');
+    // Strip known Jupiter API route paths from the pathname.
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    const routeIndex = pathSegments.findIndex(seg =>
+      ['price', 'swap', 'ultra', 'trigger', 'recurring'].includes(seg.toLowerCase())
+    );
+    if (routeIndex >= 0 && pathSegments[routeIndex + 1]?.startsWith('v')) {
+      url.pathname = '/' + pathSegments.slice(0, routeIndex).join('/');
+    }
     url.search = '';
     url.hash = '';
-    return url.toString().replace(/\/+$/, '');
+    return stripTrailingSlashes(url.toString());
   } catch {
     return trimmed;
   }
