@@ -46,7 +46,7 @@ const runtimeClientInjectionContracts = JSON.parse(readFileSync(
 
 // Bridge commands always use npx --package (reverted from absolute-path in 0.9.70
 // due to Hermes stdio tool registration regression #51587).
-const EXPECTED_BRIDGE_COMMAND = 'npx';
+const EXPECTED_BRIDGE_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const EXPECTED_BRIDGE_ARGS = ['--yes', '--package', NPM_PACKAGE, 'sap-mcp-server'];
 
 let tempDirs: string[] = [];
@@ -678,7 +678,7 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.nextContent).toContain('  sap:\n    enabled: false\n    tools:\n      include:\n        - sap_discover_agents\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
-    expect(built.nextContent).toContain('  sap_payments:\n    enabled: false\n    tools:\n      include:\n        - sap_payments_call_paid_tool\n    command: "npx"');
+    expect(built.nextContent).toContain(`  sap_payments:\n    enabled: false\n    tools:\n      include:\n        - sap_payments_call_paid_tool\n    command: "${EXPECTED_BRIDGE_COMMAND}"`);
     expect(built.nextContent).toContain('      CUSTOM_BRIDGE_FLAG: "keep"');
     expect(built.nextContent).toContain('      SAP_ALLOWED_TOOLS: "all"');
     expect(built.nextContent).not.toContain('transport: "streamable-http"');
@@ -702,8 +702,8 @@ describe('MCP client injection', () => {
     ].join('\n'));
 
     expect(built.nextContent).toContain('mcp_servers:\n  sap-mcp:\n    enabled: false\n    url: "https://mcp.sap.oobeprotocol.ai/mcp"');
-    expect(built.nextContent).toContain('  sap_payments:\n    command: "npx"');
-    expect(built.nextContent).toContain('      SAP_MCP_RUNTIME_ID: "clawpump"');
+    expect(built.nextContent).toContain(`  sap_payments:\n    command: "${EXPECTED_BRIDGE_COMMAND}"`);
+    expect(built.nextContent).toContain(`      SAP_MCP_RUNTIME_ID: "clawpump"`);
     expect(built.nextContent).not.toContain('  sap:\n');
   });
 
