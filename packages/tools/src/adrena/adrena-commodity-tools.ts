@@ -6,7 +6,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../../core/src/types.js';
 import {
   adrenaPipelineException,
   adrenaPipelineOk,
@@ -17,7 +17,7 @@ import {
   buildOpenCommodityShort,
   buildCloseCommodityLong,
   buildCloseCommodityShort,
-} from '@oobe-protocol-labs/sap-mcp-perps/adrena';
+} from '../../../perps/src/adrena/index.js';
 import {
   COMMODITY_TOKENS,
   priceToRaw,

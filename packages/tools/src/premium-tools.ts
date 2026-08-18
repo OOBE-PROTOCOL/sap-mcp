@@ -1,5 +1,5 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,
@@ -33,7 +33,7 @@ import {
   type PremiumCapabilityType,
   type PremiumManifestTemplateRequest,
   type PremiumSessionRequest,
-} from '@oobe-protocol-labs/sap-mcp-premium';
+} from '../../premium/src/index.js';
 
 const CAPABILITY_TYPES = ['stream', 'webhook', 'tool'] as const;
 

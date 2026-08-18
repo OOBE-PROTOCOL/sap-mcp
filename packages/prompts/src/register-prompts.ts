@@ -9,8 +9,8 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapMcpContext } from '../../core/src/types.js';
 
 // Registry prompts
 import { registerSapAgentPrompt } from './registry/register-sap-agent.prompt.js';

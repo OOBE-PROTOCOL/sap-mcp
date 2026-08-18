@@ -18,8 +18,8 @@ import Database from 'better-sqlite3';
 import type { Database as DatabaseType, Statement } from 'better-sqlite3';
 import { mkdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { getMemoryDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { logger } from '../../core/src/logger.js';
+import { getMemoryDir } from '../../config-runtime/src/paths.js';
 import type { MemoryConfig } from './types.js';
 
 /**

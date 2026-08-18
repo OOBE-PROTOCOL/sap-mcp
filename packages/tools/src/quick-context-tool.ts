@@ -7,11 +7,11 @@
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { execSync } from 'child_process';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
-import type { SapMcpContext, SapMcpToolCatalogContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { listPremiumPlugins, publicPremiumProviderStatus } from '@oobe-protocol-labs/sap-mcp-premium';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
+import type { SapMcpContext, SapMcpToolCatalogContext } from '../../core/src/types.js';
+import { listPremiumPlugins, publicPremiumProviderStatus } from '../../premium/src/index.js';
 import { listBundledSkillNames, getBundledSkillContents } from './skills-tools.js';
-import { CAPABILITIES } from '@oobe-protocol-labs/sap-mcp-server-runtime/server-metadata';
+import { CAPABILITIES } from '../../server-runtime/src/server-metadata.js';
 import { registerToolFamilyPipelineTool } from './tool-family-pipeline.js';
 import {
   buildSessionContextPacket,

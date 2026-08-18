@@ -8,7 +8,7 @@
  * @module policy/spending-limits
  */
 
-import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpConfig } from '../../core/src/types.js';
 
 /**
  * @name checkSpendingLimit

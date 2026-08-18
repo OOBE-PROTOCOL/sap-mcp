@@ -11,8 +11,8 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { getPreferredConfigDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { getPreferredConfigDir } from '../../config-runtime/src/paths.js';
+import { logger } from '../../core/src/logger.js';
 
 /** Trade journal entry. */
 export interface TradeJournalEntry {

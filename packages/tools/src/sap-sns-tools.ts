@@ -25,8 +25,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createHash } from 'crypto';
 import { PublicKey, type Connection } from '@solana/web3.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { logger } from '../../core/src/logger.js';
 import {
   createToolFamilyPipelineResult,
   registerToolFamilyPipelineTool,

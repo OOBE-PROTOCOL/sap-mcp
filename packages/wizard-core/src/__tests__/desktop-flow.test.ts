@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import { MCP_SERVER_VERSION } from '../../../core/src/constants.js';
 import {
   createDefaultDesktopWizardDraft,
   getDesktopHostedDiscovery,

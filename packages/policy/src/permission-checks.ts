@@ -8,7 +8,7 @@
  * @module policy/permission-checks
  */
 
-import type { SapPermission, SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapPermission, SapMcpConfig } from '../../core/src/types.js';
 
 /**
  * @name checkPermission

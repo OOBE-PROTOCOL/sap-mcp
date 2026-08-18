@@ -6,7 +6,7 @@
  */
 
 import { Connection } from '@solana/web3.js';
-import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpConfig } from '../../../core/src/types.js';
 
 /**
  * @name createConnection

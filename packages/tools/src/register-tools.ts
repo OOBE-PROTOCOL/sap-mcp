@@ -1,6 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapMcpContext } from '../../core/src/types.js';
 import { BUILTIN_TOOL_MODULES } from './builtin-tool-modules.js';
 import { buildToolCatalog, summarizeToolCatalog } from './tool-catalog.js';
 import { registerToolModules, type ToolModuleDefinition, type ToolModuleRegistrationSummary } from './module-registry.js';

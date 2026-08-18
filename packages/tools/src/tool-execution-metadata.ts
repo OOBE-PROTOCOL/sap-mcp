@@ -9,10 +9,10 @@
  * @module tools/tool-execution-metadata
  */
 
-import type { SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { isHostedAccountlessBlockedTool } from '@oobe-protocol-labs/sap-mcp-payments/hosted-tool-eligibility';
-import { classifyTool, type PaymentTier } from '@oobe-protocol-labs/sap-mcp-payments/pricing';
-import { getRequiredPermission, isWriteOperation } from '@oobe-protocol-labs/sap-mcp-security/tool-permissions';
+import type { SapPermission } from '../../core/src/types.js';
+import { isHostedAccountlessBlockedTool } from '../../payments/src/hosted-tool-eligibility.js';
+import { classifyTool, type PaymentTier } from '../../payments/src/pricing.js';
+import { getRequiredPermission, isWriteOperation } from '../../security/src/tool-permissions.js';
 import type { ToolModuleDefinition } from './module-registry.js';
 
 export type ToolExecutionIntent =

@@ -13,10 +13,10 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 import * as http from 'http';
-import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
-import { McpMonetizationGate } from '@oobe-protocol-labs/sap-mcp-payments';
+import type { SapMcpConfig } from '../../config-runtime/src/env.js';
+import { McpMonetizationGate } from '../../payments/src/index.js';
 
 /**
  * Contract describing http transport config data used by the SAP MCP runtime.

@@ -6,10 +6,10 @@
 
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
-import type { SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
-import { redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { loadConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
-import { initLogger, logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import type { SapMcpConfig } from '../../config-runtime/src/env.js';
+import { redactSensitiveString } from '../../core/src/logger.js';
+import { loadConfig } from '../../config-runtime/src/env.js';
+import { initLogger, logger } from '../../core/src/logger.js';
 
 const SOLANA_MAINNET_CAIP2 = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
 const SOLANA_DEVNET_CAIP2 = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';

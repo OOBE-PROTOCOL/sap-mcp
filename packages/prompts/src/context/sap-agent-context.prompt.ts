@@ -17,11 +17,11 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerPrompt } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
-import { logger, redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { getActiveProfile, loadProfileConfig, getCurrentProfileInfo, listProfiles, getProfileConfigPath } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
-import { getPreferredConfigDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { registerPrompt } from '../../../mcp-adapter/src/sdk-compat.js';
+import { logger, redactSensitiveString } from '../../../core/src/logger.js';
+import type { SapMcpContext } from '../../../core/src/types.js';
+import { getActiveProfile, loadProfileConfig, getCurrentProfileInfo, listProfiles, getProfileConfigPath } from '../../../config-runtime/src/profiles.js';
+import { getPreferredConfigDir } from '../../../config-runtime/src/paths.js';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
 const WIZARD_DESCRIPTOR_URL = 'https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json';

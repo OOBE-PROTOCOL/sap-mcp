@@ -9,7 +9,7 @@
  * @module sap/sap-errors
  */
 
-import { SapSdkError } from '@oobe-protocol-labs/sap-mcp-core/errors';
+import { SapSdkError } from '../../core/src/errors.js';
 
 /**
  * @name mapSapError

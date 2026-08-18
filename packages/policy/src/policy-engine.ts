@@ -9,8 +9,8 @@
  * @module policy/policy-engine
  */
 
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpConfig, SapPolicy, SapPermission } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapMcpConfig, SapPolicy, SapPermission } from '../../core/src/types.js';
 import { defaultPolicies } from './default-policies.js';
 import { HybridPolicyEngine, type HybridPolicyConfig } from './hybrid-policy-engine.js';
 import type { PolicyContext, PolicyDecision } from './local-policy-engine.js';

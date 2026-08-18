@@ -10,8 +10,8 @@
  * @module session/session-limits
  */
 
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapAgentSession, SapSpendingLimits } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapAgentSession, SapSpendingLimits } from '../../core/src/types.js';
 
 /**
  * @name checkSpendingLimit

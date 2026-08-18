@@ -12,9 +12,9 @@
  * @module signer/signer-resolver
  */
 
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { SignerError } from '@oobe-protocol-labs/sap-mcp-core/errors';
-import type { SapMcpConfig, SapSignerMode } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import { SignerError } from '../../core/src/errors.js';
+import type { SapMcpConfig, SapSignerMode } from '../../core/src/types.js';
 import type { SignerResult } from './signer-types.js';
 import { createLocalKeypairSigner } from './local-keypair-signer.js';
 import { createExternalSigner } from './external-signer.js';

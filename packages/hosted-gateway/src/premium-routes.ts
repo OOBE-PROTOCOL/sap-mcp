@@ -24,7 +24,7 @@
  */
 
 import * as http from 'node:http';
-import { readRequestBody, parseJsonBody } from '@oobe-protocol-labs/sap-mcp-payments/http-adapter';
+import { readRequestBody, parseJsonBody } from '../../payments/src/http-adapter.js';
 import {
   activatePremiumSession,
   startStream,
@@ -36,7 +36,7 @@ import {
   startWebhookDelivery,
   getWebhookSubscription,
   getWebhookDeliveries,
-} from '@oobe-protocol-labs/sap-mcp-premium';
+} from '../../premium/src/index.js';
 
 /* -------------------------------------------------------------------------- */
 /* Internal HTTP helpers                                                      */

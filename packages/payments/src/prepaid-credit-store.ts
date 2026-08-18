@@ -17,8 +17,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { randomUUID } from 'crypto';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { getPreferredConfigDir } from '@oobe-protocol-labs/sap-mcp-config-runtime/paths';
+import { logger } from '../../core/src/logger.js';
+import { getPreferredConfigDir } from '../../config-runtime/src/paths.js';
 
 /** Prepaid credit entry for a wallet. */
 export interface PrepaidCredit {

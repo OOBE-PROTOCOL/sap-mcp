@@ -12,7 +12,7 @@
  * @module security/approval-required
  */
 
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 
 /**
  * @name isApprovalRequired

@@ -13,8 +13,8 @@
 
 import { Keypair } from '@solana/web3.js';
 import { readFileSync } from 'fs';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { SignerError } from '@oobe-protocol-labs/sap-mcp-core/errors';
+import { logger } from '../../core/src/logger.js';
+import { SignerError } from '../../core/src/errors.js';
 
 /**
  * @name loadKeypairFromFile

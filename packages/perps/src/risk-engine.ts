@@ -12,11 +12,11 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { createTextResponse } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/tool-response';
-import { registerTool } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { queryTradeJournal } from '@oobe-protocol-labs/sap-mcp-strategies/trade-journal';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { createTextResponse } from '../../mcp-adapter/src/tool-response.js';
+import { registerTool } from '../../mcp-adapter/src/sdk-compat.js';
+import { logger } from '../../core/src/logger.js';
+import { queryTradeJournal } from '../../strategies/src/trade-journal.js';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 

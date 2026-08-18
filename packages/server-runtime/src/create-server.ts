@@ -13,7 +13,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 import {
   MCP_SERVER_DESCRIPTION,
   MCP_SERVER_ICON_URL,
@@ -22,14 +22,14 @@ import {
   MCP_SERVER_TITLE,
   MCP_SERVER_VERSION,
   MCP_SERVER_WEBSITE_URL,
-} from '@oobe-protocol-labs/sap-mcp-core/constants';
-import type { SapMcpConfig, SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { createSapClient } from '@oobe-protocol-labs/sap-mcp-sap/sap-client-manager';
-import { resolveSigner } from '@oobe-protocol-labs/sap-mcp-signer/signer-resolver';
-import { PolicyEngine } from '@oobe-protocol-labs/sap-mcp-policy/policy-engine';
+} from '../../core/src/constants.js';
+import type { SapMcpConfig, SapMcpContext } from '../../core/src/types.js';
+import { createSapClient } from '../../sap/src/sap-client-manager.js';
+import { resolveSigner } from '../../signer/src/signer-resolver.js';
+import { PolicyEngine } from '../../policy/src/policy-engine.js';
 import { registerCapabilities } from './register-capabilities.js';
-import { setToolExecutionContext } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
-import { initMetrics, startMetricsExporter } from '@oobe-protocol-labs/sap-mcp-observability/metrics';
+import { setToolExecutionContext } from '../../mcp-adapter/src/sdk-compat.js';
+import { initMetrics, startMetricsExporter } from '../../observability/src/metrics.js';
 
 /**
  * @name createSapMcpServer

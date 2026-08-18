@@ -11,7 +11,7 @@
 import { PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
+import type { SapMcpContext } from '../../core/src/types.js';
 import {
   ADRENA_BPS_DECIMALS,
   ADRENA_CUSTODY_OFFSETS,

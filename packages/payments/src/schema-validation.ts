@@ -16,8 +16,8 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { getRegisteredTools } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { getRegisteredTools } from '../../mcp-adapter/src/sdk-compat.js';
+import { logger } from '../../core/src/logger.js';
 
 /** Module-level server reference set during tool registration. */
 let validationServer: Server | null = null;

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
 
 /**
  * @name McpClientId

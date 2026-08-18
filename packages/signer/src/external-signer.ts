@@ -5,7 +5,7 @@
  */
 
 import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 import type { Signer } from './signer-types.js';
 
 interface ExternalSignerResponse {

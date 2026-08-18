@@ -3,7 +3,7 @@
  * @description Small JSON-RPC helpers used by the remote monetization gate without coupling payment logic to MCP tools.
  */
 
-import { canonicalizeToolName } from '@oobe-protocol-labs/sap-mcp-tools/tool-aliases';
+import { canonicalizeToolName } from '../../tools/src/tool-aliases.js';
 
 /**
  * @name JsonRpcId

@@ -3,7 +3,7 @@
  * @name sap-mcp-server
  * @description npx-safe bootstrap for the SAP MCP local server CLI.
  */
-import { installPackageNodePath } from '@oobe-protocol-labs/sap-mcp-runtime/module-resolution';
+import { installPackageNodePath } from '../../runtime/src/module-resolution.js';
 
 installPackageNodePath(import.meta.url);
 await import('../../../src/cli.js');

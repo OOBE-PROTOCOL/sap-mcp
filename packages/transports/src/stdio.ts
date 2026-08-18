@@ -12,9 +12,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { clearSessionCache } from '@oobe-protocol-labs/sap-mcp-payments/mcp-session-cache';
-import { releasePaymentBridgeProcessLock } from '@oobe-protocol-labs/sap-mcp-runtime/payment-bridge-process';
+import { logger } from '../../core/src/logger.js';
+import { clearSessionCache } from '../../payments/src/mcp-session-cache.js';
+import { releasePaymentBridgeProcessLock } from '../../runtime/src/payment-bridge-process.js';
 
 /**
  * @name startStdioTransport

@@ -20,7 +20,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
+import { logger } from '../../core/src/logger.js';
 
 /** Histogram buckets for tool-call duration in seconds. */
 const DURATION_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];

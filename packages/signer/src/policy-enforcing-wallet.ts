@@ -18,13 +18,13 @@
  */
 
 import type { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { logger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapPolicyEngine } from '@oobe-protocol-labs/sap-mcp-core/types';
+import { logger } from '../../core/src/logger.js';
+import type { SapPolicyEngine } from '../../core/src/types.js';
 import {
   estimateTransactionValue,
   explicitApprovalRiskPolicyReason,
   tokenTransferPolicyReason,
-} from '@oobe-protocol-labs/sap-mcp-tools/transaction-tools';
+} from '../../tools/src/transaction-tools.js';
 
 /** Minimal signer surface required by the SAP SDK wallet interface. */
 export interface SignerWallet {

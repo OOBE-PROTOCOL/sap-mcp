@@ -10,31 +10,31 @@ import * as http from 'http';
 import { dirname, join, posix } from 'path';
 import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { getDataDir, loadConfig, type SapMcpConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/env';
-import { MCP_SERVER_VERSION } from '@oobe-protocol-labs/sap-mcp-core/constants';
-import { logger, initLogger } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import { createSapMcpServer } from '@oobe-protocol-labs/sap-mcp-server-runtime/create-server';
+import { getDataDir, loadConfig, type SapMcpConfig } from '../../config-runtime/src/env.js';
+import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
+import { logger, initLogger } from '../../core/src/logger.js';
+import { createSapMcpServer } from '../../server-runtime/src/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
-import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '@oobe-protocol-labs/sap-mcp-payments';
-import { generatePayShProviderYaml } from '@oobe-protocol-labs/sap-mcp-payments/pay-sh-spec';
+import { McpMonetizationGate, buildPricingCatalog, resolvePaymentNetwork } from '../../payments/src/index.js';
+import { generatePayShProviderYaml } from '../../payments/src/pay-sh-spec.js';
 import {
   listPremiumPlugins,
   premiumPrivatePluginSupport,
   publicPremiumProviderStatus,
   getPremiumMetrics,
   type PremiumCapabilityType,
-} from '@oobe-protocol-labs/sap-mcp-premium';
+} from '../../premium/src/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
-import type { PaymentLedgerEvent } from '@oobe-protocol-labs/sap-mcp-payments/usage-ledger';
+import type { PaymentLedgerEvent } from '../../payments/src/usage-ledger.js';
 import { renderLandingPage } from './public-home/index.js';
 import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
-import { preloadPremiumProviders, disconnectAllProviders } from '@oobe-protocol-labs/sap-mcp-premium/provider-bridge';
-import { asyncMemoryProcessor, memoryDatabase } from '@oobe-protocol-labs/sap-mcp-memory';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { BUILTIN_TOOL_MODULES } from '@oobe-protocol-labs/sap-mcp-tools/builtin-tool-modules';
-import { buildToolCatalog } from '@oobe-protocol-labs/sap-mcp-tools/tool-catalog';
+import { preloadPremiumProviders, disconnectAllProviders } from '../../premium/src/provider-bridge.js';
+import { asyncMemoryProcessor, memoryDatabase } from '../../memory/src/index.js';
+import type { SapMcpContext } from '../../core/src/types.js';
+import { BUILTIN_TOOL_MODULES } from '../../tools/src/builtin-tool-modules.js';
+import { buildToolCatalog } from '../../tools/src/tool-catalog.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';

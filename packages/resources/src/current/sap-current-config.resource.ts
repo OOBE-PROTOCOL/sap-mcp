@@ -14,11 +14,11 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerResourceTemplate } from '@oobe-protocol-labs/sap-mcp-mcp-adapter/sdk-compat';
-import { logger, redactSensitiveString } from '@oobe-protocol-labs/sap-mcp-core/logger';
-import type { SapMcpContext } from '@oobe-protocol-labs/sap-mcp-core/types';
-import { getActiveProfile, getProfileConfigPath, loadProfileConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/profiles';
-import { fullConfigSchema, type FullConfig } from '@oobe-protocol-labs/sap-mcp-config-runtime/secure-config';
+import { registerResourceTemplate } from '../../../mcp-adapter/src/sdk-compat.js';
+import { logger, redactSensitiveString } from '../../../core/src/logger.js';
+import type { SapMcpContext } from '../../../core/src/types.js';
+import { getActiveProfile, getProfileConfigPath, loadProfileConfig } from '../../../config-runtime/src/profiles.js';
+import { fullConfigSchema, type FullConfig } from '../../../config-runtime/src/secure-config.js';
 import { existsSync, readFileSync } from 'fs';
 
 const HOSTED_MCP_URL = 'https://mcp.sap.oobeprotocol.ai/mcp';
