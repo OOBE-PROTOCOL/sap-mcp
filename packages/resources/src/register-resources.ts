@@ -21,6 +21,7 @@ import { sapToolSchemaResource } from './tool-schema/sap-tool-schema.resource.js
 import { sapCurrentConfigResource } from './current/sap-current-config.resource.js';
 import { sapActiveProfileResource } from './profile/sap-active-profile.resource.js';
 import { sapNetworkStatsResource } from './stats/sap-network-stats.resource.js';
+import { registerResourceTemplates } from './resource-templates.js';
 
 /**
  * Register all resources with the MCP server
@@ -42,6 +43,9 @@ export async function registerResources(server: Server, context: SapMcpContext):
   
   // Register network stats resource
   sapNetworkStatsResource(server, context);
-  
-  logger.debug('Resources registered', { count: 9 });
+
+  // Register dynamic resource templates
+  registerResourceTemplates(server, context);
+
+  logger.debug('Resources registered', { count: 14 });
 }
