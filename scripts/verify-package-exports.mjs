@@ -116,12 +116,15 @@ for (const [specifier, expectedSymbols] of Object.entries(exportContracts)) {
 
   // If the types target points to a compiled .d.ts in dist/, redirect to the .ts source
   if (absoluteTypesTarget && absoluteTypesTarget.endsWith('.d.ts')) {
-    const srcPath = absoluteTypesTarget
+    // Cross-platform: normalize to forward slashes for replacement, then back to path
+    const normalized = absoluteTypesTarget.replace(/\\/g, '/');
+    const srcPath = normalized
       .replace('/dist/packages/', '/packages/')
       .replace('/dist/src/', '/src/')
       .replace('.d.ts', '.ts');
-    if (existsSync(srcPath)) {
-      absoluteTypesTarget = srcPath;
+    const platformPath = path.normalize(srcPath);
+    if (existsSync(platformPath)) {
+      absoluteTypesTarget = platformPath;
     }
   }
 
