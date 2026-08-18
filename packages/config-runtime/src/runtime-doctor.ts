@@ -173,14 +173,21 @@ export function buildDoctorReport(input: DoctorReportInput): DoctorReport {
       : 'Set positive maxTxValueSol and dailyLimitSol before enabling paid/write tools.',
   });
 
+  const isPublicRpc = (() => {
+    try {
+      return new URL(config.rpcUrl).hostname === 'api.mainnet-beta.solana.com';
+    } catch {
+      return false;
+    }
+  })();
   checks.push({
     id: 'rpc',
     label: 'RPC endpoint',
-    status: config.rpcUrl ? (config.rpcUrl.includes('api.mainnet-beta.solana.com') ? 'warning' : 'pass') : 'fail',
+    status: config.rpcUrl ? (isPublicRpc ? 'warning' : 'pass') : 'fail',
     message: config.rpcUrl ? 'RPC URL is configured.' : 'RPC URL is missing.',
     action: !config.rpcUrl
       ? 'Set rpcUrl or run sap-mcp-config wizard.'
-      : (config.rpcUrl.includes('api.mainnet-beta.solana.com')
+      : (isPublicRpc
         ? 'Use a private or OOBE RPC endpoint for production signing/finalization.'
         : undefined),
   });

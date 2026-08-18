@@ -241,7 +241,8 @@ function parseQuotedConfigValue(value: string): string {
     }
   }
 
-  return trimmed.split(/\s+#/u)[0]?.trim() ?? '';
+  const hashIndex = trimmed.search(/\s+#/u);
+  return hashIndex >= 0 ? trimmed.slice(0, hashIndex).trim() : trimmed.trim();
 }
 
 /**
@@ -1254,7 +1255,7 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
     const nextLines = [...lines];
     nextLines.splice(mcpIndex + 1, 0, ...yamlServerBlock(canonical, 2));
     return {
-      nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+      nextContent: `${nextLines.join('\n').trimEnd()}\n`,
       hadSapConfig: false,
     };
   }
@@ -1266,7 +1267,7 @@ function replaceYamlSapBlock(content: string, canonical: McpServerInjectionConfi
     existingEnv: extractYamlEnvEntries(existingBlock, 2),
   }));
   return {
-    nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+    nextContent: `${nextLines.join('\n').trimEnd()}\n`,
     hadSapConfig: true,
   };
 }
@@ -1325,7 +1326,7 @@ function replaceYamlHostedPaymentBridgeBlocks(
 
   nextLines.splice(mcpIndex + 1, 0, ...replacementFor(preserved));
   return {
-    nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+    nextContent: `${nextLines.join('\n').trimEnd()}\n`,
     hadSapConfig,
   };
 }
@@ -1384,7 +1385,7 @@ function replaceOpenClawYamlHostedPaymentBridgeBlocks(
 
   nextLines.splice(serversIndex + 1, 0, ...replacementFor(preserved));
   return {
-    nextContent: `${nextLines.join('\n').replace(/\n*$/, '')}\n`,
+    nextContent: `${nextLines.join('\n').trimEnd()}\n`,
     hadSapConfig,
   };
 }
@@ -1626,7 +1627,7 @@ function removeTomlSapSections(content: string): { content: string; hadSapConfig
   }
 
   return {
-    content: nextLines.join('\n').replace(/\n*$/, ''),
+    content: nextLines.join('\n').trimEnd(),
     hadSapConfig,
   };
 }
@@ -1658,7 +1659,7 @@ function removeTomlMcpServerSections(content: string, serverNames: string[]): { 
   }
 
   return {
-    content: nextLines.join('\n').replace(/\n*$/, ''),
+    content: nextLines.join('\n').trimEnd(),
     hadConfig,
   };
 }
