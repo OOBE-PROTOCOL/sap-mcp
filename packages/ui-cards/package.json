@@ -1,0 +1,62 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-ui-cards",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP Apps Card rendering boundary.",
+  "sapMcp": {
+    "boundaryId": "ui-cards",
+    "source": "packages/ui-cards/src",
+    "architectureDomain": "ui-cards",
+    "rootExport": "./ui-cards",
+    "apiContract": "config/package-export-contracts.json#./ui-cards",
+    "boundary": "MCP Apps Card rendering boundary.",
+    "legacyCompatibilitySource": "src/ui",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./protocol-logos": {
+      "types": "./src/protocol-logos.ts",
+      "default": "./src/protocol-logos.ts"
+    },
+    "./card-builder": {
+      "types": "./src/card-builder.ts",
+      "default": "./src/card-builder.ts"
+    },
+    "./ui-resources": {
+      "types": "./src/ui-resources.ts",
+      "default": "./src/ui-resources.ts"
+    },
+    "./card-shell": {
+      "types": "./src/card-shell.ts",
+      "default": "./src/card-shell.ts"
+    },
+    "./logos": {
+      "types": "./src/logos.ts",
+      "default": "./src/logos.ts"
+    },
+    "./runtime-logo-resolver": {
+      "types": "./src/runtime-logo-resolver.ts",
+      "default": "./src/runtime-logo-resolver.ts"
+    },
+    "./tool-card-registry": {
+      "types": "./src/tool-card-registry.ts",
+      "default": "./src/tool-card-registry.ts"
+    },
+    "./card-templates": {
+      "types": "./src/card-templates.ts",
+      "default": "./src/card-templates.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

@@ -14,6 +14,7 @@
  * Usage:
  *   npx sap-mcp-config init              # Create default config
  *   npx sap-mcp-config wizard            # Interactive setup wizard
+ *   npx sap-mcp-config doctor            # Check local profile/runtime readiness
  *   npx sap-mcp-config show              # Show current config
  *   npx sap-mcp-config set mode readonly # Set a field
  *   npx sap-mcp-config pending           # List pending changes
@@ -25,6 +26,7 @@
 import { getConfigManager, type AuditEntry, type FullConfig, type PendingChange } from './config/secure-config.js';
 import { runPaymentBridgeRepair, runWizard } from './config/wizard.js';
 import { getPreferredConfigDir } from './config/paths.js';
+import { buildActiveDoctorReport, type DoctorReport } from './config/runtime-doctor.js';
 import {
   listProfiles,
   switchProfile,
@@ -236,6 +238,36 @@ function loadActiveConfigForDisplay(): { config: FullConfig; profileName: string
 }
 
 /**
+ * Prints a local readiness report without exposing config secrets.
+ */
+function printDoctorReport(report: DoctorReport): void {
+  printCliHeader('SAP MCP Runtime Doctor', 'Local profile readiness');
+  printCliSection('Profile');
+  printKeyValue('Name', report.profileName, report.status === 'fail' ? 'red' : 'green');
+  printKeyValue('Path', report.configPath, 'purple');
+  printKeyValue('Config Root', report.configRoot, 'aqua');
+  printKeyValue('Status', report.status, report.status === 'fail' ? 'red' : report.status === 'warning' ? 'yellow' : 'green');
+  console.log('');
+
+  printCliSection('Checks');
+  for (const check of report.checks) {
+    const color: CliColor = check.status === 'fail' ? 'red' : check.status === 'warning' ? 'yellow' : 'green';
+    console.log(`${colorize(check.status.toUpperCase().padEnd(7), color)} ${colorize(check.label, 'aqua')}`);
+    console.log(`  ${check.message}`);
+    if (check.action) {
+      console.log(`  ${colorize('Action:', 'yellow')} ${check.action}`);
+    }
+    console.log('');
+  }
+
+  printCliSection('Summary');
+  printKeyValue('Pass', report.summary.pass, 'green');
+  printKeyValue('Warning', report.summary.warning, 'yellow');
+  printKeyValue('Fail', report.summary.fail, 'red');
+  console.log('');
+}
+
+/**
  * Internal helper for the print usage operation.
  */
 function printUsage() {
@@ -251,6 +283,7 @@ function printUsage() {
   console.log('  init                      Create default configuration');
   console.log('  wizard                    Interactive setup wizard (recommended for first-time)');
   console.log('  repair                    Repair hosted sap + local sap_payments runtime config');
+  console.log('  doctor                    Check local profile/runtime readiness');
   console.log('  show                      Show current configuration');
   console.log('  set <field> <value>       Set a configuration field');
   console.log('  pubkey                    Show agent public key');
@@ -279,6 +312,7 @@ function printUsage() {
   console.log(`${aqua}Examples:${reset}`);
   console.log(`  ${purple}sap-mcp-config wizard${reset}              # Start interactive wizard`);
   console.log(`  ${purple}sap-mcp-config repair${reset}              # Repair hosted runtime/payment bridge`);
+  console.log(`  ${purple}sap-mcp-config doctor --json${reset}       # Machine-readable readiness report`);
   console.log(`  ${purple}sap-mcp-config pubkey${reset}              # Show agent pubkey`);
   console.log(`  ${purple}sap-mcp-config profiles${reset}            # List all profiles`);
   console.log(`  ${purple}sap-mcp-config profile hermes${reset}      # Switch to hermes profile`);
@@ -326,6 +360,21 @@ async function main() {
       case 'repair-payments':
       case 'repair-bridge': {
         runPaymentBridgeRepair({ clear: false });
+        break;
+      }
+
+      case 'doctor':
+      case 'readiness': {
+        const report = buildActiveDoctorReport();
+        if (args.includes('--json')) {
+          console.log(JSON.stringify(report, null, 2));
+        } else {
+          printDoctorReport(report);
+        }
+
+        if (args.includes('--check') && report.summary.fail > 0) {
+          process.exit(1);
+        }
         break;
       }
 

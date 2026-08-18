@@ -1,0 +1,54 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-mcp-adapter",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Internal SAP MCP Model Context Protocol adapter boundary.",
+  "sapMcp": {
+    "boundaryId": "mcp-adapter",
+    "source": "packages/mcp-adapter/src",
+    "architectureDomain": "mcp-adapter",
+    "rootExport": "./mcp-adapter",
+    "apiContract": "config/package-export-contracts.json#./mcp-adapter",
+    "boundary": "Model Context Protocol adapter compatibility layer.",
+    "legacyCompatibilitySource": "src/adapters/mcp",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sdk-compat": {
+      "types": "./src/sdk-compat.ts",
+      "default": "./src/sdk-compat.ts"
+    },
+    "./prompt-response": {
+      "types": "./src/prompt-response.ts",
+      "default": "./src/prompt-response.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "default": "./src/errors.ts"
+    },
+    "./tool-response": {
+      "types": "./src/tool-response.ts",
+      "default": "./src/tool-response.ts"
+    },
+    "./resource-response": {
+      "types": "./src/resource-response.ts",
+      "default": "./src/resource-response.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-observability": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-security": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-ui-cards": "workspace:*"
+  }
+}

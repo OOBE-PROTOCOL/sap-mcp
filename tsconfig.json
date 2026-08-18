@@ -14,13 +14,23 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "customConditions": ["import", "require"]
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "packages/core/src/**/*.ts",
+    "packages/schemas/src/**/*.ts",
+    "packages/ui-cards/src/**/*.ts",
+    "packages/mcp-adapter/src/**/*.ts",
+    "packages/config-runtime/src/**/*.ts",
+    "packages/wizard-core/src/**/*.ts",
+    "packages/local-bridge/src/**/*.ts",
+    "packages/tools/src/**/*.ts",
+    "packages/server-runtime/src/**/*.ts",
+    "packages/hosted-gateway/src/**/*.ts"
   ],
   "exclude": [
     "node_modules",

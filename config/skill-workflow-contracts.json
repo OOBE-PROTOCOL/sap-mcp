@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "skillRoot": "skills",
+  "index": "skills/README.md",
+  "toolReference": "skills/sap-mcp/TOOL_REFERENCE.md",
+  "requiredSkills": [
+    { "id": "sap-agent-chat", "heading": "# SAP Agent Chat" },
+    { "id": "sap-agent-registry", "heading": "# SAP Agent Registry" },
+    { "id": "sap-agentkit", "heading": "# SAP AgentKit" },
+    { "id": "sap-clawpump-bridge", "heading": "# SAP x ClawPump Bridge" },
+    { "id": "sap-defi", "heading": "# SAP DeFi" },
+    { "id": "sap-discovery-indexing", "heading": "# SAP Discovery And Indexing" },
+    { "id": "sap-escrow-settlement", "heading": "# SAP Escrow Settlement" },
+    { "id": "sap-ledger-session", "heading": "# SAP Ledger Session" },
+    { "id": "sap-market-data", "heading": "# SAP Market Data" },
+    { "id": "sap-mcp", "heading": "# SAP MCP" },
+    { "id": "sap-memory-vault", "heading": "# SAP Memory Vault" },
+    { "id": "sap-nft-metaplex", "heading": "# SAP NFT And Metaplex" },
+    { "id": "sap-operations", "heading": "# SAP Operations" },
+    { "id": "sap-payments-x402", "heading": "# SAP Payments X402" },
+    { "id": "sap-reputation-attestation", "heading": "# SAP Reputation And Attestation" },
+    { "id": "sap-sns", "heading": "# SAP SNS" },
+    { "id": "sap-social-gaming", "heading": "# SAP Social Gaming" },
+    { "id": "sap-solana-token", "heading": "# SAP Solana Token" },
+    { "id": "sap-staking", "heading": "# SAP Staking" },
+    { "id": "sap-tool-registry", "heading": "# SAP Tool Registry" }
+  ],
+  "indexMustContain": [
+    "sap_agent_next_action",
+    "sap_skills_bundle",
+    "skills/sap-mcp/TOOL_REFERENCE.md",
+    "USER_DOCS/05_AGENT_SKILLS_TOOL_ROUTING.md",
+    "Agents must never read keypair JSON files"
+  ],
+  "sapMcpMustContain": [
+    "sap_agent_start",
+    "sap_agent_runtime_status",
+    "sap_prepare_action",
+    "sap_agent_standard_context",
+    "sap_prepare_mandate",
+    "sap_skills_bundle",
+    "sap_skills_upgrade_plan",
+    "sap_runtime_repair_plan",
+    "sap_payments_wallet_guard",
+    "sap_payments_readiness",
+    "sap_payments_call_paid_tool",
+    "sap_payments_finalize_transaction",
+    "npx sap-mcp-config doctor --json",
+    "Hosted remote is accountless",
+    "must not read or print wallet paths"
+  ],
+  "workflowDocsMustContain": [
+    "feature/hosted-mcp/*",
+    "feature/local-bridge/*",
+    "feature/wizard/*",
+    "feature/mcp-apps-ui/*",
+    "feature/payments-x402/*",
+    "feature/protocol-tools/*",
+    "feature/integrations/*",
+    "feature/release-ops/*",
+    "pnpm run verify:skill-workflows",
+    "skill workflow contracts"
+  ],
+  "packageScripts": {
+    "requiredScript": "verify:skill-workflows",
+    "requiredCommand": "node scripts/verify-skill-workflows.mjs",
+    "releaseGate": "verify:release:offline"
+  },
+  "workflowCommands": [
+    "pnpm run verify:skill-workflows"
+  ],
+  "forbiddenPatterns": [
+    "TODO",
+    "FIXME",
+    "lorem",
+    "AI slop"
+  ]
+}

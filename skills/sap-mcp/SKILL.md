@@ -109,7 +109,7 @@ source skill taxonomy:
 Use the bundled routing map for local MCP tool selection:
 
 - `skills/sap-mcp/TOOL_REFERENCE.md`
-- `USER_DOCS/05_SKILLS_AND_TOOLS.md`
+- `USER_DOCS/05_AGENT_SKILLS_TOOL_ROUTING.md`
 
 SAP MCP startup and skill bootstrap tools are free context/setup tools. Call
 `sap_agent_start`, `sap_agent_runtime_status`, `sap_agent_context`,
@@ -128,7 +128,7 @@ If skills or runtime bridge config are stale, call `sap_skills_upgrade_plan` or
 `sap_runtime_repair_plan` first. These tools return the pinned latest-release
 commands and preserve the non-custodial local signing model.
 
-## Hosted Remote MCP
+## Hosted MCP Local Bridge Setup
 
 Canonical hosted endpoint:
 
@@ -287,6 +287,33 @@ Before any write-like operation, use this routing order:
 5. Missing bridge: call `sap_runtime_repair_plan`, then tell the user to run the
    pinned repair command or desktop wizard repair path.
 
+### MagicBlock Private Payments
+
+SAP MCP exposes 21 MagicBlock tools across three protocol domains: ER Router
+(6 read-only JSON-RPC), Private Payments API (13 REST tools including
+ensure-crank), and VRF (2 on-chain tools).
+
+Private transfers and private swaps use the Hydra delivery crank for scheduled
+settlement. The API requires specific fields for private mode:
+
+- `magicblock_transfer` with `visibility: "private"`: `minDelayMs`, `maxDelayMs`,
+  and `split` are optional with defaults (`"0"`, `"0"`, `1`). SAP MCP passes these
+  defaults explicitly when the user omits them.
+- `magicblock_swap` with `visibility: "private"`: `destination`, `minDelayMs`,
+  `maxDelayMs`, and `split` are all required. SAP MCP validates these before
+  calling the API and rejects `asLegacyTransaction: true` (private swaps require
+  v0 VersionedTransactions).
+
+If a private transfer or swap has been submitted but the recipient has not
+received funds, call `magicblock_ensureCrank` with the mint address to force a
+transfer queue crank attempt. This does not move funds; it triggers the existing
+queued delivery.
+
+wSOL (`So11111111111111111111111111111111111111112`) is supported as both
+input and output mint in private mode. The API only rejects
+`nativeDestinationAccount`, not the wSOL mint itself. Private swap output
+delivered as wSOL lands in the recipient's wSOL ATA, not as native SOL.
+
 When summarizing a hosted connection, use language like:
 "server is non-custodial; user signatures come from the local SAP profile or
 external signer." Avoid saying "signer not configured", "read-only only",
@@ -307,6 +334,13 @@ call `sap_runtime_repair_plan`. Do not ask the user to manually rebuild their
 runtime config unless the repair plan has already failed or runtime startup logs
 show a concrete package/runtime error.
 
+`sap_agent_runtime_status` includes a `runtimeDoctor` object. Use it as the
+fast secret-free local preflight for mode, signer, wallet path presence, policy
+limits, RPC, and paid/write readiness. It does not replace
+`sap_payments_readiness`, which is still required before paid/write work when
+the local bridge is visible because it checks live bridge balances and signer
+capability.
+
 For agent identity work, load the matching focused skills before acting:
 
 - register, update, profile image, capability, pricing, or x402 endpoint:
@@ -317,7 +351,7 @@ For agent identity work, load the matching focused skills before acting:
   `sap-sns`
 
 The canonical field and pipeline reference is
-`docs/16_SAP_AGENT_IDENTITY_PIPELINE.md`. Follow it before registry writes.
+`docs/16_AGENT_IDENTITY_REGISTRY_PIPELINE.md`. Follow it before registry writes.
 
 ## Profile Tools
 
@@ -358,6 +392,8 @@ Show the currently loaded/active config:
 
 ```bash
 npx sap-mcp-config show
+npx sap-mcp-config doctor
+npx sap-mcp-config doctor --json
 npx sap-mcp-config info
 ```
 

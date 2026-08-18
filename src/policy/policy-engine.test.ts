@@ -290,6 +290,24 @@ describe('PolicyEngine local enforcement', () => {
     expect(decision.reason).toContain('exceeds max');
   });
 
+  it('blocks negative transaction amounts', async () => {
+    const engine = new PolicyEngine(localConfig());
+    const decision = await engine.checkPermission('transaction:submit', {
+      amountSol: -1,
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain('invalid');
+  });
+
+  it('blocks non-finite transaction amounts', async () => {
+    const engine = new PolicyEngine(localConfig());
+    const decision = await engine.checkPermission('transaction:submit', {
+      amountSol: Number.NaN,
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain('invalid');
+  });
+
   it('allows when no amount is specified', async () => {
     const engine = new PolicyEngine(localConfig());
     const decision = await engine.checkPermission('registry:read');

@@ -1,0 +1,67 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-memory",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP memory module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "memory",
+    "source": "packages/memory/src",
+    "architectureDomain": "memory",
+    "boundary": "Agent memory store, tool call store, stream buffer, and Hermes bridge.",
+    "legacyCompatibilitySource": "src/memory",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./memory-store": {
+      "types": "./src/memory-store.ts",
+      "default": "./src/memory-store.ts"
+    },
+    "./tool-call-store": {
+      "types": "./src/tool-call-store.ts",
+      "default": "./src/tool-call-store.ts"
+    },
+    "./utils": {
+      "types": "./src/utils.ts",
+      "default": "./src/utils.ts"
+    },
+    "./auto-record": {
+      "types": "./src/auto-record.ts",
+      "default": "./src/auto-record.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./database": {
+      "types": "./src/database.ts",
+      "default": "./src/database.ts"
+    },
+    "./async-processor": {
+      "types": "./src/async-processor.ts",
+      "default": "./src/async-processor.ts"
+    },
+    "./hermes-bridge": {
+      "types": "./src/hermes-bridge.ts",
+      "default": "./src/hermes-bridge.ts"
+    },
+    "./stream-buffer-store": {
+      "types": "./src/stream-buffer-store.ts",
+      "default": "./src/stream-buffer-store.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

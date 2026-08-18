@@ -190,7 +190,7 @@ async function runConfigCLI() {
   
   // Run config CLI as subprocess
   const { spawn } = await import('child_process');
-  const config = spawn('node', ['dist/config-cli.js'], {
+  const config = spawn('node', ['dist/src/config-cli.js'], {
     stdio: 'inherit',
     cwd: process.cwd(),
   });

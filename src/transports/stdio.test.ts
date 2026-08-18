@@ -5,7 +5,7 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
   StdioServerTransport: vi.fn(),
 }));
 
-vi.mock('../core/logger.js', () => ({
+vi.mock('../../packages/core/src/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('../core/logger.js', () => ({
 }));
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { logger } from '../core/logger.js';
+import { logger } from '../../packages/core/src/logger.js';
 import { startStdioTransport } from './stdio.js';
 
 describe('stdio transport', () => {

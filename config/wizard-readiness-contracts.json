@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "title": "SAP MCP Wizard Readiness Contract",
+  "requiredSourceOfTruth": "@oobe-protocol-labs/sap-mcp-server/tools",
+  "requiredDefaultMode": "hosted-api",
+  "requiredDefaultRuntime": "codex",
+  "requiredSetupModes": ["full", "payments-only"],
+  "requiredReadinessStatuses": ["ready", "needs-attention"],
+  "requiredRuntimeActionStatuses": ["configured", "installed", "skipped"],
+  "requiredHostedDiscoveryUrls": [
+    {
+      "field": "hostedMcpUrl",
+      "url": "https://mcp.sap.oobeprotocol.ai/mcp"
+    },
+    {
+      "field": "serverInfoUrl",
+      "url": "https://mcp.sap.oobeprotocol.ai/server.json"
+    },
+    {
+      "field": "wizardDescriptorUrl",
+      "url": "https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json"
+    },
+    {
+      "field": "toolCatalogUrl",
+      "url": "https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-tool-catalog.json"
+    },
+    {
+      "field": "toolCatalogAliasUrl",
+      "url": "https://mcp.sap.oobeprotocol.ai/tool-catalog.json"
+    }
+  ],
+  "minimumRequiredLocalBridgeTools": 12,
+  "requiredLocalBridgeTools": [
+    "sap_payments_profile_current",
+    "sap_payments_wallet_guard",
+    "sap_payments_readiness",
+    "sap_payments_process_status",
+    "sap_payments_call_paid_tool",
+    "sap_x402_paid_call",
+    "sap_payments_call_external_x402",
+    "sap_payments_register_agent",
+    "sap_payments_update_agent",
+    "sap_payments_finalize_transaction",
+    "sap_payments_prepare_challenge",
+    "sap_payments_sign_challenge",
+    "sap_payments_verify_receipt",
+    "sap_payments_prepaid_balance",
+    "sap_payments_start_prepaid"
+  ],
+  "requiredHostedPrepaidTools": [
+    "sap_payments_fund_prepaid",
+    "sap_payments_prepaid_balance"
+  ]
+}

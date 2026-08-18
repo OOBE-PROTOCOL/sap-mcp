@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { Keypair, SystemProgram, Transaction } from '@solana/web3.js';
+import { createTransferInstruction } from '@solana/spl-token';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { createSapMcpServer } from './create-server.js';
 import type { SapMcpConfig } from '../core/types.js';
@@ -238,6 +239,46 @@ describe('createSapMcpServer', () => {
     expect(server._instructions).toContain('Escrow writes are V2-only');
     expect(server._instructions).not.toContain('280 tools');
     expect(server._instructions).not.toContain('248 tools');
+  });
+
+  it('exposes the modular tool catalog through bootstrap tools after registration', async () => {
+    const server = registeredServer(await createSapMcpServer(baseConfig()));
+    const quickContextResponse = await server.toolHandlers?.sap_quick_context?.({
+      include: ['tools'],
+      agentKnownVersion: MCP_SERVER_VERSION,
+      maxChars: 2000,
+    });
+    const runtimeStatusResponse = await server.toolHandlers?.sap_agent_runtime_status?.({
+      intent: 'connection',
+    });
+    const quickContextPayload = quickContextResponse?.structuredContent ?? {};
+    const runtimeStatusPayload = runtimeStatusResponse?.structuredContent ?? {};
+
+    expect(quickContextPayload.toolCatalog).toMatchObject({
+      profileId: 'readonly',
+      runtimeMode: 'readonly',
+      moduleCount: 19,
+      toolCount: 152,
+    });
+    expect(JSON.stringify(quickContextPayload.toolCatalog)).toContain('sap_payments_call_paid_tool');
+    expect(quickContextPayload.summary).toContain('modules:19');
+    expect(quickContextPayload.summary).toContain('catalogTools:152');
+    expect(runtimeStatusPayload.toolCatalog).toMatchObject({
+      profileId: 'readonly',
+      moduleCount: 19,
+      toolCount: 152,
+    });
+    expect(runtimeStatusPayload.runtimeDoctor).toMatchObject({
+      status: 'warning',
+      profileName: 'runtime-context',
+      summary: {
+        fail: 0,
+      },
+    });
+    expect(JSON.stringify(runtimeStatusPayload.runtimeDoctor)).toContain('paid-write-readiness');
+    expect(JSON.stringify(runtimeStatusPayload.runtimeDoctor)).not.toContain('keypair');
+    expect(JSON.stringify(runtimeStatusPayload.runtimeDoctor)).not.toContain('/Users/');
+    expect(JSON.stringify(runtimeStatusPayload.toolCatalog)).not.toContain('api_key=');
   });
 
   it('exposes standards context and mandate planning as free control-plane tools', async () => {
@@ -989,6 +1030,47 @@ describe('createSapMcpServer', () => {
     });
 
     expect(signed?.content[0]?.text).toContain('requires approval');
+  });
+
+  it('blocks signing SPL token transfers that would otherwise look like zero-SOL transactions', async () => {
+    const keypair = Keypair.generate();
+    const walletPath = join(mkdtempSync(join(tmpdir(), 'sap-mcp-test-')), 'agent-keypair.json');
+    writeFileSync(walletPath, JSON.stringify(Array.from(keypair.secretKey)), 'utf-8');
+
+    const server = registeredServer(await createSapMcpServer(baseConfig({
+      mode: 'local-dev-keypair',
+      walletPath,
+    })));
+
+    const tx = new Transaction().add(createTransferInstruction(
+      Keypair.generate().publicKey,
+      Keypair.generate().publicKey,
+      keypair.publicKey,
+      1_000n,
+    ));
+    tx.recentBlockhash = '11111111111111111111111111111111';
+    tx.feePayer = keypair.publicKey;
+
+    const transaction = tx.serialize({
+      requireAllSignatures: false,
+      verifySignatures: false,
+    }).toString('base64');
+
+    const preview = await server.toolHandlers?.sap_preview_transaction({
+      transaction,
+      encoding: 'base64',
+    });
+    const signed = await server.toolHandlers?.sap_sign_transaction({
+      transaction,
+      encoding: 'base64',
+    });
+
+    expect(JSON.parse(preview?.content[0]?.text ?? '{}')).toMatchObject({
+      nativeTransferSol: 0,
+      tokenTransferCount: 1,
+      policyAllowed: false,
+    });
+    expect(signed?.content[0]?.text).toContain('token transfer requires explicit approval');
   });
 
   it('exposes profile tools without leaking local keypair paths', async () => {

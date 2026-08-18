@@ -240,8 +240,8 @@ Correct recovery:
 4. If all attempts fail, report that x402 settlement is temporarily unavailable
    and ask the user to retry or repair the facilitator/RPC deployment.
 
-References: `USER_DOCS/03_PAYMENTS_X402_PAYSH.md` and
-`docs/06_PAYMENTS_X402_AND_PAYSH.md`.
+References: `USER_DOCS/03_X402_PAYSH_PAID_TOOL_RUNBOOK.md` and
+`docs/06_X402_PAYSH_MONETIZATION_SETTLEMENT.md`.
 
 ## Safety
 

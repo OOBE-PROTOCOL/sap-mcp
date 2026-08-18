@@ -46,10 +46,15 @@ describe('path resolution', () => {
       expect(dir).toBe(join('/custom/xdg-home', CONFIG_APP_DIR));
     });
 
-    it('defaults to ~/.config/<app> when XDG_CONFIG_HOME is unset', () => {
+    it('defaults to platform-specific config dir when XDG_CONFIG_HOME is unset', () => {
       delete process.env.XDG_CONFIG_HOME;
       const dir = getPreferredConfigDir();
-      expect(dir).toBe(join(homedir(), '.config', CONFIG_APP_DIR));
+      if (process.platform === 'win32') {
+        // Windows uses APPDATA when XDG_CONFIG_HOME is unset.
+        expect(dir.endsWith(CONFIG_APP_DIR)).toBe(true);
+      } else {
+        expect(dir).toBe(join(homedir(), '.config', CONFIG_APP_DIR));
+      }
     });
   });
 
@@ -83,17 +88,26 @@ describe('path resolution', () => {
       expect(getDataDir()).toBe(join('/custom/xdg-data', CONFIG_APP_DIR));
     });
 
-    it('defaults to ~/.local/share/<app> when XDG_DATA_HOME is unset', () => {
+    it('defaults to platform-specific data dir when XDG_DATA_HOME is unset', () => {
       delete process.env.XDG_DATA_HOME;
-      expect(getDataDir()).toBe(join(homedir(), '.local', 'share', CONFIG_APP_DIR));
+      const dir = getDataDir();
+      if (process.platform === 'win32') {
+        expect(dir.endsWith(CONFIG_APP_DIR)).toBe(true);
+      } else {
+        expect(dir).toBe(join(homedir(), '.local', 'share', CONFIG_APP_DIR));
+      }
     });
   });
 
   describe('getKeypairsDir()', () => {
     it('returns a keypairs subdirectory inside the preferred config dir', () => {
       delete process.env.XDG_CONFIG_HOME;
-      const expected = join(homedir(), '.config', CONFIG_APP_DIR, 'keypairs');
-      expect(getKeypairsDir()).toBe(expected);
+      if (process.platform === 'win32') {
+        expect(getKeypairsDir().endsWith(join(CONFIG_APP_DIR, 'keypairs'))).toBe(true);
+      } else {
+        const expected = join(homedir(), '.config', CONFIG_APP_DIR, 'keypairs');
+        expect(getKeypairsDir()).toBe(expected);
+      }
     });
 
     it('respects XDG_CONFIG_HOME', () => {

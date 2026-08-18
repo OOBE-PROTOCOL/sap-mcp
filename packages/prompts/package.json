@@ -1,0 +1,80 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-prompts",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP prompts module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "prompts",
+    "source": "packages/prompts/src",
+    "architectureDomain": "prompts",
+    "boundary": "MCP prompt templates for developer, payments, context, execution-proof, and registry.",
+    "legacyCompatibilitySource": "src/prompts",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./register-prompts": {
+      "types": "./src/register-prompts.ts",
+      "default": "./src/register-prompts.ts"
+    },
+    "./developer/generate-sap-integration.prompt": {
+      "types": "./src/developer/generate-sap-integration.prompt.ts",
+      "default": "./src/developer/generate-sap-integration.prompt.ts"
+    },
+    "./developer/debug-sap-error.prompt": {
+      "types": "./src/developer/debug-sap-error.prompt.ts",
+      "default": "./src/developer/debug-sap-error.prompt.ts"
+    },
+    "./payments/explain-x402-settlement.prompt": {
+      "types": "./src/payments/explain-x402-settlement.prompt.ts",
+      "default": "./src/payments/explain-x402-settlement.prompt.ts"
+    },
+    "./payments/create-paid-api.prompt": {
+      "types": "./src/payments/create-paid-api.prompt.ts",
+      "default": "./src/payments/create-paid-api.prompt.ts"
+    },
+    "./context/sap-agent-context.prompt": {
+      "types": "./src/context/sap-agent-context.prompt.ts",
+      "default": "./src/context/sap-agent-context.prompt.ts"
+    },
+    "./context/sap-agent-start.prompt": {
+      "types": "./src/context/sap-agent-start.prompt.ts",
+      "default": "./src/context/sap-agent-start.prompt.ts"
+    },
+    "./context/sap-agent-intent-router.prompt": {
+      "types": "./src/context/sap-agent-intent-router.prompt.ts",
+      "default": "./src/context/sap-agent-intent-router.prompt.ts"
+    },
+    "./execution-proof/explain-proof-of-execution.prompt": {
+      "types": "./src/execution-proof/explain-proof-of-execution.prompt.ts",
+      "default": "./src/execution-proof/explain-proof-of-execution.prompt.ts"
+    },
+    "./execution-proof/verify-execution-proof.prompt": {
+      "types": "./src/execution-proof/verify-execution-proof.prompt.ts",
+      "default": "./src/execution-proof/verify-execution-proof.prompt.ts"
+    },
+    "./registry/analyze-sap-agent.prompt": {
+      "types": "./src/registry/analyze-sap-agent.prompt.ts",
+      "default": "./src/registry/analyze-sap-agent.prompt.ts"
+    },
+    "./registry/register-sap-agent.prompt": {
+      "types": "./src/registry/register-sap-agent.prompt.ts",
+      "default": "./src/registry/register-sap-agent.prompt.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-mcp-adapter": "workspace:*"
+  }
+}

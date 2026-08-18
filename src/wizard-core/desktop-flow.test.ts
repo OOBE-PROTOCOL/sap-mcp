@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MCP_SERVER_VERSION } from '../core/constants.js';
 import {
   createDefaultDesktopWizardDraft,
+  getDesktopHostedDiscovery,
   getDesktopProfileStatuses,
   saveDesktopWizardDraft,
   validateDesktopWizardDraft,
@@ -12,6 +13,21 @@ import {
 
 const ORIGINAL_ENV = { ...process.env };
 const NPM_PACKAGE = `@oobe-protocol-labs/sap-mcp-server@${MCP_SERVER_VERSION}`;
+const wizardReadinessContracts = JSON.parse(readFileSync(
+  join(process.cwd(), 'config/wizard-readiness-contracts.json'),
+  'utf-8',
+)) as {
+  requiredSourceOfTruth: string;
+  requiredDefaultMode: string;
+  requiredDefaultRuntime: string;
+  requiredSetupModes: string[];
+  requiredReadinessStatuses: string[];
+  requiredRuntimeActionStatuses: string[];
+  requiredHostedDiscoveryUrls: { field: keyof ReturnType<typeof getDesktopHostedDiscovery>; url: string }[];
+  minimumRequiredLocalBridgeTools: number;
+  requiredLocalBridgeTools: string[];
+  requiredHostedPrepaidTools: string[];
+};
 
 describe('desktop wizard flow', () => {
   afterEach(() => {
@@ -21,12 +37,26 @@ describe('desktop wizard flow', () => {
   it('defaults to hosted SAP MCP plus the local payment bridge path', () => {
     const draft = createDefaultDesktopWizardDraft();
 
-    expect(draft.mode).toBe('hosted-api');
-    expect(draft.setupMode).toBe('full');
+    expect(draft.mode).toBe(wizardReadinessContracts.requiredDefaultMode);
+    expect(wizardReadinessContracts.requiredSetupModes).toContain(draft.setupMode);
     expect(draft.createNewWallet).toBe(true);
-    expect(draft.configureRuntimes).toContain('codex');
+    expect(draft.configureRuntimes).toContain(wizardReadinessContracts.requiredDefaultRuntime);
     expect(draft.installAddonBundle).toBe(true);
     expect(validateDesktopWizardDraft(draft)).toEqual([]);
+  });
+
+  it('exposes hosted discovery URLs for server metadata, wizard, and tool catalog', () => {
+    const discovery = getDesktopHostedDiscovery();
+
+    for (const entry of wizardReadinessContracts.requiredHostedDiscoveryUrls) {
+      expect(discovery[entry.field]).toBe(entry.url);
+    }
+    expect(discovery.sourceOfTruth).toBe(wizardReadinessContracts.requiredSourceOfTruth);
+    expect(discovery.requiredLocalBridgeTools.length).toBeGreaterThanOrEqual(
+      wizardReadinessContracts.minimumRequiredLocalBridgeTools,
+    );
+    expect(discovery.requiredLocalBridgeTools).toEqual(wizardReadinessContracts.requiredLocalBridgeTools);
+    expect(discovery.requiredHostedPrepaidTools).toEqual(wizardReadinessContracts.requiredHostedPrepaidTools);
   });
 
   it('full setup creates an active local profile and a Codex hosted sap_payments bridge', async () => {
@@ -61,7 +91,9 @@ describe('desktop wizard flow', () => {
       expect(codex).toContain('SAP_ALLOWED_TOOLS = "all"');
       expect(codex).not.toContain('mcp-remote');
       expect(result.runtimeActions.some((action) => action.runtime === 'Codex' && action.status === 'configured')).toBe(true);
+      expect(wizardReadinessContracts.requiredRuntimeActionStatuses).toContain(result.runtimeActions[0]?.status);
       expect(result.readiness.status).toBe('ready');
+      expect(wizardReadinessContracts.requiredReadinessStatuses).toContain(result.readiness.status);
       expect(result.readiness.profileIssues).toEqual([]);
       expect(result.readiness.runtimeIssues).toEqual([]);
 

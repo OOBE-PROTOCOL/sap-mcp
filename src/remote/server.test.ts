@@ -9,6 +9,7 @@ import {
   buildMarketplaceConfigurationMetadata,
   buildPublicPayShProviderYaml,
   buildPublicServerInfo,
+  buildPublicToolCatalogDocument,
   buildPremiumDiscoveryDocument,
   buildStaticServerCard,
   buildWizardInstallDescriptor,
@@ -321,6 +322,7 @@ describe('remote MCP server config', () => {
 
     expect(descriptor.hostedMcpUrl).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
     expect(descriptor.configDirectory).toBe('~/.config/mcp-sap');
+    expect(descriptor.endpoints.toolCatalog).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-tool-catalog.json');
     expect(descriptor.requiredFor).toContain('signing x402/pay.sh payment payloads');
     expect(descriptor.commands.runWizard).toContain('@oobe-protocol-labs/sap-mcp-server');
     expect(descriptor.commands.installX402PaidCallAddon).toContain('sap-mcp-config wizard');
@@ -384,6 +386,7 @@ describe('remote MCP server config', () => {
     expect(info.endpoints.smitheryConfigSchema).toBe('https://mcp.sap.oobeprotocol.ai/smithery.config.schema.json');
     expect(info.endpoints.smitheryServerCard).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/mcp/server-card.json');
     expect(info.endpoints.payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
+    expect(info.endpoints.toolCatalog).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-tool-catalog.json');
     expect(info.endpoints.faviconIco).toBe('https://mcp.sap.oobeprotocol.ai/favicon.ico');
     expect(info.endpoints.wizardDownloads).toBe('https://mcp.sap.oobeprotocol.ai/wizard/downloads.json');
     expect(info.downloads.desktopWizard.windowsX64Setup).toBe(`${githubReleaseBaseUrl}/SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`);
@@ -395,6 +398,63 @@ describe('remote MCP server config', () => {
     expect(info.security.rpcSecretsExposed).toBe(false);
     expect(JSON.stringify(info)).not.toContain('api_key=');
     expect(JSON.stringify(info)).not.toContain('/Users/keepeeto');
+  });
+
+  it('publishes a secret-free hosted tool catalog for wizard and agent discovery', () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const document = buildPublicToolCatalogDocument(req, publicRemoteConfig, appConfig) as {
+      kind: string;
+      serverVersion: string;
+      sourceOfTruth: string;
+      links: Record<string, string>;
+      security: {
+        keypairBytesExposed: boolean;
+        storesUserKeypairs: boolean;
+        signerBoundary: string;
+      };
+      localBridge: {
+        serverName: string;
+        readinessTool: string;
+        paidCallTool: string;
+        finalizerTool: string;
+      };
+      catalog: {
+        profileId: string;
+        runtimeMode: string;
+        moduleCount: number;
+        toolCount: number;
+        modules: Array<{ id: string; expectedTools: string[] }>;
+        policy: {
+          hostedAccountlessBlockedTools: string[];
+          localSignerTools: string[];
+        };
+      };
+    };
+
+    expect(document.kind).toBe('sap-mcp-tool-catalog');
+    expect(document.serverVersion).toBe(MCP_SERVER_VERSION);
+    expect(document.sourceOfTruth).toBe('@oobe-protocol-labs/sap-mcp-server/tools');
+    expect(document.links.mcp).toBe('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(document.links.wizard).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-wizard.json');
+    expect(document.security.keypairBytesExposed).toBe(false);
+    expect(document.security.storesUserKeypairs).toBe(false);
+    expect(document.security.signerBoundary).toContain('local sap_payments bridge');
+    expect(document.localBridge).toMatchObject({
+      serverName: 'sap_payments',
+      readinessTool: 'sap_payments_readiness',
+      paidCallTool: 'sap_payments_call_paid_tool',
+      finalizerTool: 'sap_payments_finalize_transaction',
+    });
+    expect(document.catalog.profileId).toBe('hosted-accountless');
+    expect(document.catalog.runtimeMode).toBe('hosted-api');
+    expect(document.catalog.moduleCount).toBe(19);
+    expect(document.catalog.toolCount).toBe(139);
+    expect(document.catalog.modules.map((module) => module.id)).toContain('hosted-prepaid');
+    expect(document.catalog.modules.map((module) => module.id)).not.toContain('x402-local-helper');
+    expect(document.catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
+    expect(document.catalog.policy.localSignerTools).toContain('sap_payments_prepaid_balance');
+    expect(JSON.stringify(document)).not.toContain('api_key=');
+    expect(JSON.stringify(document)).not.toContain('/Users/keepeeto');
   });
 
   it('publishes a Smithery-compatible static MCP server card', async () => {
@@ -566,6 +626,7 @@ describe('remote MCP server config', () => {
         premiumCatalog: string;
         premiumStreams: string;
         premiumWebhooks: string;
+        toolCatalog: string;
         x402Discovery: string;
         payShProvider: string;
         payments: typeof paymentDiscovery;
@@ -616,6 +677,7 @@ describe('remote MCP server config', () => {
     expect(openApi['x-discovery'].premiumCatalog).toBe('https://mcp.sap.oobeprotocol.ai/premium/catalog.json');
     expect(openApi['x-discovery'].premiumStreams).toBe('https://mcp.sap.oobeprotocol.ai/premium/streams.json');
     expect(openApi['x-discovery'].premiumWebhooks).toBe('https://mcp.sap.oobeprotocol.ai/premium/webhooks.json');
+    expect(openApi['x-discovery'].toolCatalog).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/sap-mcp-tool-catalog.json');
     expect(openApi['x-discovery'].x402Discovery).toBe('https://mcp.sap.oobeprotocol.ai/.well-known/x402');
     expect(openApi['x-discovery'].payShProvider).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
     expect(openApi['x-pay-sh'].providerYaml).toBe('https://mcp.sap.oobeprotocol.ai/pay/provider.yml');
@@ -791,13 +853,17 @@ describe('remote MCP server config', () => {
   it('resolves hosted docs markdown safely from docs and USER_DOCS', () => {
     const root = resolvePublicDocsMarkdown('GET', '/docs/README.md');
     const sidebar = resolvePublicDocsMarkdown('GET', '/docs/_sidebar.md');
-    const user = resolvePublicDocsMarkdown('GET', '/docs/user/01_HOSTED_REMOTE_MCP.md');
+    const user = resolvePublicDocsMarkdown('GET', '/docs/user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP.md');
+    const legacyUser = resolvePublicDocsMarkdown('GET', '/docs/user/01_HOSTED_REMOTE_MCP.md');
+    const legacyEngineering = resolvePublicDocsMarkdown('GET', '/docs/05_REMOTE_VPS_DEPLOYMENT.md');
     const head = resolvePublicDocsMarkdown('HEAD', '/docs/README.md');
 
     expect(root?.contentType).toBe('text/markdown; charset=utf-8');
     expect(root?.body).toContain('SAP MCP Documentation');
-    expect(sidebar?.body).toContain('Hosted Remote MCP');
+    expect(sidebar?.body).toContain('Hosted MCP Local Bridge Setup');
     expect(user?.body).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(legacyUser?.body).toContain('https://mcp.sap.oobeprotocol.ai/mcp');
+    expect(legacyEngineering?.body).toContain('Hosted user signing/payment onboarding');
     expect(head?.body).toBeUndefined();
     expect(head?.contentLength).toBeGreaterThan(0);
     expect(resolvePublicDocsMarkdown('GET', '/docs/../package.json')).toBeUndefined();

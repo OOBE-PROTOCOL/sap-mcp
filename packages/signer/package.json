@@ -1,0 +1,64 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-signer",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP signer module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "signer",
+    "source": "packages/signer/src",
+    "architectureDomain": "signer",
+    "boundary": "Signer resolver, signing proxy, external signer, wallet guard, and policy-enforcing wallet.",
+    "legacyCompatibilitySource": "src/signer",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./load-keypair": {
+      "types": "./src/load-keypair.ts",
+      "default": "./src/load-keypair.ts"
+    },
+    "./signing-proxy": {
+      "types": "./src/signing-proxy.ts",
+      "default": "./src/signing-proxy.ts"
+    },
+    "./external-signer": {
+      "types": "./src/external-signer.ts",
+      "default": "./src/external-signer.ts"
+    },
+    "./signer-resolver": {
+      "types": "./src/signer-resolver.ts",
+      "default": "./src/signer-resolver.ts"
+    },
+    "./wallet-guard": {
+      "types": "./src/wallet-guard.ts",
+      "default": "./src/wallet-guard.ts"
+    },
+    "./local-keypair-signer": {
+      "types": "./src/local-keypair-signer.ts",
+      "default": "./src/local-keypair-signer.ts"
+    },
+    "./policy-enforcing-wallet": {
+      "types": "./src/policy-enforcing-wallet.ts",
+      "default": "./src/policy-enforcing-wallet.ts"
+    },
+    "./signer-types": {
+      "types": "./src/signer-types.ts",
+      "default": "./src/signer-types.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*",
+    "@oobe-protocol-labs/sap-mcp-tools": "workspace:*"
+  }
+}

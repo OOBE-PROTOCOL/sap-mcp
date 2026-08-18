@@ -1,38 +1,39 @@
-# SAP MCP — optional catalog entry for ClawPump Agent
+# SAP MCP - optional catalog entry for ClawPump Agent
 #
 # Presence in optional-mcps/ = approval. Merged via PR review.
-# This registers SAP MCP as an optional MCP server in the ClawPump Agent
-# catalog. ClawPump is a Hermes fork, so the config shape mirrors Hermes.
 #
-# SAP MCP provides:
+# SAP MCP is an optional coordination and payment layer for ClawPump agents:
 #   - On-chain agent registry with discoverability (protocol: "clawpump")
-#   - x402/pay.sh payment layer with local signing
-#   - Escrow V2 (prepaid, on-chain guarantee) and subscriptions
-#   - Reputation, staking, dispute resolution
-#   - Skills bundle (sap_skills_install with agent: "clawpump")
+#   - x402/pay.sh payment layer with local signing (non-custodial)
+#   - Skills discovery and optional skills install
+#
+# ClawPump is a Hermes downstream fork: its config lives in
+# ~/.hermes/config.yaml (override via HERMES_HOME), resolved by Hermes'
+# get_hermes_home(). Skills install to ~/.hermes/skills/.
 #
 # After install, a ClawPump agent can:
 #   1. Register on-chain as a SAP merchant (discoverable by all SAP clients)
-#   2. Accept x402 payments for its 131+ tools
-#   3. Receive escrow or subscription payments from other agents
-#   4. Install SAP skills into ~/.clawpump/skills/
-#
-# PR target: https://github.com/Clawpump/claw-agent/blob/main/optional-mcps/sap-mcp/manifest.yaml
+#   2. Accept x402 payments for its tools
+#   3. Opt into SAP skills installation under ~/.hermes/skills/
 manifest_version: 1
 
 name: sap-mcp
-description: >
-  Official MCP gateway for OOBE Protocol SAP — AI agents can interact with
+description: >-
+  Official MCP gateway for OOBE Protocol SAP - AI agents can interact with
   SAP identity, registry, reputation, tools, memory, payments, settlement,
   and proof-of-execution on Solana. Supports agent runtimes including Hermes,
-  Codex, Claude, OpenClaw, and ClawPump.
+  Codex, Claude, OpenClaw, and ClawPump. The MCP layer is read-only by
+  default; paid and write tools (skills install, register, escrow,
+  settlement, subscription, staking, dispute) are opt-in and require a local
+  SAP profile with a wallet. The hosted server is non-custodial: a local
+  stdio sap_payments bridge signs x402 challenges with the user wallet; keys
+  never leave the machine.
 
 source: https://mcp.sap.oobeprotocol.ai
 
-# SAP MCP ships a remote MCP server: Streamable HTTP, no auth at the MCP
-# layer (payment is handled per-call via x402/pay.sh). The local payment
-# bridge (sap_payments) runs as a stdio MCP server for x402 challenge
-# signing with the user's SAP profile wallet.
+# SAP MCP ships a remote MCP server over Streamable HTTP. In Hermes/ClawPump
+# config, omit a transport key unless the server is SSE; URL-only entries use
+# Streamable HTTP by default.
 transport:
   type: http
   url: https://mcp.sap.oobeprotocol.ai/mcp
@@ -42,9 +43,10 @@ auth:
 
 # Tool selection at install time.
 # SAP MCP exposes 300+ tools. The default-enabled set below covers free
-# discovery, identity, cost estimation, and skills — the read-only and
-# bootstrap surface. Write tools (register, escrow, settlement, payments)
-# require a local SAP profile with a wallet and are opt-in.
+# discovery, identity, cost estimation, and skills metadata - the read-only
+# and bootstrap surface. Write tools (skills install, register, escrow,
+# settlement, payments, subscription, staking, dispute) require a local SAP
+# profile with a wallet and are opt-in.
 tools:
   default_enabled:
     # bootstrap
@@ -59,10 +61,9 @@ tools:
     - sap_is_agent_active
     - sap_network_stats
     - sap_fetch_protocol_index
-    # skills (free)
+    # skills metadata (free)
     - sap_skills_list
     - sap_skills_bundle
-    - sap_skills_install
     - sap_skills_upgrade_plan
     # profile (free reads)
     - sap_profile_current
@@ -76,20 +77,23 @@ post_install: |
 
   Next steps:
   1. Run the SAP MCP wizard to create your profile and configure the local
-     payment bridge:
-     npx @oobe-protocol-labs/sap-mcp-server@latest sap-mcp-config wizard
+     payment bridge. Use the reviewed version:
+     npx @oobe-protocol-labs/sap-mcp-server@0.9.74 sap-mcp-config wizard
      Choose "ClawPump" when prompted for your runtime.
 
-  2. Install SAP skills into ~/.clawpump/skills/:
-     Call sap_skills_install with { "agent": "clawpump", "confirm": true }
+  2. Review SAP skills:
+     Call sap_skills_list, sap_skills_bundle, or sap_skills_upgrade_plan.
+     Installing skills writes into ~/.hermes/skills/ and is opt-in.
 
   3. Register your ClawPump agent on-chain (optional, for discoverability):
-     Call sap_agent_identity_plan, then sap_payments_register_agent with
+     First enable write/paid tools with hermes mcp configure sap-mcp.
+     Then call sap_agent_identity_plan and sap_payments_register_agent with
      confirm: true. Add your agent to the "clawpump" protocol index.
 
   4. Discover ClawPump agents:
      Call sap_discover_agents with { "protocol": "clawpump" }
 
-  WRITE/PAID TOOLS (register, escrow, settle, payments) require a local SAP
-  profile with a wallet. Enable them in the install checklist or later with:
-    hermes mcp configure sap-mcp
+  WRITE/PAID TOOLS (skills install, register, escrow, settle, subscription,
+  staking, payments, dispute) require a local SAP profile with a wallet.
+  Enable them in the install checklist or later with:
+  hermes mcp configure sap-mcp

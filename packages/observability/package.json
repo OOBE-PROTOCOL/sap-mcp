@@ -1,0 +1,30 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-observability",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP observability module \u2014 internal workspace package.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "observability",
+    "source": "packages/observability/src",
+    "architectureDomain": "observability",
+    "boundary": "Metrics collection and exporter.",
+    "legacyCompatibilitySource": "src/observability",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    "./metrics": {
+      "types": "./src/metrics.ts",
+      "default": "./src/metrics.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

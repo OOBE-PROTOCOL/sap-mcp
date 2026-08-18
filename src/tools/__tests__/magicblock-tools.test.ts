@@ -86,10 +86,10 @@ describe('MagicBlock tools registration', () => {
     expect(() => registerMagicBlockTools(server, createMockContext())).not.toThrow();
   });
 
-  it('registers tools in the server store (20 magicblock_ tools)', () => {
+  it('registers tools in the server store (23 magicblock_ tools)', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
-    expect(getMagicBlockTools(server)).toHaveLength(20);
+    expect(getMagicBlockTools(server)).toHaveLength(23);
   });
 
   it('registers all 6 ER Router tools', () => {
@@ -110,9 +110,9 @@ describe('MagicBlock tools registration', () => {
     const names = getMagicBlockTools(server).map((t) => t.name);
     const expected = [
       'magicblock_health', 'magicblock_challenge', 'magicblock_login',
-      'magicblock_balance', 'magicblock_privateBalance',
+      'magicblock_balance', 'magicblock_private_balance', 'magicblock_privateBalance',
       'magicblock_deposit', 'magicblock_transfer', 'magicblock_withdraw',
-      'magicblock_swapQuote', 'magicblock_swap',
+      'magicblock_swap_quote', 'magicblock_swapQuote', 'magicblock_swap',
       'magicblock_initializeMint', 'magicblock_isMintInitialized',
     ];
     for (const name of expected) {
@@ -132,7 +132,7 @@ describe('MagicBlock tools registration', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const mbTools = getMagicBlockTools(server);
-    expect(mbTools).toHaveLength(20);
+    expect(mbTools).toHaveLength(23);
     for (const tool of mbTools) {
       expect(tool.description).toBeTruthy();
       expect(tool.description.length).toBeGreaterThan(20);
@@ -186,7 +186,7 @@ describe('MagicBlock tools registration', () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const handlers = getMagicBlockHandlers(server);
-    expect(Object.keys(handlers)).toHaveLength(20);
+    expect(Object.keys(handlers)).toHaveLength(23);
   });
 
   it('documents required transfer routing fields and base-unit amount type', () => {
@@ -235,7 +235,7 @@ describe('MagicBlock tools registration', () => {
     expect(responseText(response)).toContain('magicblock_private_swap_destination_required');
   });
 
-  it('fails closed for private swaps that output wSOL because shuttle delivery is unsafe', async () => {
+  it('rejects private swaps without minDelayMs', async () => {
     const server = createServer();
     registerMagicBlockTools(server, createMockContext());
     const handler = getMagicBlockHandlers(server).magicblock_swap;
@@ -244,22 +244,113 @@ describe('MagicBlock tools registration', () => {
       userPublicKey: '11111111111111111111111111111111',
       destination: '11111111111111111111111111111111',
       visibility: 'private',
+      maxDelayMs: '0',
+      split: 1,
       quoteResponse: {
         inputMint: 'EikyJKSVWPK28rX5FG8KyJcSzv3D2b2Qg7VodzqQoobe',
-        outputMint: 'So11111111111111111111111111111111111111112',
-        inAmount: '1000',
-        outAmount: '1',
-        otherAmountThreshold: '1',
-        swapMode: 'ExactIn',
-        slippageBps: 50,
-        priceImpactPct: '0',
-        routePlan: [],
-        contextSlot: 1,
-        timeTaken: 0,
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        inAmount: '1000', outAmount: '1', otherAmountThreshold: '1',
+        swapMode: 'ExactIn', slippageBps: 50, priceImpactPct: '0',
+        routePlan: [], contextSlot: 1, timeTaken: 0,
       },
     });
 
-    expect(responseText(response)).toContain('magicblock_private_swap_wsol_output_blocked');
+    expect(responseText(response)).toContain('magicblock_private_swap_min_delay_required');
+  });
+
+  it('rejects private swaps without maxDelayMs', async () => {
+    const server = createServer();
+    registerMagicBlockTools(server, createMockContext());
+    const handler = getMagicBlockHandlers(server).magicblock_swap;
+
+    const response = await handler({
+      userPublicKey: '11111111111111111111111111111111',
+      destination: '11111111111111111111111111111111',
+      visibility: 'private',
+      minDelayMs: '0',
+      split: 1,
+      quoteResponse: {
+        inputMint: 'EikyJKSVWPK28rX5FG8KyJcSzv3D2b2Qg7VodzqQoobe',
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        inAmount: '1000', outAmount: '1', otherAmountThreshold: '1',
+        swapMode: 'ExactIn', slippageBps: 50, priceImpactPct: '0',
+        routePlan: [], contextSlot: 1, timeTaken: 0,
+      },
+    });
+
+    expect(responseText(response)).toContain('magicblock_private_swap_max_delay_required');
+  });
+
+  it('rejects private swaps without split', async () => {
+    const server = createServer();
+    registerMagicBlockTools(server, createMockContext());
+    const handler = getMagicBlockHandlers(server).magicblock_swap;
+
+    const response = await handler({
+      userPublicKey: '11111111111111111111111111111111',
+      destination: '11111111111111111111111111111111',
+      visibility: 'private',
+      minDelayMs: '0',
+      maxDelayMs: '0',
+      quoteResponse: {
+        inputMint: 'EikyJKSVWPK28rX5FG8KyJcSzv3D2b2Qg7VodzqQoobe',
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        inAmount: '1000', outAmount: '1', otherAmountThreshold: '1',
+        swapMode: 'ExactIn', slippageBps: 50, priceImpactPct: '0',
+        routePlan: [], contextSlot: 1, timeTaken: 0,
+      },
+    });
+
+    expect(responseText(response)).toContain('magicblock_private_swap_split_required');
+  });
+
+  it('rejects private swaps with split out of range', async () => {
+    const server = createServer();
+    registerMagicBlockTools(server, createMockContext());
+    const handler = getMagicBlockHandlers(server).magicblock_swap;
+
+    const response = await handler({
+      userPublicKey: '11111111111111111111111111111111',
+      destination: '11111111111111111111111111111111',
+      visibility: 'private',
+      minDelayMs: '0',
+      maxDelayMs: '0',
+      split: 20,
+      quoteResponse: {
+        inputMint: 'EikyJKSVWPK28rX5FG8KyJcSzv3D2b2Qg7VodzqQoobe',
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        inAmount: '1000', outAmount: '1', otherAmountThreshold: '1',
+        swapMode: 'ExactIn', slippageBps: 50, priceImpactPct: '0',
+        routePlan: [], contextSlot: 1, timeTaken: 0,
+      },
+    });
+
+    expect(responseText(response)).toContain('magicblock_private_swap_split_range');
+  });
+
+  it('rejects private swaps with legacy transaction flag', async () => {
+    const server = createServer();
+    registerMagicBlockTools(server, createMockContext());
+    const handler = getMagicBlockHandlers(server).magicblock_swap;
+
+    const response = await handler({
+      userPublicKey: '11111111111111111111111111111111',
+      destination: '11111111111111111111111111111111',
+      visibility: 'private',
+      minDelayMs: '0',
+      maxDelayMs: '0',
+      split: 1,
+      asLegacyTransaction: true,
+      quoteResponse: {
+        inputMint: 'EikyJKSVWPK28rX5FG8KyJcSzv3D2b2Qg7VodzqQoobe',
+        outputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        inAmount: '1000', outAmount: '1', otherAmountThreshold: '1',
+        swapMode: 'ExactIn', slippageBps: 50, priceImpactPct: '0',
+        routePlan: [], contextSlot: 1, timeTaken: 0,
+      },
+    });
+
+    expect(responseText(response)).toContain('magicblock_private_swap_legacy_not_allowed');
   });
 
   it('VRF tools have real descriptions without not-yet-implemented', () => {

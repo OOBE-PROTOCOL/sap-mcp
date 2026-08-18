@@ -24,6 +24,66 @@ type ProfileStatus = {
   issues: string[];
 };
 
+type HostedDiscovery = {
+  hostedMcpUrl: string;
+  serverInfoUrl: string;
+  wizardDescriptorUrl: string;
+  toolCatalogUrl: string;
+  toolCatalogAliasUrl: string;
+  sourceOfTruth: '@oobe-protocol-labs/sap-mcp-server/tools';
+  requiredLocalBridgeTools: string[];
+};
+
+type HostedToolCatalogDocument = {
+  kind: 'sap-mcp-tool-catalog';
+  version: string;
+  serverVersion: string;
+  generatedAt: string;
+  sourceOfTruth: '@oobe-protocol-labs/sap-mcp-server/tools';
+  links: Record<string, string>;
+  security: {
+    keypairBytesExposed: boolean;
+    storesUserKeypairs: boolean;
+    signerBoundary: string;
+  };
+  localBridge: {
+    serverName: string;
+    readinessTool: string;
+    paidCallTool: string;
+    finalizerTool: string;
+    wizardCommand: string;
+  };
+  catalog: {
+    profileId: string;
+    profileDescription: string;
+    runtimeMode: WizardDraft['mode'];
+    paymentsBridgeOnly: boolean;
+    moduleCount: number;
+    toolCount: number;
+    categories: Array<{
+      category: string;
+      modules: number;
+      tools: number;
+    }>;
+    policy: {
+      paymentTiers: Record<string, number>;
+      intents: Record<string, number>;
+      hostedAccountlessBlockedTools: string[];
+      localSignerTools: string[];
+    };
+    modules: Array<{
+      id: string;
+      title: string;
+      description: string;
+      category: string;
+      order: number;
+      mode: string;
+      requires: string[];
+      expectedTools: string[];
+    }>;
+  };
+};
+
 type WizardDraft = {
   setupMode: 'full' | 'payments-only';
   profileName: string;
@@ -77,7 +137,8 @@ type WizardResult = {
 
 interface Window {
   sapMcpWizard: {
-    getInitialState: () => Promise<{ draft: WizardDraft; runtimes: RuntimeStatus[]; profiles: ProfileStatus[] }>;
+    getInitialState: () => Promise<{ draft: WizardDraft; hostedDiscovery: HostedDiscovery; runtimes: RuntimeStatus[]; profiles: ProfileStatus[] }>;
+    getHostedToolCatalog: (url: string) => Promise<HostedToolCatalogDocument>;
     save: (draft: WizardDraft) => Promise<WizardResult>;
     openExternal: (url: string) => Promise<void>;
   };

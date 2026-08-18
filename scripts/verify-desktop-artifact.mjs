@@ -118,7 +118,7 @@ function assertPackagedRenderer(asar, archive) {
     'apps/desktop/main.mjs',
     'apps/desktop/preload.cjs',
     'apps/desktop/dist-renderer/index.html',
-    'dist/wizard-core/desktop-flow.js',
+    'dist/packages/wizard-core/src/desktop-flow.js',
   ];
 
   for (const requiredFile of requiredFiles) {

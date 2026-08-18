@@ -1,0 +1,42 @@
+{
+  "name": "@oobe-protocol-labs/sap-mcp-adapters",
+  "version": "0.9.80",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "SAP MCP adapters module \u2014 Solana connection and public key utilities.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sapMcp": {
+    "boundaryId": "adapters",
+    "source": "packages/adapters/src",
+    "architectureDomain": "adapters",
+    "boundary": "Solana connection and public key adapter utilities.",
+    "legacyCompatibilitySource": "src/adapters/solana",
+    "physicalSource": true
+  },
+  "scripts": {
+    "typecheck": "tsc -p ../../tsconfig.packages.json --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./solana/connection": {
+      "types": "./src/solana/connection.ts",
+      "default": "./src/solana/connection.ts"
+    },
+    "./solana/public-key": {
+      "types": "./src/solana/public-key.ts",
+      "default": "./src/solana/public-key.ts"
+    },
+    "./solana/commitment": {
+      "types": "./src/solana/commitment.ts",
+      "default": "./src/solana/commitment.ts"
+    }
+  },
+  "dependencies": {
+    "@oobe-protocol-labs/sap-mcp-core": "workspace:*"
+  }
+}

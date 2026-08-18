@@ -60,13 +60,14 @@ Then configure your MCP client with:
 
 For paid/write hosted tools, also configure the local `sap_payments` bridge. The wizard does this automatically for supported runtimes. See:
 
-- [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
-- [Client Configs](user/04_CLIENT_CONFIGS.md)
-- [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
-- [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
-- [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
-- [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
-- [Agentic Standards Alignment](19_AGENTIC_STANDARDS_ALIGNMENT.md)
+- [Desktop Wizard Install Runbook](user/06_DESKTOP_WIZARD_INSTALL_RUNBOOK.md)
+- [MCP Client Configuration Matrix](user/04_MCP_CLIENT_CONFIGURATION_MATRIX.md)
+- [x402/pay.sh Paid Tool Runbook](user/03_X402_PAYSH_PAID_TOOL_RUNBOOK.md)
+- [Smithery Marketplace Integration](user/07_SMITHERY_MARKETPLACE_INTEGRATION.md)
+- [Agent Identity Registry Pipeline](16_AGENT_IDENTITY_REGISTRY_PIPELINE.md)
+- [Premium Plugin Runtime Contracts](18_PREMIUM_PLUGIN_RUNTIME_CONTRACTS.md)
+- [Agentic Standards Interoperability](19_AGENTIC_STANDARDS_INTEROPERABILITY.md)
+- [Engineering Operating Model Boundaries](20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md)
 
 ## What The Hosted Server Provides
 
@@ -115,16 +116,17 @@ npx --yes --package @oobe-protocol-labs/sap-mcp-server sap-mcp-x402-paid-call \
 
 Read these first:
 
-1. [Hosted Remote MCP](user/01_HOSTED_REMOTE_MCP.md)
-2. [Client Configs](user/04_CLIENT_CONFIGS.md)
-3. [Payments: x402 And pay.sh](user/03_PAYMENTS_X402_PAYSH.md)
-4. [Smithery And MCP Marketplaces](user/07_SMITHERY_AND_MARKETPLACES.md)
-5. [Desktop GUI Wizard](user/06_DESKTOP_GUI_WIZARD.md)
-6. [Configuration And Wizard](03_CONFIGURATION_AND_WIZARD.md)
-7. [Endpoints And Clients](07_ENDPOINTS_AND_CLIENTS.md)
-8. [SAP Agent Identity Pipeline](16_SAP_AGENT_IDENTITY_PIPELINE.md)
-9. [Premium Plugin Runtime](18_PREMIUM_PLUGIN_RUNTIME.md)
-10. [Agentic Standards Alignment](19_AGENTIC_STANDARDS_ALIGNMENT.md)
+1. [Hosted MCP Local Bridge Setup](user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP.md)
+2. [MCP Client Configuration Matrix](user/04_MCP_CLIENT_CONFIGURATION_MATRIX.md)
+3. [x402/pay.sh Paid Tool Runbook](user/03_X402_PAYSH_PAID_TOOL_RUNBOOK.md)
+4. [Smithery Marketplace Integration](user/07_SMITHERY_MARKETPLACE_INTEGRATION.md)
+5. [Desktop Wizard Install Runbook](user/06_DESKTOP_WIZARD_INSTALL_RUNBOOK.md)
+6. [Profile Config Wizard Injection](03_PROFILE_CONFIG_WIZARD_INJECTION.md)
+7. [HTTP Endpoints, MCP Clients, And Smoke Tests](07_HTTP_ENDPOINTS_MCP_CLIENTS_SMOKE_TESTS.md)
+8. [Agent Identity Registry Pipeline](16_AGENT_IDENTITY_REGISTRY_PIPELINE.md)
+9. [Premium Plugin Runtime Contracts](18_PREMIUM_PLUGIN_RUNTIME_CONTRACTS.md)
+10. [Agentic Standards Interoperability](19_AGENTIC_STANDARDS_INTEROPERABILITY.md)
+11. [Engineering Operating Model Boundaries](20_ENGINEERING_OPERATING_MODEL_BOUNDARIES.md)
 
 ## Public Endpoints
 
@@ -134,6 +136,7 @@ Read these first:
 | `GET /docs` | This documentation site. |
 | `POST /mcp` | Streamable HTTP MCP endpoint for agents. |
 | `GET /server.json` | Public, secret-free machine-readable server metadata. |
+| `GET /.well-known/sap-mcp-tool-catalog.json` | Public, secret-free hosted runtime tool module and policy catalog for wizard, UI, and agent discovery. |
 | `GET /premium/catalog.json` | Public premium plugin contracts, pricing models, schemas, and provider readiness. |
 | `GET /premium/streams.json` | Public premium stream contracts for future x402/pay.sh real-time delivery rails. |
 | `GET /premium/webhooks.json` | Public premium webhook contracts with signed delivery expectations. |
