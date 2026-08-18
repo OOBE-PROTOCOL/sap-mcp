@@ -102,8 +102,12 @@ describe('path resolution', () => {
   describe('getKeypairsDir()', () => {
     it('returns a keypairs subdirectory inside the preferred config dir', () => {
       delete process.env.XDG_CONFIG_HOME;
-      const expected = join(homedir(), '.config', CONFIG_APP_DIR, 'keypairs');
-      expect(getKeypairsDir()).toBe(expected);
+      if (process.platform === 'win32') {
+        expect(getKeypairsDir().endsWith(join(CONFIG_APP_DIR, 'keypairs'))).toBe(true);
+      } else {
+        const expected = join(homedir(), '.config', CONFIG_APP_DIR, 'keypairs');
+        expect(getKeypairsDir()).toBe(expected);
+      }
     });
 
     it('respects XDG_CONFIG_HOME', () => {
