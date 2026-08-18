@@ -95,7 +95,8 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json && pnpm run build:packages",
+    "build": "pnpm run clean && tsc && tsc -p tsconfig.tui.json && pnpm run build:packages && pnpm run build:compat",
+    "build:compat": "node scripts/create-dist-compat-symlinks.mjs",
     "build:core": "tsc",
     "build:tui": "tsc -p tsconfig.tui.json",
     "desktop:renderer": "vite --config apps/desktop/vite.config.ts",
