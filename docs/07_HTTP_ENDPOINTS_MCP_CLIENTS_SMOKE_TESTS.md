@@ -26,6 +26,12 @@
 | `GET` | `/mcp` | Streamable HTTP session stream. Browser-style `Accept: text/html` receives a public preview page instead. | Same as `POST /mcp`. |
 | `DELETE` | `/mcp` | Streamable HTTP session cleanup. | Same as `POST /mcp`. |
 
+For Steve-sponsored traffic, `/mcp` may grant paid-tool access without x402
+only when both conditions are true: `Origin` or `X-SAP-Sponsored-Origin` is
+`https://steve.oobeprotocol.ai`, and `Authorization: Bearer ...` matches
+`SAP_MCP_API_KEYS` or `SAP_MCP_TRUSTED_SPONSOR_TOKENS`. A spoofed origin without
+the bearer token must still receive the normal x402 `payment_required` response.
+
 The public HTML, JSON, and YAML endpoints must remain secret-free. Do not expose RPC query parameters, private VPS paths, keypair file paths, bearer tokens, facilitator auth tokens, or wallet bytes through these routes.
 
 The hosted tool catalog endpoint is generated from the same modular

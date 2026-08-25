@@ -55,7 +55,7 @@ For end-user installation and MCP client setup, start with [`../USER_DOCS/00_USE
 3. Local stdio mode is for a user's own machine.
 4. Remote HTTP mode can be bearerless for hosted agents; paid tools still require x402.
 5. Hosted payment and transaction signing flows still require a wizard-created user SAP profile and a local or external signer.
-6. x402 monetization applies to paid `tools/call` requests, not to the basic MCP handshake.
+6. x402 monetization applies to paid `tools/call` requests, not to the basic MCP handshake. Steve-sponsored paid calls may bypass x402 only with trusted origin plus bearer token, never origin alone.
 7. pay.sh is an outer provider/catalog/proxy integration; SAP MCP remains the source of truth for per-tool pricing.
 8. Facilitator signer, revenue recipient, user SAP wallet, agent PDA, and Solana CLI wallet are separate identities.
 9. Keypair bytes must never be logged, shown to agents, injected into client config, or documented in examples.

@@ -68,6 +68,20 @@ Required categories:
 
 Public agent-facing deployments can run without Bearer auth when x402, rate limits, and policy are enabled. Private beta, enterprise, admin, and non-public deployments should use API key or JWT auth.
 
+Steve/OOBE can run as a trusted sponsor for hosted paid tools without exposing
+x402 to browser users. The hosted gateway trusts `https://steve.oobeprotocol.ai`
+by default only when the request also carries a bearer token configured through
+`SAP_MCP_API_KEYS` or `SAP_MCP_TRUSTED_SPONSOR_TOKENS`; the `Origin` header
+alone is never sufficient because ordinary HTTP clients can spoof it.
+
+```bash
+SAP_MCP_API_KEYS=<shared-steve-sponsor-secret>=steve
+# Optional override/additional origins:
+SAP_MCP_TRUSTED_SPONSOR_ORIGINS=https://steve.oobeprotocol.ai
+# Optional token list when you do not want to reuse SAP_MCP_API_KEYS:
+SAP_MCP_TRUSTED_SPONSOR_TOKENS=<shared-steve-sponsor-secret>
+```
+
 For high-volume hosted operation, configure bounded Streamable HTTP behavior:
 
 ```bash

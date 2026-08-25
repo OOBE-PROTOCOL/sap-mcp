@@ -4,6 +4,7 @@
  */
 
 import * as http from 'http';
+import { timingSafeEqual } from 'crypto';
 import { HTTPFacilitatorClient, x402HTTPResourceServer, x402ResourceServer } from '@x402/core/server';
 import type {
   HTTPProcessResult,
@@ -95,6 +96,7 @@ const SOLANA_TESTNET_CAIP2 = 'solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z';
 const PAID_ROUTE_PATTERN = 'POST /mcp/paid/*';
 const USDC_MAINNET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const USDC_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const DEFAULT_TRUSTED_SPONSOR_ORIGINS = ['https://steve.oobeprotocol.ai'];
 
 type PaymentRequirementsWithV1Alias = PaymentRequirements & {
   maxAmountRequired?: string;
@@ -112,6 +114,91 @@ interface ParsedPaymentHeader {
   x402Version: number;
   paymentPayload: PaymentPayload;
   paymentRequirements: PaymentRequirementsWithV1Alias;
+}
+
+interface TrustedSponsorResult {
+  granted: boolean;
+  origin?: string;
+  reason?: string;
+}
+
+function splitCsv(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+}
+
+function normalizeSponsorOrigin(raw: string | undefined): string | undefined {
+  if (!raw || raw === 'null') {
+    return undefined;
+  }
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function trustedSponsorOrigins(): Set<string> {
+  const configured = splitCsv(process.env.SAP_MCP_TRUSTED_SPONSOR_ORIGINS);
+  const origins = configured.length > 0 ? configured : DEFAULT_TRUSTED_SPONSOR_ORIGINS;
+  return new Set(origins.map(normalizeSponsorOrigin).filter((origin): origin is string => Boolean(origin)));
+}
+
+function trustedSponsorTokens(): string[] {
+  const explicitTokens = splitCsv(process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS);
+  const apiKeyTokens = splitCsv(process.env.SAP_MCP_API_KEYS)
+    .map(pair => pair.split('=', 1)[0]?.trim())
+    .filter((token): token is string => Boolean(token));
+  return [...explicitTokens, ...apiKeyTokens];
+}
+
+function constantTimeIncludes(candidates: readonly string[], received: string): boolean {
+  const receivedBuffer = Buffer.from(received);
+  return candidates.some(candidate => {
+    const candidateBuffer = Buffer.from(candidate);
+    return candidateBuffer.length === receivedBuffer.length && timingSafeEqual(candidateBuffer, receivedBuffer);
+  });
+}
+
+function readBearerToken(request: http.IncomingMessage): string | undefined {
+  const authorization = getHttpHeader(request.headers, 'authorization');
+  if (!authorization) {
+    return undefined;
+  }
+  const [scheme, token] = authorization.split(/\s+/, 2);
+  if (scheme !== 'Bearer' || !token?.trim()) {
+    return undefined;
+  }
+  return token.trim();
+}
+
+function readSponsorOrigin(request: http.IncomingMessage): string | undefined {
+  return normalizeSponsorOrigin(
+    getHttpHeader(request.headers, 'origin') ??
+    getHttpHeader(request.headers, 'x-sap-sponsored-origin') ??
+    getHttpHeader(request.headers, 'referer'),
+  );
+}
+
+function evaluateTrustedSponsor(request: http.IncomingMessage): TrustedSponsorResult {
+  const origin = readSponsorOrigin(request);
+  if (!origin || !trustedSponsorOrigins().has(origin)) {
+    return { granted: false, origin, reason: 'origin_not_trusted' };
+  }
+
+  const bearerToken = readBearerToken(request);
+  if (!bearerToken) {
+    return { granted: false, origin, reason: 'missing_bearer' };
+  }
+
+  const tokens = trustedSponsorTokens();
+  if (tokens.length === 0 || !constantTimeIncludes(tokens, bearerToken)) {
+    return { granted: false, origin, reason: 'invalid_bearer' };
+  }
+
+  return { granted: true, origin };
 }
 
 /**
@@ -407,6 +494,31 @@ export class McpMonetizationGate {
       logger.debug('Prepaid session not valid, falling through to 402', {
         sessionId: prepaidSessionId,
         reason: prepaidResult.reason,
+      });
+    }
+
+    // ── Trusted sponsor bypass ─────────────────────────────────────────────
+    // Steve/OOBE can sponsor hosted paid tools without prepaid balance and
+    // without exposing x402 to browser users. Origin alone is intentionally not
+    // enough because HTTP clients can spoof it; the bearer token must match a
+    // configured trusted sponsor token or SAP_MCP_API_KEYS entry.
+    const sponsor = evaluateTrustedSponsor(request);
+    if (sponsor.granted && sponsor.origin) {
+      await this.usageLedger.recordSponsorBypassGranted(metadata, decision, sponsor.origin);
+      logger.info('Trusted sponsor granted access', {
+        origin: sponsor.origin,
+        toolNames: decision.toolNames,
+        priceUsd: requiredDecision.priceUsd,
+        requestHash: requestHash.slice(0, 12),
+      });
+      await next(request, response, parsedBody);
+      return;
+    }
+    if (sponsor.origin) {
+      logger.debug('Trusted sponsor bypass not granted', {
+        origin: sponsor.origin,
+        reason: sponsor.reason,
+        toolNames: decision.toolNames,
       });
     }
 

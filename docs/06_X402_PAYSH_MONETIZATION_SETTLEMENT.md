@@ -237,6 +237,13 @@ Before mainnet launch, verify these cases on devnet:
 
 Hosted marketplace deployments can enable strict tool monetization:
 
+Steve-sponsored deployments may bypass per-call x402 for requests forwarded by
+`steve.oobeprotocol.ai`. This is not an origin-only allowlist: the gateway
+requires both a trusted origin and a bearer token from `SAP_MCP_API_KEYS` or
+`SAP_MCP_TRUSTED_SPONSOR_TOKENS`. Successful bypasses are written to the payment
+usage ledger as `sponsor_bypass_granted` so operators can audit sponsored paid
+tool usage without issuing browser x402 challenges.
+
 ```bash
 SAP_MCP_MONETIZATION_STRICT_TOOLS=true
 ```

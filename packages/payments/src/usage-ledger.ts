@@ -19,6 +19,7 @@ import type { PaymentDecision } from './pricing.js';
 export type PaymentLedgerEventType =
   | 'payment_required'
   | 'payment_challenge_returned'
+  | 'sponsor_bypass_granted'
   | 'payment_eligibility_blocked'
   | 'payment_verified'
   | 'payment_verification_failed'
@@ -46,6 +47,7 @@ export interface PaymentLedgerEvent {
   amount?: string;
   payer?: string;
   challengeTransport?: 'mcp-json-rpc' | 'http-402';
+  sponsorOrigin?: string;
   errorReason?: string;
   errorMessage?: string;
 }
@@ -239,6 +241,34 @@ export class UsageLedger {
       remoteAddress: metadata.remoteAddress,
       userAgent: metadata.userAgent,
       challengeTransport,
+    });
+  }
+
+  /**
+   * @name recordSponsorBypassGranted
+   * @description Records a trusted server-to-server sponsor bypass that grants a paid call without x402.
+   */
+  public async recordSponsorBypassGranted(
+    metadata: PaymentRequestMetadata,
+    decision: PaymentDecision,
+    sponsorOrigin: string,
+  ): Promise<void> {
+    if (!decision.required) {
+      return;
+    }
+
+    await this.append({
+      event: 'sponsor_bypass_granted',
+      timestamp: new Date().toISOString(),
+      requestHash: metadata.requestHash,
+      method: metadata.method,
+      path: metadata.path,
+      toolNames: decision.toolNames,
+      priceUsd: decision.priceUsd,
+      paymentHeaderPresent: metadata.paymentHeaderPresent,
+      remoteAddress: metadata.remoteAddress,
+      userAgent: metadata.userAgent,
+      sponsorOrigin,
     });
   }
 
