@@ -78,6 +78,20 @@ export const MCP_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
  */
 export const MCP_SERVER_DESCRIPTION = 'Solana-native MCP gateway for Synapse Agent Protocol tools, DeFi protocols, SNS identity, x402/pay.sh payments, and user-controlled agent operations.';
 /**
+ * Neutral catalog metadata used for third-party catalogs where the acronym
+ * "SAP" could be confused with SAP SE.
+ */
+export const OOBE_CATALOG_SERVER_NAME = 'oobe-protocol';
+export const OOBE_CATALOG_SERVER_TITLE = 'OOBE Protocol MCP';
+export const OOBE_CATALOG_SERVER_DESCRIPTION = 'Read-only OOBE Protocol agent discovery on Solana: public agent profiles, protocol indexes, network stats, SNS records, and bundled skill metadata.';
+export const OOBE_CATALOG_SERVER_WEBSITE_URL = 'https://mcp.sap.oobeprotocol.ai/';
+export const OOBE_CATALOG_SERVER_INSTRUCTIONS = [
+  'OOBE Protocol MCP is a read-only public discovery endpoint for Solana agent metadata.',
+  'Use it only for public agent profiles, protocol indexes, network stats, SNS record reads, and bundled skill metadata.',
+  'This catalog surface cannot sign, submit, build, or pay for blockchain transactions, and it does not expose local bridge, wallet, install, self-update, webhook, memory-write, or meta-execution tools.',
+  'For connection checks, call sap_agent_start or sap_agent_runtime_status. For discovery, use sap_get_agent, sap_get_agent_profile, sap_list_agents, sap_discover_agents, sap_fetch_protocol_index, or sap_network_stats.',
+].join('\n');
+/**
  * MCP initialize instructions. Clients may surface this text to the model as
  * server guidance, so keep it concise, standard-compliant, and action-oriented.
  */
@@ -105,6 +119,70 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
 export const MCP_SERVER_VERSION = '0.9.80';
+
+/**
+ * Read-only tool surface intended for third-party catalogs whose presence
+ * implies endorsement. It excludes spend, signing, submit, builder, install,
+ * self-update, memory-write, webhook, and meta-execution helpers.
+ */
+export const CATALOG_READONLY_TOOL_ALLOWLIST = [
+  'sap_agent_start',
+  'sap_agent_runtime_status',
+  'sap_pricing_catalog',
+  'sap_network_stats',
+  'sap_protocol_invariants',
+  'sap_get_agent',
+  'sap_get_agent_stats',
+  'sap_get_global_state',
+  'sap_get_network_overview',
+  'sap_agent_context',
+  'sap_get_agent_profile',
+  'sap_is_agent_active',
+  'sap_discover_agents',
+  'sap_list_agents',
+  'sap_list_all_agents',
+  'sap_fetch_capability_index',
+  'sap_fetch_protocol_index',
+  'sap_fetch_tool_category_index',
+  'sap_fetch_tool',
+  'sap_fetch_feedback',
+  'sap_fetch_attestation',
+  'sap_fetch_escrow',
+  'sap_fetch_escrow_v2',
+  'sap_fetch_pending_settlement',
+  'sap_fetch_dispute',
+  'sap_fetch_vault',
+  'sap_fetch_session',
+  'sap_fetch_epoch_page',
+  'sap_fetch_stake',
+  'sap_fetch_subscription',
+  'sap_sns_check_domain',
+  'sap_sns_batch_check_domains',
+  'sap_sns_resolve_domain',
+  'sap_sns_validate_records',
+  'sap_sns_get_domain_pda',
+  'sap_sns_get_record_pda',
+  'sap_sns_get_domain_records',
+  'sap_sns_get_record',
+  'sap_sns_resolve_wallet',
+  'sap_sns_check_ownership',
+  'sap_skills_list',
+  'sap_skills_bundle',
+  'sap_skills_upgrade_plan',
+  'sap_skills_check_updates',
+  'sap_profile_current',
+  'sap_profile_list',
+  'sap_profile_public_key',
+] as const;
+
+export function isCatalogReadonlyAllowedTools(allowedTools: readonly string[] | 'all'): boolean {
+  if (allowedTools === 'all' || allowedTools.length !== CATALOG_READONLY_TOOL_ALLOWLIST.length) {
+    return false;
+  }
+
+  const requested = new Set(allowedTools);
+  return CATALOG_READONLY_TOOL_ALLOWLIST.every((toolName) => requested.has(toolName));
+}
 
 /**
  * SAP protocol treasury that should receive protocol-owned registration fees.

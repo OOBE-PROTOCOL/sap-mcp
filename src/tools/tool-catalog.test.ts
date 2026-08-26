@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CATALOG_READONLY_TOOL_ALLOWLIST } from '../core/constants.js';
 import type { SapMcpConfig, SapMcpContext } from '../core/types.js';
 import { BUILTIN_TOOL_MODULES } from './builtin-tool-modules.js';
 import { buildToolCatalog, buildToolCatalogForRuntimeProfiles, summarizeToolCatalog, type ToolCatalogRuntimeProfile } from './tool-catalog.js';
@@ -98,6 +99,30 @@ describe('tool catalog', () => {
     expect(catalog.modules.map((module) => module.id)).not.toContain('x402-local-helper');
     expect(catalog.tools.map((tool) => tool.toolName)).toContain('sap_payments_prepaid_balance');
     expect(catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
+  });
+
+  it('builds a catalog read-only hosted summary without value-moving tools', () => {
+    const catalog = buildToolCatalog(
+      BUILTIN_TOOL_MODULES,
+      context({
+        mode: 'hosted-api',
+        walletPath: undefined,
+        allowedTools: [...CATALOG_READONLY_TOOL_ALLOWLIST],
+      }),
+      { profileId: 'hosted-catalog-readonly' },
+    );
+    const toolNames = catalog.tools.map((tool) => tool.toolName);
+
+    expect(catalog.profileId).toBe('hosted-catalog-readonly');
+    expect(toolNames).toContain('sap_agent_start');
+    expect(toolNames).toContain('sap_get_agent');
+    expect(toolNames).toContain('sap_network_stats');
+    expect(toolNames).toContain('sap_skills_bundle');
+    expect(toolNames).not.toContain('sap_register_agent');
+    expect(toolNames).not.toContain('sap_update_agent');
+    expect(toolNames).not.toContain('sap_submit_signed_transaction');
+    expect(toolNames).not.toContain('sap_payments_call_paid_tool');
+    expect(catalog.policy.hostedAccountlessBlockedTools).toEqual([]);
   });
 
   it('summarizes catalogs into a secret-free context shape for bootstrap tools', () => {

@@ -22,6 +22,12 @@ import {
   MCP_SERVER_TITLE,
   MCP_SERVER_VERSION,
   MCP_SERVER_WEBSITE_URL,
+  OOBE_CATALOG_SERVER_DESCRIPTION,
+  OOBE_CATALOG_SERVER_INSTRUCTIONS,
+  OOBE_CATALOG_SERVER_NAME,
+  OOBE_CATALOG_SERVER_TITLE,
+  OOBE_CATALOG_SERVER_WEBSITE_URL,
+  isCatalogReadonlyAllowedTools,
 } from '../../core/src/constants.js';
 import type { SapMcpConfig, SapMcpContext } from '../../core/src/types.js';
 import { createSapClient } from '../../sap/src/sap-client-manager.js';
@@ -42,17 +48,24 @@ import { initMetrics, startMetricsExporter } from '../../observability/src/metri
  * @usedBy `server/index.ts`, transport entry points (`stdio.ts`, `http.ts`).
  */
 export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> {
-  logger.debug('Creating SAP MCP Server', { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION });
+  const catalogReadonly = isCatalogReadonlyAllowedTools(config.allowedTools);
+  const serverName = catalogReadonly ? OOBE_CATALOG_SERVER_NAME : MCP_SERVER_NAME;
+  const serverTitle = catalogReadonly ? OOBE_CATALOG_SERVER_TITLE : MCP_SERVER_TITLE;
+  const serverDescription = catalogReadonly ? OOBE_CATALOG_SERVER_DESCRIPTION : MCP_SERVER_DESCRIPTION;
+  const serverWebsiteUrl = catalogReadonly ? OOBE_CATALOG_SERVER_WEBSITE_URL : MCP_SERVER_WEBSITE_URL;
+  const serverInstructions = catalogReadonly ? OOBE_CATALOG_SERVER_INSTRUCTIONS : MCP_SERVER_INSTRUCTIONS;
+
+  logger.debug('Creating SAP MCP Server', { name: serverName, version: MCP_SERVER_VERSION, catalogReadonly });
 
   // Create MCP server with ALL capabilities declared upfront
   // This is REQUIRED for MCP SDK v1.0.0 - capabilities must be declared in constructor
   const server = new Server(
     {
-      name: MCP_SERVER_NAME,
-      title: MCP_SERVER_TITLE,
+      name: serverName,
+      title: serverTitle,
       version: MCP_SERVER_VERSION,
-      description: MCP_SERVER_DESCRIPTION,
-      websiteUrl: MCP_SERVER_WEBSITE_URL,
+      description: serverDescription,
+      websiteUrl: serverWebsiteUrl,
       icons: [
         {
           src: MCP_SERVER_ICON_URL,
@@ -68,7 +81,7 @@ export async function createSapMcpServer(config: SapMcpConfig): Promise<Server> 
         resources: {},  // Enable resources/list
         prompts: {},    // Enable prompts/list
       },
-      instructions: MCP_SERVER_INSTRUCTIONS,
+      instructions: serverInstructions,
     }
   );
 

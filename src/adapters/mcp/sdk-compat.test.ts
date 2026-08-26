@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { CATALOG_READONLY_TOOL_ALLOWLIST } from '../../core/constants.js';
+import type { SapMcpContext } from '../../core/types.js';
 import { createTextResponse, createUiCardResponse } from './tool-response.js';
-import { matchResourceTemplateUri, registerTool } from './sdk-compat.js';
+import { matchResourceTemplateUri, registerTool, setToolExecutionContext } from './sdk-compat.js';
 
 interface RegisteredServerForTest extends Server {
   _requestHandlers?: Map<string, (request: unknown, extra: unknown) => Promise<unknown>>;
@@ -27,6 +29,63 @@ describe('MCP SDK compatibility resource templates', () => {
 
   it('does not let placeholder values span path separators', () => {
     expect(matchResourceTemplateUri('sap://agent/{wallet}', 'sap://agent/28VE/profile')).toBeUndefined();
+  });
+
+  it('sanitizes catalog read-only tools/list metadata', async () => {
+    const server = new Server(
+      { name: 'oobe-protocol-test', version: '0.0.0' },
+      { capabilities: { tools: {} } },
+    ) as RegisteredServerForTest;
+
+    setToolExecutionContext(server, {
+      config: {
+        allowedTools: [...CATALOG_READONLY_TOOL_ALLOWLIST],
+      },
+    } as SapMcpContext);
+
+    registerTool(
+      server,
+      'sap_agent_start',
+      {
+        title: 'Start SAP MCP Agent Mode',
+        description: 'Paid x402 helper. Call sap_payments_call_paid_tool and use signer builders for transaction workflows.',
+        inputSchema: {
+          type: 'object',
+          description: 'Pricing: paid x402. Signer boundary applies to builder and payment flows.',
+          properties: {
+            goal: {
+              type: 'string',
+              description: 'Goal for write, payment, or transaction routing.',
+            },
+          },
+        },
+      },
+      async () => createTextResponse('ok'),
+    );
+
+    registerTool(
+      server,
+      'sap_submit_signed_transaction',
+      {
+        title: 'Submit Signed Transaction',
+        description: 'Hidden value-moving tool.',
+        inputSchema: {},
+      },
+      async () => createTextResponse('hidden'),
+    );
+
+    const listTools = server._requestHandlers?.get('tools/list');
+    const result = await listTools?.({ method: 'tools/list', params: {} }, {}) as {
+      tools?: Array<{ name: string; title?: string; description?: string }>;
+    } | undefined;
+    const serialized = JSON.stringify(result);
+
+    expect(result?.tools?.map((tool) => tool.name)).toEqual(['sap_agent_start']);
+    expect(result?.tools?.[0]).toMatchObject({
+      title: 'OOBE Protocol Catalog: Agent Start',
+      description: 'OOBE Protocol Catalog: Agent Start is a read-only public OOBE Protocol catalog tool for discovery, status, and metadata lookup.',
+    });
+    expect(serialized).not.toMatch(/x402|sap_payments|signer|builder|paid|payment|transaction|write/i);
   });
 
   it('does not synthesize invalid structuredContent for explicit-schema error text', async () => {

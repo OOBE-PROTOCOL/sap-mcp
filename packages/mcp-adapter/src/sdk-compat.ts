@@ -31,6 +31,7 @@ import {
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../core/src/logger.js';
+import { isCatalogReadonlyAllowedTools } from '../../core/src/constants.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { checkToolPermissions, privateKeyGuard } from '../../security/src/index.js';
 import { canonicalizeToolName } from '../../tools/src/tool-aliases.js';
@@ -838,6 +839,58 @@ function ensureHandlerRegistry(server: Server) {
   return handlerRegistry.get(server)!;
 }
 
+function formatCatalogReadonlyTitle(name: string): string {
+  return `OOBE Protocol Catalog: ${name
+    .replace(/^sap_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())}`;
+}
+
+const CATALOG_READONLY_METADATA_BLOCKLIST = /x402|sap_payments|pay\.sh|payment|paid|signer|builder|submit|signed|transaction|txSubmit|premium|wizard|webhook|self-update|meta-execution|local bridge|value-moving|spend/i;
+
+function sanitizeCatalogReadonlySchema(value: unknown, fallbackDescription: string): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => typeof item !== 'string' || !CATALOG_READONLY_METADATA_BLOCKLIST.test(item))
+      .map((item) => sanitizeCatalogReadonlySchema(item, fallbackDescription));
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (CATALOG_READONLY_METADATA_BLOCKLIST.test(key)) {
+      continue;
+    }
+    sanitized[key] = key === 'description' && typeof child === 'string'
+      ? fallbackDescription
+      : sanitizeCatalogReadonlySchema(child, fallbackDescription);
+  }
+  return sanitized;
+}
+
+function sanitizeCatalogReadonlyTool(tool: Tool): Tool {
+  const title = formatCatalogReadonlyTitle(tool.name);
+  const schemaDescription = `Input schema for ${title}. Use exact field names from this schema.`;
+
+  return {
+    ...tool,
+    title,
+    description: `${title} is a read-only public OOBE Protocol catalog tool for discovery, status, and metadata lookup.`,
+    inputSchema: sanitizeCatalogReadonlySchema(tool.inputSchema, schemaDescription) as Tool['inputSchema'],
+    outputSchema: sanitizeCatalogReadonlySchema(tool.outputSchema, `Output schema for ${title}.`) as Tool['outputSchema'],
+    annotations: {
+      ...tool.annotations,
+      title,
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
+  };
+}
+
 /**
  * @name filterVisibleTools
  * @description Applies the configured allow-list to tools/list so bridge-only MCP clients do not see the full tool surface.
@@ -849,7 +902,10 @@ function filterVisibleTools(server: Server, tools: Tool[]): Tool[] {
   }
 
   const allowed = new Set(context.config.allowedTools);
-  return tools.filter((tool) => allowed.has(tool.name));
+  const visibleTools = tools.filter((tool) => allowed.has(tool.name));
+  return isCatalogReadonlyAllowedTools(context.config.allowedTools)
+    ? visibleTools.map(sanitizeCatalogReadonlyTool)
+    : visibleTools;
 }
 
 /**

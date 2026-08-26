@@ -11,7 +11,13 @@ import { dirname, join, posix } from 'path';
 import { fileURLToPath } from 'url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { getDataDir, loadConfig, type SapMcpConfig } from '../../config-runtime/src/env.js';
-import { MCP_SERVER_VERSION } from '../../core/src/constants.js';
+import {
+  MCP_SERVER_VERSION,
+  OOBE_CATALOG_SERVER_DESCRIPTION,
+  OOBE_CATALOG_SERVER_NAME,
+  OOBE_CATALOG_SERVER_TITLE,
+  isCatalogReadonlyAllowedTools,
+} from '../../core/src/constants.js';
 import { logger, initLogger } from '../../core/src/logger.js';
 import { createSapMcpServer } from '../../server-runtime/src/create-server.js';
 import { AuthManager, type RemoteAuthConfig } from './auth/index.js';
@@ -26,7 +32,7 @@ import {
 } from '../../premium/src/index.js';
 import { RemoteRateLimiter, buildRemoteRateLimitConfigFromEnv, type RemoteRateLimitConfig } from './rate-limiter.js';
 import type { PaymentLedgerEvent } from '../../payments/src/usage-ledger.js';
-import { renderLandingPage } from './public-home/index.js';
+import { renderLandingPage, type LandingPublicServerInfo } from './public-home/index.js';
 import { TX_SUBMIT_PATH, submitSignedTransactionFromHttp } from './tx-relay.js';
 import { tryPremiumRoute } from './premium-routes.js';
 import { PremiumMemoryManager } from './premium-memory.js';
@@ -38,6 +44,7 @@ import { buildToolCatalog } from '../../tools/src/tool-catalog.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
+const PUBLIC_SERVER_NAME = 'sap-mcp-server';
 function resolvePublishedRoot(startDir: string): string {
   let current = startDir;
   while (true) {
@@ -79,6 +86,32 @@ let logoAssetCache: Buffer | undefined;
 let oobeLogoAssetCache: Buffer | undefined;
 let paymentStatsCache: { expiresAt: number; stats: PublicPaymentStats } | undefined;
 let serverCardCapabilitiesCache: { expiresAt: number; capabilities: StaticServerCardCapabilities } | undefined;
+
+function isCatalogReadonlyDeployment(appConfig?: Pick<SapMcpConfig, 'allowedTools'>): boolean {
+  if (appConfig) {
+    return isCatalogReadonlyAllowedTools(appConfig.allowedTools);
+  }
+
+  return process.env.SAP_MCP_CATALOG_READONLY === 'true';
+}
+
+function publicBranding(appConfig?: Pick<SapMcpConfig, 'allowedTools'>): {
+  name: string;
+  title: string;
+  description: string;
+} {
+  return isCatalogReadonlyDeployment(appConfig)
+    ? {
+      name: OOBE_CATALOG_SERVER_NAME,
+      title: OOBE_CATALOG_SERVER_TITLE,
+      description: OOBE_CATALOG_SERVER_DESCRIPTION,
+    }
+    : {
+      name: PUBLIC_SERVER_NAME,
+      title: PUBLIC_SERVER_TITLE,
+      description: PUBLIC_SERVER_DESCRIPTION,
+    };
+}
 
 const DOCS_MARKDOWN_ALIASES: Readonly<Record<string, string>> = {
   '00_README.md': '00_ENGINEERING_DOCUMENTATION_INDEX.md',
@@ -276,7 +309,7 @@ export interface WizardInstallDescriptor {
  * @description Public, secret-free metadata for the hosted SAP MCP deployment.
  */
 export interface PublicServerInfo {
-  name: 'sap-mcp-server';
+  name: string;
   title: string;
   displayName: string;
   display_name: string;
@@ -303,33 +336,33 @@ export interface PublicServerInfo {
   };
   endpoints: {
     landing: string;
-    docs: string;
     mcp: string;
-    txSubmit: string;
     health: string;
     serverInfo: string;
-    pricing: string;
-    openApi: string;
-    premiumCatalog: string;
-    premiumStreams: string;
-    premiumWebhooks: string;
-    premiumHealth: string;
-    premiumActivate: string;
-    premiumStreamBase: string;
-    premiumWebhookRegister: string;
-    x402Discovery: string;
-    smitheryConfigSchema: string;
+    docs: string;
+    txSubmit?: string;
+    pricing?: string;
+    openApi?: string;
+    premiumCatalog?: string;
+    premiumStreams?: string;
+    premiumWebhooks?: string;
+    premiumHealth?: string;
+    premiumActivate?: string;
+    premiumStreamBase?: string;
+    premiumWebhookRegister?: string;
+    x402Discovery?: string;
+    smitheryConfigSchema?: string;
     smitheryServerCard: string;
-    payShProvider: string;
+    payShProvider?: string;
     agentCard: string;
-    wizardDescriptor: string;
-    wizardDownloads: string;
-    wizardInstallScript: string;
+    wizardDescriptor?: string;
+    wizardDownloads?: string;
+    wizardInstallScript?: string;
     toolCatalog: string;
     favicon: string;
     faviconIco: string;
   };
-  downloads: {
+  downloads?: {
     release: string;
     desktopWizard: {
       macosArm64Dmg: string;
@@ -342,8 +375,8 @@ export interface PublicServerInfo {
     resources: boolean;
     prompts: boolean;
     streaming: boolean;
-    payments: readonly ['x402', 'pay.sh'];
-    userControlledSigning: true;
+    payments?: readonly ['x402', 'pay.sh'];
+    userControlledSigning: boolean;
   };
   authentication: {
     schemes: readonly ('Bearer' | 'x402' | 'none')[];
@@ -354,9 +387,9 @@ export interface PublicServerInfo {
     keypairBytesExposed: false;
     storesUserKeypairs: false;
     rpcSecretsExposed: false;
-    wizardConfigDirectory: '~/.config/mcp-sap';
+    wizardConfigDirectory?: '~/.config/mcp-sap';
   };
-  docs: {
+  docs?: {
     npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server';
     github: 'https://github.com/OOBE-PROTOCOL/sap-mcp';
     userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS';
@@ -388,7 +421,7 @@ export interface MarketplaceConfigurationMetadata {
  */
 export interface StaticServerCard {
   serverInfo: {
-    name: 'sap-mcp-server';
+    name: string;
     displayName: string;
     display_name: string;
     title: string;
@@ -408,7 +441,7 @@ export interface StaticServerCard {
       sizes: readonly ['512x512'];
     }>;
   };
-  name: 'sap-mcp-server';
+  name: string;
   displayName: string;
   display_name: string;
   title: string;
@@ -1258,9 +1291,12 @@ function buildPublicBaseUrl(req: http.IncomingMessage, config: RemoteMCPConfig):
 export function buildPublicServerInfo(
   req: http.IncomingMessage,
   config: RemoteMCPConfig,
+  appConfig?: SapMcpConfig,
 ): PublicServerInfo {
   const baseUrl = buildPublicBaseUrl(req, config);
   const authRequired = config.auth.type !== 'none';
+  const catalogReadonly = isCatalogReadonlyDeployment(appConfig);
+  const branding = publicBranding(appConfig);
   const homepage = `${baseUrl}/`;
   const iconUrl = `${baseUrl}/favicon.png`;
   const icons = [
@@ -1271,11 +1307,11 @@ export function buildPublicServerInfo(
     },
   ];
   return {
-    name: 'sap-mcp-server',
-    title: PUBLIC_SERVER_TITLE,
-    displayName: PUBLIC_SERVER_TITLE,
-    display_name: PUBLIC_SERVER_TITLE,
-    description: PUBLIC_SERVER_DESCRIPTION,
+    name: branding.name,
+    title: branding.title,
+    displayName: branding.title,
+    display_name: branding.title,
+    description: branding.description,
     version: MCP_SERVER_VERSION,
     homepage,
     websiteUrl: homepage,
@@ -1296,62 +1332,64 @@ export function buildPublicServerInfo(
       landing: `${baseUrl}/`,
       docs: `${baseUrl}/docs`,
       mcp: `${baseUrl}/mcp`,
-      txSubmit: `${baseUrl}${TX_SUBMIT_PATH}`,
       health: `${baseUrl}/health`,
       serverInfo: `${baseUrl}/server.json`,
-      pricing: `${baseUrl}/pricing.json`,
-      openApi: `${baseUrl}/openapi.json`,
-      premiumCatalog: `${baseUrl}/premium/catalog.json`,
-      premiumStreams: `${baseUrl}/premium/streams.json`,
-      premiumWebhooks: `${baseUrl}/premium/webhooks.json`,
-      premiumHealth: `${baseUrl}/premium/health.json`,
-      premiumActivate: `${baseUrl}/premium/activate`,
-      premiumStreamBase: `${baseUrl}/premium/stream`,
-      premiumWebhookRegister: `${baseUrl}/premium/webhook/register`,
-      x402Discovery: `${baseUrl}/.well-known/x402`,
-      smitheryConfigSchema: `${baseUrl}/smithery.config.schema.json`,
       smitheryServerCard: `${baseUrl}/.well-known/mcp/server-card.json`,
-      payShProvider: `${baseUrl}/pay/provider.yml`,
       agentCard: `${baseUrl}/.well-known/agent-card.json`,
-      wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
-      wizardDownloads: `${baseUrl}/wizard/downloads.json`,
-      wizardInstallScript: `${baseUrl}/wizard/install.sh`,
       toolCatalog: `${baseUrl}/.well-known/sap-mcp-tool-catalog.json`,
       favicon: `${baseUrl}/favicon.png`,
       faviconIco: `${baseUrl}/favicon.ico`,
+      ...(catalogReadonly ? {} : {
+        txSubmit: `${baseUrl}${TX_SUBMIT_PATH}`,
+        pricing: `${baseUrl}/pricing.json`,
+        openApi: `${baseUrl}/openapi.json`,
+        premiumCatalog: `${baseUrl}/premium/catalog.json`,
+        premiumStreams: `${baseUrl}/premium/streams.json`,
+        premiumWebhooks: `${baseUrl}/premium/webhooks.json`,
+        premiumHealth: `${baseUrl}/premium/health.json`,
+        premiumActivate: `${baseUrl}/premium/activate`,
+        premiumStreamBase: `${baseUrl}/premium/stream`,
+        premiumWebhookRegister: `${baseUrl}/premium/webhook/register`,
+        x402Discovery: `${baseUrl}/.well-known/x402`,
+        smitheryConfigSchema: `${baseUrl}/smithery.config.schema.json`,
+        payShProvider: `${baseUrl}/pay/provider.yml`,
+        wizardDescriptor: `${baseUrl}/.well-known/sap-mcp-wizard.json`,
+        wizardDownloads: `${baseUrl}/wizard/downloads.json`,
+        wizardInstallScript: `${baseUrl}/wizard/install.sh`,
+      }),
     },
-    downloads: {
+    ...(catalogReadonly ? {} : { downloads: {
       release: `https://github.com/OOBE-PROTOCOL/sap-mcp/releases/tag/${MCP_SERVER_VERSION}`,
       desktopWizard: {
         macosArm64Dmg: `${RELEASE_DOWNLOAD_BASE_URL}/SAP-MCP-Wizard-${MCP_SERVER_VERSION}-arm64.dmg`,
         windowsX64Setup: `${RELEASE_DOWNLOAD_BASE_URL}/SAP-MCP-Wizard-Setup-${MCP_SERVER_VERSION}-x64.exe`,
         linuxX64TarGz: `${RELEASE_DOWNLOAD_BASE_URL}/sap-mcp-wizard-${MCP_SERVER_VERSION}-x64.tar.gz`,
       },
-    },
+    } }),
     capabilities: {
       tools: true,
       resources: true,
       prompts: true,
       streaming: true,
-      payments: ['x402', 'pay.sh'],
-      userControlledSigning: true,
+      userControlledSigning: !catalogReadonly,
+      ...(catalogReadonly ? {} : { payments: ['x402', 'pay.sh'] as const }),
     },
     authentication: {
-      schemes: authRequired ? ['Bearer'] : ['none', 'x402'],
-      bearerRequired: authRequired,
+      schemes: catalogReadonly ? ['none'] : authRequired ? ['Bearer'] : ['none', 'x402'],
+      bearerRequired: catalogReadonly ? false : authRequired,
     },
-    ...(config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
+    ...(!catalogReadonly && config.paymentDiscovery ? { payments: config.paymentDiscovery } : {}),
     security: {
       keypairBytesExposed: false,
       storesUserKeypairs: false,
       rpcSecretsExposed: false,
-      wizardConfigDirectory: '~/.config/mcp-sap',
+      ...(catalogReadonly ? {} : { wizardConfigDirectory: '~/.config/mcp-sap' as const }),
     },
-    docs: {
+    ...(catalogReadonly ? {} : { docs: {
       npm: 'https://www.npmjs.com/package/@oobe-protocol-labs/sap-mcp-server',
       github: 'https://github.com/OOBE-PROTOCOL/sap-mcp',
       userDocs: 'https://github.com/OOBE-PROTOCOL/sap-mcp/tree/main/USER_DOCS',
-    },
+    } }),
   };
 }
 
@@ -1529,6 +1567,7 @@ export async function buildStaticServerCard(
   const baseUrl = buildPublicBaseUrl(req, config);
   const capabilities = await getStaticServerCardCapabilities(appConfig);
   const authRequired = config.auth.type !== 'none';
+  const branding = publicBranding(appConfig);
   const homepage = `${baseUrl}/`;
   const iconUrl = `${baseUrl}/favicon.png`;
   const icons = [
@@ -1540,12 +1579,12 @@ export async function buildStaticServerCard(
   ];
 
   return {
-    name: 'sap-mcp-server',
-    displayName: PUBLIC_SERVER_TITLE,
-    display_name: PUBLIC_SERVER_TITLE,
-    title: PUBLIC_SERVER_TITLE,
+    name: branding.name,
+    displayName: branding.title,
+    display_name: branding.title,
+    title: branding.title,
     version: MCP_SERVER_VERSION,
-    description: PUBLIC_SERVER_DESCRIPTION,
+    description: branding.description,
     homepage,
     websiteUrl: homepage,
     website_url: homepage,
@@ -1556,12 +1595,12 @@ export async function buildStaticServerCard(
     logo: iconUrl,
     icons,
     serverInfo: {
-      name: 'sap-mcp-server',
-      displayName: PUBLIC_SERVER_TITLE,
-      display_name: PUBLIC_SERVER_TITLE,
-      title: PUBLIC_SERVER_TITLE,
+      name: branding.name,
+      displayName: branding.title,
+      display_name: branding.title,
+      title: branding.title,
       version: MCP_SERVER_VERSION,
-      description: PUBLIC_SERVER_DESCRIPTION,
+      description: branding.description,
       homepage,
       websiteUrl: homepage,
       website_url: homepage,
@@ -2017,7 +2056,7 @@ export function buildLandingHtml(
   config: RemoteMCPConfig,
   endpoint: 'root' | 'mcp' = 'root',
 ): string {
-  const info = buildPublicServerInfo(req, config);
+  const info = buildPublicServerInfo(req, config) as LandingPublicServerInfo;
   const paymentStats = readPublicPaymentStats();
   const pageUrl = endpoint === 'mcp' ? info.endpoints.mcp : info.endpoints.landing;
   const title = endpoint === 'mcp'
@@ -2610,7 +2649,7 @@ export class RemoteMCPServer {
       }
 
       if (isPublicReadMethod(req.method) && url.pathname === '/server.json') {
-        writeJson(res, 200, buildPublicServerInfo(req, this.config), {
+        writeJson(res, 200, buildPublicServerInfo(req, this.config, this.appConfig), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
         return;
@@ -2731,7 +2770,7 @@ export class RemoteMCPServer {
       }
 
       if (isPublicReadMethod(req.method) && url.pathname === '/wizard/downloads.json') {
-        const info = buildPublicServerInfo(req, this.config);
+        const info = buildPublicServerInfo(req, this.config, this.appConfig);
         writeJson(res, 200, info.downloads, {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));

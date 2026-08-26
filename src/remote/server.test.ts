@@ -1,7 +1,7 @@
 import type { IncomingMessage } from 'http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SapMcpConfig } from '../config/env.js';
-import { MCP_SERVER_VERSION } from '../core/constants.js';
+import { CATALOG_READONLY_TOOL_ALLOWLIST, MCP_SERVER_VERSION } from '../core/constants.js';
 import {
   buildA2AAgentCard,
   buildDocsHtml,
@@ -398,6 +398,42 @@ describe('remote MCP server config', () => {
     expect(info.security.rpcSecretsExposed).toBe(false);
     expect(JSON.stringify(info)).not.toContain('api_key=');
     expect(JSON.stringify(info)).not.toContain('/Users/keepeeto');
+  });
+
+  it('publishes neutral public metadata for catalog read-only deployments', async () => {
+    const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
+    const catalogConfig: SapMcpConfig = {
+      ...appConfig,
+      allowedTools: [...CATALOG_READONLY_TOOL_ALLOWLIST],
+    };
+
+    const info = buildPublicServerInfo(req, publicRemoteConfig, catalogConfig);
+    const card = await buildStaticServerCard(req, publicRemoteConfig, catalogConfig);
+
+    expect(info).toMatchObject({
+      name: 'oobe-protocol',
+      displayName: 'OOBE Protocol MCP',
+      title: 'OOBE Protocol MCP',
+      description: expect.stringContaining('Read-only OOBE Protocol agent discovery'),
+      homepage: 'https://mcp.sap.oobeprotocol.ai/',
+    });
+    expect(info.capabilities.userControlledSigning).toBe(false);
+    expect(info.capabilities).not.toHaveProperty('payments');
+    expect(info.authentication).toEqual({ schemes: ['none'], bearerRequired: false });
+    expect(info).not.toHaveProperty('downloads');
+    expect(info).not.toHaveProperty('payments');
+    expect(JSON.stringify(info)).not.toMatch(/x402|pay\.sh|premium|wizard|txSubmit|payShProvider/i);
+    expect(card).toMatchObject({
+      name: 'oobe-protocol',
+      displayName: 'OOBE Protocol MCP',
+      title: 'OOBE Protocol MCP',
+      description: expect.stringContaining('Read-only OOBE Protocol agent discovery'),
+    });
+    expect(card.serverInfo).toMatchObject({
+      name: 'oobe-protocol',
+      displayName: 'OOBE Protocol MCP',
+      title: 'OOBE Protocol MCP',
+    });
   });
 
   it('publishes a secret-free hosted tool catalog for wizard and agent discovery', () => {

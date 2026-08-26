@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { CATALOG_READONLY_TOOL_ALLOWLIST } from '../core/constants.js';
 import { loadConfig } from './env.js';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -172,6 +173,27 @@ describe('loadConfig profile precedence', () => {
       expect(config.enableCache).toBe(false);
       expect(config.enableRateLimit).toBe(false);
       expect(config.monetization.enabled).toBe(false);
+    } finally {
+      rmSync(configHome, { recursive: true, force: true });
+    }
+  });
+
+  it('applies the catalog read-only tool allow-list when requested', () => {
+    const configHome = mkdtempSync(join(tmpdir(), 'sap-mcp-config-'));
+
+    try {
+      process.env.XDG_CONFIG_HOME = configHome;
+      process.env.SAP_MCP_CONFIG_PATH = join(configHome, 'mcp-sap', 'hosted.json');
+      process.env.SAP_MCP_MODE = 'hosted-api';
+      process.env.SAP_MCP_RPC_URL = 'https://api.devnet.solana.com';
+      process.env.SAP_MCP_CATALOG_READONLY = 'true';
+
+      const config = loadConfig();
+
+      expect(config.allowedTools).toEqual([...CATALOG_READONLY_TOOL_ALLOWLIST]);
+      expect(config.allowedTools).toContain('sap_get_agent_profile');
+      expect(config.allowedTools).not.toContain('sap_register_agent');
+      expect(config.allowedTools).not.toContain('sap_submit_signed_transaction');
     } finally {
       rmSync(configHome, { recursive: true, force: true });
     }

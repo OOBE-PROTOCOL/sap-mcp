@@ -148,8 +148,15 @@ function buildPolicySummary(tools: readonly ToolCatalogToolEntry[]): ToolCatalog
   };
 }
 
-function moduleToCatalogEntry(module: ToolModuleDefinition): ToolCatalogModuleEntry {
-  const expectedTools = [...(module.expectedTools ?? [])];
+function allowedToolNamesForContext(context: SapMcpContext): Set<string> | undefined {
+  return context.config.allowedTools === 'all'
+    ? undefined
+    : new Set(context.config.allowedTools);
+}
+
+function moduleToCatalogEntry(module: ToolModuleDefinition, allowedTools: Set<string> | undefined): ToolCatalogModuleEntry {
+  const expectedTools = [...(module.expectedTools ?? [])]
+    .filter((toolName) => allowedTools?.has(toolName) ?? true);
   const tools = expectedTools.map((toolName) => ({
     moduleId: module.id,
     moduleTitle: module.title,
@@ -184,7 +191,10 @@ export function buildToolCatalog(
   const selectedModules = withPaymentsBridgeMode(options.paymentsBridgeOnly, () => (
     selectToolModulesForContext(modules, context)
   ));
-  const catalogModules = selectedModules.map(moduleToCatalogEntry);
+  const allowedTools = allowedToolNamesForContext(context);
+  const catalogModules = selectedModules
+    .map((module) => moduleToCatalogEntry(module, allowedTools))
+    .filter((module) => allowedTools === undefined || module.tools.length > 0);
   const tools = catalogModules.flatMap((module) => [...module.tools]);
 
   return {

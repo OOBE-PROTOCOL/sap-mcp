@@ -18,6 +18,7 @@ import {
   getActiveProfile,
   getProfileConfigPath,
 } from './profiles.js';
+import { CATALOG_READONLY_TOOL_ALLOWLIST } from '../../core/src/constants.js';
 import type { SapMcpConfig } from '../../core/src/types.js';
 export type {
   SapMcpConfig,
@@ -115,6 +116,7 @@ export const envSchema = z.object({
   SAP_REQUIRE_APPROVAL_ABOVE_SOL: z.coerce.number().nonnegative().default(1),
   SAP_DAILY_LIMIT_SOL: z.coerce.number().nonnegative().default(100),
   SAP_ALLOWED_TOOLS: z.string().optional(), // comma-separated or 'all'
+  SAP_MCP_CATALOG_READONLY: booleanEnvSchema.default(false),
 
   // Logging & Observability
   SAP_LOG_LEVEL: logLevelSchema.default('info'),
@@ -210,6 +212,20 @@ function asPolicyMode(value: unknown): PolicyMode | undefined {
 
 function asOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function resolveAllowedTools(env: SapEnvConfig): SapMcpConfig['allowedTools'] {
+  if (env.SAP_ALLOWED_TOOLS === 'all') {
+    return 'all';
+  }
+  if (env.SAP_ALLOWED_TOOLS) {
+    return env.SAP_ALLOWED_TOOLS.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  if (env.SAP_MCP_CATALOG_READONLY) {
+    return [...CATALOG_READONLY_TOOL_ALLOWLIST];
+  }
+
+  return 'all';
 }
 
 // ============================================================================
@@ -623,9 +639,7 @@ function transformToRuntimeConfig(env: SapEnvConfig, fileConfig: ConfigFileData 
     maxTxValueSol: env.SAP_MAX_TX_VALUE_SOL,
     requireApprovalAboveSol: env.SAP_REQUIRE_APPROVAL_ABOVE_SOL,
     dailyLimitSol: env.SAP_DAILY_LIMIT_SOL,
-    allowedTools: env.SAP_ALLOWED_TOOLS === 'all' || !env.SAP_ALLOWED_TOOLS
-      ? 'all'
-      : env.SAP_ALLOWED_TOOLS.split(',').map(s => s.trim()),
+    allowedTools: resolveAllowedTools(env),
     logLevel: env.SAP_LOG_LEVEL,
     logFormat: env.SAP_LOG_FORMAT,
     logFile: env.SAP_LOG_FILE,
