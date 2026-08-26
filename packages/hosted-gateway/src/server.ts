@@ -40,7 +40,7 @@ import { preloadPremiumProviders, disconnectAllProviders } from '../../premium/s
 import { asyncMemoryProcessor, memoryDatabase } from '../../memory/src/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { BUILTIN_TOOL_MODULES } from '../../tools/src/builtin-tool-modules.js';
-import { buildToolCatalog } from '../../tools/src/tool-catalog.js';
+import { buildToolCatalogFromRuntimeTools, type RuntimeToolDescriptor } from '../../tools/src/tool-catalog.js';
 
 const PUBLIC_SERVER_TITLE = 'SAP MCP Server | OOBE Protocol';
 const PUBLIC_SERVER_DESCRIPTION = 'Hosted Solana-native MCP gateway for Synapse Agent Protocol tools, x402/pay.sh monetization, SNS identity, and agent operations.';
@@ -1397,11 +1397,11 @@ export function buildPublicServerInfo(
  * @name buildPublicToolCatalogDocument
  * @description Builds the secret-free hosted runtime tool catalog used by wizard, UI, and agent discovery.
  */
-export function buildPublicToolCatalogDocument(
+export async function buildPublicToolCatalogDocument(
   req: http.IncomingMessage,
   config: RemoteMCPConfig,
   appConfig: SapMcpConfig,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const baseUrl = buildPublicBaseUrl(req, config);
   const hostedAppConfig: SapMcpConfig = {
     ...appConfig,
@@ -1409,9 +1409,11 @@ export function buildPublicToolCatalogDocument(
     walletPath: undefined,
     externalSignerUrl: undefined,
   };
-  const catalog = buildToolCatalog(
+  const capabilities = await getStaticServerCardCapabilities(hostedAppConfig);
+  const catalog = buildToolCatalogFromRuntimeTools(
     BUILTIN_TOOL_MODULES,
     { config: hostedAppConfig } as SapMcpContext,
+    capabilities.tools as readonly RuntimeToolDescriptor[],
     {
       profileId: 'hosted-accountless',
       profileDescription: 'Hosted Streamable HTTP SAP MCP catalog with no server-side user signer.',
@@ -2763,7 +2765,7 @@ export class RemoteMCPServer {
       }
 
       if (isPublicReadMethod(req.method) && ['/.well-known/sap-mcp-tool-catalog.json', '/tool-catalog.json'].includes(url.pathname)) {
-        writeJson(res, 200, buildPublicToolCatalogDocument(req, this.config, this.appConfig), {
+        writeJson(res, 200, await buildPublicToolCatalogDocument(req, this.config, this.appConfig), {
           'Cache-Control': 'public, max-age=300',
         }, isHeadMethod(req.method));
         return;

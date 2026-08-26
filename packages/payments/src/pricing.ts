@@ -170,6 +170,7 @@ const FREE_TOOLS = new Set([
   'sap_perp_risk_check',
   'sap_perp_portfolio_risk',
   'sap_perp_fear_greed',
+  'sap_perp_signal_score',
   'sap_adrena_simulate_position',
   'sap_strategy_execute',
   'sap_trade_journal',
@@ -260,6 +261,7 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_perp_risk_check',
   'sap_perp_portfolio_risk',
   'sap_perp_fear_greed',
+  'sap_perp_signal_score',
   'sap_adrena_simulate_position',
   'sap_strategy_execute',
   'sap_trade_journal',
@@ -304,8 +306,7 @@ const MICRO_READ_TOOLS = new Set([
   'sap_adrena_get_prices',
   'sap_adrena_get_trading_prices',
   'sap_adrena_get_position_status',
-  // Sprint 1-3 tools — micro-read because they aggregate data in 1 call.
-  'sap_perp_signal_score',
+  // Sprint 1-3 paid data aggregators.
   'sap_adrena_get_markets',
   'sap_market_snapshot',
   'sap_chart_indicators',

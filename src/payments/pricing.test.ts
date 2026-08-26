@@ -75,6 +75,19 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_agent_identity_plan', { strictTools: true })).toBe('free');
   });
 
+  it('keeps free Adrena preflight and signal planning tools outside x402 challenges', () => {
+    for (const toolName of [
+      'sap_perp_risk_check',
+      'sap_perp_portfolio_risk',
+      'sap_perp_fear_greed',
+      'sap_perp_signal_score',
+      'sap_adrena_simulate_position',
+    ]) {
+      expect(classifyTool(toolName), toolName).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true }), toolName).toBe('free');
+    }
+  });
+
   it('applies the configured minimum price to micro-read estimates and challenges', () => {
     const hostedConfig = {
       ...monetizationConfig,

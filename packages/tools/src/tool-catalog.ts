@@ -29,6 +29,15 @@ export interface ToolCatalogOptions {
   readonly paymentsBridgeOnly?: boolean;
 }
 
+export interface RuntimeToolDescriptor {
+  readonly name: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly inputSchema?: unknown;
+  readonly outputSchema?: unknown;
+  readonly annotations?: unknown;
+}
+
 export interface ToolCatalogRuntimeProfile extends ToolCatalogOptions {
   readonly id: string;
   readonly description: string;
@@ -40,6 +49,12 @@ export interface ToolCatalogToolEntry {
   readonly moduleTitle: string;
   readonly moduleCategory: ToolModuleCategory;
   readonly toolName: string;
+  readonly title?: string;
+  readonly description?: string;
+  readonly inputSchema?: unknown;
+  readonly outputSchema?: unknown;
+  readonly annotations?: unknown;
+  readonly registered?: boolean;
   readonly metadata: ToolExecutionMetadata;
 }
 
@@ -154,16 +169,36 @@ function allowedToolNamesForContext(context: SapMcpContext): Set<string> | undef
     : new Set(context.config.allowedTools);
 }
 
-function moduleToCatalogEntry(module: ToolModuleDefinition, allowedTools: Set<string> | undefined): ToolCatalogModuleEntry {
-  const expectedTools = [...(module.expectedTools ?? [])]
-    .filter((toolName) => allowedTools?.has(toolName) ?? true);
-  const tools = expectedTools.map((toolName) => ({
+function runtimeToolToEntry(
+  toolName: string,
+  module: Pick<ToolCatalogModuleEntry, 'id' | 'title' | 'category'>,
+  runtimeTool?: RuntimeToolDescriptor,
+): ToolCatalogToolEntry {
+  return {
     moduleId: module.id,
     moduleTitle: module.title,
     moduleCategory: module.category,
     toolName,
+    ...(runtimeTool?.title ? { title: runtimeTool.title } : {}),
+    ...(runtimeTool?.description ? { description: runtimeTool.description } : {}),
+    ...(runtimeTool?.inputSchema ? { inputSchema: runtimeTool.inputSchema } : {}),
+    ...(runtimeTool?.outputSchema ? { outputSchema: runtimeTool.outputSchema } : {}),
+    ...(runtimeTool?.annotations ? { annotations: runtimeTool.annotations } : {}),
+    ...(runtimeTool ? { registered: true } : {}),
     metadata: getToolExecutionMetadata(toolName, toolName),
-  }));
+  };
+}
+
+function moduleToCatalogEntry(
+  module: ToolModuleDefinition,
+  allowedTools: Set<string> | undefined,
+  runtimeToolsByName?: ReadonlyMap<string, RuntimeToolDescriptor>,
+): ToolCatalogModuleEntry {
+  const expectedTools = [...(module.expectedTools ?? [])]
+    .filter((toolName) => allowedTools?.has(toolName) ?? true)
+    .filter((toolName) => runtimeToolsByName === undefined || runtimeToolsByName.has(toolName));
+  const moduleRef = { id: module.id, title: module.title, category: module.category };
+  const tools = expectedTools.map((toolName) => runtimeToolToEntry(toolName, moduleRef, runtimeToolsByName?.get(toolName)));
 
   return {
     id: module.id,
@@ -179,6 +214,83 @@ function moduleToCatalogEntry(module: ToolModuleDefinition, allowedTools: Set<st
     expectedTools,
     tools,
   };
+}
+
+function runtimeNamespace(toolName: string): string {
+  if (toolName.startsWith('sap_payments_') || toolName.startsWith('sap_x402_')) {
+    return 'sap-payments-runtime';
+  }
+  if (toolName.startsWith('sap_adrena_') || toolName.startsWith('sap_perp_')) {
+    return 'sap-perps-runtime';
+  }
+  if (toolName.startsWith('sap_skills_') || toolName === 'sap_skills_bundle') {
+    return 'sap-skills-runtime';
+  }
+  if (toolName.startsWith('sap_memory_')) {
+    return 'sap-memory-runtime';
+  }
+  if (toolName.startsWith('sol_') || toolName.startsWith('spl-token_')) {
+    return 'solana-runtime';
+  }
+  if (/^(jupiter|orca|raydium|meteora|magicblock)_/.test(toolName)) {
+    return 'solana-integration-runtime';
+  }
+  if (toolName.startsWith('sap_')) {
+    return 'sap-protocol-runtime';
+  }
+  return 'integration-runtime';
+}
+
+function runtimeCategory(moduleId: string): ToolModuleCategory {
+  if (moduleId.includes('payment')) return 'payments';
+  if (moduleId.includes('perps')) return 'perps';
+  if (moduleId.includes('skills')) return 'skills';
+  if (moduleId.includes('memory')) return 'memory';
+  if (moduleId.includes('solana')) return 'solana';
+  if (moduleId.includes('sap-protocol')) return 'sap-protocol';
+  return 'integration';
+}
+
+function runtimeTitle(moduleId: string): string {
+  return moduleId
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function buildRuntimeRegisteredModules(
+  runtimeTools: readonly RuntimeToolDescriptor[],
+  knownToolNames: ReadonlySet<string>,
+  allowedTools: Set<string> | undefined,
+): readonly ToolCatalogModuleEntry[] {
+  const grouped = new Map<string, RuntimeToolDescriptor[]>();
+  for (const tool of runtimeTools) {
+    if (knownToolNames.has(tool.name) || !(allowedTools?.has(tool.name) ?? true)) {
+      continue;
+    }
+    const moduleId = runtimeNamespace(tool.name);
+    grouped.set(moduleId, [...(grouped.get(moduleId) ?? []), tool]);
+  }
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleId, tools], index) => {
+      const category = runtimeCategory(moduleId);
+      const title = runtimeTitle(moduleId);
+      const moduleRef = { id: moduleId, title, category };
+      const sortedTools = [...tools].sort((left, right) => left.name.localeCompare(right.name));
+      return {
+        id: moduleId,
+        title,
+        description: 'Tools discovered from the live MCP registration store that are not yet represented by static module sentinels.',
+        category,
+        order: 9_000 + index,
+        mode: 'default',
+        requires: [],
+        namespace: moduleId.replace(/-runtime$/, ''),
+        expectedTools: sortedTools.map((tool) => tool.name),
+        tools: sortedTools.map((tool) => runtimeToolToEntry(tool.name, moduleRef, tool)),
+      };
+    });
 }
 
 export function buildToolCatalog(
@@ -207,6 +319,48 @@ export function buildToolCatalog(
     categories: buildCategorySummary(catalogModules),
     policy: buildPolicySummary(tools),
     modules: catalogModules,
+    tools,
+  };
+}
+
+export function buildToolCatalogFromRuntimeTools(
+  modules: readonly ToolModuleDefinition[],
+  context: SapMcpContext,
+  runtimeTools: readonly RuntimeToolDescriptor[],
+  options: ToolCatalogOptions = {},
+): ToolCatalog {
+  validateToolModules(modules);
+
+  const selectedModules = withPaymentsBridgeMode(options.paymentsBridgeOnly, () => (
+    selectToolModulesForContext(modules, context)
+  ));
+  const allowedTools = allowedToolNamesForContext(context);
+  const runtimeToolsByName = new Map<string, RuntimeToolDescriptor>();
+  for (const tool of runtimeTools) {
+    if (!tool.name || runtimeToolsByName.has(tool.name) || !(allowedTools?.has(tool.name) ?? true)) {
+      continue;
+    }
+    runtimeToolsByName.set(tool.name, tool);
+  }
+
+  const catalogModules = selectedModules
+    .map((module) => moduleToCatalogEntry(module, allowedTools, runtimeToolsByName))
+    .filter((module) => module.tools.length > 0);
+  const knownToolNames = new Set(catalogModules.flatMap((module) => module.tools.map((tool) => tool.toolName)));
+  const runtimeModules = buildRuntimeRegisteredModules([...runtimeToolsByName.values()], knownToolNames, allowedTools);
+  const allModules = [...catalogModules, ...runtimeModules];
+  const tools = allModules.flatMap((module) => [...module.tools]);
+
+  return {
+    profileId: options.profileId ?? context.config.mode,
+    profileDescription: options.profileDescription ?? `SAP MCP ${context.config.mode} runtime tool catalog.`,
+    runtimeMode: context.config.mode,
+    paymentsBridgeOnly: options.paymentsBridgeOnly ?? process.env.SAP_MCP_PAYMENTS_BRIDGE_ONLY === 'true',
+    moduleCount: allModules.length,
+    toolCount: tools.length,
+    categories: buildCategorySummary(allModules),
+    policy: buildPolicySummary(tools),
+    modules: allModules,
     tools,
   };
 }

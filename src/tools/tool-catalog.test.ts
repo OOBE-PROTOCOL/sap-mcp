@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { CATALOG_READONLY_TOOL_ALLOWLIST } from '../core/constants.js';
 import type { SapMcpConfig, SapMcpContext } from '../core/types.js';
 import { BUILTIN_TOOL_MODULES } from './builtin-tool-modules.js';
-import { buildToolCatalog, buildToolCatalogForRuntimeProfiles, summarizeToolCatalog, type ToolCatalogRuntimeProfile } from './tool-catalog.js';
+import {
+  buildToolCatalog,
+  buildToolCatalogForRuntimeProfiles,
+  buildToolCatalogFromRuntimeTools,
+  summarizeToolCatalog,
+  type ToolCatalogRuntimeProfile,
+} from './tool-catalog.js';
 
 function config(overrides: Partial<SapMcpConfig> = {}): SapMcpConfig {
   return {
@@ -98,6 +104,33 @@ describe('tool catalog', () => {
     expect(catalog.modules.map((module) => module.id)).toContain('hosted-prepaid');
     expect(catalog.modules.map((module) => module.id)).not.toContain('x402-local-helper');
     expect(catalog.tools.map((tool) => tool.toolName)).toContain('sap_payments_prepaid_balance');
+    expect(catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
+  });
+
+  it('builds a runtime-registered catalog that keeps tools outside static sentinels', () => {
+    const catalog = buildToolCatalogFromRuntimeTools(
+      BUILTIN_TOOL_MODULES,
+      context({ mode: 'hosted-api', walletPath: undefined }),
+      [
+        { name: 'sap_agent_start', description: 'Start SAP agent runtime.' },
+        { name: 'sap_register_agent', description: 'Register an agent.' },
+        { name: 'spl-token_getBalance', description: 'Read an SPL token balance.' },
+        { name: 'jupiter_getHoldings', description: 'Read Jupiter holdings.' },
+      ],
+      { profileId: 'hosted-accountless-runtime' },
+    );
+    const toolNames = catalog.tools.map((tool) => tool.toolName);
+
+    expect(catalog.toolCount).toBe(4);
+    expect(toolNames).toEqual(expect.arrayContaining([
+      'sap_agent_start',
+      'sap_register_agent',
+      'spl-token_getBalance',
+      'jupiter_getHoldings',
+    ]));
+    expect(catalog.modules.map((module) => module.id)).toContain('solana-runtime');
+    expect(catalog.modules.map((module) => module.id)).toContain('solana-integration-runtime');
+    expect(catalog.tools.every((tool) => tool.registered)).toBe(true);
     expect(catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
   });
 

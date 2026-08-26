@@ -436,9 +436,9 @@ describe('remote MCP server config', () => {
     });
   });
 
-  it('publishes a secret-free hosted tool catalog for wizard and agent discovery', () => {
+  it('publishes a secret-free hosted tool catalog for wizard and agent discovery', async () => {
     const req = { headers: { host: 'mcp.sap.oobeprotocol.ai', 'x-forwarded-proto': 'https' } } as IncomingMessage;
-    const document = buildPublicToolCatalogDocument(req, publicRemoteConfig, appConfig) as {
+    const document = await buildPublicToolCatalogDocument(req, publicRemoteConfig, appConfig) as {
       kind: string;
       serverVersion: string;
       sourceOfTruth: string;
@@ -460,6 +460,7 @@ describe('remote MCP server config', () => {
         moduleCount: number;
         toolCount: number;
         modules: Array<{ id: string; expectedTools: string[] }>;
+        tools: Array<{ toolName: string; moduleId: string; registered?: boolean }>;
         policy: {
           hostedAccountlessBlockedTools: string[];
           localSignerTools: string[];
@@ -483,10 +484,12 @@ describe('remote MCP server config', () => {
     });
     expect(document.catalog.profileId).toBe('hosted-accountless');
     expect(document.catalog.runtimeMode).toBe('hosted-api');
-    expect(document.catalog.moduleCount).toBe(19);
-    expect(document.catalog.toolCount).toBe(139);
+    expect(document.catalog.moduleCount).toBeGreaterThanOrEqual(19);
+    expect(document.catalog.toolCount).toBeGreaterThan(300);
     expect(document.catalog.modules.map((module) => module.id)).toContain('hosted-prepaid');
     expect(document.catalog.modules.map((module) => module.id)).not.toContain('x402-local-helper');
+    expect(document.catalog.tools.map((tool) => tool.toolName)).toContain('spl-token_getBalance');
+    expect(document.catalog.tools.every((tool) => tool.registered)).toBe(true);
     expect(document.catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
     expect(document.catalog.policy.localSignerTools).toContain('sap_payments_prepaid_balance');
     expect(JSON.stringify(document)).not.toContain('api_key=');
