@@ -168,7 +168,7 @@ function readBearerToken(request: http.IncomingMessage): string | undefined {
     return undefined;
   }
   const [scheme, token] = authorization.split(/\s+/, 2);
-  if (scheme !== 'Bearer' || !token?.trim()) {
+  if (scheme?.toLowerCase() !== 'bearer' || !token?.trim()) {
     return undefined;
   }
   return token.trim();
@@ -406,6 +406,10 @@ export class McpMonetizationGate {
       await next(request, response);
       return;
     }
+    if (request.method?.toUpperCase() === 'GET') {
+      await this.returnX402Challenge(request, response, { jsonrpc: '2.0', method: 'tools/list', params: {} });
+      return;
+    }
 
     let rawBody: Buffer;
     let parsedBody: unknown;
@@ -456,13 +460,9 @@ export class McpMonetizationGate {
     // Only text/event-stream is a reliable MCP SDK marker.
     const acceptHeader = getHttpHeader(request.headers, 'accept') || '';
     const isMcpSdkClient = acceptHeader.includes('text/event-stream');
+    const sponsor = evaluateTrustedSponsor(request);
 
     if (!decision.required) {
-      if (shouldInspectRequest(request) && !isMcpSdkClient) {
-        // x402 scanner probing with arbitrary body — return 402 challenge
-        await this.returnX402Challenge(request, response, parsedBody);
-        return;
-      }
       await next(request, response, parsedBody);
       return;
     }
@@ -502,7 +502,6 @@ export class McpMonetizationGate {
     // without exposing x402 to browser users. Origin alone is intentionally not
     // enough because HTTP clients can spoof it; the bearer token must match a
     // configured trusted sponsor token or SAP_MCP_API_KEYS entry.
-    const sponsor = evaluateTrustedSponsor(request);
     if (sponsor.granted && sponsor.origin) {
       await this.usageLedger.recordSponsorBypassGranted(metadata, decision, sponsor.origin);
       logger.info('Trusted sponsor granted access', {

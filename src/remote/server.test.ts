@@ -2,6 +2,8 @@ import type { IncomingMessage } from 'http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SapMcpConfig } from '../config/env.js';
 import { CATALOG_READONLY_TOOL_ALLOWLIST, MCP_SERVER_VERSION } from '../core/constants.js';
+import { isHostedAccountlessBlockedTool } from '../payments/hosted-tool-eligibility.js';
+import { classifyTool } from '../payments/pricing.js';
 import {
   buildA2AAgentCard,
   buildDocsHtml,
@@ -460,7 +462,15 @@ describe('remote MCP server config', () => {
         moduleCount: number;
         toolCount: number;
         modules: Array<{ id: string; expectedTools: string[] }>;
-        tools: Array<{ toolName: string; moduleId: string; registered?: boolean }>;
+        tools: Array<{
+          toolName: string;
+          moduleId: string;
+          registered?: boolean;
+          metadata: {
+            paymentTier: string;
+            hostedAccountlessBlocked: boolean;
+          };
+        }>;
         policy: {
           hostedAccountlessBlockedTools: string[];
           localSignerTools: string[];
@@ -490,6 +500,27 @@ describe('remote MCP server config', () => {
     expect(document.catalog.modules.map((module) => module.id)).not.toContain('x402-local-helper');
     expect(document.catalog.tools.map((tool) => tool.toolName)).toContain('spl-token_getBalance');
     expect(document.catalog.tools.every((tool) => tool.registered)).toBe(true);
+    for (const tool of document.catalog.tools) {
+      expect(tool.metadata.paymentTier, tool.toolName).toBe(classifyTool(tool.toolName, appConfig.monetization));
+      expect(tool.metadata.hostedAccountlessBlocked, tool.toolName).toBe(isHostedAccountlessBlockedTool(tool.toolName));
+    }
+    for (const [toolName, paymentTier, blocked] of [
+      ['jupiter_getPrice', 'free', false],
+      ['jupiter_getQuote', 'read-premium', false],
+      ['jupiter_swapInstructions', 'builder', false],
+      ['magicblock_balance', 'free', false],
+      ['magicblock_swapQuote', 'read-premium', false],
+      ['magicblock_swap', 'value-action', false],
+      ['sap_adrena_get_markets', 'micro-read', false],
+      ['sap_adrena_build_open_long', 'builder', false],
+      ['orca_swap', 'builder', true],
+      ['raydium-pools_addLiquidity', 'read-premium', true],
+    ] as const) {
+      const entry = document.catalog.tools.find((tool) => tool.toolName === toolName);
+      expect(entry, toolName).toBeDefined();
+      expect(entry?.metadata.paymentTier, toolName).toBe(paymentTier);
+      expect(entry?.metadata.hostedAccountlessBlocked, toolName).toBe(blocked);
+    }
     expect(document.catalog.policy.hostedAccountlessBlockedTools).toContain('sap_register_agent');
     expect(document.catalog.policy.localSignerTools).toContain('sap_payments_prepaid_balance');
     expect(JSON.stringify(document)).not.toContain('api_key=');

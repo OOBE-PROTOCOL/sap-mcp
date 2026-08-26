@@ -117,6 +117,36 @@ function createResponse(): CapturedResponse {
   return capture;
 }
 
+function installSupportedFacilitatorStub(): void {
+  vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+    if (String(input).endsWith('/supported')) {
+      return new Response(JSON.stringify({
+        kinds: [{
+          x402Version: 2,
+          scheme: 'exact',
+          network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+          extra: { feePayer: 'FeePayer111111111111111111111111111111111' },
+        }],
+        signers: {},
+        extensions: [],
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
+}
+
+function toolCallBody(toolName: string, id = 100): Buffer {
+  return Buffer.from(JSON.stringify({
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: {
+      name: toolName,
+      arguments: { limit: 1 },
+    },
+  }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -980,6 +1010,167 @@ describe('MCP monetization gate readiness', () => {
         delete process.env.XDG_DATA_HOME;
       } else {
         process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('never returns x402 for free tools even when the caller is not an MCP SDK client', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-free-tool-test-'));
+    installSupportedFacilitatorStub();
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+      const response = createResponse();
+      const next = vi.fn(async (_request: IncomingMessage, mcpResponse: ServerResponse) => {
+        mcpResponse.writeHead(200, { 'Content-Type': 'application/json' });
+        mcpResponse.end(JSON.stringify({ jsonrpc: '2.0', id: 47, result: { ok: true } }));
+      });
+
+      await gate.handle(
+        createRequest(toolCallBody('jupiter_getPrice', 47), {
+          'content-type': 'application/json',
+          accept: 'application/json',
+        }),
+        response.response,
+        next,
+      );
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('"ok":true');
+      expect(response.body).not.toMatch(/payment_required|x402/i);
+      expect(response.headers['payment-required']).toBeUndefined();
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+    }
+  });
+
+  it('applies the Steve sponsor bypass across free, read-premium, builder, and value-action runtime tiers', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousTrustedTokens = process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS;
+    const previousApiKeys = process.env.SAP_MCP_API_KEYS;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-sponsor-matrix-test-'));
+    process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS = 'steve-runtime-token';
+    delete process.env.SAP_MCP_API_KEYS;
+    installSupportedFacilitatorStub();
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      for (const [index, toolName] of [
+        'jupiter_getPrice',
+        'magicblock_balance',
+        'sap_adrena_simulate_position',
+        'jupiter_getQuote',
+        'magicblock_swapQuote',
+        'sap_adrena_get_markets',
+        'jupiter_swapInstructions',
+        'magicblock_deposit',
+        'sap_adrena_build_open_long',
+        'magicblock_swap',
+      ].entries()) {
+        const response = createResponse();
+        const next = vi.fn(async (_request: IncomingMessage, mcpResponse: ServerResponse) => {
+          mcpResponse.writeHead(200, { 'Content-Type': 'application/json' });
+          mcpResponse.end(JSON.stringify({ jsonrpc: '2.0', id: 60 + index, result: { toolName } }));
+        });
+
+        await gate.handle(
+          createRequest(toolCallBody(toolName, 60 + index), {
+            'content-type': 'application/json',
+            accept: 'application/json',
+            origin: 'https://steve.oobeprotocol.ai',
+            authorization: 'bearer steve-runtime-token',
+          }),
+          response.response,
+          next,
+        );
+
+        expect(next, toolName).toHaveBeenCalledTimes(1);
+        expect(response.statusCode, toolName).toBe(200);
+        expect(response.body, toolName).toContain(toolName);
+        expect(response.body, toolName).not.toMatch(/payment_required|x402/i);
+        expect(response.headers['payment-required'], toolName).toBeUndefined();
+      }
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+      if (previousTrustedTokens === undefined) {
+        delete process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS;
+      } else {
+        process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS = previousTrustedTokens;
+      }
+      if (previousApiKeys === undefined) {
+        delete process.env.SAP_MCP_API_KEYS;
+      } else {
+        process.env.SAP_MCP_API_KEYS = previousApiKeys;
+      }
+    }
+  });
+
+  it('blocks Steve-sponsored local-signer tools before monetization without returning x402', async () => {
+    const previousXdgDataHome = process.env.XDG_DATA_HOME;
+    const previousTrustedTokens = process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS;
+    process.env.XDG_DATA_HOME = mkdtempSync(join(tmpdir(), 'sap-mcp-payment-sponsor-local-block-test-'));
+    process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS = 'steve-runtime-token';
+    installSupportedFacilitatorStub();
+
+    try {
+      const gate = await McpMonetizationGate.create(baseConfig);
+      if (!gate) {
+        throw new Error('Expected monetization gate to initialize.');
+      }
+
+      for (const [index, toolName] of [
+        'orca_swap',
+        'raydium-pools_addLiquidity',
+        'meteora_dlmm_addLiquidity',
+      ].entries()) {
+        const response = createResponse();
+        const next = vi.fn();
+
+        await gate.handle(
+          createRequest(toolCallBody(toolName, 80 + index), {
+            'content-type': 'application/json',
+            accept: 'application/json',
+            origin: 'https://steve.oobeprotocol.ai',
+            authorization: 'Bearer steve-runtime-token',
+          }),
+          response.response,
+          next,
+        );
+
+        expect(next, toolName).not.toHaveBeenCalled();
+        expect(response.statusCode, toolName).toBe(200);
+        expect(response.body, toolName).toContain('hosted_local_signer_required');
+        expect(response.body, toolName).toContain('"paymentNotCharged":true');
+        expect(response.body, toolName).not.toContain('payment_required');
+        expect(response.headers['payment-required'], toolName).toBeUndefined();
+      }
+    } finally {
+      if (previousXdgDataHome === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = previousXdgDataHome;
+      }
+      if (previousTrustedTokens === undefined) {
+        delete process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS;
+      } else {
+        process.env.SAP_MCP_TRUSTED_SPONSOR_TOKENS = previousTrustedTokens;
       }
     }
   });

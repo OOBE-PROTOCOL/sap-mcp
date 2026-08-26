@@ -332,6 +332,7 @@ const READ_PREMIUM_TOOLS = new Set([
   'jupiter_programLabels',
   'jupiter_searchTokens',
   'magicblock_swapQuote',
+  'magicblock_swap_quote',
   'pyth_getPriceHistory',
   'pyth_listPriceFeeds',
   'coingecko_getTrending',
