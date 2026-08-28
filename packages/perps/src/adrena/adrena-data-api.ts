@@ -90,6 +90,28 @@ export interface AdrenaTradingPrice {
   symbol: string;
   priceUsd: number;
   custodyAddress: string;
+  provider?: string;
+  feedId?: number;
+  timestamp?: number;
+}
+
+interface AdrenaTradingPriceApiEntry {
+  symbol?: string;
+  price?: string | number;
+  exponent?: number;
+  custody?: string;
+  custodyAddress?: string;
+  feed_id?: number;
+  feedId?: number;
+  timestamp?: number;
+}
+
+interface AdrenaTradingPriceProviderBucket {
+  prices?: AdrenaTradingPriceApiEntry[];
+}
+
+interface AdrenaTradingPriceApiResponse {
+  data?: Record<string, AdrenaTradingPriceProviderBucket>;
 }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -262,7 +284,28 @@ export class AdrenaDataApiClient {
    * @returns Array of trading prices.
    */
   async getLastTradingPrices(): Promise<AdrenaTradingPrice[] | null> {
-    return this.fetchJson<AdrenaTradingPrice[]>('/last-trading-prices');
+    const payload = await this.fetchJson<AdrenaTradingPrice[] | AdrenaTradingPriceApiResponse>('/last-trading-prices');
+    if (payload === null) return null;
+    if (Array.isArray(payload)) return payload;
+
+    const prices: AdrenaTradingPrice[] = [];
+    for (const [provider, bucket] of Object.entries(payload.data ?? {})) {
+      for (const entry of bucket.prices ?? []) {
+        const symbol = String(entry.symbol ?? '').trim();
+        if (!symbol) continue;
+        const rawPrice = Number(entry.price ?? 0);
+        const exponent = entry.exponent ?? -10;
+        prices.push({
+          symbol,
+          priceUsd: rawPrice * Math.pow(10, exponent),
+          custodyAddress: String(entry.custodyAddress ?? entry.custody ?? ''),
+          provider,
+          feedId: entry.feedId ?? entry.feed_id,
+          timestamp: entry.timestamp,
+        });
+      }
+    }
+    return prices;
   }
 }
 

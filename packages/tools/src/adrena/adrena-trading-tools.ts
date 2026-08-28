@@ -93,7 +93,7 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_long', {
-    description: 'Build an unsigned transaction to open or increase a long perp position on Adrena. Returns transactionBase64 for local signing via sap_payments_finalize_transaction. The agent must sign locally — SAP MCP never signs user-owned perp transactions.',
+    description: 'Build an unsigned transaction to open or increase a long perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Returns transactionBase64 for local signing via sap_payments_finalize_transaction only when safeToApprove is not false. If oracleReadiness.ready=false, simulationError, or approvalBlocked appears, do not show approval and do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -145,7 +145,7 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_short', {
-    description: 'Build an unsigned transaction to open or increase a short perp position on Adrena. Collateral must be USDC for shorts. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to open or increase a short perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Collateral must be USDC for shorts. Returns transactionBase64 only when the transaction passed pre-submit simulation. If oracleReadiness.ready=false, simulationError, or approvalBlocked appears, do not show approval and do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -427,7 +427,7 @@ export function registerAdrenaSimulatePositionTool(server: Server, context: SapM
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_simulate_position', {
-    description: 'FREE dry-run tool (no x402 charge): simulates opening a perp position on Adrena by building the same instructions as the open position builder, then calling connection.simulateTransaction(). Returns Adrena program logs, compute units consumed, whether the position would succeed, and the pre-flight balance check — without serializing or returning transaction bytes. Use this to validate position parameters and diagnose on-chain failures before building a paid transaction.',
+    description: 'FREE dry-run tool (no x402 charge): checks live Adrena oracle readiness and simulates opening a perp position only when oracle coverage can satisfy the pool. Returns oracleReadiness, balanceCheck, program logs, compute units, and wouldSucceed without transaction bytes. Use this before any paid build. Build only when wouldSucceed=true and oracleReadiness.ready=true.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -473,7 +473,7 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_position_package', {
-    description: 'Build a single unsigned transaction that atomically opens a perp position AND sets stop loss AND take profit in one transaction. 1 payment, 1 signing, 1 submit — instead of 3 separate calls. If stopLossPriceUsd or takeProfitPriceUsd is omitted, that instruction is skipped. Returns transactionBase64 for local signing via sap_payments_finalize_transaction. Includes balanceCheck.',
+    description: 'Build a single unsigned transaction that atomically opens a perp position AND sets stop loss AND take profit only after policy, balance, oracle-readiness, and simulation checks pass. If stopLossPriceUsd or takeProfitPriceUsd is omitted, that instruction is skipped. Returns transactionBase64 only when the whole package is safe to approve; otherwise return structured blocked diagnostics and do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -514,7 +514,7 @@ export function registerAdrenaPositionPackageTool(server: Server, context: SapMc
  */
 export function registerAdrenaTradeIntentTool(server: Server, context: SapMcpContext): void {
   registerAdrenaPipelineTool(server, context, 'sap_adrena_trade_intent', {
-    description: 'Intent-level Adrena trading API. Pass market name, side, USD collateral, and leverage (or "max"). The tool resolves mint addresses, decimals, max leverage from on-chain custody accounts, converts USD collateral to token amounts via oracle price, validates parameters, and returns a ready-to-sign transaction. Supports optional stopLossPct and takeProfitPct for atomic position+SL+TP in one transaction. Reduces 5 tool calls to 1.',
+    description: 'Intent-level Adrena trading API. Pass market name, side, USD collateral, and leverage (or "max"). Resolves custody, collateral, prices, policy, balance, oracle-readiness, and simulation before returning a signable transaction. Never describe the result as ready-to-sign unless transactionBase64 exists and no oracleReadiness.ready=false, simulationError, safeToApprove=false, or approvalBlocked field is present.',
     inputSchema: {
       type: 'object',
       properties: {

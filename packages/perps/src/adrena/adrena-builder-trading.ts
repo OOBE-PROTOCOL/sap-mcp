@@ -57,6 +57,8 @@ import {
   buildResult,
   describeAdrenaSimulationFailure,
   assertAdrenaSimulationPassed,
+  readPositionOracleReadiness,
+  assertAdrenaOracleReady,
 } from './adrena-builder-core.js';
 
 // ─── Trading Builders ─────────────────────────────────────────────────────────
@@ -97,6 +99,21 @@ export async function buildSimulatePosition(
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = null;
+  const [oracleReadiness, balanceCheck] = await Promise.all([
+    readPositionOracleReadiness(connection, principalToken, collateralToken, poolName),
+    checkSufficientBalance(connection, owner, collateralToken, collateralAmount),
+  ]);
+
+  if (!oracleReadiness.ready) {
+    return {
+      simulationLogs: [],
+      simulationError: 'AdrenaOracleReadinessBlocked',
+      simulationDiagnostic: oracleReadiness.reason ?? 'Adrena oracle coverage is not ready for this market.',
+      wouldSucceed: false,
+      balanceCheck,
+      oracleReadiness,
+    };
+  }
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
@@ -160,9 +177,6 @@ export async function buildSimulatePosition(
   const unitsConsumed = simulation.value.unitsConsumed;
   const wouldSucceed = simulation.value.err === null;
 
-  // Pre-flight balance check.
-  const balanceCheck = await checkSufficientBalance(connection, owner, collateralToken, collateralAmount);
-
   return {
     simulationLogs,
     ...(simulationError ? { simulationError } : {}),
@@ -170,6 +184,7 @@ export async function buildSimulatePosition(
     ...(unitsConsumed !== undefined ? { unitsConsumed } : {}),
     wouldSucceed,
     balanceCheck,
+    oracleReadiness,
   };
 }
 
@@ -198,6 +213,8 @@ export async function buildOpenPositionLong(
   // Read custody metadata for leverage pre-validation and poolMetadata.
   const poolMetadata: PoolMetadata = await readCustodyMetadata(connection, custody);
   validateLeverage(leverage, Math.floor(poolMetadata.maxInitialLeverage * 10000), principalToken);
+  const oracleReadiness = await readPositionOracleReadiness(connection, principalToken, collateralToken, 'main-pool');
+  assertAdrenaOracleReady(oracleReadiness);
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, 'long');
@@ -251,7 +268,7 @@ export async function buildOpenPositionLong(
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionLong']);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
 }
 
 /**
@@ -292,6 +309,8 @@ export async function buildOpenPositionShort(
   // Read custody metadata for leverage pre-validation and poolMetadata.
   const poolMetadata: PoolMetadata = await readCustodyMetadata(connection, custody);
   validateLeverage(leverage, Math.floor(poolMetadata.maxInitialLeverage * 10000), principalToken);
+  const oracleReadiness = await readPositionOracleReadiness(connection, principalToken, collateralToken, 'main-pool');
+  assertAdrenaOracleReady(oracleReadiness);
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, 'short');
@@ -345,7 +364,7 @@ export async function buildOpenPositionShort(
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
   assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionShort']);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
 }
 
 /**
@@ -972,6 +991,8 @@ export async function buildPositionPackage(
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
   const leverageBps = encodeAdrenaLeverage(leverage);
+  const oracleReadiness = await readPositionOracleReadiness(connection, principalToken, collateralToken, 'main-pool');
+  assertAdrenaOracleReady(oracleReadiness);
 
   // Pre-instructions: ATA + user profile
   const collateralMint = getMintPublicKey(collateralToken);
@@ -1063,5 +1084,5 @@ export async function buildPositionPackage(
   const _serializeResult = await serializeUnsignedTx(connection, owner, instructions);
   assertAdrenaSimulationPassed(_serializeResult, instructionNames);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning, undefined, leverage, _serializeResult);
+  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning, undefined, leverage, _serializeResult, oracleReadiness);
 }

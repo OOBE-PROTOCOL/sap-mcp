@@ -799,7 +799,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
       nativeAdrenaBuilder: {
         available: true,
         executionReadiness: 'conditional',
-        readinessReason: 'Native builders are registered, but Adrena position builders rely on the live Adrena oracle account/cache. Some markets return MissingOraclePrice (6088) until the oracle path supports that market. Run sap_adrena_simulate_position first and build only if wouldSucceed=true.',
+        readinessReason: 'Native builders are registered and fail closed. Adrena open-position builders rely on live pool oracle consensus. Run sap_adrena_oracle_readiness for the exact market/collateral/pool, then sap_adrena_simulate_position. Build only if oracleReadiness.ready=true and wouldSucceed=true.',
         source: 'vendored Adrena IDL (release/39) + @coral-xyz/anchor',
         operations: [
           'sap_adrena_build_open_long',
@@ -835,6 +835,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
           'sap_adrena_get_mutagen_leaderboard',
           'sap_adrena_get_prices',
           'sap_adrena_get_trading_prices',
+          'sap_adrena_oracle_readiness',
           'sap_adrena_get_position_status',
         ],
         signerPolicy: 'All builder tools return unsigned base64 transactions only after builder simulation does not return an on-chain error. Sign locally via sap_payments_finalize_transaction. SAP MCP never signs user-owned Adrena transactions.',
@@ -842,7 +843,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
       },
       signerPolicy: 'Use sap_adrena_build_* tools to construct unsigned transactions, then sign locally with sap_payments_finalize_transaction.',
       paymentPolicy: 'Adrena builder tools (sap_adrena_build_*) are paid builder calls at $0.006 each. Data API tools (sap_adrena_get_*) are micro-read at $0.001 each. Finalization via sap_payments_finalize_transaction is free.',
-      nextAction: 'Use sap_adrena_get_pool_info + sap_adrena_get_trading_prices for market data, then sap_adrena_simulate_position for the exact trade. Build only when wouldSucceed=true, then finalize after explicit user confirmation.',
+      nextAction: 'Use sap_adrena_get_pool_info + sap_adrena_get_trading_prices for market data, then sap_adrena_oracle_readiness and sap_adrena_simulate_position for the exact trade. Build only when oracleReadiness.ready=true and wouldSucceed=true, then finalize after explicit user confirmation.',
     }, null, 2));
   });
 }

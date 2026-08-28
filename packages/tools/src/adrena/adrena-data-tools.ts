@@ -16,6 +16,9 @@ import {
 } from './adrena-pipeline.js';
 import {
   adrenaDataApi,
+  readAdrenaOracleReadiness,
+  readPositionRequiredOracleSymbols,
+  type AdrenaPool,
 } from '../../../perps/src/adrena/index.js';
 import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../../../perps/src/adrena/adrena-constants.js';
 import {
@@ -272,6 +275,46 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
       return adrenaPipelineError({ error: 'Failed to fetch trading prices from Adrena Data API' });
     }
     return adrenaPipelineOk({ prices, count: prices.length });
+  });
+
+  registerAdrenaPipelineTool(server, context, 'sap_adrena_oracle_readiness', {
+    description: 'Free Adrena execution readiness check for an exact market/pool/collateral route. Reads on-chain pool, custody, and oracle accounts and returns whether each required oracle symbol has enough fresh prices for Adrena minAgree. Use this before any sap_adrena_build_* open-position tool. If ready=false, do not show approval and do not call sap_payments_finalize_transaction.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        principalToken: { type: 'string', description: 'Market symbol to trade, for example WBTC, JITOSOL, BONK, XAU, XAG, WTI.' },
+        collateralToken: { type: 'string', description: 'Collateral symbol. USDC for shorts and commodities; same token for main-pool longs.' },
+        poolName: { type: 'string', description: 'Adrena pool. Default main-pool; use commodities-pool for XAU/XAG/WTI.', enum: ['main-pool', 'commodities-pool'] },
+        requiredSymbols: {
+          type: 'array',
+          description: 'Optional explicit oracle symbols to check. If omitted, SAP MCP derives them from principal/collateral custody accounts.',
+          items: { type: 'string' },
+        },
+      },
+      additionalProperties: false,
+    },
+  }, async (args: Record<string, unknown>) => {
+    try {
+      const poolName = (args['poolName'] === 'commodities-pool' ? 'commodities-pool' : 'main-pool') as AdrenaPool;
+      const principalToken = String(args['principalToken'] ?? '').trim().toUpperCase();
+      const collateralToken = String(args['collateralToken'] ?? '').trim().toUpperCase();
+      const requiredSymbolsArg = Array.isArray(args['requiredSymbols'])
+        ? args['requiredSymbols'].map(value => String(value).trim().toUpperCase()).filter(Boolean)
+        : [];
+      const connection = getConnection(context);
+      const requiredSymbols = requiredSymbolsArg.length > 0
+        ? requiredSymbolsArg
+        : await readPositionRequiredOracleSymbols(connection, principalToken, collateralToken, poolName);
+      if (requiredSymbols.length === 0) {
+        return adrenaPipelineError({ error: 'principalToken/collateralToken or requiredSymbols are required' });
+      }
+      return adrenaPipelineOk(await readAdrenaOracleReadiness(connection, poolName, requiredSymbols));
+    } catch (err) {
+      return adrenaPipelineError({
+        error: 'Failed to read Adrena oracle readiness',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
   });
 
   // Get position status (live P&L)

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildInstruction,
   buildResult,
+  decodeAdrenaLimitedString,
   describeAdrenaSimulationFailure,
   encodeAdrenaLeverage,
   assertAdrenaSimulationPassed,
@@ -35,6 +36,13 @@ describe('Adrena builder core', () => {
     expect(encodeAdrenaLeverage(1)).toBe(10_000);
     expect(encodeAdrenaLeverage(3)).toBe(30_000);
     expect(encodeAdrenaLeverage(100)).toBe(1_000_000);
+  });
+
+  it('decodes Adrena LimitedString account fields', () => {
+    expect(decodeAdrenaLimitedString({
+      value: [87, 66, 84, 67, 85, 83, 68, 0, 0],
+      length: 7,
+    })).toBe('WBTCUSD');
   });
 
   it('prefers accountsPartial and omits null optional accounts', async () => {

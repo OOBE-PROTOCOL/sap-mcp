@@ -33,6 +33,7 @@ import {
 import { ADRENA_IDL } from './adrena-idl.js';
 import {
   deriveCortexPda,
+  deriveOraclePda,
   deriveUserProfilePda,
 } from './adrena-pda.js';
 
@@ -127,6 +128,61 @@ export interface PoolMetadata {
   openInterestShortUsd: number;
 }
 
+export interface AdrenaOraclePriceStatus {
+  symbol: string;
+  requiredFreshPrices: number;
+  freshPrices: number;
+  ready: boolean;
+  sources: {
+    symbol: string;
+    feedId: number;
+    priceUsd: number;
+    confidenceUsd: number;
+    timestamp: number;
+    ageSeconds: number;
+    fresh: boolean;
+  }[];
+}
+
+export interface AdrenaOracleReadiness {
+  poolName: AdrenaPool;
+  pool: string;
+  oracle: string;
+  ready: boolean;
+  requiredSymbols: string[];
+  checkedAt: number;
+  minAgree: number;
+  stalenessSeconds: number;
+  poolAllowsTrade: boolean;
+  poolAllowsSwap: boolean;
+  symbols: AdrenaOraclePriceStatus[];
+  missingSymbols: string[];
+  reason?: string;
+}
+
+export class AdrenaOracleReadinessError extends Error {
+  readonly code = 'AdrenaOracleReadinessBlocked';
+  readonly status = 'blocked_before_build';
+  readonly safeToApprove = false;
+  readonly approvalBlocked = true;
+  readonly oracleReadiness: AdrenaOracleReadiness;
+  readonly nextAction: string;
+
+  constructor(readiness: AdrenaOracleReadiness) {
+    const missing = readiness.missingSymbols.length > 0
+      ? readiness.missingSymbols.join(', ')
+      : readiness.symbols.filter(symbol => !symbol.ready).map(symbol => symbol.symbol).join(', ');
+    super(
+      `Adrena oracle readiness failed for ${readiness.poolName}: ${missing || 'required prices'} do not have ` +
+      `${readiness.minAgree} fresh oracle prices within ${readiness.stalenessSeconds}s. ` +
+      'Do not build or approve this transaction until Adrena oracle coverage recovers.',
+    );
+    this.name = 'AdrenaOracleReadinessError';
+    this.oracleReadiness = readiness;
+    this.nextAction = 'Run sap_adrena_oracle_readiness, then choose a market whose ready=true or wait for Adrena oracle providers to refresh.';
+  }
+}
+
 /**
  * Encode a human leverage multiplier into Adrena's 1e4 BPS wire format.
  * Example: 3x => 30000, 100x => 1000000.
@@ -155,6 +211,8 @@ export interface SimulatePositionResult {
   simulationDiagnostic?: string;
   /** Pre-flight balance check for the collateral token. */
   balanceCheck: BalanceCheck;
+  /** Live Adrena oracle coverage for the exact pool/custodies used by this trade. */
+  oracleReadiness?: AdrenaOracleReadiness;
 }
 
 /** Result of building an unsigned transaction. */
@@ -196,6 +254,8 @@ export interface UnsignedTransactionResult {
   simulationUnitsConsumed?: number;
   /** Priority fee in micro-lamports applied to this transaction (0 = none). */
   priorityFeeMicroLamports?: number;
+  /** Live Adrena oracle coverage checked before returning signable transaction bytes. */
+  oracleReadiness?: AdrenaOracleReadiness;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -404,6 +464,214 @@ export async function readCustodyMetadata(
     openInterestLongUsd: Number(openInterestLongUsdRaw) / 1e6,
     openInterestShortUsd: Number(openInterestShortUsdRaw) / 1e6,
   };
+}
+
+interface AdrenaLimitedString {
+  value?: readonly number[] | Uint8Array;
+  length?: number;
+}
+
+interface DecodedAdrenaPool {
+  allowTrade?: number;
+  allowSwap?: number;
+  multiOracleConfig?: {
+    minAgree?: number;
+    stalenessSeconds?: number | BN;
+  };
+}
+
+interface DecodedAdrenaCustody {
+  oracle?: AdrenaLimitedString;
+  tradeOracle?: AdrenaLimitedString;
+}
+
+interface DecodedAdrenaOraclePrice {
+  price?: BN | number | string;
+  confidence?: BN | number | string;
+  timestamp?: BN | number | string;
+  exponent?: number;
+  feedId?: number;
+  name?: AdrenaLimitedString;
+}
+
+interface DecodedAdrenaOracle {
+  prices?: DecodedAdrenaOraclePrice[];
+}
+
+function anchorNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (BN.isBN(value)) return value.toNumber();
+  if (typeof value === 'string') {
+    const decimal = Number(value);
+    if (Number.isFinite(decimal)) return decimal;
+    const hex = Number.parseInt(value, 16);
+    return Number.isFinite(hex) ? hex : 0;
+  }
+  const maybeNumber = value as { toNumber?: () => number } | null;
+  if (maybeNumber?.toNumber) return maybeNumber.toNumber();
+  return 0;
+}
+
+function anchorBigNumberishToFloat(value: unknown, exponent: number): number {
+  const raw = BN.isBN(value)
+    ? Number(value.toString(10))
+    : typeof value === 'bigint'
+      ? Number(value)
+      : typeof value === 'number'
+        ? value
+        : typeof value === 'string'
+          ? Number(value)
+          : 0;
+  return raw * Math.pow(10, exponent);
+}
+
+export function decodeAdrenaLimitedString(value: unknown): string {
+  const limited = value as AdrenaLimitedString | null;
+  const bytes = limited?.value;
+  if (!bytes) return '';
+  const length = Math.min(Number(limited.length ?? bytes.length), bytes.length, 31);
+  return Buffer.from(Array.from(bytes).slice(0, length)).toString('utf8').replace(/\0/g, '').trim();
+}
+
+export async function readCustodyOracleSymbols(
+  connection: Connection,
+  custodyAddress: PublicKey,
+): Promise<string[]> {
+  const accountInfo = await connection.getAccountInfo(custodyAddress, 'confirmed');
+  if (!accountInfo?.data) {
+    throw new Error(`Custody account ${custodyAddress.toBase58()} not found`);
+  }
+  const program = createAdrenaProgram(connection);
+  const custody = program.coder.accounts.decode('custody', accountInfo.data) as DecodedAdrenaCustody;
+  return [decodeAdrenaLimitedString(custody.oracle), decodeAdrenaLimitedString(custody.tradeOracle)]
+    .filter((symbol): symbol is string => symbol.length > 0);
+}
+
+export async function readPositionRequiredOracleSymbols(
+  connection: Connection,
+  principalToken: string,
+  collateralToken: string,
+  poolName: AdrenaPool,
+): Promise<string[]> {
+  const principalCustody = getCustodyPublicKey(principalToken, poolName);
+  const collateralCustody = getCustodyPublicKey(collateralToken, poolName);
+  const symbolSets = await Promise.all([
+    readCustodyOracleSymbols(connection, principalCustody),
+    readCustodyOracleSymbols(connection, collateralCustody),
+  ]);
+  return Array.from(new Set(
+    symbolSets
+      .flat()
+      .map(symbol => symbol.toUpperCase())
+      .filter(symbol => symbol !== 'SYNTHETIC'),
+  ));
+}
+
+export async function readAdrenaOracleReadiness(
+  connection: Connection,
+  poolName: AdrenaPool,
+  requiredSymbols: readonly string[],
+): Promise<AdrenaOracleReadiness> {
+  const pool = getPoolPublicKey(poolName);
+  const oracle = deriveOraclePda();
+  const program = createAdrenaProgram(connection);
+  const [poolInfo, oracleInfo] = await Promise.all([
+    connection.getAccountInfo(pool, 'confirmed'),
+    connection.getAccountInfo(oracle, 'confirmed'),
+  ]);
+  if (!poolInfo?.data) {
+    throw new Error(`Adrena pool ${pool.toBase58()} not found`);
+  }
+  if (!oracleInfo?.data) {
+    throw new Error(`Adrena oracle ${oracle.toBase58()} not found`);
+  }
+
+  const decodedPool = program.coder.accounts.decode('pool', poolInfo.data) as DecodedAdrenaPool;
+  const decodedOracle = program.coder.accounts.decode('oracle', oracleInfo.data) as DecodedAdrenaOracle;
+  const checkedAt = Math.floor(Date.now() / 1000);
+  const minAgree = Math.max(1, anchorNumber(decodedPool.multiOracleConfig?.minAgree) || 1);
+  const stalenessSeconds = Math.max(1, anchorNumber(decodedPool.multiOracleConfig?.stalenessSeconds) || 15);
+  const uniqueSymbols = Array.from(new Set(requiredSymbols.map(symbol => symbol.toUpperCase()).filter(Boolean)));
+
+  const pricesBySymbol = new Map<string, AdrenaOraclePriceStatus['sources']>();
+  for (const price of decodedOracle.prices ?? []) {
+    const symbol = decodeAdrenaLimitedString(price.name).toUpperCase();
+    if (!symbol) continue;
+    const timestamp = anchorNumber(price.timestamp);
+    const ageSeconds = Math.max(0, checkedAt - timestamp);
+    const sources = pricesBySymbol.get(symbol) ?? [];
+    sources.push({
+      symbol,
+      feedId: anchorNumber(price.feedId),
+      priceUsd: anchorBigNumberishToFloat(price.price, price.exponent ?? -10),
+      confidenceUsd: anchorBigNumberishToFloat(price.confidence, price.exponent ?? -10),
+      timestamp,
+      ageSeconds,
+      fresh: ageSeconds <= stalenessSeconds,
+    });
+    pricesBySymbol.set(symbol, sources);
+  }
+
+  const symbols = uniqueSymbols.map(symbol => {
+    const sources = (pricesBySymbol.get(symbol) ?? [])
+      .sort((left, right) => left.ageSeconds - right.ageSeconds);
+    const freshPrices = sources.filter(source => source.fresh).length;
+    return {
+      symbol,
+      requiredFreshPrices: minAgree,
+      freshPrices,
+      ready: freshPrices >= minAgree,
+      sources,
+    };
+  });
+  const missingSymbols = symbols
+    .filter(symbol => !symbol.ready)
+    .map(symbol => symbol.symbol);
+  const poolAllowsTrade = decodedPool.allowTrade === 1;
+  const poolAllowsSwap = decodedPool.allowSwap === 1;
+  const ready = poolAllowsTrade && poolAllowsSwap && missingSymbols.length === 0;
+  const reason = ready
+    ? undefined
+    : [
+        !poolAllowsTrade ? 'pool trade disabled' : '',
+        !poolAllowsSwap ? 'pool swap disabled' : '',
+        missingSymbols.length > 0
+          ? `insufficient fresh oracle prices for ${missingSymbols.join(', ')}`
+          : '',
+      ].filter(Boolean).join('; ');
+
+  return {
+    poolName,
+    pool: pool.toBase58(),
+    oracle: oracle.toBase58(),
+    ready,
+    requiredSymbols: uniqueSymbols,
+    checkedAt,
+    minAgree,
+    stalenessSeconds,
+    poolAllowsTrade,
+    poolAllowsSwap,
+    symbols,
+    missingSymbols,
+    ...(reason ? { reason } : {}),
+  };
+}
+
+export async function readPositionOracleReadiness(
+  connection: Connection,
+  principalToken: string,
+  collateralToken: string,
+  poolName: AdrenaPool,
+): Promise<AdrenaOracleReadiness> {
+  const requiredSymbols = await readPositionRequiredOracleSymbols(connection, principalToken, collateralToken, poolName);
+  return readAdrenaOracleReadiness(connection, poolName, requiredSymbols);
+}
+
+export function assertAdrenaOracleReady(readiness: AdrenaOracleReadiness): void {
+  if (!readiness.ready) {
+    throw new AdrenaOracleReadinessError(readiness);
+  }
 }
 
 /**
@@ -1043,6 +1311,7 @@ export function buildResult(
   poolMetadata?: PoolMetadata,
   requestedLeverage?: number,
   simulation?: Pick<SerializeResult, 'simulationLogs' | 'simulationError' | 'simulationUnitsConsumed' | 'priorityFeeMicroLamports'>,
+  oracleReadiness?: AdrenaOracleReadiness,
 ): UnsignedTransactionResult {
   const encodedLeverageBps = requestedLeverage !== undefined
     ? encodeAdrenaLeverage(requestedLeverage)
@@ -1073,6 +1342,7 @@ export function buildResult(
     ...(simulation?.simulationError ? { simulationError: simulation.simulationError } : {}),
     ...(simulation?.simulationUnitsConsumed !== undefined ? { simulationUnitsConsumed: simulation.simulationUnitsConsumed } : {}),
     ...(simulation?.priorityFeeMicroLamports !== undefined ? { priorityFeeMicroLamports: simulation.priorityFeeMicroLamports } : {}),
+    ...(oracleReadiness ? { oracleReadiness } : {}),
   };
 }
 

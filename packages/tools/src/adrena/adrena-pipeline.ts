@@ -39,9 +39,26 @@ export function adrenaPipelineError(payload: Record<string, unknown>): AdrenaPip
 }
 
 export function adrenaPipelineException(error: string, err: unknown): AdrenaPipelineResult {
+  const extra: Record<string, unknown> = {};
+  if (err && typeof err === 'object') {
+    const record = err as Record<string, unknown>;
+    for (const key of [
+      'code',
+      'status',
+      'safeToApprove',
+      'approvalBlocked',
+      'oracleReadiness',
+      'nextAction',
+    ]) {
+      if (record[key] !== undefined) {
+        extra[key] = record[key];
+      }
+    }
+  }
   return adrenaPipelineError({
     error,
     message: err instanceof Error ? err.message : 'Unknown error',
+    ...extra,
   });
 }
 

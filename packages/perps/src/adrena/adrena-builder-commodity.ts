@@ -49,6 +49,8 @@ import {
   serializeUnsignedTx,
   buildResult,
   assertAdrenaSimulationPassed,
+  readPositionOracleReadiness,
+  assertAdrenaOracleReady,
 } from './adrena-builder-core.js';
 
 // ─── Commodity Builders (synthetic perps) ──────────────────────────────────────
@@ -167,6 +169,8 @@ async function buildOpenPositionLongInternal(
   const collateralCustodyTokenAccount = await readCustodyTokenAccount(connection, collateralCustody);
   const fundingAccount = deriveAta(owner, getMintPublicKey(collateralToken));
   const referrerProfile = null;
+  const oracleReadiness = await readPositionOracleReadiness(connection, principalToken, collateralToken, poolName);
+  assertAdrenaOracleReady(oracleReadiness);
 
   const collateralRaw = BigInt(Math.floor(collateralAmount * Math.pow(10, ADRENA_CUSTODIES[collateralToken.toUpperCase() as keyof typeof ADRENA_CUSTODIES].decimals)));
   const priceRaw = price ?? await fetchOraclePrice(principalToken, side);
@@ -221,7 +225,7 @@ async function buildOpenPositionLongInternal(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, leverage, _serializeResult);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, leverage, _serializeResult, oracleReadiness);
 }
 
 async function buildClosePositionLongInternal(
