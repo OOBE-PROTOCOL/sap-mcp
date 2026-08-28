@@ -43,6 +43,7 @@ import {
   buildInstruction,
   serializeUnsignedTx,
   buildResult,
+  assertAdrenaSimulationPassed,
 } from './adrena-builder-core.js';
 
 // ─── Staking Builders ──────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ export async function buildInitUserStaking(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['initUserStaking']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -113,7 +115,7 @@ export async function buildInitUserStaking(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['initUserStaking'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['initUserStaking'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -178,6 +180,7 @@ export async function buildAddLiquidStake(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['addLiquidStake']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees (LP token balance is not in standard token mints).
@@ -198,7 +201,7 @@ export async function buildAddLiquidStake(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['addLiquidStake'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['addLiquidStake'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -263,6 +266,7 @@ export async function buildRemoveLiquidStake(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['removeLiquidStake']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -283,7 +287,7 @@ export async function buildRemoveLiquidStake(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['removeLiquidStake'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['removeLiquidStake'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -342,6 +346,7 @@ export async function buildAddLockedStake(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['addLockedStake']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -362,7 +367,7 @@ export async function buildAddLockedStake(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['addLockedStake'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['addLockedStake'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -422,6 +427,7 @@ export async function buildClaimStakes(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['claimStakes']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -442,5 +448,5 @@ export async function buildClaimStakes(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['claimStakes'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['claimStakes'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }

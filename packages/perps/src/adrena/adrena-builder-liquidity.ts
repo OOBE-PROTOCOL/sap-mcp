@@ -39,6 +39,7 @@ import {
   buildInstruction,
   serializeUnsignedTx,
   buildResult,
+  assertAdrenaSimulationPassed,
 } from './adrena-builder-core.js';
 
 // ─── Liquidity & Swap Builders ──────────────────────────────────────────────────
@@ -101,6 +102,7 @@ export async function buildAddLiquidity(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['addLiquidity']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
@@ -111,7 +113,7 @@ export async function buildAddLiquidity(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, ['addLiquidity'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['addLiquidity'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -168,6 +170,7 @@ export async function buildRemoveLiquidity(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['removeLiquidity']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees (removeLiquidity burns LP tokens).
@@ -188,7 +191,7 @@ export async function buildRemoveLiquidity(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['removeLiquidity'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['removeLiquidity'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -250,6 +253,7 @@ export async function buildSwap(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['swap']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
@@ -260,5 +264,5 @@ export async function buildSwap(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, ['swap'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['swap'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }

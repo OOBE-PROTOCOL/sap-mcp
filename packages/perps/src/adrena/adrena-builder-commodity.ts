@@ -48,6 +48,7 @@ import {
   buildInstruction,
   serializeUnsignedTx,
   buildResult,
+  assertAdrenaSimulationPassed,
 } from './adrena-builder-core.js';
 
 // ─── Commodity Builders (synthetic perps) ──────────────────────────────────────
@@ -209,6 +210,7 @@ async function buildOpenPositionLongInternal(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, [ixName]);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check (commodity positions use USDC collateral).
@@ -219,7 +221,7 @@ async function buildOpenPositionLongInternal(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, leverage);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, leverage, _serializeResult);
 }
 
 async function buildClosePositionLongInternal(
@@ -281,6 +283,7 @@ async function buildClosePositionLongInternal(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, [ixName]);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees (close returns tokens, doesn't require collateral).
@@ -301,5 +304,5 @@ async function buildClosePositionLongInternal(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }

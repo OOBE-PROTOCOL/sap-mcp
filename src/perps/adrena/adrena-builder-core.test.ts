@@ -3,7 +3,10 @@ import type { Program } from '@coral-xyz/anchor';
 import { describe, expect, it } from 'vitest';
 import {
   buildInstruction,
+  buildResult,
+  describeAdrenaSimulationFailure,
   encodeAdrenaLeverage,
+  assertAdrenaSimulationPassed,
 } from './adrena-builder-core.js';
 import { ADRENA_DEFAULT_REFERRER_PROFILE } from './adrena-constants.js';
 
@@ -354,5 +357,48 @@ describe('Adrena builder core', () => {
       false,
       true,
     ]);
+  });
+
+  it('describes MissingOraclePrice simulation failures before approval', () => {
+    const diagnostic = describeAdrenaSimulationFailure({
+      simulationError: '{"InstructionError":[2,{"Custom":6088}]}',
+      simulationLogs: [
+        'Program log: OpenPositionShort: collateral=30000000, leverage=20000',
+        'Program log: AnchorError occurred. Error Code: MissingOraclePrice. Error Number: 6088.',
+      ],
+      simulationUnitsConsumed: 130_042,
+    }, ['openOrIncreasePositionShort']);
+
+    expect(diagnostic).toContain('MissingOraclePrice (6088)');
+    expect(diagnostic).toContain('Do not show an approval');
+  });
+
+  it('blocks unsigned transaction results when simulation already failed', () => {
+    expect(() => assertAdrenaSimulationPassed({
+      simulationError: '{"InstructionError":[2,{"Custom":6088}]}',
+      simulationLogs: ['Program log: Error Number: 6088. Error Message: Missing at least one oracle price.'],
+    }, ['openOrIncreasePositionShort'])).toThrow(/MissingOraclePrice \(6088\)/);
+  });
+
+  it('includes successful simulation metadata in unsigned transaction results', () => {
+    const result = buildResult(
+      'AQID',
+      PublicKey.default,
+      ['swap'],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        simulationLogs: ['Program log: ok'],
+        simulationUnitsConsumed: 11_100,
+        priorityFeeMicroLamports: 5_000,
+      },
+    );
+
+    expect(result.simulationLogs).toEqual(['Program log: ok']);
+    expect(result.simulationUnitsConsumed).toBe(11_100);
+    expect(result.priorityFeeMicroLamports).toBe(5_000);
   });
 });

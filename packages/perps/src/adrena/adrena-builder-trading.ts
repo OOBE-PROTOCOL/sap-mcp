@@ -55,6 +55,8 @@ import {
   buildInstruction,
   serializeUnsignedTx,
   buildResult,
+  describeAdrenaSimulationFailure,
+  assertAdrenaSimulationPassed,
 } from './adrena-builder-core.js';
 
 // ─── Trading Builders ─────────────────────────────────────────────────────────
@@ -164,6 +166,7 @@ export async function buildSimulatePosition(
   return {
     simulationLogs,
     ...(simulationError ? { simulationError } : {}),
+    ...(simulationError ? { simulationDiagnostic: describeAdrenaSimulationFailure({ simulationError, simulationLogs, simulationUnitsConsumed: unitsConsumed }, [ixName]) } : {}),
     ...(unitsConsumed !== undefined ? { unitsConsumed } : {}),
     wouldSucceed,
     balanceCheck,
@@ -246,8 +249,9 @@ export async function buildOpenPositionLong(
       : undefined;
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionLong']);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult);
 }
 
 /**
@@ -339,8 +343,9 @@ export async function buildOpenPositionShort(
       : undefined;
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionShort']);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage);
+  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult);
 }
 
 /**
@@ -409,6 +414,7 @@ export async function buildClosePositionLong(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['closePositionLong']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
@@ -429,7 +435,7 @@ export async function buildClosePositionLong(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['closePositionLong'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['closePositionLong'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -500,6 +506,7 @@ export async function buildClosePositionShort(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['closePositionShort']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
@@ -520,7 +527,7 @@ export async function buildClosePositionShort(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['closePositionShort'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['closePositionShort'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 // ─── SL / TP Builders ──────────────────────────────────────────────────────────
@@ -567,6 +574,7 @@ export async function buildSetStopLoss(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, [ixName]);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -587,7 +595,7 @@ export async function buildSetStopLoss(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -629,6 +637,7 @@ export async function buildSetTakeProfit(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, [ixName]);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -649,7 +658,7 @@ export async function buildSetTakeProfit(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, [ixName], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -683,6 +692,7 @@ export async function buildCancelStopLoss(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['cancelStopLoss']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -703,7 +713,7 @@ export async function buildCancelStopLoss(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['cancelStopLoss'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['cancelStopLoss'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -737,6 +747,7 @@ export async function buildCancelTakeProfit(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['cancelTakeProfit']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -757,7 +768,7 @@ export async function buildCancelTakeProfit(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['cancelTakeProfit'], position, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['cancelTakeProfit'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 // ─── Limit Order Builders ───────────────────────────────────────────────────────
@@ -826,6 +837,7 @@ export async function buildAddLimitOrder(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['addLimitOrder']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight balance check.
@@ -836,7 +848,7 @@ export async function buildAddLimitOrder(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  return buildResult(transactionBase64, owner, ['addLimitOrder'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['addLimitOrder'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 /**
@@ -885,6 +897,7 @@ export async function buildCancelLimitOrder(
   });
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, [ix]);
+  assertAdrenaSimulationPassed(_serializeResult, ['cancelLimitOrder']);
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: check SOL for fees.
@@ -905,7 +918,7 @@ export async function buildCancelLimitOrder(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['cancelLimitOrder'], undefined, balanceCheck, warning);
+  return buildResult(transactionBase64, owner, ['cancelLimitOrder'], undefined, balanceCheck, warning, undefined, undefined, _serializeResult);
 }
 
 // ─── Batch Position Package Builder ────────────────────────────────────────────
@@ -1048,6 +1061,7 @@ export async function buildPositionPackage(
       : undefined;
 
   const _serializeResult = await serializeUnsignedTx(connection, owner, instructions);
+  assertAdrenaSimulationPassed(_serializeResult, instructionNames);
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning, undefined, leverage);
+  return buildResult(transactionBase64, owner, instructionNames, position, balanceCheck, warning, undefined, leverage, _serializeResult);
 }

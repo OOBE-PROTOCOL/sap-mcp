@@ -151,6 +151,8 @@ export interface SimulatePositionResult {
   unitsConsumed?: number;
   /** True if the simulation succeeded (no error in simulation). */
   wouldSucceed: boolean;
+  /** Human-readable diagnostic for known Adrena simulation failures. */
+  simulationDiagnostic?: string;
   /** Pre-flight balance check for the collateral token. */
   balanceCheck: BalanceCheck;
 }
@@ -908,6 +910,62 @@ export interface SerializeResult {
   priorityFeeMicroLamports?: number;
 }
 
+const ADRENA_SIMULATION_ERROR_HINTS: readonly {
+  readonly match: RegExp;
+  readonly label: string;
+  readonly message: string;
+}[] = [
+  {
+    match: /MissingOraclePrice|"?Custom"?\s*:\s*6088|0x17c8/i,
+    label: 'MissingOraclePrice (6088)',
+    message: 'The Adrena program rejected the transaction because the oracle account or oracle price payload does not contain every price required by this market.',
+  },
+  {
+    match: /InsufficientCollateral|"?Custom"?\s*:\s*6071|0x17b7/i,
+    label: 'InsufficientCollateral (6071)',
+    message: 'The collateral balance or collateral amount is not sufficient for this Adrena position.',
+  },
+  {
+    match: /MinLeverage|"?Custom"?\s*:\s*6029|0x178d/i,
+    label: 'MinLeverage (6029)',
+    message: 'The requested leverage is below the Adrena minimum for this market.',
+  },
+  {
+    match: /CustodyBelowMinimum|"?Custom"?\s*:\s*6090|0x17ca/i,
+    label: 'CustodyBelowMinimum (6090)',
+    message: 'The custody account is below Adrena minimum liquidity requirements for this operation.',
+  },
+];
+
+export function describeAdrenaSimulationFailure(
+  result: Pick<SerializeResult, 'simulationError' | 'simulationLogs' | 'simulationUnitsConsumed'>,
+  instructionNames: readonly string[],
+): string | undefined {
+  if (!result.simulationError) return undefined;
+
+  const joinedLogs = result.simulationLogs?.join('\n') ?? '';
+  const searchable = `${result.simulationError}\n${joinedLogs}`;
+  const known = ADRENA_SIMULATION_ERROR_HINTS.find(hint => hint.match.test(searchable));
+  const prefix = `Adrena builder simulation failed before signing (${instructionNames.join(', ')})`;
+  const units = result.simulationUnitsConsumed !== undefined
+    ? ` Consumed ${result.simulationUnitsConsumed} compute units.`
+    : '';
+
+  if (known) {
+    return `${prefix}: ${known.label}. ${known.message}${units} Do not show an approval or call sap_payments_finalize_transaction for this transaction.`;
+  }
+
+  return `${prefix}: ${result.simulationError}.${units} Do not show an approval or call sap_payments_finalize_transaction for this transaction.`;
+}
+
+export function assertAdrenaSimulationPassed(
+  result: Pick<SerializeResult, 'simulationError' | 'simulationLogs' | 'simulationUnitsConsumed'>,
+  instructionNames: readonly string[],
+): void {
+  const failure = describeAdrenaSimulationFailure(result, instructionNames);
+  if (failure) throw new Error(failure);
+}
+
 export async function serializeUnsignedTx(
   connection: Connection,
   feePayer: PublicKey,
@@ -984,6 +1042,7 @@ export function buildResult(
   warning?: string,
   poolMetadata?: PoolMetadata,
   requestedLeverage?: number,
+  simulation?: Pick<SerializeResult, 'simulationLogs' | 'simulationError' | 'simulationUnitsConsumed' | 'priorityFeeMicroLamports'>,
 ): UnsignedTransactionResult {
   const encodedLeverageBps = requestedLeverage !== undefined
     ? encodeAdrenaLeverage(requestedLeverage)
@@ -1010,6 +1069,10 @@ export function buildResult(
       },
     } : {}),
     ...(warning ? { warning } : {}),
+    ...(simulation?.simulationLogs ? { simulationLogs: simulation.simulationLogs } : {}),
+    ...(simulation?.simulationError ? { simulationError: simulation.simulationError } : {}),
+    ...(simulation?.simulationUnitsConsumed !== undefined ? { simulationUnitsConsumed: simulation.simulationUnitsConsumed } : {}),
+    ...(simulation?.priorityFeeMicroLamports !== undefined ? { priorityFeeMicroLamports: simulation.priorityFeeMicroLamports } : {}),
   };
 }
 

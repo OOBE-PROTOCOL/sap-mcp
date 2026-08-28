@@ -770,7 +770,7 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
   };
 
   registerTool(server, 'sap_perp_builder_status', {
-    description: 'Free readiness check for perps execution. Returns whether SAP MCP has native Adrena perps builders (available since 0.9.38) or a configured hosted unsigned transaction builder. If builderAvailable is false, agents must stop before execution and must not route direct signer-only perps tools through x402 paid-call replay.',
+    description: 'Free readiness check for perps execution. Returns whether SAP MCP has native Adrena perps builders or a configured hosted unsigned transaction builder. Builder availability is not execution approval: agents must dry-run the exact market/side/collateral/leverage before requesting a paid build or showing approval.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     const perps = getPerpsConfig(context);
@@ -781,6 +781,8 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
       marketsProviderConfigured: Boolean(perps.marketsUrl),
       positionsProviderConfigured: Boolean(perps.positionsUrl),
       builderAvailable: true,
+      executionReadiness: 'per_market_dry_run_required',
+      preflightRequired: true,
       adrenaProgramId: perps.adrenaProgramId,
       rpcScanMode: 'anchor-discriminator-getProgramAccounts',
       scanDiscriminators: {
@@ -796,6 +798,8 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
       },
       nativeAdrenaBuilder: {
         available: true,
+        executionReadiness: 'conditional',
+        readinessReason: 'Native builders are registered, but Adrena position builders rely on the live Adrena oracle account/cache. Some markets return MissingOraclePrice (6088) until the oracle path supports that market. Run sap_adrena_simulate_position first and build only if wouldSucceed=true.',
         source: 'vendored Adrena IDL (release/39) + @coral-xyz/anchor',
         operations: [
           'sap_adrena_build_open_long',
@@ -833,11 +837,12 @@ function registerPerpBuilderStatusTool(server: Server, context: SapMcpContext): 
           'sap_adrena_get_trading_prices',
           'sap_adrena_get_position_status',
         ],
-        signerPolicy: 'All builder tools return unsigned base64 transactions. Sign locally via sap_payments_finalize_transaction. SAP MCP never signs user-owned Adrena transactions.',
+        signerPolicy: 'All builder tools return unsigned base64 transactions only after builder simulation does not return an on-chain error. Sign locally via sap_payments_finalize_transaction. SAP MCP never signs user-owned Adrena transactions.',
+        blockedApprovalPolicy: 'If a builder or simulator returns simulationError, MissingOraclePrice, InsufficientCollateral, MinLeverage, CustodyBelowMinimum, or PolicyViolation, do not show approval and do not call sap_payments_finalize_transaction.',
       },
       signerPolicy: 'Use sap_adrena_build_* tools to construct unsigned transactions, then sign locally with sap_payments_finalize_transaction.',
       paymentPolicy: 'Adrena builder tools (sap_adrena_build_*) are paid builder calls at $0.006 each. Data API tools (sap_adrena_get_*) are micro-read at $0.001 each. Finalization via sap_payments_finalize_transaction is free.',
-      nextAction: 'Use sap_adrena_get_pool_info + sap_adrena_get_trading_prices for market data, then sap_adrena_build_open_long (or short), then sap_payments_finalize_transaction with submit:true after user confirmation.',
+      nextAction: 'Use sap_adrena_get_pool_info + sap_adrena_get_trading_prices for market data, then sap_adrena_simulate_position for the exact trade. Build only when wouldSucceed=true, then finalize after explicit user confirmation.',
     }, null, 2));
   });
 }
