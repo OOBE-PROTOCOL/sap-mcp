@@ -221,6 +221,12 @@ export interface UnsignedTransactionResult {
   transactionBase64: string;
   /** Transaction encoding. */
   encoding: 'base64';
+  /** Machine-readable approval gate. UIs may show signing controls only when true. */
+  safeToApprove: true;
+  /** Machine-readable negative approval gate. Successful builder results keep this false. */
+  approvalBlocked: false;
+  /** Builder-side RPC simulation status for this exact unsigned transaction. */
+  simulationStatus: 'passed';
   /** Fee payer public key. */
   feePayer: string;
   /** Description of the instructions included. */
@@ -1320,6 +1326,9 @@ export function buildResult(
   return {
     transactionBase64,
     encoding: 'base64',
+    safeToApprove: true,
+    approvalBlocked: false,
+    simulationStatus: 'passed',
     feePayer: feePayer.toBase58(),
     instructions: instructionNames,
     ...(positionAddress ? { positionAddress: positionAddress.toBase58() } : {}),

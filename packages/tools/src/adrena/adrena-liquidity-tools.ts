@@ -36,7 +36,7 @@ import {
 export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcpContext): void {
   // Add liquidity
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_liquidity', {
-    description: 'Build an unsigned transaction to add liquidity to an Adrena pool. Deposits collateral and receives LP tokens. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to add liquidity to an Adrena pool. Deposits collateral and receives LP tokens. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +66,7 @@ export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcp
 
   // Remove liquidity
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_remove_liquidity', {
-    description: 'Build an unsigned transaction to remove liquidity from an Adrena pool. Burns LP tokens and receives collateral. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to remove liquidity from an Adrena pool. Burns LP tokens and receives collateral. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,7 +96,7 @@ export function registerAdrenaLiquiditySwapTools(server: Server, context: SapMcp
 
   // Swap
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_swap', {
-    description: 'Build an unsigned transaction to swap tokens through an Adrena pool. Uses zero-slippage oracle pricing. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to swap tokens through an Adrena pool. Uses zero-slippage oracle pricing. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {

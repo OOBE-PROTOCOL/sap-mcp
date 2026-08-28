@@ -405,6 +405,9 @@ describe('Adrena builder core', () => {
       },
     );
 
+    expect(result.safeToApprove).toBe(true);
+    expect(result.approvalBlocked).toBe(false);
+    expect(result.simulationStatus).toBe('passed');
     expect(result.simulationLogs).toEqual(['Program log: ok']);
     expect(result.simulationUnitsConsumed).toBe(11_100);
     expect(result.priorityFeeMicroLamports).toBe(5_000);

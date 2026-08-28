@@ -54,7 +54,7 @@ export function registerAdrenaAddLimitOrderTool(server: Server, context: SapMcpC
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_limit_order', {
-    description: 'Build an unsigned transaction to place a limit order on Adrena. The order fills when the oracle price reaches the trigger price. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to place a limit order on Adrena. The order fills when the oracle price reaches the trigger price. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -95,7 +95,7 @@ export function registerAdrenaCancelLimitOrderTool(server: Server, context: SapM
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_limit_order', {
-    description: 'Build an unsigned transaction to cancel a limit order on Adrena. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to cancel a limit order on Adrena. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {

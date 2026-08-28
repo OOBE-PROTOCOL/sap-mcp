@@ -36,7 +36,7 @@ import {
 export function registerAdrenaStakingTools(server: Server, context: SapMcpContext): void {
   // Init user staking
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_init_user_staking', {
-    description: 'Build an unsigned transaction to initialize a user staking account on Adrena. Must be called before add_liquid_stake or add_locked_stake. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to initialize a user staking account on Adrena. Must be called before add_liquid_stake or add_locked_stake. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -57,7 +57,7 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
 
   // Add liquid stake
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_liquid_stake', {
-    description: 'Build an unsigned transaction to add a liquid stake on Adrena (stake LP tokens). Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to add a liquid stake on Adrena (stake LP tokens). Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
 
   // Remove liquid stake
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_remove_liquid_stake', {
-    description: 'Build an unsigned transaction to remove a liquid stake on Adrena (unstake LP tokens). Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to remove a liquid stake on Adrena (unstake LP tokens). Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -103,7 +103,7 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
 
   // Add locked stake
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_add_locked_stake', {
-    description: 'Build an unsigned transaction to add a locked stake on Adrena. LP tokens are locked for a specified duration. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to add a locked stake on Adrena. LP tokens are locked for a specified duration. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -128,7 +128,7 @@ export function registerAdrenaStakingTools(server: Server, context: SapMcpContex
 
   // Claim stakes
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_claim_stakes', {
-    description: 'Build an unsigned transaction to claim staking rewards on Adrena. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to claim staking rewards on Adrena. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {

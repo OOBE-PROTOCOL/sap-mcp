@@ -37,7 +37,7 @@ import {
 export function registerAdrenaCommodityTools(server: Server, context: SapMcpContext): void {
   // Open commodity long
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_commodity_long', {
-    description: 'Build an unsigned transaction to open a long position on a synthetic commodity (XAU, XAG, WTI) on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Uses the commodities pool with USDC collateral. Returns transactionBase64 only when safe to approve; if blocked diagnostics are returned, do not show approval or call finalize.',
+    description: 'Build an unsigned transaction to open a long position on a synthetic commodity (XAU, XAG, WTI) on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Uses the commodities pool with USDC collateral. Returns transactionBase64 only when safeToApprove=true and approvalBlocked=false; if blocked diagnostics are returned, do not show approval or call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -68,7 +68,7 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
 
   // Open commodity short
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_commodity_short', {
-    description: 'Build an unsigned transaction to open a short position on a synthetic commodity (XAU, XAG, WTI) on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Uses the commodities pool with USDC collateral. Returns transactionBase64 only when safe to approve; if blocked diagnostics are returned, do not show approval or call finalize.',
+    description: 'Build an unsigned transaction to open a short position on a synthetic commodity (XAU, XAG, WTI) on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Uses the commodities pool with USDC collateral. Returns transactionBase64 only when safeToApprove=true and approvalBlocked=false; if blocked diagnostics are returned, do not show approval or call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -99,7 +99,7 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
 
   // Close commodity long
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_commodity_long', {
-    description: 'Build an unsigned transaction to close a long commodity position on Adrena. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to close a long commodity position on Adrena. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -128,7 +128,7 @@ export function registerAdrenaCommodityTools(server: Server, context: SapMcpCont
 
   // Close commodity short
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_commodity_short', {
-    description: 'Build an unsigned transaction to close a short commodity position on Adrena. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to close a short commodity position on Adrena. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -93,7 +93,7 @@ export function registerAdrenaOpenLongTool(server: Server, context: SapMcpContex
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_long', {
-    description: 'Build an unsigned transaction to open or increase a long perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Returns transactionBase64 for local signing via sap_payments_finalize_transaction only when safeToApprove is not false. If oracleReadiness.ready=false, simulationError, or approvalBlocked appears, do not show approval and do not call finalize.',
+    description: 'Build an unsigned transaction to open or increase a long perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Returns transactionBase64 for local signing via sap_payments_finalize_transaction only when safeToApprove=true and approvalBlocked=false. If oracleReadiness.ready=false, simulationError, safeToApprove is not true, or approvalBlocked appears, do not show approval and do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -145,7 +145,7 @@ export function registerAdrenaOpenShortTool(server: Server, context: SapMcpConte
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_open_short', {
-    description: 'Build an unsigned transaction to open or increase a short perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Collateral must be USDC for shorts. Returns transactionBase64 only when the transaction passed pre-submit simulation. If oracleReadiness.ready=false, simulationError, or approvalBlocked appears, do not show approval and do not call finalize.',
+    description: 'Build an unsigned transaction to open or increase a short perp position on Adrena only after policy, balance, oracle-readiness, and simulation checks pass. Collateral must be USDC for shorts. Returns transactionBase64 only when safeToApprove=true, approvalBlocked=false, and the transaction passed pre-submit simulation. If oracleReadiness.ready=false, simulationError, safeToApprove is not true, or approvalBlocked appears, do not show approval and do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -194,7 +194,7 @@ export function registerAdrenaCloseLongTool(server: Server, context: SapMcpConte
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_long', {
-    description: 'Build an unsigned transaction to close a long perp position on Adrena. Default closes 100% at market price. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to close a long perp position on Adrena. Default closes 100% at market price. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -232,7 +232,7 @@ export function registerAdrenaCloseShortTool(server: Server, context: SapMcpCont
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_close_short', {
-    description: 'Build an unsigned transaction to close a short perp position on Adrena. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to close a short perp position on Adrena. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -275,7 +275,7 @@ export function registerAdrenaSetStopLossTool(server: Server, context: SapMcpCon
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_set_stop_loss', {
-    description: 'Build an unsigned transaction to set stop loss on an Adrena position. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to set stop loss on an Adrena position. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -314,7 +314,7 @@ export function registerAdrenaSetTakeProfitTool(server: Server, context: SapMcpC
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_set_take_profit', {
-    description: 'Build an unsigned transaction to set take profit on an Adrena position. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to set take profit on an Adrena position. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -350,7 +350,7 @@ export function registerAdrenaCancelStopLossTool(server: Server, context: SapMcp
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_stop_loss', {
-    description: 'Build an unsigned transaction to cancel stop loss on an Adrena position. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to cancel stop loss on an Adrena position. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -384,7 +384,7 @@ export function registerAdrenaCancelTakeProfitTool(server: Server, context: SapM
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_cancel_take_profit', {
-    description: 'Build an unsigned transaction to cancel take profit on an Adrena position. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to cancel take profit on an Adrena position. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -670,7 +670,7 @@ export function registerAdrenaTrailingStopTool(server: Server, context: SapMcpCo
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_trailing_stop', {
-    description: 'Build an unsigned transaction to set a trailing stop loss on an Adrena position. Reads the current oracle price and computes the stop loss at the specified percentage distance. For longs: SL below current price. For shorts: SL above current price. Returns transactionBase64 for local signing. Call this repeatedly to keep the stop trailing the price.',
+    description: 'Build an unsigned transaction to set a trailing stop loss on an Adrena position. Reads the current oracle price and computes the stop loss at the specified percentage distance. For longs: SL below current price. For shorts: SL above current price. Returns transactionBase64 only after builder-side RPC simulation passes. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize. Call this repeatedly to keep the stop trailing the price.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
@@ -745,7 +745,7 @@ export function registerAdrenaModifyPositionTool(server: Server, context: SapMcp
   };
 
   registerAdrenaPipelineTool(server, context, 'sap_adrena_build_modify_position', {
-    description: 'Build an unsigned transaction to modify an existing Adrena position by adding collateral. Uses openOrIncreasePosition which atomically adds collateral to an existing position. The leverage parameter can be changed to adjust the position risk. Returns transactionBase64 for local signing.',
+    description: 'Build an unsigned transaction to modify an existing Adrena position by adding collateral. Uses openOrIncreasePosition which atomically adds collateral to an existing position. The leverage parameter can be changed to adjust the position risk. Returns transactionBase64 only after policy, oracle-readiness, balance, and builder-side RPC simulation pass. Show approval only when safeToApprove=true and approvalBlocked=false; otherwise do not call finalize.',
     inputSchema: schema,
   }, async (args: Record<string, unknown>) => {
     try {
