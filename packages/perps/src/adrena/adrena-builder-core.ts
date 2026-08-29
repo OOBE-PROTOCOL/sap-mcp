@@ -492,8 +492,8 @@ interface DecodedAdrenaCustody {
 }
 
 interface DecodedAdrenaOraclePrice {
-  price?: BN | number | string;
-  confidence?: BN | number | string;
+  price?: BN | number | string | bigint;
+  confidence?: BN | number | string | bigint;
   timestamp?: BN | number | string;
   exponent?: number;
   feedId?: number;
@@ -574,6 +574,68 @@ export async function readPositionRequiredOracleSymbols(
   ));
 }
 
+/**
+ * Raw decoder for the Adrena oracle account v39 layout (verified on mainnet
+ * against GEm9TZP7BL8rTz1JDy6X74PL595zr1putA9BXC8ehDmU).
+ *
+ * The Anchor coder with the vendored pre-v39 IDL silently mis-decodes this
+ * account (slot layout shifted), producing `prices: []` even when the account
+ * holds fresh prices. This parser reads the bytemuck C-repr layout directly:
+ *
+ *   discriminator u8[8] (skipped)
+ *   bump u8 | version u8 | registered_prices_count u8 | pad u8[5]
+ *   updated_at i64
+ *   prices[50] OraclePrice, each 64 bytes:
+ *     price u64 | confidence u64 | timestamp i64 | exponent i32 |
+ *     feed_id u8 | pad u8[3] | name u8[32]
+ *
+ * @param data — Full oracle account data (including 8-byte discriminator).
+ * @returns Array of decoded prices (empty when the account is invalid).
+ */
+export function decodeAdrenaOraclePricesV39(data: Uint8Array): DecodedAdrenaOraclePrice[] {
+  const buffer = Buffer.from(data);
+  if (buffer.length < 24 || buffer.length % 8 !== 0) return [];
+
+  const registeredCount = buffer[10];
+  if (registeredCount > 50) return [];
+
+  const SLOT_BASE = 24;
+  const SLOT_SIZE = 64;
+  const MAX_SLOTS = Math.floor((buffer.length - SLOT_BASE) / SLOT_SIZE);
+  const results: DecodedAdrenaOraclePrice[] = [];
+
+  for (let slot = 0; slot < Math.min(registeredCount, MAX_SLOTS); slot++) {
+    const base = SLOT_BASE + slot * SLOT_SIZE;
+    const timestamp = Number(buffer.readBigInt64LE(base + 16));
+    if (timestamp <= 0) continue;
+    const nameBytes = buffer.subarray(base + 32, base + 64);
+    const name = Buffer.from(nameBytes).toString('utf8').split('\0', 1)[0] ?? '';
+    if (name.length === 0) continue;
+    results.push({
+      price: buffer.readBigUInt64LE(base),
+      confidence: buffer.readBigUInt64LE(base + 8),
+      timestamp,
+      exponent: buffer.readInt32LE(base + 24),
+      feedId: buffer[base + 28],
+      name: { value: Array.from(nameBytes), length: name.length },
+    });
+  }
+  return results;
+}
+
+/** Normalize an oracle symbol: 'SOLUSD' → 'SOL', keep 'XAU'/'XAG'/'WTI' as-is. */
+export function normalizeAdrenaOracleSymbol(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  return upper.endsWith('USD') ? upper.slice(0, -3) : upper;
+}
+
+function decodeOraclePrices(oracleInfoData: Uint8Array, program: ReturnType<typeof createAdrenaProgram>): DecodedAdrenaOraclePrice[] {
+  const rawPrices = decodeAdrenaOraclePricesV39(oracleInfoData);
+  if (rawPrices.length > 0) return rawPrices;
+  const decodedOracle = program.coder.accounts.decode('oracle', Buffer.from(oracleInfoData)) as DecodedAdrenaOracle | null;
+  return decodedOracle?.prices ?? [];
+}
+
 export async function readAdrenaOracleReadiness(
   connection: Connection,
   poolName: AdrenaPool,
@@ -594,15 +656,15 @@ export async function readAdrenaOracleReadiness(
   }
 
   const decodedPool = program.coder.accounts.decode('pool', poolInfo.data) as DecodedAdrenaPool;
-  const decodedOracle = program.coder.accounts.decode('oracle', oracleInfo.data) as DecodedAdrenaOracle;
+  const oraclePrices = decodeOraclePrices(oracleInfo.data, program);
   const checkedAt = Math.floor(Date.now() / 1000);
   const minAgree = Math.max(1, anchorNumber(decodedPool.multiOracleConfig?.minAgree) || 1);
   const stalenessSeconds = Math.max(1, anchorNumber(decodedPool.multiOracleConfig?.stalenessSeconds) || 15);
   const uniqueSymbols = Array.from(new Set(requiredSymbols.map(symbol => symbol.toUpperCase()).filter(Boolean)));
 
   const pricesBySymbol = new Map<string, AdrenaOraclePriceStatus['sources']>();
-  for (const price of decodedOracle.prices ?? []) {
-    const symbol = decodeAdrenaLimitedString(price.name).toUpperCase();
+  for (const price of oraclePrices) {
+    const symbol = normalizeAdrenaOracleSymbol(decodeAdrenaLimitedString(price.name));
     if (!symbol) continue;
     const timestamp = anchorNumber(price.timestamp);
     const ageSeconds = Math.max(0, checkedAt - timestamp);
