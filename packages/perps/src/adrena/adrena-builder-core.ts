@@ -262,6 +262,16 @@ export interface UnsignedTransactionResult {
   priorityFeeMicroLamports?: number;
   /** Live Adrena oracle coverage checked before returning signable transaction bytes. */
   oracleReadiness?: AdrenaOracleReadiness;
+  /** Present when the initial simulation hit a multi-oracle failure (6088 et
+   * al) and the builder retried with the Switchboard refresh flow. The caller
+   * must sign/submit `oracleRefresh.transactionBase64` BEFORE the trade tx
+   * when `status === 'land-refresh-first'`. */
+  oracleRefresh?: {
+    transactionBase64: string;
+    quoteAccount: string;
+    updateOraclePrepended: boolean;
+    status: 'land-refresh-first' | 'healed';
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

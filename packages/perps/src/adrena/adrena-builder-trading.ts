@@ -21,6 +21,9 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from './adrena-constants.js';
 import {
+  serializeUnsignedTxHealable,
+} from './adrena-builder-heal.js';
+import {
   deriveCortexPda,
   deriveOraclePda,
   deriveTransferAuthorityPda,
@@ -265,10 +268,17 @@ export async function buildOpenPositionLong(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionLong']);
+  const healable = await serializeUnsignedTxHealable(connection, owner, [...allPreInstructions, ix], ['openOrIncreasePositionLong']);
+  const _serializeResult = healable.serializeResult;
+  if (!healable.oracleRefresh) {
+    assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionLong']);
+  }
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
+  const result = buildResult(transactionBase64, owner, ['openOrIncreasePositionLong'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
+  if (healable.oracleRefresh) {
+    result.oracleRefresh = healable.oracleRefresh;
+  }
+  return result;
 }
 
 /**
@@ -361,10 +371,17 @@ export async function buildOpenPositionShort(
       ? `Insufficient SOL for transaction fees: have ${balanceCheck.solBalance} SOL, need ~0.005 SOL.`
       : undefined;
 
-  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionShort']);
+  const healable = await serializeUnsignedTxHealable(connection, owner, [...allPreInstructions, ix], ['openOrIncreasePositionShort']);
+  const _serializeResult = healable.serializeResult;
+  if (!healable.oracleRefresh) {
+    assertAdrenaSimulationPassed(_serializeResult, ['openOrIncreasePositionShort']);
+  }
   const transactionBase64 = _serializeResult.transactionBase64;
-  return buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
+  const result = buildResult(transactionBase64, owner, ['openOrIncreasePositionShort'], position, balanceCheck, warning, poolMetadata, leverage, _serializeResult, oracleReadiness);
+  if (healable.oracleRefresh) {
+    result.oracleRefresh = healable.oracleRefresh;
+  }
+  return result;
 }
 
 /**
@@ -432,8 +449,11 @@ export async function buildClosePositionLong(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  assertAdrenaSimulationPassed(_serializeResult, ['closePositionLong']);
+  const healableCloseLong = await serializeUnsignedTxHealable(connection, owner, [...allPreInstructions, ix], ['closePositionLong']);
+  const _serializeResult = healableCloseLong.serializeResult;
+  if (!healableCloseLong.oracleRefresh) {
+    assertAdrenaSimulationPassed(_serializeResult, ['closePositionLong']);
+  }
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
@@ -454,7 +474,11 @@ export async function buildClosePositionLong(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['closePositionLong'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
+  const closeLongResult = buildResult(transactionBase64, owner, ['closePositionLong'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
+  if (healableCloseLong.oracleRefresh) {
+    closeLongResult.oracleRefresh = healableCloseLong.oracleRefresh;
+  }
+  return closeLongResult;
 }
 
 /**
@@ -524,8 +548,11 @@ export async function buildClosePositionShort(
     systemProgram: new PublicKey(SYSTEM_PROGRAM_ID),
   });
 
-  const _serializeResult = await serializeUnsignedTx(connection, owner, [...allPreInstructions, ix]);
-  assertAdrenaSimulationPassed(_serializeResult, ['closePositionShort']);
+  const healableCloseShort = await serializeUnsignedTxHealable(connection, owner, [...allPreInstructions, ix], ['closePositionShort']);
+  const _serializeResult = healableCloseShort.serializeResult;
+  if (!healableCloseShort.oracleRefresh) {
+    assertAdrenaSimulationPassed(_serializeResult, ['closePositionShort']);
+  }
   const transactionBase64 = _serializeResult.transactionBase64;
 
   // Pre-flight: show balances and check SOL for fees.
@@ -546,7 +573,11 @@ export async function buildClosePositionShort(
     solSufficientForFees: solBalance >= 0.005,
   };
 
-  return buildResult(transactionBase64, owner, ['closePositionShort'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
+  const closeShortResult = buildResult(transactionBase64, owner, ['closePositionShort'], position, balanceCheck, warning, undefined, undefined, _serializeResult);
+  if (healableCloseShort.oracleRefresh) {
+    closeShortResult.oracleRefresh = healableCloseShort.oracleRefresh;
+  }
+  return closeShortResult;
 }
 
 // ─── SL / TP Builders ──────────────────────────────────────────────────────────

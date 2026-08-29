@@ -36,6 +36,7 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  protobufjs: set this to true or false
   utf-8-validate: true
 
 minimumReleaseAgeExclude:
