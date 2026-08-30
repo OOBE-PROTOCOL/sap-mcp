@@ -8,7 +8,7 @@
  * @module perps/perp-decoders
  */
 
-import { PublicKey } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 import type { SapMcpContext } from '../../core/src/types.js';
@@ -317,15 +317,19 @@ export function decodeAdrenaPositionAccount(
  *  Shared RPC helpers
  * ═══════════════════════════════════════════════════════════════════ */
 
-export async function readAdrenaMarketsByCustody(context: SapMcpContext): Promise<Map<string, DecodedAdrenaCustody>> {
+export async function readAdrenaMarketsByCustody(
+  context: SapMcpContext,
+  connectionOverride?: Connection,
+): Promise<Map<string, DecodedAdrenaCustody>> {
   const { PublicKey } = await import('@solana/web3.js');
   const adrenaProgramId = new PublicKey(getPerpsConfig(context).adrenaProgramId || '13gDzEXCdocbj8iAiqrScGo47NiSuYENGsRqi3SEAwet');
+  const connection = connectionOverride ?? context.connection;
   const [poolAccounts, custodyAccounts] = await Promise.all([
-    context.connection.getProgramAccounts(adrenaProgramId, {
+    connection.getProgramAccounts(adrenaProgramId, {
       filters: [{ memcmp: { offset: 0, bytes: discToBase58(DISC_POOL) } }],
       commitment: 'confirmed',
     }),
-    context.connection.getProgramAccounts(adrenaProgramId, {
+    connection.getProgramAccounts(adrenaProgramId, {
       filters: [{ memcmp: { offset: 0, bytes: discToBase58(DISC_CUSTODY) } }],
       commitment: 'confirmed',
     }),

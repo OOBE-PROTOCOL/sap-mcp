@@ -253,6 +253,8 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
       // works on any RPC.
       const { derivePositionPda } = await import('./adrena/adrena-pda.js');
       const { ADRENA_CUSTODIES } = await import('./adrena/adrena-constants.js');
+      const { readAdrenaMarketsByCustody } = await import('./perp-decoders.js');
+      const { withPerpsConnectionFallback } = await import('./perp-rpc-fallback.js');
       const { PublicKey: PK } = await import('@solana/web3.js');
 
       // Build all possible position PDAs: each custody x each side (long/short).
@@ -270,13 +272,21 @@ function registerPerpPositionInfoTool(server: Server, context: SapMcpContext): v
       }
 
       // Batch fetch all PDAs with getMultipleAccountsInfo.
-      const accounts = await context.connection.getMultipleAccountsInfo(
-        pdaChecks.map((c) => c.pda),
-        'confirmed',
+      const accounts = await withPerpsConnectionFallback(
+        context,
+        (connection) => connection.getMultipleAccountsInfo(
+          pdaChecks.map((c) => c.pda),
+          'confirmed',
+        ),
+        'Adrena position PDAs read',
       );
 
       // Read markets for enrichment.
-      const marketsByCustody = await readAdrenaMarketsByCustody(context);
+      const marketsByCustody = await withPerpsConnectionFallback(
+        context,
+        (connection) => readAdrenaMarketsByCustody(context, connection),
+        'Adrena markets read',
+      );
 
       const positions: PerpPosition[] = [];
       for (let i = 0; i < accounts.length; i++) {
@@ -526,6 +536,7 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
       // Derive Position PDAs directly (same fix as sap_perp_position_info).
       const { derivePositionPda } = await import('./adrena/adrena-pda.js');
       const { ADRENA_CUSTODIES } = await import('./adrena/adrena-constants.js');
+      const { withPerpsConnectionFallback } = await import('./perp-rpc-fallback.js');
       const { PublicKey: PK } = await import('@solana/web3.js');
 
       const custodyEntries = Object.entries(ADRENA_CUSTODIES);
@@ -540,12 +551,20 @@ function registerPerpLiquidationZonesTool(server: Server, context: SapMcpContext
         }
       }
 
-      const accounts = await context.connection.getMultipleAccountsInfo(
-        pdaChecks.map((c) => c.pda),
-        'confirmed',
+      const accounts = await withPerpsConnectionFallback(
+        context,
+        (connection) => connection.getMultipleAccountsInfo(
+          pdaChecks.map((c) => c.pda),
+          'confirmed',
+        ),
+        'Adrena position PDAs read',
       );
 
-      const marketsByCustody = await readAdrenaMarketsByCustody(context);
+      const marketsByCustody = await withPerpsConnectionFallback(
+        context,
+        (connection) => readAdrenaMarketsByCustody(context, connection),
+        'Adrena markets read',
+      );
       const zones: LiquidationZone[] = [];
       for (let i = 0; i < accounts.length; i++) {
         const account = accounts[i];

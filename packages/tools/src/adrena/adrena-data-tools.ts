@@ -21,9 +21,85 @@ import {
   type AdrenaPool,
 } from '../../../perps/src/adrena/index.js';
 import { ADRENA_CUSTODIES, ADRENA_MAIN_POOL_ADDRESS, ADRENA_COMMODITIES_POOL_ADDRESS } from '../../../perps/src/adrena/adrena-constants.js';
+import type { AdrenaPositionRecord } from '../../../perps/src/adrena/adrena-data-api.js';
 import {
   getConnection,
 } from './adrena-helpers.js';
+import { withAdrenaConnectionFallback } from './adrena-rpc-fallback.js';
+
+/**
+ * Read a wallet's open Adrena positions directly on-chain (PDA derivation +
+ * getMultipleAccountsInfo) when the upstream Data API is unavailable. The
+ * Data API (datapi.adrena.trade) has changed contract / returns 400 on every
+ * path, so this path keeps the tool functional with live position state.
+ * @param context — SAP MCP context with the primary Solana RPC.
+ * @param wallet — Owner wallet public key.
+ * @returns Position records in the Data API shape, or null when the read fails.
+ */
+async function readOpenPositionsOnChain(
+  context: SapMcpContext,
+  wallet: string,
+): Promise<AdrenaPositionRecord[] | null> {
+  try {
+    const { derivePositionPda } = await import('../../../perps/src/adrena/adrena-pda.js');
+    const { decodeAdrenaPositionAccount, readAdrenaMarketsByCustody } = await import('../../../perps/src/perp-decoders.js');
+    const custodyEntries = Object.entries(ADRENA_CUSTODIES);
+    const sides: Array<'long' | 'short'> = ['long', 'short'];
+
+    const pdaChecks = custodyEntries.flatMap(([symbol, custody]) => {
+      const poolPk = new PublicKey(custody.pool);
+      const custodyPk = new PublicKey(custody.address);
+      return sides.map((side) => ({
+        symbol,
+        side,
+        pda: derivePositionPda(new PublicKey(wallet), poolPk, custodyPk, side),
+      }));
+    });
+
+    const decodedMarkets = await withAdrenaConnectionFallback(
+      context,
+      (connection) => readAdrenaMarketsByCustody(context, connection),
+      'Adrena markets read',
+    );
+
+    const accounts = await withAdrenaConnectionFallback(
+      context,
+      (connection) => connection.getMultipleAccountsInfo(
+        pdaChecks.map((c) => c.pda),
+        'confirmed',
+      ),
+      'Adrena positions read',
+    );
+
+    const positions: AdrenaPositionRecord[] = [];
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+      const check = pdaChecks[i];
+      if (!account?.data || !check) continue;
+      const decoded = decodeAdrenaPositionAccount(check.pda, account.data, decodedMarkets);
+      if (!decoded) continue;
+      const marketSymbol = decoded.market === 'unknown' ? check.symbol : decoded.market;
+      positions.push({
+        wallet,
+        principalToken: marketSymbol,
+        collateralToken: 'USDC',
+        side: decoded.side,
+        sizeUsd: decoded.size,
+        collateralUsd: decoded.collateral,
+        leverage: decoded.leverage,
+        entryPrice: decoded.entryPrice,
+        exitPrice: null,
+        pnlUsd: decoded.unrealizedPnl,
+        openTime: decoded.openTime,
+        closeTime: null,
+        status: 'open',
+      });
+    }
+    return positions;
+  } catch {
+    return null;
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
  *  Data API Tools
@@ -51,11 +127,18 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     if (!wallet) {
       return adrenaPipelineError({ error: 'wallet is required' });
     }
-    const positions = await adrenaDataApi.getPositions(wallet);
+    let positions = await adrenaDataApi.getPositions(wallet);
+    let source: 'data-api' | 'on-chain-pda-fallback' = 'data-api';
     if (positions === null) {
-      return adrenaPipelineError({ error: 'Failed to fetch positions from Adrena Data API', wallet });
+      // Data API is down (returning 400 on every path) — fall back to the
+      // on-chain Position PDA read so the tool stays functional.
+      positions = await readOpenPositionsOnChain(context, wallet);
+      if (positions === null) {
+        return adrenaPipelineError({ error: 'Failed to fetch positions from Adrena Data API and on-chain fallback', wallet });
+      }
+      source = 'on-chain-pda-fallback';
     }
-    const data = { wallet, positions, count: positions.length };
+    const data = { wallet, positions, count: positions.length, source };
     const openPosition = positions.find((p) => p.status === 'open');
     const cardCtx: UiCardContext | undefined = openPosition
       ? {
