@@ -33,6 +33,12 @@ import {
   type ProtocolIndexData,
 } from '@oobe-protocol-labs/synapse-sap-sdk/types';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
+import {
+  buildAgentRegisterTransaction,
+  buildAgentUpdateTransaction,
+  buildAgentLifecycleTransaction,
+  buildAgentReportCallsTransaction,
+} from './identity-builders.js';
 import type { FairScaleTask } from '@oobe-protocol-labs/synapse-sap-sdk/registries/fairscale';
 import type { ToolCategoryName } from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
 import type { PaymentContext, PreparePaymentOptions, SettleOptions } from '@oobe-protocol-labs/synapse-sap-sdk/registries/x402';
@@ -1614,7 +1620,7 @@ function requiredToolCategory(input: JsonRecord): ToolCategoryName | number {
  * @name parseCapabilities
  * @description Converts user input into SDK `Capability[]` values.
  */
-function parseCapabilities(value: unknown): Capability[] {
+export function parseCapabilities(value: unknown): Capability[] {
   if (value === undefined || value === null) {
     return [];
   }
@@ -1640,7 +1646,7 @@ function parseCapabilities(value: unknown): Capability[] {
  * @name parsePricingTiers
  * @description Converts user input into SDK `PricingTier[]` values.
  */
-function parsePricingTiers(value: unknown): PricingTier[] {
+export function parsePricingTiers(value: unknown): PricingTier[] {
   if (value === undefined || value === null) {
     return [];
   }
@@ -1680,7 +1686,7 @@ function parsePricingTiers(value: unknown): PricingTier[] {
  * @name parseProtocols
  * @description Converts user input into SDK protocol identifiers.
  */
-function parseProtocols(value: unknown): string[] {
+export function parseProtocols(value: unknown): string[] {
   if (value === undefined || value === null) {
     return [];
   }
@@ -3634,8 +3640,76 @@ const stakingAndSubscriptionTools: ToolRegistration[] = [
   },
 ];
 
+const agentIdentityBuilderTools: ToolRegistration[] = [
+  {
+    name: 'sap_build_agent_register_transaction',
+    title: 'Build SAP Agent Registration Transaction',
+    description: 'Hosted-safe unsigned builder for register_agent. Browser runtimes preview this transaction, the owner wallet approves and signs locally, then it goes through the Steve signed-transaction submit relay or sap_payments_finalize_transaction. Pays the 0.1 SOL SAP protocol registration fee from the signing wallet. Keypair bytes never leave the user device.',
+    inputSchema: {
+      ownerWallet: { type: 'string', description: 'Agent owner wallet public key (base58) — also the transaction fee payer and sole required signer.' },
+      name: { type: 'string', description: 'Public display name for the SAP agent.' },
+      description: { type: 'string', description: 'Public description of what the agent does.' },
+      capabilities: { type: 'array', description: 'Capability list: [{ id, description, protocolId, version }] (strings accepted as shorthand).' },
+      pricing: { type: 'array', description: 'Optional pricing tiers advertised by the agent.' },
+      protocols: { type: 'array', items: { type: 'string' }, description: 'Protocol tags the agent supports (sap, mcp, jupiter, sns, x402...).' },
+      agentId: { type: 'string', description: 'Optional stable lowercase agent id (off-chain, separate from the on-chain PDA).' },
+      agentUri: { type: 'string', description: 'Optional public HTTPS/IPFS/Arweave metadata URI.' },
+      x402Endpoint: { type: 'string', description: 'Optional public x402 discovery/payment endpoint.' },
+    },
+    handler: async (input, client) => buildAgentRegisterTransaction(input, client),
+  },
+  {
+    name: 'sap_build_agent_update_transaction',
+    title: 'Build SAP Agent Update Transaction',
+    description: 'Hosted-safe unsigned builder for update_agent. The owner wallet signs locally after preview; null fields are ignored on-chain.',
+    inputSchema: {
+      ownerWallet: { type: 'string', description: 'Agent owner wallet public key (base58) — sole required signer.' },
+      name: { type: 'string', description: 'Optional replacement display name.' },
+      description: { type: 'string', description: 'Optional replacement description.' },
+      capabilities: { type: 'array', description: 'Optional FULL replacement capability list.' },
+      pricing: { type: 'array', description: 'Optional FULL replacement pricing tier list.' },
+      protocols: { type: 'array', items: { type: 'string' }, description: 'Optional FULL replacement protocol list.' },
+      agentId: { type: 'string', description: 'Optional replacement stable agent id.' },
+      agentUri: { type: 'string', description: 'Optional replacement public metadata URI (use for image updates after uploading to IPFS/etc).' },
+      x402Endpoint: { type: 'string', description: 'Optional replacement x402 endpoint.' },
+    },
+    handler: async (input, client) => buildAgentUpdateTransaction(input, client),
+  },
+  {
+    name: 'sap_build_agent_lifecycle_transaction',
+    title: 'Build SAP Agent Lifecycle Transaction',
+    description: 'Hosted-safe unsigned builder for the agent lifecycle actions: deactivate_agent, reactivate_agent, close_agent (reclaims rent), and migrate_pricing_menu (one-time backfill of the PricingMenu PDA for agents registered before pricing menus existed). The owner wallet signs locally.',
+    inputSchema: {
+      action: { type: 'string', enum: ['deactivate_agent', 'reactivate_agent', 'close_agent', 'migrate_pricing_menu'], description: 'Lifecycle action to build.' },
+      ownerWallet: { type: 'string', description: 'Agent owner wallet public key (base58) — sole required signer.' },
+    },
+    handler: async (input, client) => {
+      const action = String(input['action'] ?? '');
+      if (!['deactivate_agent', 'reactivate_agent', 'close_agent', 'migrate_pricing_menu'].includes(action)) {
+        throw new Error('action must be one of deactivate_agent, reactivate_agent, close_agent, migrate_pricing_menu');
+      }
+      return buildAgentLifecycleTransaction(
+        action as 'deactivate_agent' | 'reactivate_agent' | 'close_agent' | 'migrate_pricing_menu',
+        input,
+        client,
+      );
+    },
+  },
+  {
+    name: 'sap_build_agent_report_calls_transaction',
+    title: 'Build SAP Agent Report Calls Transaction',
+    description: 'Hosted-safe unsigned builder for report_calls. The agent owner wallet signs locally after serving calls to consumers.',
+    inputSchema: {
+      ownerWallet: { type: 'string', description: 'Agent owner wallet public key (base58) — sole required signer.' },
+      callsServed: { type: 'number', description: 'Number of calls served to report for the agent.' },
+    },
+    handler: async (input, client) => buildAgentReportCallsTransaction(input, client),
+  },
+];
+
 const sapToolGroups: ToolRegistration[][] = [
   agentTools,
+  agentIdentityBuilderTools,
   discoveryTools,
   indexAndFetchTools,
   paymentAndEscrowTools,
