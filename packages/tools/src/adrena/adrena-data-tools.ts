@@ -260,9 +260,27 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     if (!wallet) {
       return adrenaPipelineError({ error: 'wallet is required' });
     }
-    const trader = await adrenaDataApi.getTraderInfo(wallet);
+    let trader = await adrenaDataApi.getTraderInfo(wallet);
     if (trader === null) {
-      return adrenaPipelineError({ error: 'Failed to fetch trader info from Adrena Data API', wallet });
+      // Data API is down — derive live trader metrics from the on-chain
+      // Position PDA read (open positions only; closed history is not
+      // reconstructable without the indexed API).
+      const positions = await readOpenPositionsOnChain(context, wallet);
+      if (positions !== null) {
+        const openPositions = positions.filter((p) => p.status === 'open');
+        trader = {
+          wallet,
+          totalVolumeUsd: openPositions.reduce((sum, p) => sum + p.sizeUsd, 0),
+          totalPnlUsd: openPositions.reduce((sum, p) => sum + (p.pnlUsd ?? 0), 0),
+          totalFeesPaid: 0,
+          positionsCount: openPositions.length,
+          winRate: 0,
+          rank: null,
+        };
+      }
+    }
+    if (trader === null) {
+      return adrenaPipelineError({ error: 'Failed to fetch trader info from Adrena Data API and on-chain fallback', wallet });
     }
     return adrenaPipelineOk(trader);
   });
@@ -384,14 +402,21 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
       const requiredSymbolsArg = Array.isArray(args['requiredSymbols'])
         ? args['requiredSymbols'].map(value => String(value).trim().toUpperCase()).filter(Boolean)
         : [];
-      const connection = getConnection(context);
       const requiredSymbols = requiredSymbolsArg.length > 0
         ? requiredSymbolsArg
-        : await readPositionRequiredOracleSymbols(connection, principalToken, collateralToken, poolName);
+        : await withAdrenaConnectionFallback(
+            context,
+            (connection) => readPositionRequiredOracleSymbols(connection, principalToken, collateralToken, poolName),
+            'Adrena oracle symbols read',
+          );
       if (requiredSymbols.length === 0) {
         return adrenaPipelineError({ error: 'principalToken/collateralToken or requiredSymbols are required' });
       }
-      return adrenaPipelineOk(await readAdrenaOracleReadiness(connection, poolName, requiredSymbols));
+      return adrenaPipelineOk(await withAdrenaConnectionFallback(
+        context,
+        (connection) => readAdrenaOracleReadiness(connection, poolName, requiredSymbols),
+        'Adrena oracle readiness read',
+      ));
     } catch (err) {
       return adrenaPipelineError({
         error: 'Failed to read Adrena oracle readiness',
@@ -420,9 +445,10 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     if (!wallet || !principalToken) {
       return adrenaPipelineError({ error: 'wallet and principalToken are required' });
     }
-    const positions = await adrenaDataApi.getPositions(wallet);
+    const positions = await adrenaDataApi.getPositions(wallet)
+      ?? await readOpenPositionsOnChain(context, wallet);
     if (positions === null) {
-      return adrenaPipelineError({ error: 'Failed to fetch positions from Adrena Data API' });
+      return adrenaPipelineError({ error: 'Failed to fetch positions from Adrena Data API (on-chain fallback also unavailable)' });
     }
     const matching = positions.filter(p =>
       p.principalToken?.toUpperCase() === principalToken &&
