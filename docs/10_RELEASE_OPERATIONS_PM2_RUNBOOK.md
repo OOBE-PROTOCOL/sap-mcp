@@ -145,7 +145,7 @@ Each release should document:
 
 ## 10.8 Current Release Notes
 
-Version `0.9.80` includes:
+Version `0.9.81` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.
@@ -161,8 +161,14 @@ Version `0.9.80` includes:
 12. Streamable HTTP cleanup bypasses for `DELETE`, `OPTIONS`, and `HEAD`.
 13. Canonical x402 estimate/challenge pricing.
 14. Jupiter endpoint normalization for server-side provider keys.
-15. Perps provider readiness and optional unsigned builder registration.
-16. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
-17. MCP Apps `ui://` cards with structured content and HTML escaping.
-18. Hosted `sap` plus local `sap_payments` bridge setup for supported runtimes.
-19. Company-grade component branch and service-contract operating model.
+15. Adrena on-chain perps protocol with 39 tools (reads + unsigned builders + staking + commodity).
+16. Hosted-safe agent identity builders for browser runtimes (`sap_build_*`).
+17. Adrena oracle relay with Switchboard on-demand refresh and auto-heal.
+18. 20 MagicBlock MCP tools (ephemeral rollup operations).
+19. Hermes-safe OOBE protocol catalog mode.
+20. Trusted sponsor bypass with origin + bearer token validation.
+21. mcp-session-cache for reduced x402 paid-call round trips.
+22. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
+23. MCP Apps `ui://` cards with structured content and HTML escaping.
+24. Hosted `sap` plus local `sap_payments` bridge setup for supported runtimes.
+25. Company-grade component branch and service-contract operating model.

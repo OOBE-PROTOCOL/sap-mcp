@@ -1,10 +1,10 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-adapters",
-  "version": "0.9.80",
+  "version": "0.9.81",
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "description": "SAP MCP adapters module \u2014 Solana connection and public key utilities.",
+  "description": "SAP MCP adapters module — Solana connection and public key utilities.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "sapMcp": {

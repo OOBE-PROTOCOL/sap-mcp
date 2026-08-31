@@ -2,6 +2,60 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.81 - 2026-08-31
+
+### Added
+
+- Adrena on-chain perps protocol: 39 new `sap_adrena_*` tools spanning
+  data reads (positions, pool info, custody info, trader info, markets,
+  prices, oracle readiness, trader/mutagen leaderboards), unsigned
+  builders (open/close long & short, stop loss, take profit, trailing
+  stop, modify position, position package, trade intent, simulate),
+  commodity long/short builders, limit order add/cancel, liquidity
+  add/remove, swap, and staking (init, add/remove liquid stake, locked
+  stake, claim stakes).
+- Hosted-safe agent identity builders for browser runtimes:
+  `sap_build_agent_register_transaction`, `sap_build_agent_update_transaction`,
+  `sap_build_agent_lifecycle_transaction`, `sap_build_agent_report_calls_transaction`,
+  `sap_build_sol_transfer`, `sap_build_spl_transfer`.
+- Adrena oracle relay with Switchboard on-demand refresh and auto-heal
+  for trade builders using canonical IDL.
+- Adrena approval safety flags exposed explicitly on all builder tools.
+- Hermes-safe OOBE protocol catalog mode for hosted MCP.
+- 20 MagicBlock MCP tools (ephemeral rollup balance, deposit, withdraw,
+  swap, swap quote, transfer, VRF randomness, delegation, crank,
+  account info, blockhash, identity, challenge, login, health, mint
+  init/is-initialized, private balance, get routes, signature status).
+
+### Fixed
+
+- Adrena Data API fallback: when `datapi.adrena.trade` returns 400 or
+  the hosted gateway IP gets 426 from public RPC, `sap_adrena_get_positions`
+  falls back to direct on-chain Position PDA read (release/39 decode).
+  `sap_adrena_get_trader_info` derives live open-position metrics from
+  the on-chain Position PDA. `sap_adrena_get_position_status` reuses
+  the same fallback. `sap_adrena_oracle_readiness` routes through the
+  RPC fallback so a blocked primary endpoint no longer fails the check.
+- `sap_perp_position_info` and `sap_perp_liquidation_zones` now route
+  PDA and market reads through `withAdrenaConnectionFallback` /
+  `withPerpsConnectionFallback` helpers that retry across configured
+  primary RPC and public fallback endpoints.
+- Steve sponsored MCP bypass hardened to prevent unauthorized free
+  access to paid tools.
+- Hosted catalog aligned with runtime tools to prevent projection drift.
+- Dependency security advisories resolved.
+
+### Changed
+
+- Trusted sponsor bypass now validates both origin and bearer token
+  before granting free access to paid tools. Default trusted origin
+  remains `https://steve.oobeprotocol.ai`, configurable via
+  `SAP_MCP_TRUSTED_SPONSOR_ORIGINS` and `SAP_MCP_TRUSTED_SPONSOR_TOKENS`.
+- `mcp-session-cache.ts` scoped per-endpoint LRU (5min TTL, max 8
+  sessions) to reduce x402 paid-call round trips.
+- Facilitator health check with round-robin RPC across 4 public
+  mainnet endpoints (8s timeout).
+
 ## 0.9.80 - 2026-08-18
 
 ### Security

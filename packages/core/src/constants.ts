@@ -118,7 +118,7 @@ export const MCP_SERVER_ICON_URL = 'https://mcp.sap.oobeprotocol.ai/favicon.png'
 /**
  * Shared mcp server version definition used by the SAP MCP runtime.
  */
-export const MCP_SERVER_VERSION = '0.9.80';
+export const MCP_SERVER_VERSION = '0.9.81';
 
 /**
  * Read-only tool surface intended for third-party catalogs whose presence

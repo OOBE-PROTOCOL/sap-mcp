@@ -1,10 +1,10 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-tui",
-  "version": "0.9.80",
+  "version": "0.9.81",
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "description": "SAP MCP tui module \u2014 internal workspace package.",
+  "description": "SAP MCP tui module — internal workspace package.",
   "sapMcp": {
     "boundaryId": "tui",
     "source": "packages/tui/src",

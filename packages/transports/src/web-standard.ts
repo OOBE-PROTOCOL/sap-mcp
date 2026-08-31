@@ -151,7 +151,7 @@ export async function handleWebStandardRequest(
 
   // Health check endpoint
   if (url.pathname === '/health' && request.method === 'GET') {
-    return new Response(JSON.stringify({ status: 'ok', version: '0.9.80' }), {
+    return new Response(JSON.stringify({ status: 'ok', version: '0.9.81' }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
