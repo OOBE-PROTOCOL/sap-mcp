@@ -25,6 +25,7 @@ onlyBuiltDependencies:
   - bigint-buffer
   - bufferutil
   - esbuild
+  - protobufjs
   - utf-8-validate
 
 allowBuilds:
@@ -36,7 +37,7 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
-  protobufjs: set this to true or false
+  protobufjs: true
   utf-8-validate: true
 
 minimumReleaseAgeExclude:
