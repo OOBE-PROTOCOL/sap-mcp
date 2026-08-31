@@ -151,6 +151,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",
+    "@ellipsis-labs/rise": "^0.4.67",
     "@langchain/core": "^0.3.80",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@oobe-protocol-labs/sap-mcp-adapters": "workspace:*",

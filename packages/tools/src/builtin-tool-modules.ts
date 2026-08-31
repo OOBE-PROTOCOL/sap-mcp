@@ -12,6 +12,7 @@
 import { sapNetworkStatsTool } from './sap-network-stats.tool.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerAdrenaTools } from './adrena-tools.js';
+import { registerPhoenixTools } from './phoenix-tools.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerClientSdkTools } from './client-sdk-tools.js';
 import { registerEstimateToolCost } from './estimate-tool-cost.js';
@@ -316,6 +317,37 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_adrena_build_modify_position',
     ],
     register: registerAdrenaTools,
+  }),
+  createToolModule({
+    id: 'phoenix',
+    title: 'Phoenix Perps',
+    description: 'Phoenix.trade perps protocol: market data reads, order builders, collateral management, and trader onboarding.',
+    category: 'perps',
+    order: 235,
+    expectedTools: [
+      'sap_phoenix_get_exchange',
+      'sap_phoenix_get_market',
+      'sap_phoenix_get_markets',
+      'sap_phoenix_get_orderbook',
+      'sap_phoenix_get_market_stats',
+      'sap_phoenix_get_funding_history',
+      'sap_phoenix_get_market_fills',
+      'sap_phoenix_get_candles',
+      'sap_phoenix_get_trader',
+      'sap_phoenix_get_trader_state',
+      'sap_phoenix_get_trader_pnl',
+      'sap_phoenix_build_place_limit_order',
+      'sap_phoenix_build_place_market_order',
+      'sap_phoenix_build_cancel_orders',
+      'sap_phoenix_build_cancel_all',
+      'sap_phoenix_build_place_stop_loss',
+      'sap_phoenix_build_cancel_stop_loss',
+      'sap_phoenix_build_place_conditional_order',
+      'sap_phoenix_build_deposit',
+      'sap_phoenix_build_withdraw',
+      'sap_phoenix_build_register_trader',
+    ],
+    register: registerPhoenixTools,
   }),
   createToolModule({
     id: 'perps-risk',
