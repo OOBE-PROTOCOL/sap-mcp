@@ -12,34 +12,11 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { getRegisteredTools } from '../../mcp-adapter/src/sdk-compat.js';
-import { ToolModuleIdSchema, parseToolModuleManifest, type ToolModuleCategory, type ToolModuleManifest, type ToolModuleMode } from './tool-module-manifest.js';
-export type { ToolModuleCategory, ToolModuleMode } from './tool-module-manifest.js';
+import { ToolModuleIdSchema, parseToolModuleManifest, type ToolModuleCategory, type ToolModuleManifest, type ToolModuleMode, type ToolModuleDefinition } from './tool-module-manifest.js';
+export type { ToolModuleCategory, ToolModuleMode, ToolModuleRegister, ToolModuleLifecycleEvent, ToolModuleLifecycleHooks, ToolModuleDefinition } from './tool-module-manifest.js';
 
 export const PLUGIN_TOOL_MODULE_ORDER_MIN = 5_000;
 export const PLUGIN_TOOL_MODULE_ORDER_MAX = 8_999;
-
-export type ToolModuleRegister = (server: Server, context: SapMcpContext) => void | Promise<void>;
-
-export interface ToolModuleLifecycleEvent {
-  readonly module: ToolModuleManifest;
-  readonly context: SapMcpContext;
-  readonly beforeCount: number;
-  readonly afterCount?: number;
-  readonly addedCount?: number;
-  readonly error?: unknown;
-}
-
-export interface ToolModuleLifecycleHooks {
-  readonly beforeRegister?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
-  readonly afterRegister?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
-  readonly onRegisterError?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
-}
-
-export interface ToolModuleDefinition extends ToolModuleManifest {
-  readonly register: ToolModuleRegister;
-  readonly when?: (context: SapMcpContext) => boolean;
-  readonly lifecycle?: ToolModuleLifecycleHooks;
-}
 
 export interface PluginToolModuleOptions {
   readonly namespace: string;

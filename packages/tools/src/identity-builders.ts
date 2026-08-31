@@ -21,7 +21,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { Pda } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
-import { parseCapabilities, parsePricingTiers, parseProtocols } from './sap-sdk-tools.js';
+import { parseCapabilities, parsePricingTiers, parseProtocols } from './sap-sdk-parsers.js';
 
 /** JSON object shape used across MCP tool input/output surfaces. */
 type JsonRecord = Record<string, unknown>;

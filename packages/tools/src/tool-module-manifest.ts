@@ -60,3 +60,35 @@ export type ToolModuleManifest = z.infer<typeof ToolModuleManifestSchema>;
 export function parseToolModuleManifest(input: unknown): ToolModuleManifest {
   return ToolModuleManifestSchema.parse(input);
 }
+
+// ─── Tool Module Definition (executable surface) ──────────────────────────────
+// Moved here from module-registry.ts to break the circular dependency:
+// sdk-compat → tool-execution-metadata → module-registry → sdk-compat.
+// tool-execution-metadata now imports ToolModuleDefinition from this file
+// instead of from module-registry.
+
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import type { SapMcpContext } from '../../core/src/types.js';
+
+export type ToolModuleRegister = (server: Server, context: SapMcpContext) => void | Promise<void>;
+
+export interface ToolModuleLifecycleEvent {
+  readonly module: ToolModuleManifest;
+  readonly context: SapMcpContext;
+  readonly beforeCount: number;
+  readonly afterCount?: number;
+  readonly addedCount?: number;
+  readonly error?: unknown;
+}
+
+export interface ToolModuleLifecycleHooks {
+  readonly beforeRegister?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
+  readonly afterRegister?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
+  readonly onRegisterError?: (event: ToolModuleLifecycleEvent) => void | Promise<void>;
+}
+
+export interface ToolModuleDefinition extends ToolModuleManifest {
+  readonly register: ToolModuleRegister;
+  readonly when?: (context: SapMcpContext) => boolean;
+  readonly lifecycle?: ToolModuleLifecycleHooks;
+}
