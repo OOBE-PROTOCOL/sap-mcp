@@ -145,7 +145,7 @@ Each release should document:
 
 ## 10.8 Current Release Notes
 
-Version `0.9.81` includes:
+Version `0.9.82` includes:
 
 1. Local stdio and remote Streamable HTTP MCP modes.
 2. Profile-managed config under `~/.config/mcp-sap`.
@@ -168,7 +168,9 @@ Version `0.9.81` includes:
 19. Hermes-safe OOBE protocol catalog mode.
 20. Trusted sponsor bypass with origin + bearer token validation.
 21. mcp-session-cache for reduced x402 paid-call round trips.
-22. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
-23. MCP Apps `ui://` cards with structured content and HTML escaping.
-24. Hosted `sap` plus local `sap_payments` bridge setup for supported runtimes.
-25. Company-grade component branch and service-contract operating model.
+22. Phoenix.trade perps protocol with 21 tools (market data reads + order builders + collateral).
+23. Zero circular dependencies (madge --circular = 0).
+24. Node.js `>=22.12.0` and pnpm `11.7.0` release baseline.
+25. MCP Apps `ui://` cards with structured content and HTML escaping.
+26. Hosted `sap` plus local `sap_payments` bridge setup for supported runtimes.
+27. Company-grade component branch and service-contract operating model.

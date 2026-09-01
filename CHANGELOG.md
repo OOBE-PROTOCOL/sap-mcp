@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.82 - 2026-08-31
+
+### Added
+
+- Phoenix.trade perps protocol: 21 new `sap_phoenix_*` tools using
+  `@ellipsis-labs/rise` SDK. 11 reads (exchange, markets, orderbook,
+  market stats, funding history, fills, candles, trader state, PnL)
+  and 10 unsigned builders (limit/market order, cancel orders/all,
+  stop loss, cancel stop loss, conditional order, deposit, withdraw,
+  register trader). Pattern identical to Adrena — all hosted-safe,
+  zero server-side signing.
+
+### Fixed
+
+- CI/CD: `phoenix-pipeline.ts` added to allowed direct register
+  pipeline tool files in the tool execution pipeline contract.
+- CI/CD: `minimumPipelineToolRegistrations` updated from 165 to 186
+  and `minimumPipelineToolFiles` from 22 to 23 to account for Phoenix.
+
+### Changed
+
+- Zero circular dependencies: `madge --circular` reports 0 cycles
+  after extracting `sap-sdk-parsers.ts` and moving `ToolModuleDefinition`
+  to `tool-module-manifest.ts`.
+- Total tool count: 386 (was 365). Module count: 20 (was 19).
+
 ## 0.9.81 - 2026-08-31
 
 ### Added
