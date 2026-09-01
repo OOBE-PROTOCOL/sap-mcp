@@ -77,15 +77,19 @@ export function registerPhoenixMarketsTool(server: Server, context: SapMcpContex
 
 export function registerPhoenixOrderbookTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_orderbook', {
-    description: 'Get Phoenix orderbook for a symbol. Free read.',
+    description: 'Get Phoenix orderbook for a symbol. Use depth to limit the number of bid/ask levels returned (default 20, max 100). Free read.',
     inputSchema: {
       type: 'object',
-      properties: { symbol: { type: 'string', description: 'Market symbol (e.g. SOL)' } },
+      properties: {
+        symbol: { type: 'string', description: 'Market symbol (e.g. SOL)' },
+        depth: { type: 'number', description: 'Number of bid/ask levels to return (default 20, max 100)', minimum: 1, maximum: 100 },
+      },
       required: ['symbol'],
     } as unknown as JsonSchema,
   }, async (input) => {
     try {
-      const data = await getClient().getOrderbook(input.symbol as string);
+      const depth = typeof input.depth === 'number' ? Math.min(input.depth, 100) : 20;
+      const data = await getClient().getOrderbook(input.symbol as string, { depth });
       return phoenixPipelineOk(data);
     } catch (err) {
       return phoenixPipelineException('Failed to get Phoenix orderbook', err);

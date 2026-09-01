@@ -61,8 +61,8 @@ export class PhoenixDataApiClient {
    * @param symbol — Market symbol.
    * @returns Orderbook view.
    */
-  async getOrderbook(symbol: string) {
-    return this.client.orderbook().getOrderbook(symbol);
+  async getOrderbook(symbol: string, params?: { depth?: number }) {
+    return this.client.orderbook().getOrderbook(symbol, params as never);
   }
 
   /**
