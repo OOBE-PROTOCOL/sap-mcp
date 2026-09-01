@@ -63,7 +63,7 @@ export function registerPhoenixMarketTool(server: Server, context: SapMcpContext
 
 export function registerPhoenixMarketsTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_markets', {
-    description: 'List all Phoenix markets with parameters. Free read.',
+    description: 'List all Phoenix markets with parameters. Returns a compact summary of available markets (symbols, leverage tiers, fees). For full market details, use sap_phoenix_get_market with a specific symbol. Do NOT call this tool repeatedly — the summary does not change within a session. Free read.',
     inputSchema: { type: 'object', properties: {} } as unknown as JsonSchema,
   }, async () => {
     try {

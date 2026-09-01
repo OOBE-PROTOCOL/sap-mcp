@@ -54,7 +54,7 @@ export function compactPhoenixResponse(record: Record<string, unknown>): Record<
       ...result,
       _truncated: true,
       _originalSize: serialized.length,
-      _note: `Response capped at ${MAX_PHOENIX_RESPONSE_CHARS} chars. Use a specific tool (e.g. sap_phoenix_get_market with a symbol) for detailed data.`,
+      _note: `Response capped at ${MAX_PHOENIX_RESPONSE_CHARS} chars. The summary above contains all available markets. For full details on a specific market, use sap_phoenix_get_market with a symbol (e.g. SOL, BTC). Do NOT call sap_phoenix_get_markets again — the data will not change.`,
     };
   }
   return result;
