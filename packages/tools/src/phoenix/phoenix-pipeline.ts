@@ -27,11 +27,63 @@ export function toPhoenixRecord(payload: unknown): Record<string, unknown> {
 }
 
 export function phoenixPipelineOk(payload: unknown): PhoenixPipelineResult {
-  return createToolExecutionResult(toPhoenixRecord(payload), undefined);
+  return createToolExecutionResult(compactPhoenixResponse(toPhoenixRecord(payload)), undefined);
 }
 
 export function phoenixPipelineError(payload: Record<string, unknown>): PhoenixPipelineResult {
   return createToolExecutionResult(payload, undefined, { isError: true });
+}
+
+/**
+ * Cap Phoenix tool responses at the gateway level to prevent context explosion.
+ * Large arrays are trimmed to the first N entries; large strings are truncated
+ * with a marker. This prevents 471k+ char payloads from reaching the MCP client.
+ */
+const MAX_PHOENIX_RESPONSE_CHARS = 30_000;
+const MAX_PHOENIX_ARRAY_ENTRIES = 50;
+
+export function compactPhoenixResponse(record: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    result[key] = compactValue(value, 0);
+  }
+  // If the serialized result is still too large, do a final hard truncation
+  const serialized = JSON.stringify(result);
+  if (serialized.length > MAX_PHOENIX_RESPONSE_CHARS) {
+    return {
+      ...result,
+      _truncated: true,
+      _originalSize: serialized.length,
+      _note: `Response capped at ${MAX_PHOENIX_RESPONSE_CHARS} chars. Use a specific tool (e.g. sap_phoenix_get_market with a symbol) for detailed data.`,
+    };
+  }
+  return result;
+}
+
+function compactValue(value: unknown, depth: number): unknown {
+  if (depth > 5) return '[max depth reached]';
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    return value.length > 500 ? value.slice(0, 500) + `… (+${value.length - 500} chars)` : value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    if (value.length > MAX_PHOENIX_ARRAY_ENTRIES) {
+      return [
+        ...value.slice(0, MAX_PHOENIX_ARRAY_ENTRIES).map((v) => compactValue(v, depth + 1)),
+        `[+${value.length - MAX_PHOENIX_ARRAY_ENTRIES} more entries]`,
+      ];
+    }
+    return value.map((v) => compactValue(v, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const compacted: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      compacted[k] = compactValue(v, depth + 1);
+    }
+    return compacted;
+  }
+  return value;
 }
 
 export function phoenixPipelineException(error: string, err: unknown): PhoenixPipelineResult {
