@@ -8,7 +8,7 @@
  * @module perps/phoenix/phoenix-data-api
  */
 
-import { PhoenixHttpClient } from '@ellipsis-labs/rise';
+import { getPhoenixTraderSubaccountAddress, PhoenixHttpClient, PhoenixHttpError } from '@ellipsis-labs/rise';
 
 import { PHOENIX_DATA_API_BASE_URL } from './phoenix-constants.js';
 
@@ -89,12 +89,28 @@ export class PhoenixDataApiClient {
   }
 
   /**
-   * Get trader info by pubkey.
-   * @param pubkey — Trader wallet public key (base58).
+   * Get trader info. Accepts either the trader account key (PDA) or the trader
+   * authority wallet; the Phoenix perp API only recognizes the trader account
+   * key, so an authority input is resolved to its subaccount PDA first.
+   *
+   * @param pubkey — Trader account key or trader authority wallet (base58).
    * @returns Trader view object.
    */
   async getTrader(pubkey: string) {
-    return this.client.traders().getTrader(pubkey);
+    try {
+      return await this.client.traders().getTrader(pubkey);
+    } catch (error) {
+      const isNotFound =
+        error instanceof PhoenixHttpError && error.status === 404;
+      if (!isNotFound) throw error;
+      // 404: the input may be the authority wallet rather than the trader PDA.
+      const traderAddress = await getPhoenixTraderSubaccountAddress({
+        authority: pubkey,
+        traderPdaIndex: 0,
+        subaccountIndex: 0,
+      } as never);
+      return this.client.traders().getTrader(traderAddress as string);
+    }
   }
 
   /**
