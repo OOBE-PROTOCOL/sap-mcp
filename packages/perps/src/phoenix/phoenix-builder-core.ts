@@ -91,11 +91,18 @@ export function phoenixIxToTransactionInstruction(
   ix: PhoenixInstruction,
   programId: string,
 ): TransactionInstruction {
-  const keys = ix.accounts.map((meta) => ({
-    pubkey: new PublicKey(meta.address as string),
-    isSigner: meta.isSigner,
-    isWritable: meta.isWritable,
-  }));
+  const keys = ix.accounts.map((meta) => {
+    // The SDK uses AccountRole enum: 0=READONLY, 1=WRITABLE, 2=READONLY_SIGNER, 3=WRITABLE_SIGNER
+    // Some SDK versions also include isSigner/isWritable booleans — prefer those if present
+    const role = meta.role as number;
+    const isSigner = meta.isSigner ?? (role === 2 || role === 3);
+    const isWritable = meta.isWritable ?? (role === 1 || role === 3);
+    return {
+      pubkey: new PublicKey(meta.address as string),
+      isSigner,
+      isWritable,
+    };
+  });
 
   return new TransactionInstruction({
     programId: new PublicKey(programId),
