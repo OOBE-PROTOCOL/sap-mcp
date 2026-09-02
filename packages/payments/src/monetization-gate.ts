@@ -25,6 +25,7 @@ import type { SapMcpConfig, SapMcpMonetizationConfig } from '../../config-runtim
 import { logger } from '../../core/src/logger.js';
 import { getHttpHeader, NativeHttpAdapter, parseJsonBody, readRequestBody } from './http-adapter.js';
 import { evaluateHostedToolEligibility } from './hosted-tool-eligibility.js';
+import { evaluatePrePaymentValidation } from './preflight-validation.js';
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
@@ -447,6 +448,29 @@ export class McpMonetizationGate {
         hostedEligibilityFailure.code,
         hostedEligibilityFailure.message,
         hostedEligibilityFailure.data,
+      );
+      return;
+    }
+
+    // Pre-payment input validation: reject malformed wallet-bearing params BEFORE
+    // the x402 challenge so clients never pay for a call that would fail on
+    // validation. Mirrors the gateway-side parsePublicKey hardening one layer up.
+    const prePaymentFailure = evaluatePrePaymentValidation(parsedMcp);
+    if (prePaymentFailure) {
+      const requestHash = hashPaymentRequest(rawBody, parsedBody);
+      const metadata = buildRequestMetadata(request, requestHash, '/mcp/preflight-invalid-wallet');
+      await this.usageLedger.recordEligibilityBlocked(
+        metadata,
+        prePaymentFailure.data.blockedTools,
+        prePaymentFailure.message,
+        'Pre-payment validation rejected malformed wallet parameters. No x402 payment was charged.',
+      );
+      writeJsonRpcError(
+        response,
+        parsedBody,
+        prePaymentFailure.code,
+        prePaymentFailure.message,
+        prePaymentFailure.data,
       );
       return;
     }
