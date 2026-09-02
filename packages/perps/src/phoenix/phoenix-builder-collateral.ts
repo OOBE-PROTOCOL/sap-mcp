@@ -8,7 +8,7 @@
  */
 
 import { PublicKey, type Connection } from '@solana/web3.js';
-import { createPhoenixClient } from '@ellipsis-labs/rise';
+import { createPhoenixClient, MarginType } from '@ellipsis-labs/rise';
 import { logger } from '../../../core/src/logger.js';
 import {
   buildPhoenixResult,
@@ -124,8 +124,9 @@ export async function buildRegisterTrader(
   });
 
   const registerIx = await client.ixs.buildRegisterTrader({
-    trader: authority.toBase58() as never,
-    maxPositions,
+    authority: authority.toBase58() as never,
+    marginType: MarginType.Cross,
+    maxPositions: BigInt(maxPositions),
   } as never);
 
   const ix = phoenixIxToTransactionInstruction(
