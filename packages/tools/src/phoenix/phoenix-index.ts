@@ -11,6 +11,7 @@ import { logger } from '../../../core/src/logger.js';
 import { registerPhoenixDataTools } from './phoenix-data-tools.js';
 import { registerPhoenixTradingTools } from './phoenix-trading-tools.js';
 import { registerPhoenixCollateralTools } from './phoenix-collateral-tools.js';
+import { registerPhoenixRelayTools } from './phoenix-relay-tools.js';
 
 /**
  * Register all Phoenix perps protocol tools: data reads, trading builders, collateral builders.
@@ -24,6 +25,7 @@ export function registerPhoenixTools(server: Server, context: SapMcpContext): vo
   registerPhoenixDataTools(server, context);
   registerPhoenixTradingTools(server, context);
   registerPhoenixCollateralTools(server, context);
+  registerPhoenixRelayTools(server, context);
 
-  logger.debug('Phoenix perps tools registered', { count: 21 });
+  logger.debug('Phoenix perps tools registered', { count: 24 });
 }
