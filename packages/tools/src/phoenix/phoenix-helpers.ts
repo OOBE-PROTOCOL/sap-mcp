@@ -31,10 +31,14 @@ export function parsePublicKey(value: string): PublicKey {
   return new PublicKey(value);
 }
 
-/** Returns trimmed authority or null if missing/undefined/null. */
+/** Returns trimmed authority or null if missing/undefined/null/abbreviated. */
 export function validateAuthority(input: { authority?: unknown }): string | null {
   const authority = String(input.authority ?? '').trim();
   if (!authority || authority === 'undefined' || authority === 'null') {
+    return null;
+  }
+  // Reject abbreviated addresses like "4emrGb...XVYD" — must be full base58 (32-44 chars, no dots)
+  if (authority.includes('...') || authority.includes('…') || authority.length < 32) {
     return null;
   }
   return authority;

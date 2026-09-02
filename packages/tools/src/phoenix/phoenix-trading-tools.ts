@@ -52,7 +52,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceLimitOrder(
         connection, owner,
@@ -85,7 +85,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceMarketOrder(
         connection, owner,
@@ -116,7 +116,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildCancelOrdersById(
         connection, owner,
@@ -145,7 +145,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildCancelAll(
         connection, owner,
@@ -179,7 +179,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceStopLoss(
         connection, owner,
@@ -212,7 +212,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const result = await buildCancelStopLoss(
         connection, owner,
@@ -247,7 +247,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
     try {
       const connection = getConnection(context);
       const authorityStr = validateAuthority(input);
-      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses. Call steve_get_wallet_balance to get the complete address.' } as Record<string, unknown>, undefined, { isError: true });
       const owner = parsePublicKey(authorityStr);
       const options: Record<string, unknown> = {};
       if (input.lessTriggerPrice) {
