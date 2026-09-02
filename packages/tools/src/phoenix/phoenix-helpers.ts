@@ -31,5 +31,14 @@ export function parsePublicKey(value: string): PublicKey {
   return new PublicKey(value);
 }
 
+/** Returns trimmed authority or null if missing/undefined/null. */
+export function validateAuthority(input: { authority?: unknown }): string | null {
+  const authority = String(input.authority ?? '').trim();
+  if (!authority || authority === 'undefined' || authority === 'null') {
+    return null;
+  }
+  return authority;
+}
+
 /** Default Phoenix perp symbols. */
 export const PHOENIX_SYMBOLS = ['SOL', 'BTC', 'ETH', 'BNB'] as const;

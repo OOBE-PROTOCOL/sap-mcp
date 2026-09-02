@@ -11,7 +11,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../../core/src/types.js';
 import { logger } from '../../../core/src/logger.js';
-import { getConnection, parsePublicKey } from './phoenix-helpers.js';
+import { getConnection, parsePublicKey, validateAuthority } from './phoenix-helpers.js';
+import { createToolExecutionResult } from '../tool-execution-pipeline.js';
 import type { JsonSchema } from './phoenix-helpers.js';
 import {
   registerPhoenixPipelineTool,
@@ -50,7 +51,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceLimitOrder(
         connection, owner,
         input.symbol as string, input.side as 'bid' | 'ask',
@@ -81,7 +84,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceMarketOrder(
         connection, owner,
         input.symbol as string, input.side as 'bid' | 'ask',
@@ -110,7 +115,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildCancelOrdersById(
         connection, owner,
         input.symbol as string, input.orders as never,
@@ -137,7 +144,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildCancelAll(
         connection, owner,
         input.symbol as string,
@@ -169,7 +178,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildPlaceStopLoss(
         connection, owner,
         input.symbol as string, BigInt(input.triggerPrice as string),
@@ -200,7 +211,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const result = await buildCancelStopLoss(
         connection, owner,
         input.symbol as string,
@@ -233,7 +246,9 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
   }, async (input) => {
     try {
       const connection = getConnection(context);
-      const owner = parsePublicKey(input.authority as string);
+      const authorityStr = validateAuthority(input);
+      if (!authorityStr) return createToolExecutionResult({ error: 'authority is required. Pass the trader\'s wallet public key (base58). Call steve_get_wallet_balance to find the user\'s wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      const owner = parsePublicKey(authorityStr);
       const options: Record<string, unknown> = {};
       if (input.lessTriggerPrice) {
         options.lessTriggerOrder = {
