@@ -99,9 +99,9 @@ export function registerPhoenixCollateralTools(server: Server, context: SapMcpCo
     } as unknown as JsonSchema,
   }, async (input) => {
     try {
-      const authorityStr = String(input.authority ?? '').trim();
-      if (!authorityStr || authorityStr === 'undefined' || authorityStr === 'null') {
-        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58). You can find the user\'s wallet address by calling steve_get_wallet_balance first.' } as Record<string, unknown>, undefined, { isError: true });
+      const authorityStr = validateAuthority({ authority: input.authority });
+      if (!authorityStr) {
+        return createToolExecutionResult({ error: 'authority parameter is required. Pass the FULL wallet public key (base58, 44 chars, no dots). Do NOT use abbreviated addresses like 4emrGb...XVYD - get the exact address from steve_get_wallet_balance.' } as Record<string, unknown>, undefined, { isError: true });
       }
       const connection = getConnection(context);
       const authority = parsePublicKey(authorityStr);
