@@ -104,8 +104,13 @@ export function phoenixIxToTransactionInstruction(
     };
   });
 
+  // The SDK reports the correct on-chain program for each instruction
+  // (programAddress). Prefer it over the provided fallback so perps
+  // instructions are never routed to the Phoenix spot AMM program.
+  const resolvedProgramId = (ix as { programAddress?: string }).programAddress ?? programId;
+
   return new TransactionInstruction({
-    programId: new PublicKey(programId),
+    programId: new PublicKey(resolvedProgramId),
     keys,
     data: Buffer.from(ix.data),
   });
