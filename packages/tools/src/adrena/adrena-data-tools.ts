@@ -124,8 +124,8 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     },
   }, async (args: Record<string, unknown>) => {
     const wallet = String(args['wallet'] ?? '').trim();
-    if (!wallet) {
-      return adrenaPipelineError({ error: 'wallet is required' });
+    if (!wallet || wallet.includes('...') || wallet.includes('…') || wallet.length < 32) {
+      return adrenaPipelineError({ error: 'wallet is required and must be a FULL base58 address (44 chars, no dots). Do NOT use abbreviated addresses.' });
     }
     let positions = await adrenaDataApi.getPositions(wallet);
     let source: 'data-api' | 'on-chain-pda-fallback' = 'data-api';
@@ -257,8 +257,8 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     },
   }, async (args: Record<string, unknown>) => {
     const wallet = String(args['wallet'] ?? '').trim();
-    if (!wallet) {
-      return adrenaPipelineError({ error: 'wallet is required' });
+    if (!wallet || wallet.includes('...') || wallet.includes('…') || wallet.length < 32) {
+      return adrenaPipelineError({ error: 'wallet is required and must be a FULL base58 address (44 chars, no dots). Do NOT use abbreviated addresses.' });
     }
     let trader = await adrenaDataApi.getTraderInfo(wallet);
     if (trader === null) {
@@ -317,8 +317,8 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     },
   }, async (args: Record<string, unknown>) => {
     const wallet = String(args['wallet'] ?? '').trim();
-    if (!wallet) {
-      return adrenaPipelineError({ error: 'wallet is required' });
+    if (!wallet || wallet.includes('...') || wallet.includes('…') || wallet.length < 32) {
+      return adrenaPipelineError({ error: 'wallet is required and must be a FULL base58 address (44 chars, no dots). Do NOT use abbreviated addresses.' });
     }
     const mutagen = await adrenaDataApi.getMutagen(wallet);
     if (mutagen === null) {
@@ -444,6 +444,9 @@ export function registerAdrenaDataApiTools(server: Server, context: SapMcpContex
     const side = args['side'] === 'short' ? 'short' : 'long';
     if (!wallet || !principalToken) {
       return adrenaPipelineError({ error: 'wallet and principalToken are required' });
+    }
+    if (wallet.includes('...') || wallet.includes('…') || wallet.length < 32) {
+      return adrenaPipelineError({ error: 'wallet must be a FULL base58 address (44 chars, no dots). Do NOT use abbreviated addresses.' });
     }
     const positions = await adrenaDataApi.getPositions(wallet)
       ?? await readOpenPositionsOnChain(context, wallet);

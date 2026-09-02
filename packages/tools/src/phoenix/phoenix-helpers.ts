@@ -27,8 +27,22 @@ export function getConnection(context: SapMcpContext): Connection {
   return context.connection;
 }
 
+/**
+ * Parse a string into a PublicKey, rejecting abbreviated/truncated addresses.
+ * Base58 Solana addresses are 32-44 chars, no dots, no ellipsis.
+ */
 export function parsePublicKey(value: string): PublicKey {
-  return new PublicKey(value);
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') {
+    throw new Error('Invalid public key: empty or null. Pass a full base58 wallet address (44 chars).');
+  }
+  if (trimmed.includes('...') || trimmed.includes('…')) {
+    throw new Error(`Invalid public key: abbreviated address "${trimmed}" contains dots. Pass the FULL base58 address (44 chars, no dots).`);
+  }
+  if (trimmed.length < 32 || trimmed.length > 44) {
+    throw new Error(`Invalid public key: length ${trimmed.length} is outside valid range (32-44 chars). Pass the FULL base58 address.`);
+  }
+  return new PublicKey(trimmed);
 }
 
 /** Returns trimmed authority or null if missing/undefined/null/abbreviated. */
