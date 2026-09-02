@@ -55,6 +55,10 @@ export interface UnsignedTransactionResult {
     transactionBase64: string;
     submit: boolean;
   };
+  /** Builder-side simulation error for this exact unsigned transaction, if any. */
+  simulationError?: string;
+  /** Program logs captured during the best-effort simulation. */
+  simulationLogs?: string[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -213,6 +217,10 @@ export function buildPhoenixResult(
   transactionBase64: string,
   feePayer: PublicKey,
   instructionNames: string[],
+  simulation?: {
+    simulationError?: string;
+    simulationLogs?: string[];
+  },
 ): UnsignedTransactionResult {
   return {
     transactionBase64,
@@ -226,6 +234,8 @@ export function buildPhoenixResult(
       transactionBase64,
       submit: true,
     },
+    ...(simulation?.simulationError ? { simulationError: simulation.simulationError } : {}),
+    ...(simulation?.simulationLogs?.length ? { simulationLogs: simulation.simulationLogs } : {}),
   };
 }
 
@@ -248,7 +258,10 @@ export async function buildFromPhoenixIx(
 ): Promise<UnsignedTransactionResult> {
   const ix = phoenixIxToTransactionInstruction(phoenixIx as PhoenixInstruction, programId);
   const serialized = await serializeUnsignedPhoenixTx(connection, feePayer, [ix]);
-  return buildPhoenixResult(serialized.transactionBase64, feePayer, [instructionName]);
+  return buildPhoenixResult(serialized.transactionBase64, feePayer, [instructionName], {
+    simulationError: serialized.simulationError,
+    simulationLogs: serialized.simulationLogs,
+  });
 }
 
 /**
@@ -270,5 +283,8 @@ export async function buildFromPhoenixIxs(
 ): Promise<UnsignedTransactionResult> {
   const ixs = phoenixIxsToTransactionInstructions(phoenixIxs, programId);
   const serialized = await serializeUnsignedPhoenixTx(connection, feePayer, ixs);
-  return buildPhoenixResult(serialized.transactionBase64, feePayer, instructionNames);
+  return buildPhoenixResult(serialized.transactionBase64, feePayer, instructionNames, {
+    simulationError: serialized.simulationError,
+    simulationLogs: serialized.simulationLogs,
+  });
 }

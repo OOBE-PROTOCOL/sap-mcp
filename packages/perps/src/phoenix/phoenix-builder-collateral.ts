@@ -59,7 +59,10 @@ export async function buildDeposit(
   const serialized = await serializeUnsignedPhoenixTx(connection, feePayer, ixs);
   logger.debug('Phoenix deposit builder', { authority: authority.toBase58() as never, amountUsdc: amountUsdc.toString() });
 
-  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildDepositIxs']);
+  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildDepositIxs'], {
+      simulationError: serialized.simulationError,
+      simulationLogs: serialized.simulationLogs,
+    });
 }
 
 /**
@@ -103,7 +106,10 @@ export async function buildWithdraw(
   const serialized = await serializeUnsignedPhoenixTx(connection, feePayer, ixs);
   logger.debug('Phoenix withdraw builder', { authority: authority.toBase58() as never, amountUsdc: amountUsdc.toString() });
 
-  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildWithdrawIxs']);
+  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildWithdrawIxs'], {
+      simulationError: serialized.simulationError,
+      simulationLogs: serialized.simulationLogs,
+    });
 }
 
 /**
@@ -139,5 +145,8 @@ export async function buildRegisterTrader(
   const serialized = await serializeUnsignedPhoenixTx(connection, feePayer, [ix]);
   logger.debug('Phoenix register trader builder', { authority: authority.toBase58() as never });
 
-  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildRegisterTrader']);
+  return buildPhoenixResult(serialized.transactionBase64, feePayer, ['buildRegisterTrader'], {
+      simulationError: serialized.simulationError,
+      simulationLogs: serialized.simulationLogs,
+    });
 }
