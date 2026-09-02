@@ -200,7 +200,7 @@ export function registerPhoenixTraderTool(server: Server, context: SapMcpContext
     try {
       const authority = String(input.authority ?? '').trim();
       if (!authority || authority === 'undefined' || authority === 'null') {
-        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58). If querying your own positions, use your own wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58). If querying your own positions, use your own wallet address. If the trader is not yet registered on Phoenix, call sap_phoenix_build_register_trader first to build the registration transaction.' } as Record<string, unknown>, undefined, { isError: true });
       }
       const data = await getClient().getTrader(authority);
       return phoenixPipelineOk(data);
