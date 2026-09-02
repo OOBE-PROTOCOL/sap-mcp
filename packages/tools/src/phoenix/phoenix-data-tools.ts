@@ -16,6 +16,7 @@ import {
   phoenixPipelineOk,
   phoenixPipelineException,
 } from './phoenix-pipeline.js';
+import { createToolExecutionResult } from '../tool-execution-pipeline.js';
 import type { JsonSchema } from './phoenix-helpers.js';
 
 let cachedClient: PhoenixDataApiClient | null = null;
@@ -189,15 +190,19 @@ export function registerPhoenixCandlesTool(server: Server, context: SapMcpContex
 
 export function registerPhoenixTraderTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_trader', {
-    description: 'Get Phoenix trader state (positions, orders, collateral). Free read.',
+    description: 'Get Phoenix trader state (positions, orders, collateral). You MUST provide the trader\'s wallet address (base58 public key). If querying your own positions, use your own wallet address. Free read.',
     inputSchema: {
       type: 'object',
-      properties: { authority: { type: 'string', description: 'Trader authority public key (base58)' } },
+      properties: { authority: { type: 'string', description: 'Trader wallet authority public key (base58). This is REQUIRED — the tool will fail without it.' } },
       required: ['authority'],
     } as unknown as JsonSchema,
   }, async (input) => {
     try {
-      const data = await getClient().getTrader(input.authority as string);
+      const authority = String(input.authority ?? '').trim();
+      if (!authority || authority === 'undefined' || authority === 'null') {
+        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58). If querying your own positions, use your own wallet address.' } as Record<string, unknown>, undefined, { isError: true });
+      }
+      const data = await getClient().getTrader(authority);
       return phoenixPipelineOk(data);
     } catch (err) {
       return phoenixPipelineException('Failed to get Phoenix trader', err);
@@ -207,18 +212,22 @@ export function registerPhoenixTraderTool(server: Server, context: SapMcpContext
 
 export function registerPhoenixTraderStateTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_trader_state', {
-    description: 'Get Phoenix trader state snapshot (subaccounts, positions, collateral). Free read.',
+    description: 'Get Phoenix trader state snapshot (subaccounts, positions, collateral). You MUST provide the trader\'s wallet address (base58 public key). Free read.',
     inputSchema: {
       type: 'object',
       properties: {
-        authority: { type: 'string', description: 'Trader authority public key (base58)' },
+        authority: { type: 'string', description: 'Trader wallet authority public key (base58). REQUIRED.' },
         traderPdaIndex: { type: 'number', description: 'Trader PDA index (default 0)', minimum: 0 },
       },
       required: ['authority'],
     } as unknown as JsonSchema,
   }, async (input) => {
     try {
-      const data = await getClient().getTraderStateSnapshot(input.authority as string);
+      const authority = String(input.authority ?? '').trim();
+      if (!authority || authority === 'undefined' || authority === 'null') {
+        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58).' } as Record<string, unknown>, undefined, { isError: true });
+      }
+      const data = await getClient().getTraderStateSnapshot(authority);
       return phoenixPipelineOk(data);
     } catch (err) {
       return phoenixPipelineException('Failed to get Phoenix trader state', err);
@@ -228,15 +237,19 @@ export function registerPhoenixTraderStateTool(server: Server, context: SapMcpCo
 
 export function registerPhoenixTraderPnlTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_trader_pnl', {
-    description: 'Get Phoenix trader PnL history. Free read.',
+    description: 'Get Phoenix trader PnL history. You MUST provide the trader\'s wallet address (base58 public key). Free read.',
     inputSchema: {
       type: 'object',
-      properties: { authority: { type: 'string', description: 'Trader authority public key (base58)' } },
+      properties: { authority: { type: 'string', description: 'Trader wallet authority public key (base58). REQUIRED.' } },
       required: ['authority'],
     } as unknown as JsonSchema,
   }, async (input) => {
     try {
-      const data = await getClient().getTraderPnl(input.authority as string, { resolution: (input.resolution as string) ?? '1h' });
+      const authority = String(input.authority ?? '').trim();
+      if (!authority || authority === 'undefined' || authority === 'null') {
+        return createToolExecutionResult({ error: 'authority parameter is required. Pass the trader\'s wallet public key (base58).' } as Record<string, unknown>, undefined, { isError: true });
+      }
+      const data = await getClient().getTraderPnl(authority, { resolution: (input.resolution as string) ?? '1h' });
       return phoenixPipelineOk(data);
     } catch (err) {
       return phoenixPipelineException('Failed to get Phoenix trader PnL', err);
