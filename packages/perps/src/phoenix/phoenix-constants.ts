@@ -12,7 +12,7 @@
 export const PHOENIX_DATA_API_BASE_URL = 'https://perp-api.phoenix.trade';
 
 /** Phoenix program ID on Solana mainnet. */
-export const PHOENIX_PROGRAM_ID = 'PhoenixV1';
+export const PHOENIX_PROGRAM_ID = 'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY';
 
 /** Phoenix global configuration address on Solana mainnet. */
 export const PHOENIX_GLOBAL_CONFIGURATION_ADDRESS = 'Gcs8Kk5u5N6LpNgq8Q3FGhnTfW6Ac9pNUk3V4VxLgMxg';
