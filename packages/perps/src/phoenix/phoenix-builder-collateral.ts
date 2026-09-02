@@ -43,10 +43,11 @@ export async function buildDeposit(
 
   const depositIxs = await client.ixs.buildDepositIxs({
     authority: authority.toBase58() as never,
+    feePayer: feePayer.toBase58() as never,
     amount: amountUsdc,
     traderPdaIndex,
     traderSubaccountIndex,
-  });
+  } as never);
 
   const ixs = depositIxs.instructions.map((ix) =>
     phoenixIxToTransactionInstruction(
@@ -86,10 +87,11 @@ export async function buildWithdraw(
 
   const withdrawIxs = await client.ixs.buildWithdrawIxs({
     authority: authority.toBase58() as never,
+    feePayer: feePayer.toBase58() as never,
     amount: amountUsdc,
     traderPdaIndex,
     traderSubaccountIndex,
-  });
+  } as never);
 
   const ixs = withdrawIxs.instructions.map((ix) =>
     phoenixIxToTransactionInstruction(
