@@ -13,6 +13,7 @@ import { sapNetworkStatsTool } from './sap-network-stats.tool.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerAdrenaTools } from './adrena-tools.js';
 import { registerPhoenixTools } from './phoenix-tools.js';
+import { registerToolSearchTool } from './sap-tool-search.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerClientSdkTools } from './client-sdk-tools.js';
 import { registerEstimateToolCost } from './estimate-tool-cost.js';
@@ -438,6 +439,19 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_trade_journal_query',
     ],
     register: registerMemoryTools,
+  }),
+  createToolModule({
+    id: 'tool-search',
+    title: 'Tool Search Retriever',
+    description: 'BM25 search over the 420+ SAP MCP tool catalog. Returns top-K matching tools with input schemas for dynamic discovery.',
+    category: 'agent-runtime',
+    order: 999,
+    expectedTools: [
+      'sap_search_tools',
+    ],
+    register: (server: import('@modelcontextprotocol/sdk/server/index.js').Server, context: SapMcpContext) => {
+      registerToolSearchTool(server, context);
+    },
   }),
 ] as const;
 

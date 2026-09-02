@@ -760,7 +760,7 @@
     }
   ],
   "minimumPipelineToolFiles": 23,
-  "minimumPipelineToolRegistrations": 189,
+  "minimumPipelineToolRegistrations": 190,
   "allowedDirectRegisterPipelineToolFiles": [
     "packages/tools/src/adrena/adrena-pipeline.ts",
     "packages/tools/src/phoenix/phoenix-pipeline.ts",
