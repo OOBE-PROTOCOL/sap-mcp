@@ -535,7 +535,7 @@ describe('release readiness documentation and package surface', () => {
     expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"registerPipelineTool"');
     expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"registerToolFamilyPipelineTool"');
     expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"allowedDirectRegisterPipelineToolFiles"');
-    expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"minimumPipelineToolRegistrations": 190');
+    expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"minimumPipelineToolRegistrations": 193');
     expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"maximumLegacyRegisterToolFiles": 0');
     expect(readText('config/tool-execution-pipeline-contracts.json')).toContain('"packages/tool-plugin-template/src/index.ts"');
     expect(readText('scripts/verify-tool-execution-pipeline.mjs')).toContain('maximumLegacyRegisterToolFiles');

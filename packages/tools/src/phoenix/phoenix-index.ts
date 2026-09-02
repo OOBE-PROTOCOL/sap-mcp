@@ -27,5 +27,5 @@ export function registerPhoenixTools(server: Server, context: SapMcpContext): vo
   registerPhoenixCollateralTools(server, context);
   registerPhoenixRelayTools(server, context);
 
-  logger.debug('Phoenix perps tools registered', { count: 24 });
+  logger.debug('Phoenix perps tools registered', { count: 27 });
 }

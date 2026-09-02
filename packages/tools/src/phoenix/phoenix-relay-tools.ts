@@ -182,5 +182,87 @@ export function registerPhoenixRelayTools(server: Server, context: SapMcpContext
     }
   });
 
-  logger.debug('Phoenix Relay cross-chain deposit tools registered', { count: 3 });
+  /* ════════════════════════════════════════════════════════════════════
+   *  Jupiter Universal Deposit — standalone Jupiter-branded tools
+   *  Same Relay.link API, but with jupiter_ prefix for skill routing
+   * ════════════════════════════════════════════════════════════════════ */
+  registerPhoenixPipelineTool(server, context, 'jupiter_universal_deposit_quote', {
+    description: 'Jupiter Universal Deposit: generate a deposit address to bridge funds from any EVM chain (Ethereum, Base, Arbitrum, etc.) to Solana USDC. Powered by Relay.link — same infrastructure as jup.ag/deposit. The user sends a normal transfer to the deposit address and receives USDC on Solana automatically. Flat $0.30 fee. Free read.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        recipient: { type: 'string', description: 'Solana wallet address (base58) that will receive USDC.' },
+        originChainId: { type: 'number', description: 'Origin chain ID: 1 (Ethereum), 8453 (Base), 42161 (Arbitrum), 10 (Optimism), 137 (Polygon), 56 (BSC).', enum: [1, 10, 56, 137, 42161, 8453, 43114] },
+        originCurrency: { type: 'string', description: 'Origin token address. 0x0000000000000000000000000000000000000000 for native ETH. Default: native.', default: '0x0000000000000000000000000000000000000000' },
+        amount: { type: 'string', description: 'Amount in smallest unit (wei for ETH). Required.' },
+      },
+      required: ['recipient', 'originChainId', 'amount'],
+    } as unknown as JsonSchema,
+  }, async (input) => {
+    try {
+      const recipient = String(input.recipient ?? '').trim();
+      if (!recipient || recipient.length < 32) {
+        return phoenixPipelineException('recipient is required and must be a full Solana wallet address', new Error('Invalid recipient'));
+      }
+      const originChainId = typeof input.originChainId === 'number' ? input.originChainId : 1;
+      const originCurrency = String(input.originCurrency ?? RELAY_EVM_NATIVE_ADDRESS).trim();
+      const amount = String(input.amount ?? '').trim();
+      if (!amount) {
+        return phoenixPipelineException('amount is required', new Error('Missing amount'));
+      }
+
+      const quote = await getCrossChainQuote({ recipient, originChainId, originCurrency, amount });
+      return phoenixPipelineOk({
+        depositAddress: quote.depositAddress,
+        requestId: quote.requestId,
+        fees: quote.fees,
+        details: quote.details,
+        instructions: `Send ${amount} units to ${quote.depositAddress} on chain ${originChainId}. USDC will arrive at ${recipient} on Solana. Track with jupiter_universal_deposit_status.`,
+      });
+    } catch (err) {
+      return phoenixPipelineException('Failed to get Jupiter Universal Deposit quote', err);
+    }
+  });
+
+  registerPhoenixPipelineTool(server, context, 'jupiter_universal_deposit_status', {
+    description: 'Track a Jupiter Universal Deposit cross-chain transfer. Returns status (pending/success/failed), transaction hashes. Use requestId from jupiter_universal_deposit_quote. Free read.',
+    inputSchema: {
+      type: 'object',
+      properties: { requestId: { type: 'string', description: 'Request ID from the deposit quote.' } },
+      required: ['requestId'],
+    } as unknown as JsonSchema,
+  }, async (input) => {
+    try {
+      const requestId = String(input.requestId ?? '').trim();
+      if (!requestId) return phoenixPipelineException('requestId is required', new Error('Missing requestId'));
+      const status = await getDepositStatus(requestId);
+      return phoenixPipelineOk(status);
+    } catch (err) {
+      return phoenixPipelineException('Failed to check deposit status', err);
+    }
+  });
+
+  registerPhoenixPipelineTool(server, context, 'jupiter_universal_deposit_chains', {
+    description: 'List all chains supported by Jupiter Universal Deposit for cross-chain transfers to Solana. Returns chain IDs, names, and popular chains. Free read.',
+    inputSchema: { type: 'object', properties: {} } as unknown as JsonSchema,
+  }, async () => {
+    try {
+      const chains = await getSupportedChains();
+      return phoenixPipelineOk({
+        totalChains: chains.length,
+        popularChains: [
+          { name: 'Ethereum', chainId: 1 },
+          { name: 'Base', chainId: 8453 },
+          { name: 'Arbitrum', chainId: 42161 },
+          { name: 'Optimism', chainId: 10 },
+          { name: 'Polygon', chainId: 137 },
+        ],
+        destinationChain: { name: 'Solana', chainId: 792703809, currency: 'USDC' },
+      });
+    } catch (err) {
+      return phoenixPipelineException('Failed to fetch supported chains', err);
+    }
+  });
+
+  logger.debug('Phoenix Relay + Jupiter Universal Deposit tools registered', { count: 6 });
 }
