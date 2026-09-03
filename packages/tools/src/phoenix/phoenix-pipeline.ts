@@ -6,6 +6,7 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Transaction, VersionedTransaction } from '@solana/web3.js';
 import type { SapMcpContext } from '../../../core/src/types.js';
 import {
   createToolExecutionResult,
@@ -64,6 +65,13 @@ function compactValue(value: unknown, depth: number): unknown {
   if (depth > 5) return '[max depth reached]';
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
+    // Unsigned transactions ARE the product of builder tools — truncating
+    // them breaks every client-side finalize/preview flow (the browser
+    // cannot deserialize "… (+492 chars)"). Only strings that ACTUALLY
+    // deserialize as Solana transactions are preserved; everything else
+    // (market data, logs, long base64 that isn't a tx) keeps the
+    // context-protection truncation.
+    if (isDeserializableTransaction(value)) return value;
     return value.length > 500 ? value.slice(0, 500) + `… (+${value.length - 500} chars)` : value;
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
@@ -84,6 +92,31 @@ function compactValue(value: unknown, depth: number): unknown {
     return compacted;
   }
   return value;
+}
+
+/**
+ * True only when the string genuinely deserializes as a Solana transaction
+ * (legacy or v0). Decoding — not shape-guessing — is the client's own
+ * acceptance test (mcp-transaction-extractor looksLikeBase64Transaction),
+ * so the gateway must apply the same bar before sparing a string from
+ * truncation.
+ */
+function isDeserializableTransaction(value: string): boolean {
+  if (value.length < 100 || value.length % 4 !== 0) return false;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  const decoded = Buffer.from(value, 'base64');
+  if (decoded.length < 64) return false;
+  try {
+    VersionedTransaction.deserialize(Buffer.from(value, 'base64'));
+    return true;
+  } catch {
+    try {
+      Transaction.from(Buffer.from(value, 'base64'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export function phoenixPipelineException(error: string, err: unknown): PhoenixPipelineResult {
