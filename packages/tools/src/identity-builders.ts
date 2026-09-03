@@ -19,6 +19,7 @@
  */
 
 import { PublicKey, SystemProgram } from '@solana/web3.js';
+import BN from 'bn.js';
 import { Pda } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 import { parseCapabilities, parsePricingTiers, parseProtocols } from './sap-sdk-parsers.js';
@@ -107,7 +108,10 @@ function identityPdas(client: SapClient, ownerWallet: PublicKey) {
 }
 
 function methodsOf(client: SapClient): AnchorMethods {
-  return client.program as unknown as AnchorMethods;
+  // client.program is the Anchor Program wrapper; the method builders live
+  // under .methods. Fall back to the program itself for proxied layouts.
+  const program = client.program as unknown as { methods?: AnchorMethods };
+  return program.methods ?? (client.program as unknown as AnchorMethods);
 }
 
 /**
@@ -353,18 +357,23 @@ export async function buildAgentReportCallsTransaction(
     : 0;
   const serviceHashRaw = input['serviceHash'];
   const serviceHash = (() => {
+    // Anchor borsh [u8;32] encodes from a plain JS number array in this SDK
+    // runtime — Buffer/Uint8Array inputs fail with "toArrayLike is not a
+    // function" inside BNLayout.encode. Verified on-chain (mainnet sim).
     if (typeof serviceHashRaw === 'string' && /^[0-9a-fA-F]{64}$/.test(serviceHashRaw)) {
-      return Uint8Array.from(Buffer.from(serviceHashRaw, 'hex'));
+      return Array.from(Buffer.from(serviceHashRaw, 'hex'));
     }
     throw new Error('serviceHash is required — 64-char hex sha256 of the served payload.');
   })();
+  // u64 args must be BN instances: plain numbers lack toArrayLike and crash
+  // the borsh encoder (verified against mainnet — BN(0), BN(1) encode fine).
   const [agentPda] = Pda.deriveAgent(ownerWallet, client.programId);
   const [agentStats] = Pda.deriveAgentStats(agentPda, client.programId);
   const [escrowPda] = Pda.deriveEscrowV2(agentPda, depositor, escrowNonce, client.programId);
   const methods = methodsOf(client);
   const instruction = await requireAnchorMethod(methods, 'settle_calls_v2', 'settleCallsV2')(
-    escrowNonce,
-    callsServed,
+    new BN(escrowNonce),
+    new BN(Math.trunc(callsServed)),
     serviceHash,
   ).accounts({
     wallet: ownerWallet,

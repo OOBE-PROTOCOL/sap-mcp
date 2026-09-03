@@ -156,6 +156,24 @@ export function optionalSettlementMode(input: JsonRecord): typeof SettlementMode
 
 // ─── Public Parsers ─────────────────────────────────────────────────────────────
 
+/**
+ * Normalizes a capability id to the on-chain validator format.
+ *
+ * The mainnet validator (validator.rs InvalidCapabilityFormat 6026) requires
+ * capability ids to be colon-namespaced `protocol:capability` (e.g.
+ * "synapse-agent-protocol:perps"). Bare ids like "perps" or "perp-trading"
+ * are rejected on-chain. When the caller supplies a bare id we namespace it
+ * with its protocolId when present, or with the "synapse-agent-protocol"
+ * protocol namespace (the SAP home protocol) when no protocol is known.
+ * Verified against mainnet simulation: bare id → CAP-ERR; "proto:cap" → SUCCESS.
+ */
+function normalizeCapabilityId(id: string, protocolId: string | null): string {
+  if (id.includes(':')) {
+    return id;
+  }
+  return `${protocolId ?? 'synapse-agent-protocol'}:${id}`;
+}
+
 export function parseCapabilities(value: unknown): Capability[] {
   if (value === undefined || value === null) {
     return [];
@@ -166,13 +184,17 @@ export function parseCapabilities(value: unknown): Capability[] {
 
   return value.map((item) => {
     if (typeof item === 'string') {
-      return { id: item, description: null, protocolId: null, version: null };
+      if (item.includes(':')) {
+        return { id: item, description: null, protocolId: item.slice(0, item.indexOf(':')), version: null };
+      }
+      return { id: `synapse-agent-protocol:${item}`, description: null, protocolId: null, version: null };
     }
     const record = asRecord(item);
+    const protocolId = optionalString(record, 'protocolId') ?? null;
     return {
-      id: requiredString(record, 'id'),
+      id: normalizeCapabilityId(requiredString(record, 'id'), protocolId),
       description: optionalString(record, 'description') ?? null,
-      protocolId: optionalString(record, 'protocolId') ?? null,
+      protocolId,
       version: optionalString(record, 'version') ?? null,
     };
   });
