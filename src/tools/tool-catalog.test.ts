@@ -81,7 +81,7 @@ describe('tool catalog', () => {
     expect(catalog.profileId).toBe('local-stdio-wallet');
     expect(catalog.runtimeMode).toBe('readonly');
     expect(catalog.moduleCount).toBe(21);
-    expect(catalog.toolCount).toBe(180);
+    expect(catalog.toolCount).toBe(182);
     expect(catalog.modules.map((module) => module.id)).toContain('x402-local-helper');
     expect(catalog.modules.map((module) => module.id)).not.toContain('hosted-prepaid');
     expect(catalog.categories).toContainEqual(expect.objectContaining({
@@ -169,7 +169,7 @@ describe('tool catalog', () => {
       profileId: 'hosted-accountless',
       runtimeMode: 'hosted-api',
       moduleCount: 21,
-      toolCount: 167,
+      toolCount: 169,
     });
     expect(summary.modules.map((module) => module.id)).toContain('hosted-prepaid');
     expect(summary.modules[0]).not.toHaveProperty('register');

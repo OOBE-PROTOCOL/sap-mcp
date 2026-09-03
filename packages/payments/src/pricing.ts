@@ -403,6 +403,10 @@ const BUILDER_TOOLS = new Set([
   'sap_adrena_build_trailing_stop',
   'sap_adrena_build_modify_position',
   'sap_adrena_trade_intent',
+  // Phoenix trader activation — build returns wire instructions for the
+  // browser; submit proxies the user-signed tx to Phoenix's co-signing API.
+  'sap_phoenix_build_onboard_trader',
+  'sap_phoenix_submit_onboard_trader',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([

@@ -23,12 +23,16 @@ import {
   buildWithdraw,
   buildRegisterTrader,
 } from '../../../perps/src/phoenix/phoenix-builder-collateral.js';
+import {
+  buildOnboardInstructions,
+  submitOnboardTransaction,
+} from '../../../perps/src/phoenix/phoenix-builder-onboarding.js';
 
 export function registerPhoenixCollateralTools(server: Server, context: SapMcpContext): void {
   logger.debug('Registering Phoenix collateral builder tools');
 
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_build_deposit', {
-    description: 'Build an unsigned USDC deposit transaction into a Phoenix trader account. Returns transactionBase64 for browser approval.',
+    description: 'Build an unsigned USDC deposit transaction into a Phoenix trader account. Returns transactionBase64 for browser approval. Requires an ACTIVATED trader: check sap_phoenix_get_trader_state first — if state is "frozen" or depositCollateral.immediate=false, run the activation flow (sap_phoenix_build_onboard_trader → sign → sap_phoenix_submit_onboard_trader) before depositing, or this build simulates CapabilityDenied.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -88,7 +92,7 @@ export function registerPhoenixCollateralTools(server: Server, context: SapMcpCo
   });
 
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_build_register_trader', {
-    description: 'Build an unsigned register trader transaction for Phoenix onboarding. You MUST provide the trader\'s wallet address (base58). Returns transactionBase64. The transaction must be signed and submitted by the wallet owner — the gateway never signs.',
+    description: 'Create a Phoenix trader account (RegisterTrader only — the account stays FROZEN with NO deposit capability until activation). Full onboarding = registration + activation: 1) sap_phoenix_build_register_trader → preview/sign/submit locally (creates the account); 2) sap_phoenix_build_onboard_trader + sap_phoenix_submit_onboard_trader (Phoenix co-signs, enables deposit/withdraw/trade); 3) verify with sap_phoenix_get_trader_state — state must leave "frozen" and depositCollateral must be immediate before sap_phoenix_build_deposit can succeed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -115,5 +119,61 @@ export function registerPhoenixCollateralTools(server: Server, context: SapMcpCo
     }
   });
 
-  logger.debug('Phoenix collateral builder tools registered', { count: 3 });
+  /* ════════════════════════════════════════════════════════════════════
+   *  Trader ACTIVATION (delegated onboarding)
+   *
+   *  RegisterTrader alone leaves the account frozen with no capabilities.
+   *  Activation requires Phoenix's onboarder co-signature, which only
+   *  exists through the build-register-ixs → send-register-ixs API flow.
+   * ════════════════════════════════════════════════════════════════════ */
+
+  registerPhoenixPipelineTool(server, context, 'sap_phoenix_build_onboard_trader', {
+    description: 'Build Phoenix trader ACTIVATION instructions (enables all six capabilities incl. deposit). ALWAYS required after register — a RegisterTrader-only account is frozen and every deposit simulates CapabilityDenied. Fetches instructions from Phoenix\'s build-register-ixs API (the only source of the OnboardTraderDelegated instruction). The browser assembles and signs them, then MUST submit via sap_phoenix_submit_onboard_trader — never via plain RPC, the onboarder signature exists only inside Phoenix\'s send-register-ixs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        traderAuthority: { type: 'string', description: 'Trader authority wallet public key (base58, FULL 44 chars).' },
+        txFeePayer: { type: 'string', description: 'Wallet paying fees and rent (base58). Usually the same as traderAuthority. Must NOT be the Phoenix onboarder.' },
+        maxPositions: { type: 'number', description: 'Max positions for registration (32-128, default 128). Only used when the account still needs RegisterTrader.', minimum: 32, maximum: 128 },
+      },
+      required: ['traderAuthority', 'txFeePayer'],
+    } as unknown as JsonSchema,
+  }, async (input) => {
+    try {
+      const result = await buildOnboardInstructions({
+        traderAuthority: String(input.traderAuthority ?? ''),
+        txFeePayer: String(input.txFeePayer ?? input.traderAuthority ?? ''),
+        maxPositions: input.maxPositions as number | undefined,
+      });
+      return phoenixPipelineOk(result);
+    } catch (err) {
+      return phoenixPipelineException('Failed to build Phoenix trader onboarding', err);
+    }
+  });
+
+  registerPhoenixPipelineTool(server, context, 'sap_phoenix_submit_onboard_trader', {
+    description: 'Submit a user-signed Phoenix activation transaction through Phoenix\'s co-signing API (send-register-ixs): Phoenix validates it, adds the onboarder signature, simulates, verifies the onboarder pays nothing, and broadcasts. Pair with sap_phoenix_build_onboard_trader. After success verify with sap_phoenix_get_trader_state (state leaves "frozen", depositCollateral.immediate=true) before building deposits.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transaction: { type: 'string', description: 'Base64-encoded transaction assembled from build_onboard_trader instructions and signed by the fee payer.' },
+        traderAuthority: { type: 'string', description: 'Trader authority wallet public key (base58) — same as used in build_onboard_trader.' },
+        txFeePayer: { type: 'string', description: 'Fee payer wallet public key (base58) — same as used in build_onboard_trader.' },
+      },
+      required: ['transaction', 'traderAuthority', 'txFeePayer'],
+    } as unknown as JsonSchema,
+  }, async (input) => {
+    try {
+      const result = await submitOnboardTransaction({
+        transaction: String(input.transaction ?? ''),
+        traderAuthority: String(input.traderAuthority ?? ''),
+        txFeePayer: String(input.txFeePayer ?? input.traderAuthority ?? ''),
+      });
+      return phoenixPipelineOk(result);
+    } catch (err) {
+      return phoenixPipelineException('Failed to submit Phoenix trader onboarding', err);
+    }
+  });
+
+  logger.debug('Phoenix collateral builder tools registered', { count: 5 });
 }

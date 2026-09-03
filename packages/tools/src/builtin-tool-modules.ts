@@ -347,6 +347,8 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_phoenix_build_deposit',
       'sap_phoenix_build_withdraw',
       'sap_phoenix_build_register_trader',
+      'sap_phoenix_build_onboard_trader',
+      'sap_phoenix_submit_onboard_trader',
       'sap_phoenix_get_cross_chain_quote',
       'sap_phoenix_get_deposit_status',
       'sap_phoenix_get_supported_chains',
