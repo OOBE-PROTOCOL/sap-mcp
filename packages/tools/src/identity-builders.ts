@@ -96,6 +96,42 @@ function methodsOf(client: SapClient): AnchorMethods {
   return client.program as unknown as AnchorMethods;
 }
 
+/**
+ * Resolves an Anchor method builder from the program's methods namespace.
+ * Anchor camelCases IDL instruction names (register_agent → registerAgent);
+ * when the loaded IDL is stale or the namespace is proxied, the lookup can
+ * return undefined — fail with an explicit, actionable message instead of
+ * "is not a function".
+ */
+function requireAnchorMethod(methods: AnchorMethods, snakeName: string, camelName: string): AnchorMethods[string] {
+  const candidate = methods[camelName] ?? methods[snakeName];
+  if (typeof candidate !== 'function') {
+    throw new Error(
+      `SAP IDL mismatch: neither '${camelName}' nor '${snakeName}' is exposed by the loaded program IDL. ` +
+      `The gateway is running with a stale or incompatible @oobe-protocol-labs/synapse-sap-sdk install — re-run pnpm install on the server so the bundled IDL (${idlSummary()}) matches the SDK.`,
+    );
+  }
+  return candidate;
+}
+
+let cachedIdlSummary: string | null = null;
+function idlSummary(): string {
+  if (cachedIdlSummary) return cachedIdlSummary;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createRequire } = require('node:module') as typeof import('node:module');
+    const req = createRequire(`${process.cwd()}/package.json`);
+    const idl = req('@oobe-protocol-labs/synapse-sap-sdk/idl/synapse_agent_sap.json') as {
+      metadata?: { version?: string };
+      instructions: Array<{ name: string }>;
+    };
+    cachedIdlSummary = `v${idl.metadata?.version ?? '?'}, ${idl.instructions.length} instructions`;
+    return cachedIdlSummary;
+  } catch {
+    return 'unknown IDL';
+  }
+}
+
 // ─── Builders ─────────────────────────────────────────────────────────
 
 export async function buildAgentRegisterTransaction(
@@ -125,7 +161,7 @@ export async function buildAgentRegisterTransaction(
   };
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
-  const instruction = await methods.registerAgent(
+  const instruction = await requireAnchorMethod(methods, 'register_agent', 'registerAgent')(
     identity.name,
     identity.description,
     identity.capabilities,
@@ -165,7 +201,7 @@ export async function buildAgentUpdateTransaction(
   const ownerWallet = ownerWalletOf(input);
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
-  const instruction = await methods.updateAgent(
+  const instruction = await requireAnchorMethod(methods, 'update_agent', 'updateAgent')(
     typeof input['name'] === 'string' ? input['name'] : null,
     typeof input['description'] === 'string' ? input['description'] : null,
     input['capabilities'] === undefined ? null : parseCapabilities(input['capabilities']),
@@ -203,9 +239,8 @@ export async function buildAgentLifecycleTransaction(
   const ownerWallet = ownerWalletOf(input);
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
-  const builder = methods[action].length >= 4
-    ? methods[action]()
-    : methods[action]();
+  const actionMethod = requireAnchorMethod(methods, action, action.replace(/_([a-z0-9])/g, (_match, c) => c.toUpperCase()));
+  const builder = actionMethod();
   const ctx: JsonRecord = action === 'close_agent'
     ? {
       signer: ownerWallet,
@@ -254,7 +289,7 @@ export async function buildAgentReportCallsTransaction(
     : (() => { throw new Error('callsServed (number) is required'); })();
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
-  const instruction = await methods.reportCalls(callsServed).accounts({
+  const instruction = await requireAnchorMethod(methods, 'settle_calls_v2', 'settleCallsV2')(callsServed).accounts({
     signer: ownerWallet,
     wallet: ownerWallet,
     agent: pdas.agentPda,
