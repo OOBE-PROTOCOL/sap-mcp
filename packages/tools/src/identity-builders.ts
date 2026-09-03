@@ -18,13 +18,22 @@
  * @module tools/identity-builders
  */
 
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { Pda } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
 import { parseCapabilities, parsePricingTiers, parseProtocols } from './sap-sdk-parsers.js';
 
 /** JSON object shape used across MCP tool input/output surfaces. */
 type JsonRecord = Record<string, unknown>;
+
+/** Solana system program — required account on every identity instruction. */
+const SYSTEM_PROGRAM_ID = SystemProgram.programId;
+
+/**
+ * SAP protocol treasury (SAP protocol constants). The registry program
+ * credits its platform fee to this writable remaining account.
+ */
+const TREASURY_WALLET = new PublicKey('J7PyZAGKvprCz4SQ5DKBLAHstJxgVqZcz6kguUoWpP7P');
 
 interface IdentityBuilderResult {
   action: string;
@@ -39,7 +48,12 @@ interface IdentityBuilderResult {
 }
 
 type AnchorInstructionBuilder = {
-  accounts(accounts: JsonRecord): { instruction(): Promise<unknown> };
+  accounts(accounts: JsonRecord): {
+    instruction(): Promise<unknown>;
+    remainingAccounts?(accounts: Array<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }>): {
+      instruction(): Promise<unknown>;
+    };
+  };
   accountsPartial?(accounts: JsonRecord): { instruction(): Promise<unknown> };
 };
 
@@ -161,7 +175,7 @@ export async function buildAgentRegisterTransaction(
   };
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
-  const instruction = await requireAnchorMethod(methods, 'register_agent', 'registerAgent')(
+  const anchorBuilder = requireAnchorMethod(methods, 'register_agent', 'registerAgent')(
     identity.name,
     identity.description,
     identity.capabilities,
@@ -171,13 +185,22 @@ export async function buildAgentRegisterTransaction(
     identity.agentUri,
     identity.x402Endpoint,
   ).accounts({
-    signer: ownerWallet,
     wallet: ownerWallet,
     agent: pdas.agentPda,
     agentStats: pdas.agentStats,
     pricingMenu: pdas.pricingMenu,
     globalRegistry: pdas.globalRegistry,
-  }).instruction();
+    systemProgram: SYSTEM_PROGRAM_ID,
+  });
+  const instruction = await (
+    anchorBuilder.remainingAccounts
+      ? anchorBuilder.remainingAccounts([
+        // The on-chain program credits a platform fee to the treasury via a
+        // writable remaining account (mirrors SapClient.agent.register()).
+        { pubkey: TREASURY_WALLET, isSigner: false, isWritable: true },
+      ])
+      : anchorBuilder
+  ).instruction();
   const transactionBase64 = await serializeIdentityTx(client, ownerWallet, instruction);
   return identityBuilderResponse({
     action: 'register_agent',
@@ -241,31 +264,53 @@ export async function buildAgentLifecycleTransaction(
   const methods = methodsOf(client);
   const actionMethod = requireAnchorMethod(methods, action, action.replace(/_([a-z0-9])/g, (_match, c) => c.toUpperCase()));
   const builder = actionMethod();
-  const ctx: JsonRecord = action === 'close_agent'
-    ? {
-      signer: ownerWallet,
+  // Account sets mirror the SDK AgentModule exactly (verified against the
+  // deployed mainnet bytecode): no `signer` key (wallet is the signer),
+  // systemProgram present, and close_agent uses the real stake/vault PDAs
+  // plus the writable treasury remaining account.
+  const [stakePda] = Pda.deriveStake(pdas.agentPda, client.programId);
+  const [vaultPda] = Pda.deriveVault(pdas.agentPda, client.programId);
+  const accountsByAction: Record<typeof action, JsonRecord> = {
+    close_agent: {
       wallet: ownerWallet,
       agent: pdas.agentPda,
       agentStats: pdas.agentStats,
-      vaultCheck: pdas.agentPda,
+      vaultCheck: vaultPda,
       pricingMenu: pdas.pricingMenu,
-      stake: pdas.agentPda,
+      stake: stakePda,
       globalRegistry: pdas.globalRegistry,
-    }
-    : {
-      signer: ownerWallet,
+    },
+    deactivate_agent: {
       wallet: ownerWallet,
       agent: pdas.agentPda,
       agentStats: pdas.agentStats,
-      pricingMenu: pdas.pricingMenu,
       globalRegistry: pdas.globalRegistry,
-    };
-  const accountArgs = action === 'close_agent'
-    ? ctx
-    : action === 'migrate_pricing_menu'
-      ? { signer: ownerWallet, wallet: ownerWallet, agent: pdas.agentPda, pricingMenu: pdas.pricingMenu }
-      : ctx;
-  const instruction = await builder.accounts(accountArgs).instruction();
+    },
+    reactivate_agent: {
+      wallet: ownerWallet,
+      agent: pdas.agentPda,
+      agentStats: pdas.agentStats,
+      globalRegistry: pdas.globalRegistry,
+    },
+    migrate_pricing_menu: {
+      wallet: ownerWallet,
+      agent: pdas.agentPda,
+      pricingMenu: pdas.pricingMenu,
+      systemProgram: SYSTEM_PROGRAM_ID,
+    },
+  };
+  const accountArgs = accountsByAction[action];
+  const anchored = builder.accounts(accountArgs) as {
+    instruction(): Promise<unknown>;
+    remainingAccounts?(
+      accounts: Array<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }>,
+    ): { instruction(): Promise<unknown> };
+  };
+  // close_agent settles remaining rent flows through the treasury.
+  const settled = anchored.remainingAccounts && action === 'close_agent'
+    ? anchored.remainingAccounts([{ pubkey: TREASURY_WALLET, isSigner: false, isWritable: true }])
+    : anchored;
+  const instruction = await settled.instruction();
   const transactionBase64 = await serializeIdentityTx(client, ownerWallet, instruction);
   return identityBuilderResponse({
     action,
@@ -275,7 +320,11 @@ export async function buildAgentLifecycleTransaction(
       ownerWallet: ownerWallet.toBase58(),
       agentPda: pdas.agentPda.toBase58(),
       pricingMenu: pdas.pricingMenu.toBase58(),
+      ...(action === 'close_agent' ? { stake: stakePda.toBase58(), vaultCheck: vaultPda.toBase58() } : {}),
     },
+    ...(action === 'migrate_pricing_menu'
+      ? { warnings: ['migrate_pricing_menu is NOT present in the currently deployed mainnet program bytecode — this transaction will fail until the program is redeployed with that instruction.'] }
+      : {}),
   });
 }
 
@@ -283,18 +332,46 @@ export async function buildAgentReportCallsTransaction(
   input: JsonRecord,
   client: SapClient,
 ): Promise<IdentityBuilderResult> {
+  // On-chain the legacy "report calls" concept is settle_calls_v2:
+  // args (escrowNonce: u64, callsToSettle: u64, serviceHash: [u8;32]),
+  // accounts { wallet, agent, agentStats, escrow, systemProgram }.
+  // The escrow PDA is per (agent, depositor, nonce) — the depositor whose
+  // calls are being settled must be provided.
   const ownerWallet = ownerWalletOf(input);
+  const depositor = (() => {
+    const raw = input['depositorWallet'] ?? input['depositor'];
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+      throw new Error('depositorWallet is required (base58) — the consumer whose escrow funds this settlement.');
+    }
+    return new PublicKey(raw.trim());
+  })();
   const callsServed = typeof input['callsServed'] === 'number' && Number.isFinite(input['callsServed'])
     ? input['callsServed']
     : (() => { throw new Error('callsServed (number) is required'); })();
-  const pdas = identityPdas(client, ownerWallet);
+  const escrowNonce = typeof input['escrowNonce'] === 'number' && Number.isInteger(input['escrowNonce'])
+    ? input['escrowNonce']
+    : 0;
+  const serviceHashRaw = input['serviceHash'];
+  const serviceHash = (() => {
+    if (typeof serviceHashRaw === 'string' && /^[0-9a-fA-F]{64}$/.test(serviceHashRaw)) {
+      return Uint8Array.from(Buffer.from(serviceHashRaw, 'hex'));
+    }
+    throw new Error('serviceHash is required — 64-char hex sha256 of the served payload.');
+  })();
+  const [agentPda] = Pda.deriveAgent(ownerWallet, client.programId);
+  const [agentStats] = Pda.deriveAgentStats(agentPda, client.programId);
+  const [escrowPda] = Pda.deriveEscrowV2(agentPda, depositor, escrowNonce, client.programId);
   const methods = methodsOf(client);
-  const instruction = await requireAnchorMethod(methods, 'settle_calls_v2', 'settleCallsV2')(callsServed).accounts({
-    signer: ownerWallet,
+  const instruction = await requireAnchorMethod(methods, 'settle_calls_v2', 'settleCallsV2')(
+    escrowNonce,
+    callsServed,
+    serviceHash,
+  ).accounts({
     wallet: ownerWallet,
-    agent: pdas.agentPda,
-    agentStats: pdas.agentStats,
-    globalRegistry: pdas.globalRegistry,
+    agent: agentPda,
+    agentStats,
+    escrow: escrowPda,
+    systemProgram: SYSTEM_PROGRAM_ID,
   }).instruction();
   const transactionBase64 = await serializeIdentityTx(client, ownerWallet, instruction);
   return identityBuilderResponse({
@@ -303,8 +380,13 @@ export async function buildAgentReportCallsTransaction(
     requiredSigner: ownerWallet,
     accounts: {
       ownerWallet: ownerWallet.toBase58(),
-      agentPda: pdas.agentPda.toBase58(),
-      agentStats: pdas.agentStats.toBase58(),
+      depositorWallet: depositor.toBase58(),
+      agentPda: agentPda.toBase58(),
+      agentStats: agentStats.toBase58(),
+      escrow: escrowPda.toBase58(),
     },
+    warnings: [
+      'settle_calls_v2 moves real escrow funds. DisputeWindow escrows also initialize a PendingSettlement PDA in remaining accounts — a full treasury/SPL settlement flow is coming; this builder covers the plain CoSigned path with an existing escrow.',
+    ],
   });
 }
