@@ -64,12 +64,46 @@ export function registerPhoenixMarketTool(server: Server, context: SapMcpContext
 
 export function registerPhoenixMarketsTool(server: Server, context: SapMcpContext): void {
   registerPhoenixPipelineTool(server, context, 'sap_phoenix_get_markets', {
-    description: 'List all Phoenix markets with parameters. Returns a compact summary of available markets (symbols, leverage tiers, fees). For full market details, use sap_phoenix_get_market with a specific symbol. Do NOT call this tool repeatedly — the summary does not change within a session. Free read.',
+    description: 'List all Phoenix perp markets WITH live stats merged: symbol, mark price, oracle price, 24h volume, open interest, funding rates, leverage tiers. Sorted data source for opportunity ranking and dashboards. Free read — stats come from one batched /v1/markets/stats/latest call.',
     inputSchema: { type: 'object', properties: {} } as unknown as JsonSchema,
   }, async () => {
     try {
-      const data = await getClient().getMarkets();
-      return phoenixPipelineOk(data);
+      const [data, stats] = await Promise.all([
+        getClient().getMarkets(),
+        getClient().getLatestMarketsStats().catch(() => null),
+      ]);
+      if (!stats || typeof stats !== 'object') {
+        return phoenixPipelineOk(data);
+      }
+      // Merge per-symbol stats into the market configs so consumers get a
+      // single enriched list: markPrice, oraclePrice, openInterest, volume,
+      // funding — keyed by symbol. Config fields stay untouched.
+      const statsBySymbol = new Map<string, Record<string, unknown>>();
+      const statsMarkets = (stats as unknown as { markets?: Array<Record<string, unknown>> }).markets;
+      if (Array.isArray(statsMarkets)) {
+        for (const row of statsMarkets) {
+          if (row && typeof row.symbol === 'string') statsBySymbol.set(row.symbol, row);
+        }
+      }
+      const enriched = (Array.isArray(data) ? data : []).map((market) => {
+        const s = statsBySymbol.get((market as { symbol?: string }).symbol ?? '');
+        if (!s) return market;
+        return {
+          ...(market as unknown as Record<string, unknown>),
+          markPrice: s.mark_price,
+          oraclePrice: s.oracle_price,
+          priceChange24h: typeof s.prev_day_mark_price === 'number' && typeof s.mark_price === 'number' && s.prev_day_mark_price !== 0
+            ? ((s.mark_price - s.prev_day_mark_price) / s.prev_day_mark_price) * 100
+            : undefined,
+          openInterest: s.open_interest,
+          volume24h: s.day_volume_usd,
+          fundingRate: s.current_funding_rate,
+          eightHourFundingRate: s.eight_hour_funding_rate,
+          annualizedFundingRate: s.annualized_funding_rate,
+          statsTimestampMs: s.timestamp_ms,
+        };
+      });
+      return phoenixPipelineOk(enriched);
     } catch (err) {
       return phoenixPipelineException('Failed to list Phoenix markets', err);
     }

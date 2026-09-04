@@ -57,6 +57,15 @@ export class PhoenixDataApiClient {
   }
 
   /**
+   * Get the latest stats (mark price, OI, volume, funding) for ALL markets
+   * in one call — `GET /v1/markets/stats/latest`.
+   * @returns Response with a `markets` array of per-symbol stat rows.
+   */
+  async getLatestMarketsStats() {
+    return this.client.markets().getLatestMarketsStats();
+  }
+
+  /**
    * Get the orderbook for a market.
    * @param symbol — Market symbol.
    * @returns Orderbook view.
