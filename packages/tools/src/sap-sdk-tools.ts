@@ -2510,11 +2510,11 @@ const agentTools: ToolRegistration[] = [
   },
   {
     name: 'sap_register_agent',
-    title: 'Register SAP Agent (Raw SDK Deprecated)',
-    description: 'Deprecated raw SDK wrapper. Production registration must use sap_payments_register_agent so the local signer path confirms the account, verifies the 0.1 SOL protocol treasury fee invariant, and returns protocolComplete. Hosted accountless SAP MCP rejects this direct write before x402 payment.',
+    title: 'Register SAP Agent (Blocked in hosted Steve — use the builder)',
+    description: 'DISABLED: this direct write cannot run in hosted Steve (no server keypair) and fails with "Explicit user approval is required" or hosted_local_signer_required. In Steve web the ONLY registration path is sap_build_agent_register_transaction → Steve UI preview → user approval → browser signature → finalize submit. In LOCAL sap_payments setups use sap_payments_register_agent instead.',
     inputSchema: SAP_AGENT_REGISTER_INPUT_SCHEMA,
     handler: async () => {
-      throw new Error('sap_register_agent raw SDK path is disabled for production safety. Call sap_agent_identity_plan, then sap_payments_register_agent with the same registration fields and confirm: true. success is true only when the agent account exists and protocolFee.status is verified.');
+      throw new Error('sap_register_agent is disabled in hosted Steve. Build the unsigned registration transaction with sap_build_agent_register_transaction, present it for explicit user approval, then submit through the browser-sign finalize flow. For local signer setups call sap_payments_register_agent with confirm: true.');
     },
   },
   {

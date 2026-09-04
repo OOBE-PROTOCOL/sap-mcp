@@ -789,7 +789,8 @@ describe('createSapMcpServer', () => {
     expect(toolsByName.get('bridging_bridgeWormhole')?.description).toContain('cross-chain asset movement');
     expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('SAP MCP context');
     expect(toolsByName.get('metaplex-nft_mintNFT')?.description).toContain('sap_payments_register_agent');
-    expect(toolsByName.get('sap_register_agent')?.description).toContain('Deprecated raw SDK wrapper');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('DISABLED: this direct write cannot run in hosted Steve');
+    expect(toolsByName.get('sap_register_agent')?.description).toContain('sap_build_agent_register_transaction');
     expect(toolsByName.get('sap_register_agent')?.description).toContain('sap_payments_register_agent');
   });
 
