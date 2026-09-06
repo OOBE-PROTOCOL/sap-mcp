@@ -79,6 +79,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         numBaseLots: { type: 'string', description: 'Raw base lots (overrides baseUnits)' },
         clientOrderId: { type: 'string', description: 'Client order ID (unique per trader); optional' },
         reduceOnly: { type: 'boolean', description: 'Reduce-only: order can only decrease an existing position (OrderFlags.ReduceOnly)' },
+        holderTier: { type: 'string', enum: ['bronze', 'silver', 'gold', 'platinum'], description: 'Caller $STEVE holder tier — lowers the builder fee (bronze −10%, silver −20%, gold −30%, platinum −50%). Omit for the standard fee.' },
         traderPdaIndex: { type: 'number', minimum: 0 },
         traderSubaccountIndex: { type: 'number', minimum: 0 },
       },
@@ -125,6 +126,8 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         {
           // OrderFlags.ReduceOnly = 128 (Phoenix OrderPacket bit flag).
           orderFlags: input.reduceOnly === true || input.reduceOnly === 'true' ? 128 : 0,
+          // $STEVE holder tier drives the Flight builder-fee override.
+          holderTierId: (input.holderTier as string | undefined)?.trim() || undefined,
           traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0,
         },
       );
@@ -146,6 +149,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         size: { type: 'string', description: 'Alias of baseUnits' },
         numBaseLots: { type: 'string', description: 'Raw base lots (advanced; overrides baseUnits)' },
         reduceOnly: { type: 'boolean', description: 'Reduce-only: order can only decrease an existing position (OrderFlags.ReduceOnly)' },
+        holderTier: { type: 'string', enum: ['bronze', 'silver', 'gold', 'platinum'], description: 'Caller $STEVE holder tier — lowers the builder fee (bronze −10%, silver −20%, gold −30%, platinum −50%). Omit for the standard fee.' },
         traderPdaIndex: { type: 'number', minimum: 0 },
         traderSubaccountIndex: { type: 'number', minimum: 0 },
       },
@@ -177,6 +181,8 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         {
           // OrderFlags.ReduceOnly = 128 (Phoenix OrderPacket bit flag).
           orderFlags: input.reduceOnly === true || input.reduceOnly === 'true' ? 128 : 0,
+          // $STEVE holder tier drives the Flight builder-fee override.
+          holderTierId: (input.holderTier as string | undefined)?.trim() || undefined,
           traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0,
         },
       );

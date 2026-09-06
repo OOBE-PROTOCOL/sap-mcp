@@ -18,12 +18,12 @@ import {
   Direction,
   StopLossOrderKind,
   SelfTradeBehavior,
-  
+
 } from '@ellipsis-labs/rise';
 
 import {
   buildFromPhoenixIx,
-  
+
   type PhoenixSide,
   type PhoenixDirection,
   type PhoenixStopLossOrderKind,
@@ -32,15 +32,64 @@ import {
 import { PHOENIX_PROGRAM_ID } from './phoenix-constants.js';
 
 /**
+ * Builder-fee tiers for the $STEVE holder program (mirrors
+ * steve-website src/lib/steve-token.ts). Standard builder fee is 10 bps;
+ * higher $STEVE holder tiers pay proportionally less down to 5 bps
+ * (Platinum = half the fee = the on-chain "-50%" discount).
+ */
+export const PHOENIX_BUILDER_FEE_BPS_STANDARD = 10n;
+export const PHOENIX_BUILDER_FEE_BPS_MINIMUM = 5n;
+
+/** Resolve the Flight builder fee override (bps) for a $STEVE holder tier.
+ *  Returns null when the Flight builder is not configured. */
+export function resolveBuilderFeeBpsForTier(tierId: string | undefined): bigint | null {
+  const authority = process.env['STEVE_BUILDER_AUTHORITY']?.trim();
+  if (!authority) return null;
+  switch (tierId) {
+    case 'platinum':
+      return PHOENIX_BUILDER_FEE_BPS_MINIMUM; // 5 bps = −50% vs 10
+    case 'gold':
+      return 7n; // −30%
+    case 'silver':
+      return 8n; // −20%
+    case 'bronze':
+      return 9n; // −10%
+    default:
+      return PHOENIX_BUILDER_FEE_BPS_STANDARD; // 10 bps, no tier
+  }
+}
+
+/**
  * Create a Phoenix client with exchange metadata for instruction building.
  * The client caches exchange metadata (markets, addresses) for PDA resolution.
  *
+ * When STEVE_BUILDER_AUTHORITY is set, order instructions are routed through
+ * the Phoenix Flight proxy with a builder fee (feeBpsOverride per $STEVE
+ * tier). With no env set the behaviour is identical to before — zero impact
+ * on existing flows.
+ *
  * @param connection — Solana RPC connection (used for exchange metadata fallback).
+ * @param options — feeBpsOverride: per-order builder fee in bps (null = builder default).
  * @returns Phoenix client with .ixs builder surface.
  */
-export async function getPhoenixClient(connection: Connection) {
+export async function getPhoenixClient(connection: Connection, options?: { feeBpsOverride?: bigint | null }) {
   const rpcUrl = connection.rpcEndpoint;
-  return createPhoenixClient({ rpcUrl });
+  const builderAuthority = process.env['STEVE_BUILDER_AUTHORITY']?.trim();
+  const feeBpsOverride = options?.feeBpsOverride ?? null;
+  if (!builderAuthority) {
+    return createPhoenixClient({ rpcUrl });
+  }
+  // Validate before wrapping so a typo in env fails fast, not at order time.
+  const builderAuthorityTyped = new PublicKey(builderAuthority).toBase58() as Parameters<typeof createPhoenixClient>[0] extends { flight?: { builderAuthority: infer T } } ? T : never;
+  return createPhoenixClient({
+    rpcUrl,
+    flight: {
+      builderAuthority: builderAuthorityTyped,
+      builderPdaIndex: 0,
+      builderSubaccountIndex: 0,
+      feeBpsOverride,
+    },
+  });
 }
 
 /**
@@ -139,11 +188,13 @@ export async function buildPlaceLimitOrder(
     matchLimit?: bigint | null;
     lastValidSlot?: bigint | null;
     orderFlags?: number;
+    /** $STEVE holder tier id — drives the Flight builder-fee override. */
+    holderTierId?: string;
     traderPdaIndex?: number;
     traderSubaccountIndex?: number;
   },
 ): Promise<UnsignedTransactionResult> {
-  const client = await getPhoenixClient(connection);
+  const client = await getPhoenixClient(connection, { feeBpsOverride: resolveBuilderFeeBpsForTier(options?.holderTierId) });
   const ix = await client.ixs.buildPlaceLimitOrder({
     authority: owner.toBase58() as never,
     symbol: symbol as never,
@@ -189,11 +240,13 @@ export async function buildPlaceMarketOrder(
     minQuoteLotsToFill?: bigint;
     clientOrderId?: bigint;
     orderFlags?: number;
+    /** $STEVE holder tier id — drives the Flight builder-fee override. */
+    holderTierId?: string;
     traderPdaIndex?: number;
     traderSubaccountIndex?: number;
   },
 ): Promise<UnsignedTransactionResult> {
-  const client = await getPhoenixClient(connection);
+  const client = await getPhoenixClient(connection, { feeBpsOverride: resolveBuilderFeeBpsForTier(options?.holderTierId) });
   const ix = await client.ixs.buildPlaceMarketOrder({
     authority: owner.toBase58() as never,
     symbol: symbol as never,
