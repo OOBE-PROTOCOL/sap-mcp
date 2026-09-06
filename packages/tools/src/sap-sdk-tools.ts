@@ -1767,6 +1767,9 @@ function parseX402BatchSettlementEntries(value: unknown): Array<{ calls: number;
 /**
  * @name parseEscrowV2Args
  * @description Builds typed V2 escrow creation args from MCP JSON input.
+ * Enforces every create-time check from escrow_v2.rs that does not require
+ * on-chain state, so invalid escrows fail at builder time instead of as
+ * post-preview RPC simulation Anchor errors.
  */
 function parseEscrowV2Args(input: JsonRecord): CreateEscrowV2Args {
   const tokenMint = optionalPublicKey(input, 'tokenMint') ?? null;
@@ -1792,15 +1795,38 @@ function parseEscrowV2Args(input: JsonRecord): CreateEscrowV2Args {
     throw new Error('disputeWindowSlots must be positive when settlementSecurity=2 (DisputeWindow).');
   }
 
+  // escrow_v2.rs:154 — price_per_call > 0 (InvalidPricePerCall)
+  const pricePerCall = requiredBn(input, 'pricePerCall');
+  if (pricePerCall.lte(new BN(0))) {
+    throw new Error('pricePerCall must be > 0 (on-chain InvalidPricePerCall). Pass the per-call price in smallest units and retry.');
+  }
+
+  // escrow_v2.rs:158-163 — expires_at must be in the future or 0 (never).
+  // Already-expired escrows lock depositor funds with no usable path.
+  const expiresAt = optionalBn(input, 'expiresAt', new BN(0));
+  if (expiresAt.gt(new BN(0)) && expiresAt.lte(new BN(Math.floor(Date.now() / 1000)))) {
+    throw new Error('expiresAt is already in the past (on-chain EscrowAlreadyExpired). Pass 0 (never expires) or a future Unix timestamp and retry.');
+  }
+
+  // escrow_v2.rs:188-193 — token decimals must match the rail:
+  // USDC escrows use 6, native SOL escrows use 9 (InvalidPaymentToken).
+  const tokenDecimals = optionalNumber(input, 'tokenDecimals') ?? (tokenMint ? 6 : 9);
+  if (tokenMint && tokenDecimals !== 6) {
+    throw new Error(`tokenDecimals must be 6 for USDC escrows (got ${tokenDecimals}; on-chain InvalidPaymentToken). Omit tokenDecimals or pass 6.`);
+  }
+  if (!tokenMint && tokenDecimals !== 9) {
+    throw new Error(`tokenDecimals must be 9 for native SOL escrows (got ${tokenDecimals}; on-chain InvalidPaymentToken). Omit tokenDecimals or pass 9.`);
+  }
+
   return {
     escrowNonce: optionalBn(input, 'nonce', new BN(0)),
-    pricePerCall: requiredBn(input, 'pricePerCall'),
+    pricePerCall,
     maxCalls: requiredBn(input, 'maxCalls'),
     initialDeposit: requiredBn(input, 'initialDeposit'),
-    expiresAt: optionalBn(input, 'expiresAt', new BN(0)),
+    expiresAt,
     volumeCurve: [],
     tokenMint,
-    tokenDecimals: optionalNumber(input, 'tokenDecimals') ?? (tokenMint ? 6 : 9),
+    tokenDecimals,
     settlementSecurity,
     disputeWindowSlots,
     coSigner,
@@ -2026,6 +2052,12 @@ async function buildEscrowCreateTransaction(input: JsonRecord, client: SapClient
   const agentWallet = requiredPublicKey(input, 'agentWallet');
   const args = parseEscrowV2Args(input);
   validateEscrowPaymentMint(args.tokenMint);
+  // escrow_v2.rs:136-140 — a CoSigned escrow's co-signer must NOT be the
+  // agent's own wallet (CoSignerIsAgentWallet): the co-signer exists to
+  // independently confirm service delivery.
+  if (args.coSigner && args.coSigner.equals(agentWallet)) {
+    throw new Error('coSigner must not be the agent wallet itself (on-chain CoSignerIsAgentWallet). Pass an independent co-signer and retry.');
+  }
   const pdas = getEscrowPdas(client, agentWallet, depositorWallet, args.escrowNonce);
   const remainingAccounts = buildSplRemainingAccounts(args.tokenMint, depositorWallet, pdas.escrowPda);
   const methods = (client.program as unknown as { methods: AnchorMethods }).methods;
