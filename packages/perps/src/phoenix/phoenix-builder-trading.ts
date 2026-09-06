@@ -64,6 +64,53 @@ function toStopLossOrderKind(kind: PhoenixStopLossOrderKind): StopLossOrderKind 
   return kind === 'ioc' ? StopLossOrderKind.IOC : StopLossOrderKind.Limit;
 }
 
+// ─── Unit conversion (mirrors Rise SDK baseUnitsToBaseLotsWithMarketParams) ───
+//
+// Phoenix on-chain order packets speak in BASE LOTS and PRICE TICKS:
+//   numBaseLots  = baseUnits * 10^baseLotsDecimals
+//   priceInTicks = priceUsd  * 1e6 / (tickSize * 10^baseLotsDecimals)
+// (quoteLotsDecimals is fixed at 6 = micro-USDC.)
+//
+// Human inputs ("0.01" SOL, "106.71" USD) MUST be converted with the market's
+// own baseLotsDecimals/tickSize — passing raw base units as lots made orders
+// 10^N times too large or crashed with "Cannot convert undefined to a BigInt".
+
+export interface PhoenixMarketUnits {
+  baseLotsDecimals: number;
+  tickSize: number;
+}
+
+/** Integer-safe base-units → base-lots conversion (avoids float precision loss). */
+export function baseUnitsToBaseLots(baseUnits: string, units: PhoenixMarketUnits): bigint {
+  const raw = baseUnits.trim();
+  if (!/^\d+(\.\d+)?$/.test(raw)) {
+    throw new Error(`baseUnits must be a positive decimal number (got "${baseUnits}").`);
+  }
+  const [whole, frac = ''] = raw.split('.');
+  const fracPadded = (frac + '0'.repeat(units.baseLotsDecimals)).slice(0, units.baseLotsDecimals);
+  const lotsStr = (whole === '0' ? '' : whole) + fracPadded;
+  const lots = BigInt(lotsStr || '0');
+  if (lots <= 0n) {
+    throw new Error(`Order size too small for this market: ${baseUnits} rounds to 0 base lots (baseLotsDecimals=${units.baseLotsDecimals}).`);
+  }
+  return lots;
+}
+
+/** USD price → price-in-ticks (integer-safe).
+ *  priceTicks = priceUsd * 1e6 / (tickSize * 10^baseLotsDecimals). */
+export function priceUsdToTicks(priceUsd: string, units: PhoenixMarketUnits): bigint {
+  const raw = priceUsd.trim();
+  if (!/^\d+(\.\d+)?$/.test(raw)) {
+    throw new Error(`priceUsd must be a positive decimal number (got "${priceUsd}").`);
+  }
+  const [whole, frac = ''] = raw.split('.');
+  const frac6 = (frac + '000000').slice(0, 6); // micro-USD scale
+  const numerator = BigInt(whole + frac6);
+  const tickDenominator = BigInt(Math.round(units.tickSize * Math.pow(10, units.baseLotsDecimals)));
+  if (tickDenominator <= 0n) throw new Error('Invalid market tickSize.');
+  return numerator / tickDenominator;
+}
+
 // ─── Trading Builders ─────────────────────────────────────────────────────────
 
 /**
