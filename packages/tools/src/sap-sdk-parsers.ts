@@ -154,6 +154,19 @@ export function optionalSettlementMode(input: JsonRecord): typeof SettlementMode
   throw new Error('settlementMode must be one of instant, escrow, batched, or x402');
 }
 
+// ─── On-chain Limits ────────────────────────────────────────────────────────────
+
+/**
+ * Hard limits enforced by the SAP mainnet validator (validator.rs).
+ * Rejecting here — at builder time — surfaces an actionable message in the
+ * tool result instead of a post-preview RPC simulation failure (Anchor
+ * errors 6003 TooManyProtocols... see synapse-sap-sdk anchor-errors.ts).
+ *
+ * @see SAP program errors 6003 (caps>10), 6005 (protos>5)
+ */
+export const MAX_CAPABILITIES = 10;
+export const MAX_PROTOCOLS = 5;
+
 // ─── Public Parsers ─────────────────────────────────────────────────────────────
 
 /**
@@ -180,6 +193,12 @@ export function parseCapabilities(value: unknown): Capability[] {
   }
   if (!Array.isArray(value)) {
     throw new Error('capabilities must be an array');
+  }
+  if (value.length > MAX_CAPABILITIES) {
+    throw new Error(
+      `capabilities exceeds the on-chain limit: ${value.length} > ${MAX_CAPABILITIES} (SAP error 6003 TooManyCapabilities). ` +
+      'Reduce the list to at most 10 colon-namespaced ids and retry.',
+    );
   }
 
   return value.map((item) => {
@@ -242,6 +261,12 @@ export function parseProtocols(value: unknown): string[] {
   }
   if (!Array.isArray(value)) {
     throw new Error('protocols must be an array');
+  }
+  if (value.length > MAX_PROTOCOLS) {
+    throw new Error(
+      `protocols exceeds the on-chain limit: ${value.length} > ${MAX_PROTOCOLS} (SAP error 6005 TooManyProtocols). ` +
+      'Keep at most 5 protocol tags (e.g. "sap", "mcp", "jupiter", "sns", "x402") and retry.',
+    );
   }
   return value.map((item) => {
     if (typeof item !== 'string' || item.length === 0) {
