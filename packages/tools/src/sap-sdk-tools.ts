@@ -49,6 +49,7 @@ import {
   parseCapabilities,
   parsePricingTiers,
   parseProtocols,
+  validateIdentityArgsOnChain,
 } from './sap-sdk-parsers.js';
 import type { FairScaleTask } from '@oobe-protocol-labs/synapse-sap-sdk/registries/fairscale';
 import type { ToolCategoryName } from '@oobe-protocol-labs/synapse-sap-sdk/registries/discovery';
@@ -1465,9 +1466,12 @@ function requiredToolCategory(input: JsonRecord): ToolCategoryName | number {
 /**
  * @name parseRegisterAgentArgs
  * @description Builds strongly typed `RegisterAgentArgs` from MCP JSON input.
+ * Runs the full on-chain payload validation (validator.rs parity) so invalid
+ * payloads fail at parse time with an actionable message instead of as an
+ * RPC simulation Anchor error after signing.
  */
 export function parseRegisterAgentArgs(input: JsonRecord): RegisterAgentArgs {
-  return {
+  const args: RegisterAgentArgs = {
     name: requiredString(input, 'name'),
     description: requiredString(input, 'description'),
     capabilities: parseCapabilities(input.capabilities),
@@ -1477,14 +1481,18 @@ export function parseRegisterAgentArgs(input: JsonRecord): RegisterAgentArgs {
     agentUri: optionalString(input, 'agentUri') ?? optionalString(input, 'metadataUri') ?? null,
     x402Endpoint: optionalString(input, 'x402Endpoint') ?? null,
   };
+  validateIdentityArgsOnChain(args);
+  return args;
 }
 
 /**
  * @name parseUpdateAgentArgs
  * @description Builds strongly typed `UpdateAgentArgs` from MCP JSON input.
+ * Only present fields are validated (None = skip), mirroring validator.rs
+ * validate_update.
  */
 export function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
-  return {
+  const args: UpdateAgentArgs = {
     name: optionalString(input, 'name') ?? null,
     description: optionalString(input, 'description') ?? null,
     capabilities: input.capabilities === undefined ? null : parseCapabilities(input.capabilities),
@@ -1494,6 +1502,8 @@ export function parseUpdateAgentArgs(input: JsonRecord): UpdateAgentArgs {
     agentUri: optionalString(input, 'agentUri') ?? optionalString(input, 'metadataUri') ?? null,
     x402Endpoint: optionalString(input, 'x402Endpoint') ?? null,
   };
+  validateIdentityArgsOnChain(args);
+  return args;
 }
 
 function parseIdentityPlanAction(input: JsonRecord): string {

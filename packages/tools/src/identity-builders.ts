@@ -22,7 +22,12 @@ import { PublicKey, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
 import { Pda } from '@oobe-protocol-labs/synapse-sap-sdk';
 import type { SapClient } from '@oobe-protocol-labs/synapse-sap-sdk';
-import { parseCapabilities, parsePricingTiers, parseProtocols } from './sap-sdk-parsers.js';
+import {
+  parseCapabilities,
+  parsePricingTiers,
+  parseProtocols,
+  validateIdentityArgsOnChain,
+} from './sap-sdk-parsers.js';
 
 /** JSON object shape used across MCP tool input/output surfaces. */
 type JsonRecord = Record<string, unknown>;
@@ -177,6 +182,16 @@ export async function buildAgentRegisterTransaction(
       : typeof input['metadataUri'] === 'string' ? input['metadataUri'] : null,
     x402Endpoint: typeof input['x402Endpoint'] === 'string' ? input['x402Endpoint'] : null,
   };
+  validateIdentityArgsOnChain({
+    name: identity.name,
+    description: identity.description,
+    agentId: identity.agentId,
+    agentUri: identity.agentUri,
+    x402Endpoint: identity.x402Endpoint,
+    capabilities: identity.capabilities,
+    pricing: identity.pricing,
+    protocols: identity.protocols,
+  });
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
   const anchorBuilder = requireAnchorMethod(methods, 'register_agent', 'registerAgent')(
@@ -226,19 +241,37 @@ export async function buildAgentUpdateTransaction(
   client: SapClient,
 ): Promise<IdentityBuilderResult> {
   const ownerWallet = ownerWalletOf(input);
+  const updateName = typeof input['name'] === 'string' ? input['name'] : null;
+  const updateDescription = typeof input['description'] === 'string' ? input['description'] : null;
+  const updateCapabilities = input['capabilities'] === undefined ? null : parseCapabilities(input['capabilities']);
+  const updatePricing = input['pricing'] === undefined ? null : parsePricingTiers(input['pricing']);
+  const updateProtocols = input['protocols'] === undefined ? null : parseProtocols(input['protocols']);
+  const updateAgentId = typeof input['agentId'] === 'string' ? input['agentId'] : null;
+  const updateAgentUri = typeof input['agentUri'] === 'string'
+    ? input['agentUri']
+    : typeof input['metadataUri'] === 'string' ? input['metadataUri'] : null;
+  const updateX402Endpoint = typeof input['x402Endpoint'] === 'string' ? input['x402Endpoint'] : null;
+  validateIdentityArgsOnChain({
+    name: updateName,
+    description: updateDescription,
+    agentId: updateAgentId,
+    agentUri: updateAgentUri,
+    x402Endpoint: updateX402Endpoint,
+    capabilities: updateCapabilities,
+    pricing: updatePricing,
+    protocols: updateProtocols,
+  });
   const pdas = identityPdas(client, ownerWallet);
   const methods = methodsOf(client);
   const instruction = await requireAnchorMethod(methods, 'update_agent', 'updateAgent')(
-    typeof input['name'] === 'string' ? input['name'] : null,
-    typeof input['description'] === 'string' ? input['description'] : null,
-    input['capabilities'] === undefined ? null : parseCapabilities(input['capabilities']),
-    input['pricing'] === undefined ? null : parsePricingTiers(input['pricing']),
-    input['protocols'] === undefined ? null : parseProtocols(input['protocols']),
-    typeof input['agentId'] === 'string' ? input['agentId'] : null,
-    typeof input['agentUri'] === 'string'
-      ? input['agentUri']
-      : typeof input['metadataUri'] === 'string' ? input['metadataUri'] : null,
-    typeof input['x402Endpoint'] === 'string' ? input['x402Endpoint'] : null,
+    updateName,
+    updateDescription,
+    updateCapabilities,
+    updatePricing,
+    updateProtocols,
+    updateAgentId,
+    updateAgentUri,
+    updateX402Endpoint,
   ).accounts({
     signer: ownerWallet,
     wallet: ownerWallet,
