@@ -123,7 +123,7 @@ export function priceUsdToTicks(priceUsd: string, units: PhoenixMarketUnits): bi
  * @param priceInTicks — Price in ticks (bigint).
  * @param numBaseLots — Size in base lots (bigint).
  * @param clientOrderId — Client order ID for tracking (bigint).
- * @param options — Optional: selfTradeBehavior, matchLimit, lastValidSlot, traderPdaIndex.
+ * @param options — Optional: selfTradeBehavior, matchLimit, lastValidSlot, orderFlags (e.g. OrderFlags.ReduceOnly = 128), traderPdaIndex.
  * @returns UnsignedTransactionResult with base64-serialized unsigned transaction.
  */
 export async function buildPlaceLimitOrder(
@@ -138,6 +138,7 @@ export async function buildPlaceLimitOrder(
     selfTradeBehavior?: SelfTradeBehavior;
     matchLimit?: bigint | null;
     lastValidSlot?: bigint | null;
+    orderFlags?: number;
     traderPdaIndex?: number;
     traderSubaccountIndex?: number;
   },
@@ -154,7 +155,7 @@ export async function buildPlaceLimitOrder(
       matchLimit: options?.matchLimit ?? null,
       clientOrderId,
       lastValidSlot: options?.lastValidSlot ?? null,
-      orderFlags: 0,
+      orderFlags: options?.orderFlags ?? 0,
       cancelExisting: false,
     },
     traderPdaIndex: options?.traderPdaIndex,
@@ -187,6 +188,7 @@ export async function buildPlaceMarketOrder(
     minBaseLotsToFill?: bigint;
     minQuoteLotsToFill?: bigint;
     clientOrderId?: bigint;
+    orderFlags?: number;
     traderPdaIndex?: number;
     traderSubaccountIndex?: number;
   },
@@ -206,7 +208,7 @@ export async function buildPlaceMarketOrder(
       lastValidSlot: null,
       matchLimit: null,
       selfTradeBehavior: SelfTradeBehavior.Abort, cancelExisting: false,
-      orderFlags: 0,
+      orderFlags: options?.orderFlags ?? 0,
     },
     traderPdaIndex: options?.traderPdaIndex,
     traderSubaccountIndex: options?.traderSubaccountIndex,

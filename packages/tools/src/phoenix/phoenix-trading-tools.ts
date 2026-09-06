@@ -78,6 +78,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         size: { type: 'string', description: 'Alias of baseUnits' },
         numBaseLots: { type: 'string', description: 'Raw base lots (overrides baseUnits)' },
         clientOrderId: { type: 'string', description: 'Client order ID (unique per trader); optional' },
+        reduceOnly: { type: 'boolean', description: 'Reduce-only: order can only decrease an existing position (OrderFlags.ReduceOnly)' },
         traderPdaIndex: { type: 'number', minimum: 0 },
         traderSubaccountIndex: { type: 'number', minimum: 0 },
       },
@@ -121,7 +122,11 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         input.symbol as string, input.side as 'bid' | 'ask',
         priceInTicks, numBaseLots,
         clientOrderId,
-        { traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0 },
+        {
+          // OrderFlags.ReduceOnly = 128 (Phoenix OrderPacket bit flag).
+          orderFlags: input.reduceOnly === true || input.reduceOnly === 'true' ? 128 : 0,
+          traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0,
+        },
       );
       return phoenixPipelineOk(result);
     } catch (err) {
@@ -140,6 +145,7 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         baseUnits: { type: 'string', description: 'Human-readable size in base units (e.g. "0.01" = 0.01 SOL)' },
         size: { type: 'string', description: 'Alias of baseUnits' },
         numBaseLots: { type: 'string', description: 'Raw base lots (advanced; overrides baseUnits)' },
+        reduceOnly: { type: 'boolean', description: 'Reduce-only: order can only decrease an existing position (OrderFlags.ReduceOnly)' },
         traderPdaIndex: { type: 'number', minimum: 0 },
         traderSubaccountIndex: { type: 'number', minimum: 0 },
       },
@@ -168,7 +174,11 @@ export function registerPhoenixTradingTools(server: Server, context: SapMcpConte
         connection, owner,
         input.symbol as string, input.side as 'bid' | 'ask',
         numBaseLots,
-        { traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0 },
+        {
+          // OrderFlags.ReduceOnly = 128 (Phoenix OrderPacket bit flag).
+          orderFlags: input.reduceOnly === true || input.reduceOnly === 'true' ? 128 : 0,
+          traderPdaIndex: (input.traderPdaIndex as number) ?? 0, traderSubaccountIndex: (input.traderSubaccountIndex as number) ?? 0,
+        },
       );
       return phoenixPipelineOk(result);
     } catch (err) {
