@@ -29,6 +29,7 @@ import { evaluatePrePaymentValidation } from './preflight-validation.js';
 import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
+import { isJsonRpcError as structuredIsJsonRpcError } from './json-rpc-error.js';
 import { hashPaymentRequest, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
 import { isTransientRpcError } from './facilitator-rpc-fallback.js';
 import { PrepaidCreditStore, setGlobalPrepaidStore } from './prepaid-credit-store.js';
@@ -319,52 +320,7 @@ export class McpMonetizationGate {
    * @internal
    */
   private isJsonRpcError(body: Buffer): boolean {
-    try {
-      const text = body.toString('utf-8');
-      if (!text) return false;
-
-      // Try parsing as JSON-RPC.
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-
-      // JSON-RPC error: { "error": { "code": ..., "message": ... } }
-      if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
-        const error = parsed['error'];
-        if (typeof error === 'object' && error !== null && 'code' in error) {
-          return true;
-        }
-        // `error` can be a string in some MCP responses.
-        if (typeof error === 'string' && error.length > 0) {
-          return true;
-        }
-      }
-
-      // MCP tool result with isError: { "result": { "content": [...], "isError": true } }
-      if (typeof parsed === 'object' && parsed !== null && 'result' in parsed) {
-        const result = parsed['result'];
-        if (typeof result === 'object' && result !== null && 'isError' in result) {
-          return result['isError'] === true;
-        }
-        // Some tools return { "result": { "content": [{ "text": "Error: ..." }] }
-        if (typeof result === 'object' && result !== null && 'content' in result) {
-          const content = result['content'];
-          if (Array.isArray(content)) {
-            for (const item of content) {
-              if (typeof item === 'object' && item !== null && 'text' in item) {
-                const text = String(item['text'] ?? '');
-                if (text.startsWith('Error:') || text.includes('"isError":true') || text.includes('"error"')) {
-                  return true;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      return false;
-    } catch {
-      // Not JSON — can't determine, don't block settlement.
-      return false;
-    }
+    return structuredIsJsonRpcError(body);
   }
 
   /**
