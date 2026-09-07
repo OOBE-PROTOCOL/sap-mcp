@@ -377,9 +377,27 @@ export async function handlePremiumWebhookStatus(
 export async function tryPremiumRoute(
   req: http.IncomingMessage,
   res: http.ServerResponse,
+  auth?: { success: boolean; userId?: string; error?: string },
 ): Promise<boolean> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const pathname = url.pathname;
+
+  // Finding 2 (Solking disclosure 2026-09-07): premium delivery routes ran
+  // BEFORE the /mcp auth check, so unauthenticated clients could activate
+  // sessions with fake receipts. Every premium route now requires a validated
+  // auth result, passed in by the server BEFORE any route dispatch.
+  if (!auth?.success) {
+    if (pathname.startsWith('/premium/')) {
+      writeJsonResponse(res, 401, {
+        error: 'unauthorized',
+        message: 'Bearer authentication is required for premium delivery routes.',
+      }, {
+        'WWW-Authenticate': 'Bearer',
+      });
+      return true;
+    }
+    return false;
+  }
 
   // POST /premium/activate
   if (req.method === 'POST' && pathname === '/premium/activate') {

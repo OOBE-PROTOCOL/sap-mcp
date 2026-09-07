@@ -562,7 +562,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       writableEnded: false,
     } as unknown as http.ServerResponse;
 
-    const handled = await tryPremiumRoute(req, res);
+    const handled = await tryPremiumRoute(req, res, { success: true, userId: 'smoke-test-tenant' });
     expect(handled).toBe(true);
     expect(statusCode).toBe(200);
 
@@ -607,7 +607,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
         end: vi.fn((data?: string) => { if (data) responseBody += data; }),
       } as unknown as http.ServerResponse;
 
-      const handled = await tryPremiumRoute(req, res);
+      const handled = await tryPremiumRoute(req, res, { success: true, userId: 'smoke-test-tenant' });
       expect(handled).toBe(true);
       expect(statusCode).toBe(200);
 

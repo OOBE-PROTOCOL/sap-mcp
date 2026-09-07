@@ -2708,7 +2708,10 @@ export class RemoteMCPServer {
 
       // Premium delivery rail routes (activation, SSE stream, webhook register/status).
       // These are not public read-only — they handle POST and GET with side effects.
-      const handledByPremiumRoute = await tryPremiumRoute(req, res);
+      // Finding 2 (Solking disclosure 2026-09-07): auth MUST be validated BEFORE
+      // premium route dispatch; the validated result is passed into the router.
+      const premiumAuth = this.authManager.validateFromHeaders(req.headers);
+      const handledByPremiumRoute = await tryPremiumRoute(req, res, premiumAuth);
       if (handledByPremiumRoute) {
         return;
       }
