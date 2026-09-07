@@ -6,16 +6,19 @@
  * the x402/pay.sh challenge on the delivery rail, the activation manager
  * verifies the receipt and transitions the session to `active`.
  *
- * The activation manager is deliberately decoupled from the x402 facilitator:
- * it accepts an opaque `paymentReceipt` string that the caller (HTTP endpoint
- * or MCP tool) has already verified against the x402/pay.sh rail. This keeps
- * the premium layer testable without a live facilitator.
+ * Solking disclosure 2026-09-07 (Finding 2): activation previously only
+ * length-checked the receipt string, so any 8-character placeholder activated
+ * a paid premium session. Activation now REQUIRES an injected
+ * {@link ReceiptVerifier} and FAILS CLOSED when none is configured — the only
+ * bypass is the explicit dev escape hatch `SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION=true`,
+ * which must never be set on hosted deployments.
  *
  * @flow
- *   1. Buyer settles x402 challenge → receives `paymentReceipt` string.
+ *   1. Buyer settles x402 challenge → receives `paymentReceipt` (tx signature).
  *   2. Buyer calls `POST /premium/activate` or MCP tool `sap_premium_activate_session`.
- *   3. → `activateSession()` verifies the session is in `pending_payment` status.
- *   4. → Transitions session to `active` via `session-manager.activateSession()`.
+ *   3. → Receipt format is validated, then the injected `ReceiptVerifier`
+ *      checks the settlement on-chain (or against the facilitator).
+ *   4. → On success, `session-manager.activateSession()` transitions to `active`.
  *   5. → Returns `PremiumActivationResult` with `unitsQuota` and `activatedAt`.
  *   6. Stream broker / webhook engine check `status=active` before delivering.
  *
@@ -27,16 +30,26 @@ import { getPremiumSession } from './session-manager.js';
 import type { PremiumActivationRequest, PremiumActivationResult } from './types.js';
 
 /**
+ * @name ReceiptVerifier
+ * @description Asynchronous payment-receipt verification contract.
+ *
+ * Implementations check that `receipt` is a real settled payment (on-chain tx
+ * signature lookup against the recorded payTo/price, or a facilitator verify
+ * call). Injected by the HTTP route / MCP tool layer; the premium package
+ * itself stays network-free for testability.
+ */
+export interface ReceiptVerifier {
+  verify(receipt: string, expectedAmountUsd?: number): Promise<{ valid: boolean; payer?: string; reason?: string }>;
+}
+
+/**
  * @name verifyReceiptFormat
  * @description Basic structural validation of a payment receipt string.
  *
  * This does NOT verify the receipt against the x402/pay.sh facilitator — that
- * is the caller's responsibility. It only checks that the receipt is a non-empty
- * string of reasonable length.
- *
- * Special case: the literal string "pending" is accepted but returns a special
- * result telling the caller to provide the actual tx signature after settlement.
- * This prevents agents from wasting a paid call when they don't have the receipt yet.
+ * is the ReceiptVerifier's job. It only checks that the receipt is a non-empty
+ * string of reasonable length, as a cheap pre-filter before the (costlier)
+ * verification call.
  *
  * @param receipt - The opaque receipt string from x402/pay.sh settlement.
  * @returns True if the receipt has a valid structural format.
@@ -67,33 +80,41 @@ const RECEIPT_HELP_MESSAGE =
   'Do NOT pass "pending" — it will always be rejected. ' +
   'If you do not have the tx signature yet, settle the payment first, then retry.';
 
+function rejected(sessionId: string, reason: string): PremiumActivationResult {
+  return {
+    sessionId,
+    status: 'rejected',
+    activatedAt: null,
+    receiptBound: false,
+    unitsQuota: 0,
+    reason,
+  };
+}
+
 /**
  * @name activatePremiumSession
- * @description Activate a pending premium session with a payment receipt.
+ * @description Activate a pending premium session with a verified payment receipt.
  *
  * Steps:
  *   1. Validate the receipt format (non-empty, reasonable length).
  *   2. Look up the session via `getPremiumSession`.
  *   3. Check the session is in `pending_payment` status.
- *   4. Call `activateSession` to transition to `active`.
- *   5. Return `PremiumActivationResult`.
+ *   4. Verify the receipt via the injected `ReceiptVerifier` — fail closed
+ *      when no verifier is configured unless the dev escape hatch is set.
+ *   5. Call `activateSession` to transition to `active`.
+ *   6. Return `PremiumActivationResult`.
  *
- * @param request - Activation request with session id and payment receipt.
- * @returns `PremiumActivationResult` with `status=active` on success.
+ * @param request - Activation request with session id, payment receipt, and
+ *   optional receipt verifier.
+ * @returns `PremiumActivationResult` with `status=active` on success,
+ *   `status=rejected` when verification fails or is unavailable.
  *
  * @usedBy `premium-tools.ts` → MCP tool `sap_premium_activate_session`,
  *   `remote/server.ts` → `POST /premium/activate`
  */
-export function activatePremiumSession(request: PremiumActivationRequest): PremiumActivationResult {
+export async function activatePremiumSession(request: PremiumActivationRequest): Promise<PremiumActivationResult> {
   if (!verifyReceiptFormat(request.paymentReceipt)) {
-    return {
-      sessionId: request.sessionId,
-      status: 'pending_payment',
-      activatedAt: null,
-      receiptBound: false,
-      unitsQuota: 0,
-      reason: RECEIPT_HELP_MESSAGE,
-    };
+    return rejected(request.sessionId, RECEIPT_HELP_MESSAGE);
   }
 
   const session = getPremiumSession(request.sessionId);
@@ -152,7 +173,40 @@ export function activatePremiumSession(request: PremiumActivationRequest): Premi
     };
   }
 
-  // Status is pending_payment — activate.
-  const result = activateSession(request.sessionId);
-  return result;
+  // Status is pending_payment — verify the receipt BEFORE activating.
+  // Finding 2: fail closed without a verifier; the escape hatch is an explicit,
+  // logged dev-only option that must never be enabled on hosted deployments.
+  if (!request.receiptVerifier) {
+    if (process.env['SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION'] === 'true') {
+      console.error(
+        '[activation-manager] SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION=true — activating session WITHOUT receipt verification. ' +
+        'This is a development escape hatch and MUST NOT be enabled on hosted deployments.',
+      );
+      return activateSession(request.sessionId);
+    }
+    return rejected(
+      request.sessionId,
+      'receipt_verification_unavailable: no receipt verifier is configured. ' +
+      'Activation requires proof of settlement. (Hosted deployments must wire a facilitator or on-chain verifier.)',
+    );
+  }
+
+  let verification: { valid: boolean; payer?: string; reason?: string };
+  try {
+    verification = await request.receiptVerifier.verify(request.paymentReceipt, session.estimatedPriceUsd);
+  } catch (error) {
+    return rejected(
+      request.sessionId,
+      `receipt_verification_error: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (!verification.valid) {
+    return rejected(
+      request.sessionId,
+      `receipt_verification_failed: ${verification.reason ?? 'the payment receipt could not be verified on-chain'}. ${RECEIPT_HELP_MESSAGE}`,
+    );
+  }
+
+  return activateSession(request.sessionId);
 }

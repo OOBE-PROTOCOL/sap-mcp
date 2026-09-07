@@ -37,6 +37,7 @@ import {
   getWebhookSubscription,
   getWebhookDeliveries,
 } from '../../premium/src/index.js';
+import { createOnChainReceiptVerifier } from './receipt-verifier.js';
 
 /* -------------------------------------------------------------------------- */
 /* Internal HTTP helpers                                                      */
@@ -133,10 +134,19 @@ export async function handlePremiumActivation(
     return;
   }
 
-  const activation = activatePremiumSession({
+  // Finding 2 (Solking disclosure 2026-09-07): receipts are verified on-chain
+  // before activation. No verifier configured → fail closed (activation-manager
+  // handles the dev escape hatch explicitly).
+  const rpcUrl = process.env['SAP_MCP_RPC_URL'] ?? process.env['SAP_RPC_URL'];
+  const receiptVerifier = rpcUrl
+    ? createOnChainReceiptVerifier({ rpcUrl })
+    : undefined;
+
+  const activation = await activatePremiumSession({
     sessionId,
     paymentReceipt,
     payerAddress: payerAddress || undefined,
+    receiptVerifier,
   });
 
   const httpStatus = activation.status === 'active' ? 200 : 402;

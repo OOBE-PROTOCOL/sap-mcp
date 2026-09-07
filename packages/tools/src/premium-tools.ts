@@ -714,7 +714,11 @@ export function registerPremiumTools(server: Server, context: SapMcpContext): vo
         }, { isError: true });
       }
 
-      const activation = activatePremiumSession({
+      // Finding 2: hosted tool layer has no direct RPC wiring here — pass no
+      // verifier so activation fails closed on the hosted accountless API,
+      // and await the now-async activation. Local profiles configure
+      // SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION explicitly if they need the dev path.
+      const activation = await activatePremiumSession({
         sessionId,
         paymentReceipt,
         payerAddress: readString(raw.payerAddress),

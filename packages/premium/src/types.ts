@@ -311,6 +311,13 @@ export interface PremiumActivationRequest {
   paymentReceipt: string;
   payerAddress?: string;
   signature?: string;
+  /**
+   * Injected receipt verifier (Finding 2). When absent, activation fails
+   * closed unless SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION=true (dev only).
+   * Declared structurally here to keep the premium package network-free;
+   * the canonical contract is `ReceiptVerifier` in activation-manager.ts.
+   */
+  receiptVerifier?: { verify(receipt: string, expectedAmountUsd?: number): Promise<{ valid: boolean; payer?: string; reason?: string }> };
 }
 
 /**
@@ -328,7 +335,7 @@ export interface PremiumActivationRequest {
  */
 export interface PremiumActivationResult {
   sessionId: string;
-  status: 'active' | 'closed' | 'pending_payment' | 'blocked_requires_provider' | 'expired';
+  status: 'active' | 'closed' | 'pending_payment' | 'blocked_requires_provider' | 'expired' | 'rejected';
   activatedAt: string | null;
   receiptBound: boolean;
   unitsQuota: number;

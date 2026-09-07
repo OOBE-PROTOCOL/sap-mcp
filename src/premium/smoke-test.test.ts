@@ -115,6 +115,10 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     // Set provider env vars so sessions can be activated.
     process.env.SAP_MCP_PREMIUM_JUPITER_STREAM_URL = 'wss://mock-jupiter.example.com/stream';
     process.env.SAP_MCP_PREMIUM_WEBHOOK_SIGNER = 'test-signing-key-for-smoke-test';
+    // Finding 2: activation now verifies receipts. The smoke test exercises the
+    // full delivery rail without live RPC, so it opts into the explicit
+    // unverified-activation dev path for these tests only.
+    process.env.SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION = 'true';
   });
 
   afterEach(() => {
@@ -124,6 +128,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     stopAllWebhooks();
     delete process.env.SAP_MCP_PREMIUM_JUPITER_STREAM_URL;
     delete process.env.SAP_MCP_PREMIUM_WEBHOOK_SIGNER;
+    delete process.env.SAP_MCP_ALLOW_UNVERIFIED_ACTIVATION;
     vi.restoreAllMocks();
   });
 
@@ -185,7 +190,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
 
   /* --- Layer 2: Activation manager --- */
 
-  it('activates a pending session with a valid receipt', () => {
+  it('activates a pending session with a valid receipt', async () => {
     const session = createPremiumSessionPlan({
       pluginId: 'sap-premium-market-data',
       capabilityId: 'jupiter.quote.delta',
@@ -194,7 +199,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    const result = activatePremiumSession({
+    const result = await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
       payerAddress: '9WzDXwBbmkg8ZTbNMqMxgue9xK6dX5z6YxQkp1XM1mAB',
@@ -209,7 +214,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     expect(updated?.status).toBe('active');
   });
 
-  it('rejects activation with invalid receipt format', () => {
+  it('rejects activation with invalid receipt format', async () => {
     const session = createPremiumSessionPlan({
       pluginId: 'sap-premium-market-data',
       capabilityId: 'jupiter.quote.delta',
@@ -218,17 +223,19 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    const result = activatePremiumSession({
+    const result = await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'short',
     });
 
-    expect(result.status).toBe('pending_payment');
+    // Finding 2: structurally invalid receipts are now rejected outright
+    // (the old contract returned the session's pending_payment status).
+    expect(result.status).toBe('rejected');
     expect(result.receiptBound).toBe(false);
   });
 
-  it('rejects activation for unknown session', () => {
-    const result = activatePremiumSession({
+  it('rejects activation for unknown session', async () => {
+    const result = await activatePremiumSession({
       sessionId: 'nonexistent-session',
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -237,7 +244,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     expect(result.receiptBound).toBe(false);
   });
 
-  it('closes an active session and prevents re-activation', () => {
+  it('closes an active session and prevents re-activation', async () => {
     const session = createPremiumSessionPlan({
       pluginId: 'sap-premium-market-data',
       capabilityId: 'jupiter.quote.delta',
@@ -246,7 +253,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -258,14 +265,14 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     expect(after?.status).toBe('closed');
 
     // Re-activation should return closed status.
-    const reActivate = activatePremiumSession({
+    const reActivate = await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
     expect(reActivate.status).toBe('closed');
   });
 
-  it('decrements session quota and auto-closes at zero', () => {
+  it('decrements session quota and auto-closes at zero', async () => {
     const session = createPremiumSessionPlan({
       pluginId: 'sap-premium-market-data',
       capabilityId: 'jupiter.quote.delta',
@@ -274,7 +281,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -353,7 +360,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -389,7 +396,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
         ttlSeconds: 300,
       });
 
-      activatePremiumSession({
+      await activatePremiumSession({
         sessionId: session.sessionId,
         paymentReceipt: 'x402-receipt-proof-abc123def456',
       });
@@ -437,7 +444,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -459,7 +466,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       ttlSeconds: 300,
     });
 
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -492,7 +499,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
       requestedUnits: 10,
       ttlSeconds: 300,
     });
-    activatePremiumSession({
+    await activatePremiumSession({
       sessionId: activeSession.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -584,7 +591,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
         requestedUnits: 10,
         ttlSeconds: 300,
       });
-      activatePremiumSession({
+      await activatePremiumSession({
         sessionId: session.sessionId,
         paymentReceipt: 'x402-receipt-proof-abc123def456',
       });
@@ -652,7 +659,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
     expect(session.status).toBe('pending_payment');
 
     // 2. Activate.
-    const activation = activatePremiumSession({
+    const activation = await activatePremiumSession({
       sessionId: session.sessionId,
       paymentReceipt: 'x402-receipt-proof-abc123def456',
     });
@@ -721,7 +728,7 @@ describe('premium delivery rail — end-to-end smoke test', () => {
         requestedUnits: 10,
         ttlSeconds: 300,
       });
-      activatePremiumSession({
+      await activatePremiumSession({
         sessionId: session.sessionId,
         paymentReceipt: 'x402-receipt-proof-abc123def456',
       });
