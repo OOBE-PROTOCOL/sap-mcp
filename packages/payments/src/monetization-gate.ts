@@ -30,6 +30,7 @@ import { isRecord, parseJsonRpcBody } from './json-rpc.js';
 import type { PaymentDecision } from './pricing.js';
 import { formatUsdPrice, resolvePaymentDecision } from './pricing.js';
 import { isJsonRpcError as structuredIsJsonRpcError } from './json-rpc-error.js';
+import { buildSettlementCacheKey } from './settlement-cache-key.js';
 import { hashPaymentRequest, UsageLedger, type PaymentRequestMetadata } from './usage-ledger.js';
 import { isTransientRpcError } from './facilitator-rpc-fallback.js';
 import { PrepaidCreditStore, setGlobalPrepaidStore } from './prepaid-credit-store.js';
@@ -837,11 +838,13 @@ export class McpMonetizationGate {
 
     let settlement: SettleResponse;
 
-    // Idempotency check: if this requestHash was already settled successfully
-    // within the TTL window, return the cached settlement without re-charging.
-    // This prevents double-charge when a client retries after a network failure
-    // that occurred after the tool executed but before the response arrived.
-    const cached = this.idempotencyCache.get(options.metadata.requestHash);
+    // Idempotency check: if this (requestHash, payer) pair was already settled
+    // successfully within the TTL window, return the cached settlement without
+    // re-charging. This prevents double-charge when a client retries after a
+    // network failure that occurred after the tool executed but before the
+    // response arrived. Keys are payer-scoped (Finding 7): a different payer's
+    // verified payment for the same request MUST settle independently.
+    const cached = this.idempotencyCache.get(buildSettlementCacheKey(options.metadata.requestHash, verifyResult.payer));
     if (cached && cached.expiresAt > Date.now()) {
       logger.info('Settlement idempotency cache hit', {
         toolNames: options.decision.toolNames,
@@ -887,11 +890,15 @@ export class McpMonetizationGate {
       return;
     }
 
-    // Cache successful settlement for idempotency on retry.
-    this.idempotencyCache.set(options.metadata.requestHash, {
-      settlement,
-      expiresAt: Date.now() + McpMonetizationGate.IDEMPOTENCY_TTL_MS,
-    });
+    // Cache successful settlement for idempotency on retry — payer-scoped key
+    // so distinct payers never share cache entries (Finding 7).
+    this.idempotencyCache.set(
+      buildSettlementCacheKey(options.metadata.requestHash, settlement.payer ?? verifyResult.payer),
+      {
+        settlement,
+        expiresAt: Date.now() + McpMonetizationGate.IDEMPOTENCY_TTL_MS,
+      },
+    );
     // Evict oldest entries when cache exceeds the max size.
     if (this.idempotencyCache.size > McpMonetizationGate.IDEMPOTENCY_MAX_ENTRIES) {
       const oldestKey = this.idempotencyCache.keys().next().value as string | undefined;
