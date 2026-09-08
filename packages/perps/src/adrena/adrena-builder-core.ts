@@ -175,11 +175,13 @@ export class AdrenaOracleReadinessError extends Error {
     super(
       `Adrena oracle readiness failed for ${readiness.poolName}: ${missing || 'required prices'} do not have ` +
       `${readiness.minAgree} fresh oracle prices within ${readiness.stalenessSeconds}s. ` +
-      'Do not build or approve this transaction until Adrena oracle coverage recovers.',
+      'Retry the same trade build once: the builder auto-detects stale Switchboard quotes and returns an unsigned ' +
+      'oracle-refresh transaction that Steve signs first — after it lands on-chain, the trade usually builds. ' +
+      'If the retry still returns ready=false, wait a minute and try again.',
     );
     this.name = 'AdrenaOracleReadinessError';
     this.oracleReadiness = readiness;
-    this.nextAction = 'Run sap_adrena_oracle_readiness, then choose a market whose ready=true or wait for Adrena oracle providers to refresh.';
+    this.nextAction = 'Retry the same build once (auto-heal returns an unsigned oracle-refresh tx to sign first). If ready stays false, wait ~60s and retry.';
   }
 }
 
