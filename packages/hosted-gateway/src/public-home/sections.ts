@@ -478,6 +478,7 @@ export function renderScrollMachine(model: LandingPageModel): string {
  */
 export function renderDocsLaunchpad(model: LandingPageModel): string {
   const docs = [
+    ['Register an agent (quickstart)', `${model.info.endpoints.docs}/#/user/16_AGENT_IDENTITY_REGISTRY_PIPELINE`, 'coral'],
     ['User onboarding index', `${model.info.endpoints.docs}/#/user/00_USER_ONBOARDING_INDEX`, 'coral'],
     ['Hosted MCP bridge setup', `${model.info.endpoints.docs}/#/user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP`, 'yellow'],
     ['Client config matrix', `${model.info.endpoints.docs}/#/user/04_MCP_CLIENT_CONFIGURATION_MATRIX`, 'green'],

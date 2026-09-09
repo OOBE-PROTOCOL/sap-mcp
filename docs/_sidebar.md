@@ -1,5 +1,6 @@
 - Getting Started
   - [Overview](README.md)
+  - [Register an Agent (Quickstart)](user/16_AGENT_IDENTITY_REGISTRY_PIPELINE.md)
   - [Hosted MCP Local Bridge Setup](user/01_HOSTED_MCP_LOCAL_BRIDGE_SETUP.md)
   - [Local Stdio Profile Signer Setup](user/02_LOCAL_STDIO_PROFILE_SIGNER_SETUP.md)
   - [MCP Client Configuration Matrix](user/04_MCP_CLIENT_CONFIGURATION_MATRIX.md)

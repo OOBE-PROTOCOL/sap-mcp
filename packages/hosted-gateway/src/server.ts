@@ -2232,8 +2232,10 @@ export function buildDocsHtml(
       color: var(--sap-ink);
       font-weight: 800;
     }
+    /* The custom .docs-home pill already carries the brand; the docsify
+       app-name h1 right under it rendered a duplicate "SAP MCP" heading. */
     .app-name {
-      margin-top: 82px;
+      display: none;
     }
     .sidebar {
       border-right: 1px solid var(--sap-line);
