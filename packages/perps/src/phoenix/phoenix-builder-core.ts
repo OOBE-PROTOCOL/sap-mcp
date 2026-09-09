@@ -157,12 +157,24 @@ export async function serializeUnsignedPhoenixTx(
 }> {
   const blockhash = await connection.getLatestBlockhash();
 
+  // Compute-unit limit: ALWAYS prepend setComputeUnitLimit. Without an
+  // explicit limit the RPC simulation/runtime default is 200k CU, which
+  // Phoenix collateral-transfer flows exceed -> ComputationalBudgetExceeded
+  // and the approval gate refuses to let the user sign (2026-09-09 user
+  // report). 1.4M CU is the Solana max per transaction and covers every
+  // Phoenix flow (place order, deposit, withdraw, mint init).
+  const CU_LIMIT_UNITS = Number(process.env['SAP_MCP_CU_LIMIT_UNITS'] ?? '1400000');
+
   // Priority fee: prepend ComputeBudgetProgram.setComputeUnitPrice when
   // SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS > 0. Default 0 = disabled.
   const PRIORITY_FEE_MICRO_LAMPORTS = Number(process.env['SAP_MCP_PRIORITY_FEE_MICRO_LAMPORTS'] ?? '0');
-  const allInstructions = PRIORITY_FEE_MICRO_LAMPORTS > 0
-    ? [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE_MICRO_LAMPORTS }), ...instructions]
-    : instructions;
+  const budgetInstructions: TransactionInstruction[] = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: CU_LIMIT_UNITS }),
+  ];
+  if (PRIORITY_FEE_MICRO_LAMPORTS > 0) {
+    budgetInstructions.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE_MICRO_LAMPORTS }));
+  }
+  const allInstructions = [...budgetInstructions, ...instructions];
 
   const tx = new Transaction({
     recentBlockhash: blockhash.blockhash,
