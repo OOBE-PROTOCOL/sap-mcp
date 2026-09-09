@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.83 - 2026-09-09
+
+### Fixed
+
+- Hosted onboarding: `hosted_local_signer_required` failures for SAP registry
+  writes now route agents to the correct hosted unsigned builders instead of
+  dead-ending. `sap_register_agent` failures recommend
+  `sap_build_agent_register_transaction`, `sap_update_agent` recommends
+  `sap_build_agent_update_transaction`, lifecycle writes recommend
+  `sap_build_agent_lifecycle_transaction`, and report/reputation writes
+  recommend `sap_build_agent_report_calls_transaction`. The
+  `recommendedFlow` text for registry writes now states explicitly that
+  registration does NOT require the local `sap_payments` bridge.
+- Hosted tool eligibility: added the agent registry unsigned builders
+  (`sap_build_agent_register_transaction`,
+  `sap_build_agent_update_transaction`,
+  `sap_build_agent_lifecycle_transaction`,
+  `sap_build_agent_report_calls_transaction`) to the hosted-safe
+  allowlist so hosted-only agents can complete agent registration without a
+  local payment bridge.
+
+### Changed
+
+- User report: a chat agent told a user that SAP DNS and infrastructure were
+  "completely broken" and registration was impossible after 30 minutes.
+  Live verification showed all hosted endpoints healthy (DNS, MCP initialize,
+  docs, pricing, wizard descriptor all HTTP 200). Root cause was the
+  misleading recovery guidance in the `hosted_local_signer_required` error,
+  not infrastructure. This release fixes that guidance.
+
 ## 0.9.82 - 2026-08-31
 
 ### Added

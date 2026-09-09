@@ -1,10 +1,10 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-security",
-  "version": "0.9.82",
+  "version": "0.9.83",
   "private": true,
   "type": "module",
   "sideEffects": false,
-  "description": "SAP MCP security module — internal workspace package.",
+  "description": "SAP MCP security module \u2014 internal workspace package.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "sapMcp": {

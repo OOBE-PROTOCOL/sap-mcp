@@ -133,6 +133,10 @@ const HOSTED_SAFE_EXACT_TOOLS = new Set([
   'sap_submit_signed_transaction',
   'sap_build_sol_transfer',
   'sap_build_spl_transfer',
+  'sap_build_agent_register_transaction',
+  'sap_build_agent_update_transaction',
+  'sap_build_agent_lifecycle_transaction',
+  'sap_build_agent_report_calls_transaction',
   'sap_sns_check_domain',
   'sap_sns_batch_check_domains',
   'sap_sns_validate_records',
@@ -145,6 +149,57 @@ const HOSTED_SAFE_EXACT_TOOLS = new Set([
   'sap_sns_get_record_pda',
   'staking_getStakeAccounts',
 ]);
+
+const GENERIC_HOSTED_RECOVERY_TOOLS = [
+  'sap_payments_readiness',
+  'sap_payments_call_paid_tool',
+  'sap_payments_finalize_transaction',
+  'sap_build_sol_transfer',
+  'sap_build_spl_transfer',
+  'sap_escrow_build_create_transaction',
+  'sap_escrow_build_settle_transaction',
+  'sap_sns_build_manage_record_transaction',
+];
+
+const REGISTRY_WRITE_RECOVERY_TOOLS = [
+  'sap_build_agent_register_transaction',
+  'sap_build_agent_update_transaction',
+  'sap_build_agent_lifecycle_transaction',
+  'sap_payments_finalize_transaction',
+  'sap_submit_signed_transaction',
+  'sap_agent_identity_plan',
+  'sap_payments_readiness',
+  'sap_payments_call_paid_tool',
+];
+
+const REGISTRY_BUILDER_BY_BLOCKED_TOOL: ReadonlyMap<string, string> = new Map([
+  ['sap_register_agent', 'sap_build_agent_register_transaction'],
+  ['sap_update_agent', 'sap_build_agent_update_transaction'],
+  ['sap_deactivate_agent', 'sap_build_agent_lifecycle_transaction'],
+  ['sap_reactivate_agent', 'sap_build_agent_lifecycle_transaction'],
+  ['sap_close_agent', 'sap_build_agent_lifecycle_transaction'],
+  ['sap_report_calls', 'sap_build_agent_report_calls_transaction'],
+  ['sap_update_reputation_metrics', 'sap_build_agent_report_calls_transaction'],
+]);
+
+export function recommendedToolsForBlockedTools(blockedTools: readonly string[]): string[] {
+  const registryBuilders = [
+    ...new Set(
+      blockedTools
+        .map(tool => REGISTRY_BUILDER_BY_BLOCKED_TOOL.get(tool))
+        .filter((tool): tool is string => typeof tool === 'string'),
+    ),
+  ];
+
+  if (registryBuilders.length > 0) {
+    return [
+      ...registryBuilders,
+      ...REGISTRY_WRITE_RECOVERY_TOOLS.filter(tool => !registryBuilders.includes(tool)),
+    ];
+  }
+
+  return [...GENERIC_HOSTED_RECOVERY_TOOLS];
+}
 
 export function evaluateHostedToolEligibility(
   parsedRequest: ParsedMcpRequest,
@@ -162,26 +217,24 @@ export function evaluateHostedToolEligibility(
     return undefined;
   }
 
+  const uniqueBlockedTools = [...new Set(blockedTools)];
+  const isRegistryWrite = uniqueBlockedTools.some(tool =>
+    REGISTRY_BUILDER_BY_BLOCKED_TOOL.has(tool),
+  );
+
   return {
     code: -32011,
     message: 'hosted_local_signer_required',
     data: {
       reason: 'This hosted SAP MCP server is accountless and cannot sign user-owned Solana writes. No x402 payment was charged.',
       paymentNotCharged: true,
-      blockedTools: [...new Set(blockedTools)],
+      blockedTools: uniqueBlockedTools,
       hostedMode: 'accountless-non-custodial',
-      recommendedFlow: 'Use local sap_payments for paid hosted calls. For write operations, use hosted unsigned builders only when the tool returns a transaction, then finalize locally with sap_payments_finalize_transaction. If no builder exists, run the direct write on the local SAP MCP profile.',
-      namespaceHint: 'sap_payments_* tools live on the sap_payments MCP server, not the sap server. Use mcp__sap_payments__ prefix (e.g. mcp__sap_payments__sap_payments_readiness, mcp__sap_payments__sap_payments_call_paid_tool). If the sap_payments server is not connected, run the SAP MCP wizard repair flow and restart the MCP client.',
-      recommendedTools: [
-        'sap_payments_readiness',
-        'sap_payments_call_paid_tool',
-        'sap_payments_finalize_transaction',
-        'sap_build_sol_transfer',
-        'sap_build_spl_transfer',
-        'sap_escrow_build_create_transaction',
-        'sap_escrow_build_settle_transaction',
-        'sap_sns_build_manage_record_transaction',
-      ],
+      recommendedFlow: isRegistryWrite
+        ? 'Registration and other registry writes DO NOT require the local sap_payments bridge. Call the hosted unsigned builder for this write (e.g. sap_build_agent_register_transaction), then finalize/sign locally with sap_payments_finalize_transaction or submit with sap_submit_signed_transaction. No x402 fee was charged.'
+        : 'Use local sap_payments for paid hosted calls. For write operations, use hosted unsigned builders only when the tool returns a transaction, then finalize locally with sap_payments_finalize_transaction. If no builder exists, run the direct write on the local SAP MCP profile.',
+      namespaceHint: 'sap_payments_* tools live on the sap_payments MCP server, not the sap server. Use mcp__sap_payments__ prefix (e.g. mcp__sap_payments__sap_payments_readiness, mcp__sap_payments__sap_payments_call_paid_tool). If the sap_payments server is not connected, run the SAP MCP wizard repair flow and restart the MCP client. Registry builders (sap_build_agent_*) live on the hosted sap server and work without sap_payments.',
+      recommendedTools: recommendedToolsForBlockedTools(uniqueBlockedTools),
     },
   };
 }
