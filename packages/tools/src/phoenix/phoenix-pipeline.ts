@@ -75,6 +75,10 @@ function compactValue(value: unknown, depth: number): unknown {
     return value.length > 500 ? value.slice(0, 500) + `… (+${value.length - 500} chars)` : value;
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
+  // Phoenix stats rows carry BigInt fields (e.g. timestamp_ms). JSON.stringify
+  // throws on BigInt ("Do not know how to serialize a BigInt"), which kills
+  // the whole tool response — convert to string before it reaches stringify.
+  if (typeof value === 'bigint') return value.toString();
   if (Array.isArray(value)) {
     if (value.length > MAX_PHOENIX_ARRAY_ENTRIES) {
       return [
