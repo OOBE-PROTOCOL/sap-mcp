@@ -391,7 +391,7 @@ async function rpcCall<T>(
     body: JSON.stringify({ jsonrpc: JSONRPC_VERSION, id: 1, method, params }),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`MagicBlock Router ${res.status}: ${text.slice(0, 200)}`);
+  if (!res.ok) throw upstreamError(res.status, 'MagicBlock Router', text);
   const json = JSON.parse(text) as JsonRpcResponse<T>;
   if (json.error) throw new Error(`JSON-RPC error ${json.error.code}: ${json.error.message}`);
   if (!json.result) throw new Error(`JSON-RPC response missing result for ${method}`);
@@ -399,6 +399,29 @@ async function rpcCall<T>(
 }
 
 type QueryParams = Record<string, string | undefined>;
+
+/**
+ * Compact an upstream error body into a model-actionable message: parse the
+ * JSON error envelope and surface the code + message + any field list, so a
+ * 422 tells the model exactly which arguments to fix instead of a truncated
+ * "Missing required f..." that forces blind retries.
+ */
+function upstreamError(status: number, label: string, text: string): Error {
+  let detail = text.slice(0, 400);
+  try {
+    const parsed = JSON.parse(text) as { error?: { code?: string; message?: string; fields?: unknown; details?: unknown } };
+    const err = parsed.error;
+    if (err && typeof err === 'object') {
+      const parts = [err.code, err.message].filter((v): v is string => typeof v === 'string' && v.length > 0);
+      if (err.fields != null) parts.push(`fields: ${JSON.stringify(err.fields).slice(0, 200)}`);
+      if (err.details != null) parts.push(`details: ${JSON.stringify(err.details).slice(0, 200)}`);
+      if (parts.length > 0) detail = parts.join(' | ');
+    }
+  } catch {
+    // Non-JSON body — keep the raw slice.
+  }
+  return new Error(`${label} ${status}: ${detail}`);
+}
 
 async function apiGet<T>(path: string, query?: QueryParams, authToken?: string): Promise<T> {
   const url = new URL(PAYMENTS_ENDPOINT + path);
@@ -411,7 +434,7 @@ async function apiGet<T>(path: string, query?: QueryParams, authToken?: string):
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const res = await fetch(url.toString(), { method: 'GET', headers });
   const text = await res.text();
-  if (!res.ok) throw new Error(`MagicBlock API ${res.status}: ${text.slice(0, 200)}`);
+  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text);
   return JSON.parse(text) as T;
 }
 
@@ -421,7 +444,7 @@ async function apiPost<T>(path: string, body: object, authToken?: string): Promi
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   const text = await res.text();
-  if (!res.ok) throw new Error(`MagicBlock API ${res.status}: ${text.slice(0, 200)}`);
+  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text);
   return JSON.parse(text) as T;
 }
 
