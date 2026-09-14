@@ -2,6 +2,41 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.84 - 2026-09-14
+
+### Added
+
+- Backpack Exchange tool family: 15 free `sap_backpack_*` market-data tools
+  (markets, market, ticker, tickers, depth, trades, klines, mark price,
+  funding rates, open interest, collateral, assets, securities, market
+  sessions, borrow/lend) backed by a typed Ed25519 REST client
+  (`BackpackApiClient`) with the documented header-signing scheme,
+  structured `backpack_credentials_required` errors, upstream-size response
+  compaction (50-entry arrays, 500-char strings, 30k total cap, Solana
+  transactions preserved byte-for-byte), and live-verified endpoint shapes.
+- Sunrise tool family: 5 `sap_sunrise_*` tools (list_tokens, resolve_token,
+  get_quote, execute_quote, swap_intent) backed by a typed client for the
+  public Sunrise swap API, with the execute/poll CONFIRMED state machine,
+  string base-unit amount validation, canonical-mint anti-spoof guidance,
+  and core-asset mint constants (USDC/USDT/WETH/WBTC).
+- In-repo agent skills `sap-backpack-tools` and `sap-sunrise-tools` covering
+  tool schemas, pricing tiers, hosted vs local routing, credentials setup,
+  and protocol gotchas.
+- Live integration tests for both families (opt-in via SAP_LIVE_TESTS=1)
+  asserting real upstream response shapes: Backpack ticker + market sessions,
+  Sunrise token list (~76 tokens, no core assets) and live USDC-to-MON quote.
+
+### Changed
+
+- `sap_search_tools` description now indexes the backpack and sunrise
+  categories; BM25 discovery covers the 20 new tools automatically.
+- Tool catalog counts: 23 modules (was 21), 202 tools on local-stdio-wallet
+  (was 182), 189 tools on hosted-accountless (was 169). Pipeline contracts
+  raised to 25 files and the backpack/sunrise pipelines added to the allowed
+  direct-register list.
+- Version surfaces aligned to 0.9.84 (package.json, server.json, constants,
+  logger fallback, runbook, README, 30 workspace packages).
+
 ## 0.9.83 - 2026-09-09
 
 ### Fixed

@@ -88,6 +88,32 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
+  it('keeps Backpack Exchange market-data reads free in both monetization modes', () => {
+    for (const toolName of [
+      'sap_backpack_get_markets',
+      'sap_backpack_get_ticker',
+      'sap_backpack_get_depth',
+      'sap_backpack_get_klines',
+      'sap_backpack_get_mark_price',
+      'sap_backpack_get_collateral',
+      'sap_backpack_get_securities',
+      'sap_backpack_get_market_sessions',
+      'sap_backpack_get_borrow_lend_markets',
+      'sap_backpack_get_status',
+    ]) {
+      expect(classifyTool(toolName), toolName).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true }), toolName).toBe('free');
+    }
+  });
+
+  it('prices Sunrise reads free and the swap flow as builders', () => {
+    expect(classifyTool('sap_sunrise_list_tokens')).toBe('free');
+    expect(classifyTool('sap_sunrise_resolve_token')).toBe('free');
+    expect(classifyTool('sap_sunrise_get_quote')).toBe('builder');
+    expect(classifyTool('sap_sunrise_execute_quote')).toBe('builder');
+    expect(classifyTool('sap_sunrise_swap_intent')).toBe('builder');
+  });
+
   it('applies the configured minimum price to micro-read estimates and challenges', () => {
     const hostedConfig = {
       ...monetizationConfig,

@@ -1,6 +1,6 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-perps",
-  "version": "0.9.83",
+  "version": "0.9.84",
   "private": true,
   "type": "module",
   "sideEffects": false,

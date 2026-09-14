@@ -12,7 +12,9 @@
 import { sapNetworkStatsTool } from './sap-network-stats.tool.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerAdrenaTools } from './adrena-tools.js';
+import { registerBackpackTools } from './backpack/backpack-index.js';
 import { registerPhoenixTools } from './phoenix-tools.js';
+import { registerSunriseTools } from './sunrise/sunrise-index.js';
 import { registerToolSearchTool } from './sap-tool-search.js';
 import { registerChatTools } from './chat-tools.js';
 import { registerClientSdkTools } from './client-sdk-tools.js';
@@ -357,6 +359,46 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'jupiter_universal_deposit_chains',
     ],
     register: registerPhoenixTools,
+  }),
+  createToolModule({
+    id: 'backpack',
+    title: 'Backpack Exchange',
+    description: 'Backpack Exchange CeFi market data: markets, tickers, depth, trades, klines, mark prices, funding, open interest, collateral, assets, tokenized securities, market sessions, and borrow/lend rates. Free reads.',
+    category: 'integration',
+    order: 245,
+    expectedTools: [
+      'sap_backpack_get_markets',
+      'sap_backpack_get_market',
+      'sap_backpack_get_ticker',
+      'sap_backpack_get_tickers',
+      'sap_backpack_get_depth',
+      'sap_backpack_get_trades',
+      'sap_backpack_get_klines',
+      'sap_backpack_get_mark_price',
+      'sap_backpack_get_funding_rates',
+      'sap_backpack_get_open_interest',
+      'sap_backpack_get_collateral',
+      'sap_backpack_get_assets',
+      'sap_backpack_get_securities',
+      'sap_backpack_get_market_sessions',
+      'sap_backpack_get_borrow_lend_markets',
+    ],
+    register: registerBackpackTools,
+  }),
+  createToolModule({
+    id: 'sunrise',
+    title: 'Sunrise Gateway',
+    description: 'Sunrise asset-gateway tools: canonical token discovery with spoof protection, swap quotes, and user-signed swap execution over the public Sunrise API.',
+    category: 'integration',
+    order: 246,
+    expectedTools: [
+      'sap_sunrise_list_tokens',
+      'sap_sunrise_resolve_token',
+      'sap_sunrise_get_quote',
+      'sap_sunrise_execute_quote',
+      'sap_sunrise_swap_intent',
+    ],
+    register: registerSunriseTools,
   }),
   createToolModule({
     id: 'perps-risk',

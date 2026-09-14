@@ -177,6 +177,27 @@ const FREE_TOOLS = new Set([
   'sap_trade_journal_query',
   'sap_payments_start_prepaid',
   'sap_payments_prepaid_balance',
+  // Backpack Exchange market-data reads — free external HTTP reads (pattern:
+  // same as Phoenix data tools). Signed account/trading wrappers are builders.
+  'sap_backpack_get_markets',
+  'sap_backpack_get_market',
+  'sap_backpack_get_ticker',
+  'sap_backpack_get_tickers',
+  'sap_backpack_get_depth',
+  'sap_backpack_get_trades',
+  'sap_backpack_get_klines',
+  'sap_backpack_get_mark_price',
+  'sap_backpack_get_funding_rates',
+  'sap_backpack_get_open_interest',
+  'sap_backpack_get_collateral',
+  'sap_backpack_get_assets',
+  'sap_backpack_get_securities',
+  'sap_backpack_get_market_sessions',
+  'sap_backpack_get_borrow_lend_markets',
+  'sap_backpack_get_status',
+  // Sunrise reads — free external HTTP reads against the public Sunrise API.
+  'sap_sunrise_list_tokens',
+  'sap_sunrise_resolve_token',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -268,6 +289,26 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_trade_journal_query',
   'sap_payments_start_prepaid',
   'sap_payments_prepaid_balance',
+  // Backpack market-data reads — free in strict mode too.
+  'sap_backpack_get_markets',
+  'sap_backpack_get_market',
+  'sap_backpack_get_ticker',
+  'sap_backpack_get_tickers',
+  'sap_backpack_get_depth',
+  'sap_backpack_get_trades',
+  'sap_backpack_get_klines',
+  'sap_backpack_get_mark_price',
+  'sap_backpack_get_funding_rates',
+  'sap_backpack_get_open_interest',
+  'sap_backpack_get_collateral',
+  'sap_backpack_get_assets',
+  'sap_backpack_get_securities',
+  'sap_backpack_get_market_sessions',
+  'sap_backpack_get_borrow_lend_markets',
+  'sap_backpack_get_status',
+  // Sunrise reads — free in strict mode too.
+  'sap_sunrise_list_tokens',
+  'sap_sunrise_resolve_token',
 ]);
 
 const MICRO_READ_TOOLS = new Set([
@@ -407,6 +448,23 @@ const BUILDER_TOOLS = new Set([
   // browser; submit proxies the user-signed tx to Phoenix's co-signing API.
   'sap_phoenix_build_onboard_trader',
   'sap_phoenix_submit_onboard_trader',
+  // Sunrise swap flow — builders that return unsigned transactions for local
+  // signing; execute submits the user-signed transaction (no server custody).
+  'sap_sunrise_get_quote',
+  'sap_sunrise_execute_quote',
+  'sap_sunrise_swap_intent',
+  // Backpack signed account/trading wrappers — they proxy user-configured
+  // Backpack API credentials and never touch the user's Solana wallet.
+  'sap_backpack_get_balances',
+  'sap_backpack_get_open_orders',
+  'sap_backpack_get_order_history',
+  'sap_backpack_get_fills',
+  'sap_backpack_get_max_order_quantity',
+  'sap_backpack_execute_order',
+  'sap_backpack_cancel_order',
+  'sap_backpack_cancel_all_orders',
+  'sap_backpack_get_deposit_address',
+  'sap_backpack_request_withdrawal',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([
