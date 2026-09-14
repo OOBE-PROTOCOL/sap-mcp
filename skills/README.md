@@ -52,6 +52,8 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-market-data` | Pyth, CoinGecko, Jupiter token intelligence, prices, OHLCV, risk data |
 | `sap-nft-metaplex` | DAS, Metaplex NFT, 3.Land collections, mints, listings, authorities |
 | `sap-social-gaming` | Blinks, Gibwork bounties, Send Arcade gaming |
+| `sap-backpack-tools` | Backpack Exchange CeFi: markets, depth, klines, collateral, securities, signed account/trading with API keys |
+| `sap-sunrise-tools` | Sunrise asset gateway: canonical token discovery, swap quotes, user-signed swap execution |
 
 ## Agent Behavior
 
