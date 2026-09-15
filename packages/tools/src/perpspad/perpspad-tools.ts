@@ -88,7 +88,7 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
   });
 
   registerPerpspadPipelineTool(server, context, 'sap_perpspad_get_token_events', {
-    description: 'Fetch buyback / burn / fee transaction events for one PerpsPad token (its backing perp PnL drives buybacks and burns). Optional kind filter (comma-separated: buyback, external_buyback, burn, claim, creator_fee) and paging. Free read.',
+    description: 'Fetch buyback / burn / fee transaction events for one PerpsPad token (its backing perp PnL drives buybacks and burns). Optional kind filter (comma-separated: buyback, external_buyback, burn, claim, creator_payout; default buyback+external_buyback+burn) and paging. Free read.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -223,9 +223,17 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
       const unsigned = await getClient().buildLaunch(body);
       return perpspadPipelineOk({
         success: true,
-        launch: unsigned,
-        unsignedTransactions: { config: unsigned.config ?? null, pool: unsigned.pool ?? null },
-        nextStep: 'These transactions were NOT broadcast. Sign and send BOTH the config and pool transactions from the creator wallet (pays rent, dev-buy, and the 0.01 SOL fee), then poll sap_perpspad_get_launch_status with the returned tokenId until status is live.',
+        tokenId: unsigned.tokenId,
+        mint: unsigned.mint,
+        configAddress: unsigned.configAddress,
+        poolAddress: unsigned.poolAddress,
+        protocolFeeSol: unsigned.protocolFeeSol,
+        transactions: unsigned.transactions,
+        unsignedTransactions: {
+          config: unsigned.transactions.find((t) => t.label === 'config')?.base64 ?? null,
+          pool: unsigned.transactions.find((t) => t.label === 'pool')?.base64 ?? null,
+        },
+        nextStep: `These transactions were NOT broadcast. Sign and send BOTH transactions (config first, then pool) from the creator wallet ${body.creatorAddress} (pays rent, dev-buy, and the ${unsigned.protocolFeeSol} SOL protocol fee), then poll sap_perpspad_get_launch_status with tokenId '${unsigned.tokenId}' until status is live.`,
         _note: 'This tool returns unsigned transactions only. It never signs or sends.',
       });
     } catch (err) {

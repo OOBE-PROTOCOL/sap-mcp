@@ -37,7 +37,7 @@ export const DEV_BUY_BOUNDS: Readonly<Record<string, { readonly min: number; rea
 export const STATS_INCLUDE_KINDS = ['kpis', 'distributions', 'series', 'leaderboards'] as const;
 
 /** Supported token event kinds. */
-export const TOKEN_EVENT_KINDS = ['buyback', 'external_buyback', 'burn', 'claim', 'creator_fee'] as const;
+export const TOKEN_EVENT_KINDS = ['buyback', 'external_buyback', 'burn', 'claim', 'creator_payout'] as const;
 
 /** Backing perp market as returned by GET /api/v1/markets. */
 export interface PerpspadMarket {
@@ -101,9 +101,12 @@ export interface PerpspadLaunchBody {
 
 /** Unsigned launch transactions returned by POST /api/v1/launch. */
 export interface PerpspadLaunchUnsigned {
-  readonly config?: string;
-  readonly pool?: string;
-  readonly [key: string]: unknown;
+  readonly tokenId: string;
+  readonly mint: string;
+  readonly configAddress: string;
+  readonly poolAddress: string;
+  readonly transactions: readonly { readonly label: string; readonly base64: string }[];
+  readonly protocolFeeSol: number;
 }
 
 /**
