@@ -114,6 +114,23 @@ describe('SAP MCP monetization pricing', () => {
     expect(classifyTool('sap_sunrise_swap_intent')).toBe('builder');
   });
 
+  it('keeps PerpsPad reads free and the launch builder priced', () => {
+    for (const toolName of [
+      'sap_perpspad_get_markets',
+      'sap_perpspad_get_tokens',
+      'sap_perpspad_get_token',
+      'sap_perpspad_get_token_events',
+      'sap_perpspad_get_launch_status',
+      'sap_perpspad_get_stock_pairs',
+      'sap_perpspad_get_stats',
+    ]) {
+      expect(classifyTool(toolName), toolName).toBe('free');
+      expect(classifyTool(toolName, { strictTools: true }), toolName).toBe('free');
+    }
+    expect(classifyTool('sap_perpspad_build_launch')).toBe('builder');
+    expect(classifyTool('sap_perpspad_build_launch', { strictTools: true })).toBe('builder');
+  });
+
   it('applies the configured minimum price to micro-read estimates and challenges', () => {
     const hostedConfig = {
       ...monetizationConfig,

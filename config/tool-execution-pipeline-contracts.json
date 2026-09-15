@@ -759,14 +759,15 @@
       "moduleId": "skills"
     }
   ],
-  "minimumPipelineToolFiles": 25,
+  "minimumPipelineToolFiles": 26,
   "minimumPipelineToolRegistrations": 193,
   "allowedDirectRegisterPipelineToolFiles": [
     "packages/tools/src/adrena/adrena-pipeline.ts",
     "packages/tools/src/backpack/backpack-pipeline.ts",
     "packages/tools/src/phoenix/phoenix-pipeline.ts",
     "packages/tools/src/sap-network-stats.tool.ts",
-    "packages/tools/src/sunrise/sunrise-pipeline.ts"
+    "packages/tools/src/sunrise/sunrise-pipeline.ts",
+    "packages/tools/src/perpspad/perpspad-pipeline.ts"
   ],
   "maximumLegacyRegisterToolFiles": 0,
   "additionalLegacyRegisterToolAuditFiles": [

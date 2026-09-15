@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.9.85 - 2026-09-14
+
+### Added
+
+- PerpsPad launchpad tool family: 7 free `sap_perpspad_*` reads (markets with
+  leverage caps, launched tokens with their backing perp positions, single
+  token, buyback/burn/fee events, launch status polling, pairable stock
+  mints, platform stats) plus the `sap_perpspad_build_launch` BUILDER that
+  returns the unsigned config + pool transactions for the creator wallet to
+  sign and send (never broadcasts server-side). Typed client with
+  launch-body validation verified against the live API: ticker A-Z 0-9,
+  dev-buy bounds (SOL 0.1-5, USDC 5-5000), market leverage caps, 2-leg
+  baskets, CUSTOM quote mint requirement.
+- In-repo agent skill `sap-perpspad-tools` (23 total skills).
+- Live integration tests (SAP_LIVE_TESTS=1): markets, tokens, token by id,
+  platform stats.
+
+### Changed
+
+- Tool catalog: 24 modules, 210 tools on local-stdio-wallet, 197 on
+  hosted-accountless. Pipeline contracts: 26 direct-register files.
+- `sap_search_tools` description indexes the perpspad category.
+- Version surfaces aligned to 0.9.85.
+
 ## 0.9.84 - 2026-09-14
 
 ### Added

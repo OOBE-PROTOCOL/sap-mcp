@@ -170,7 +170,7 @@ interface ToolSearchPipelineDefinition extends ToolFamilyPipelineDefinition {
 export function registerToolSearchTool(server: Server, context: SapMcpContext): void {
   const definition: ToolSearchPipelineDefinition = {
     name: 'sap_search_tools',
-    description: 'Search the SAP MCP tool catalog (420+ tools) by keyword. Returns top-K matching tools with their name, description, and full input schema. Use this to discover tools before calling them via sap_call_tool. Categories: sap_phoenix_ (Phoenix perps), sap_adrena_ (Adrena perps), sap_perp_ (perps risk/signals), jupiter_ (swaps), spl_token_ (tokens), staking_ (staking), bridging_ (bridges), meteora_ (liquidity), magicblock_ (ephemeral rollups), sap_backpack_ (Backpack Exchange CeFi: markets, depth, klines, collateral, securities, trading), sap_sunrise_ (Sunrise asset gateway: canonical tokens, swap quotes, cross-chain asset swaps). Free read.',
+    description: 'Search the SAP MCP tool catalog (420+ tools) by keyword. Returns top-K matching tools with their name, description, and full input schema. Use this to discover tools before calling them via sap_call_tool. Categories: sap_phoenix_ (Phoenix perps), sap_adrena_ (Adrena perps), sap_perp_ (perps risk/signals), jupiter_ (swaps), spl_token_ (tokens), staking_ (staking), bridging_ (bridges), meteora_ (liquidity), magicblock_ (ephemeral rollups), sap_backpack_ (Backpack Exchange CeFi: markets, depth, klines, collateral, securities, trading), sap_sunrise_ (Sunrise asset gateway: canonical tokens, swap quotes, cross-chain asset swaps), sap_perpspad_ (PerpsPad launchpad: perp-backed token launches, markets, stats, buyback events). Free read.',
     inputSchema: {
       type: 'object',
       properties: {

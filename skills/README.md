@@ -54,6 +54,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-social-gaming` | Blinks, Gibwork bounties, Send Arcade gaming |
 | `sap-backpack-tools` | Backpack Exchange CeFi: markets, depth, klines, collateral, securities, signed account/trading with API keys |
 | `sap-sunrise-tools` | Sunrise asset gateway: canonical token discovery, swap quotes, user-signed swap execution |
+| `sap-perpspad-tools` | PerpsPad launchpad: perp-backed token launches, markets, tokens, buyback events, stats, launch builder |
 
 ## Agent Behavior
 

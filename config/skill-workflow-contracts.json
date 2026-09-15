@@ -25,7 +25,8 @@
     { "id": "sap-staking", "heading": "# SAP Staking" },
     { "id": "sap-tool-registry", "heading": "# SAP Tool Registry" },
     { "id": "sap-backpack-tools", "heading": "# Backpack Exchange Tools" },
-    { "id": "sap-sunrise-tools", "heading": "# Sunrise Gateway Tools" }
+    { "id": "sap-sunrise-tools", "heading": "# Sunrise Gateway Tools" },
+    { "id": "sap-perpspad-tools", "heading": "# PerpsPad Launchpad Tools" }
   ],
   "indexMustContain": [
     "sap_agent_next_action",

@@ -257,16 +257,16 @@ describe('createSapMcpServer', () => {
     expect(quickContextPayload.toolCatalog).toMatchObject({
       profileId: 'readonly',
       runtimeMode: 'readonly',
-      moduleCount: 23,
-      toolCount: 202,
+      moduleCount: 24,
+      toolCount: 210,
     });
     expect(JSON.stringify(quickContextPayload.toolCatalog)).toContain('sap_payments_call_paid_tool');
-    expect(quickContextPayload.summary).toContain('modules:23');
-    expect(quickContextPayload.summary).toContain('catalogTools:202');
+    expect(quickContextPayload.summary).toContain('modules:24');
+    expect(quickContextPayload.summary).toContain('catalogTools:210');
     expect(runtimeStatusPayload.toolCatalog).toMatchObject({
       profileId: 'readonly',
-      moduleCount: 23,
-      toolCount: 202,
+      moduleCount: 24,
+      toolCount: 210,
     });
     expect(runtimeStatusPayload.runtimeDoctor).toMatchObject({
       status: 'warning',

@@ -198,6 +198,14 @@ const FREE_TOOLS = new Set([
   // Sunrise reads — free external HTTP reads against the public Sunrise API.
   'sap_sunrise_list_tokens',
   'sap_sunrise_resolve_token',
+  // PerpsPad reads — free external HTTP reads against the public launchpad API.
+  'sap_perpspad_get_markets',
+  'sap_perpspad_get_tokens',
+  'sap_perpspad_get_token',
+  'sap_perpspad_get_token_events',
+  'sap_perpspad_get_launch_status',
+  'sap_perpspad_get_stock_pairs',
+  'sap_perpspad_get_stats',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -309,6 +317,14 @@ const STRICT_FREE_TOOLS = new Set([
   // Sunrise reads — free in strict mode too.
   'sap_sunrise_list_tokens',
   'sap_sunrise_resolve_token',
+  // PerpsPad reads — free in strict mode too.
+  'sap_perpspad_get_markets',
+  'sap_perpspad_get_tokens',
+  'sap_perpspad_get_token',
+  'sap_perpspad_get_token_events',
+  'sap_perpspad_get_launch_status',
+  'sap_perpspad_get_stock_pairs',
+  'sap_perpspad_get_stats',
 ]);
 
 const MICRO_READ_TOOLS = new Set([
@@ -465,6 +481,9 @@ const BUILDER_TOOLS = new Set([
   'sap_backpack_cancel_all_orders',
   'sap_backpack_get_deposit_address',
   'sap_backpack_request_withdrawal',
+  // PerpsPad launch builder — returns unsigned config+pool transactions for
+  // the creator wallet to sign and send; never broadcasts server-side.
+  'sap_perpspad_build_launch',
 ]);
 
 const VALUE_ACTION_TOOLS = new Set([

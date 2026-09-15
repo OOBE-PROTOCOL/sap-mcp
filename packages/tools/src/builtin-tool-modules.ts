@@ -13,6 +13,7 @@ import { sapNetworkStatsTool } from './sap-network-stats.tool.js';
 import { registerAgentStartTool } from './agent-start-tool.js';
 import { registerAdrenaTools } from './adrena-tools.js';
 import { registerBackpackTools } from './backpack/backpack-index.js';
+import { registerPerpspadTools } from './perpspad/perpspad-index.js';
 import { registerPhoenixTools } from './phoenix-tools.js';
 import { registerSunriseTools } from './sunrise/sunrise-index.js';
 import { registerToolSearchTool } from './sap-tool-search.js';
@@ -399,6 +400,24 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_sunrise_swap_intent',
     ],
     register: registerSunriseTools,
+  }),
+  createToolModule({
+    id: 'perpspad',
+    title: 'PerpsPad Launchpad',
+    description: 'PerpsPad permissionless launchpad: perp markets with leverage caps, launched tokens with their backing perp positions, buyback/burn events, launch status polling, platform stats, stock pairs, and the unsigned launch-transaction builder.',
+    category: 'integration',
+    order: 255,
+    expectedTools: [
+      'sap_perpspad_get_markets',
+      'sap_perpspad_get_tokens',
+      'sap_perpspad_get_token',
+      'sap_perpspad_get_token_events',
+      'sap_perpspad_get_launch_status',
+      'sap_perpspad_get_stock_pairs',
+      'sap_perpspad_get_stats',
+      'sap_perpspad_build_launch',
+    ],
+    register: registerPerpspadTools,
   }),
   createToolModule({
     id: 'perps-risk',
