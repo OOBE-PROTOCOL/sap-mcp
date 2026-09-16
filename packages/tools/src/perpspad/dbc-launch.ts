@@ -64,13 +64,16 @@ export function deriveDbcPool(mint: PublicKey, config: PublicKey, quoteMint: Pub
   )[0];
 }
 
-/** DBC base vault PDA: seeds ["token_vault", base_mint, pool] (verified against the live PerpsPad pool). */
-export function deriveDbcBaseVault(baseMint: PublicKey, pool: PublicKey): PublicKey {
+/** DBC vault PDA: seeds ["token_vault", mint, pool] — works for base AND quote vaults (source: ix_initialize_virtual_pool_with_spl_token.rs). */
+export function deriveDbcVault(mint: PublicKey, pool: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from('token_vault'), baseMint.toBuffer(), pool.toBuffer()],
+    [Buffer.from('token_vault'), mint.toBuffer(), pool.toBuffer()],
     DBC_PROGRAM_ID,
   )[0];
 }
+
+/** @deprecated use deriveDbcVault — kept for the re-export surface. */
+export const deriveDbcBaseVault = deriveDbcVault;
 
 /**
  * Builds the DBC `create_config` transaction with OUR config keypair.
@@ -152,7 +155,8 @@ export function buildInitializePoolTx(params: {
   // DBC pool_authority (program-level PDA, pinned from PerpsPad's live tx).
   const poolAuthority = DBC_POOL_AUTHORITY;
   const pool = deriveDbcPool(mintKeypair.publicKey, configAddress);
-  const baseVault = deriveDbcBaseVault(mintKeypair.publicKey, pool);
+  const baseVault = deriveDbcVault(mintKeypair.publicKey, pool);
+  const quoteVault = deriveDbcVault(WSOL_MINT, pool);
   const mintMetadata = deriveMintMetadata(mintKeypair.publicKey);
 
   const tx = new Transaction().add({
@@ -165,7 +169,7 @@ export function buildInitializePoolTx(params: {
       { pubkey: WSOL_MINT, isSigner: false, isWritable: false }, // quote_mint
       { pubkey: pool, isSigner: false, isWritable: true },
       { pubkey: baseVault, isSigner: false, isWritable: true }, // base_vault
-      { pubkey: WSOL_MINT, isSigner: false, isWritable: true }, // quote_vault (WSOL: mint account doubles as vault target pre-wrap)
+      { pubkey: quoteVault, isSigner: false, isWritable: true }, // quote_vault: PDA ["token_vault", WSOL, pool] — created by this ix
       { pubkey: mintMetadata, isSigner: false, isWritable: true },
       { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: payer, isSigner: true, isWritable: true },
