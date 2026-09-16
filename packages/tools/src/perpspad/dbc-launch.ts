@@ -15,6 +15,7 @@ import {
   deriveDbcPoolAddress,
   deriveDbcPoolAuthority,
   deriveDbcTokenVaultAddress,
+  deriveMintMetadata as deriveMintMetadataSdk,
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { createHash } from 'crypto';
 
@@ -57,12 +58,9 @@ export function anchorSighash(namespace: string, name: string): Buffer {
   return createHash('sha256').update(`${namespace}:${name}`).digest().subarray(0, 8);
 }
 
-/** Metaplex metadata PDA of a mint. */
+/** Metaplex metadata PDA — OFFICIAL SDK derivation (seeds ["metadata", program_id, mint]; my previous ["metadata", mint] was missing the program id and failed Metaplex seed validation on-chain). */
 export function deriveMintMetadata(mint: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('metadata'), mint.toBuffer()],
-    METADATA_PROGRAM_ID,
-  )[0];
+  return deriveMintMetadataSdk(mint);
 }
 
 /** DBC pool PDA — OFFICIAL Meteora SDK derivation (deriveDbcPoolAddress handles the max/min key ordering internally). Verified: derives PerpsPad's live pool HyhQAsTw… byte-for-byte. */
