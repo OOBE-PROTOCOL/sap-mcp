@@ -11,6 +11,11 @@
  */
 
 import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import {
+  deriveDbcPoolAddress,
+  deriveDbcPoolAuthority,
+  deriveDbcTokenVaultAddress,
+} from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { createHash } from 'crypto';
 
 /** Meteora DBC program (mainnet). */
@@ -40,8 +45,12 @@ export const PERPSPAD_CONFIG_ARGS = Buffer.from(
   'hex',
 );
 
-/** DBC pool_authority (program-level PDA, pinned from PerpsPad's live init_pool tx). */
-export const DBC_POOL_AUTHORITY = new PublicKey('9xNYu22Jgocjwrz8ZsyjVHoJcvwBk2AMyc5qoE5sYg8S');
+/** DBC pool_authority — const PDA from the official SDK. On-chain verified: this
+ * account EXISTS on mainnet (owner SystemProgram, ~59 SOL of accumulated fees).
+ * NOTE: PerpsPad's live txs use a different (fork/legacy) interface where the
+ * pool authority is a signer keypair — the mainline program's source
+ * (`address = const_pda::pool_authority::ID`) and the SDK both point here. */
+export const DBC_POOL_AUTHORITY = deriveDbcPoolAuthority();
 
 /** Anchor sighash: sha256("<namespace>:<snake_case_name>").slice(0, 8). */
 export function anchorSighash(namespace: string, name: string): Buffer {
@@ -56,20 +65,14 @@ export function deriveMintMetadata(mint: PublicKey): PublicKey {
   )[0];
 }
 
-/** DBC virtual pool PDA: seeds ["pool", config, base_mint, quote_mint] (max/min ordering collapses to [base, quote] for WSOL-quote launches; verified against PerpsPad's live pool). */
+/** DBC pool PDA — OFFICIAL Meteora SDK derivation (deriveDbcPoolAddress handles the max/min key ordering internally). Verified: derives PerpsPad's live pool HyhQAsTw… byte-for-byte. */
 export function deriveDbcPool(mint: PublicKey, config: PublicKey, quoteMint: PublicKey = WSOL_MINT): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('pool'), config.toBuffer(), mint.toBuffer(), quoteMint.toBuffer()],
-    DBC_PROGRAM_ID,
-  )[0];
+  return deriveDbcPoolAddress(quoteMint, mint, config);
 }
 
-/** DBC vault PDA: seeds ["token_vault", mint, pool] — works for base AND quote vaults (source: ix_initialize_virtual_pool_with_spl_token.rs). */
+/** DBC token vault PDA — OFFICIAL Meteora SDK derivation, works for base AND quote vaults. */
 export function deriveDbcVault(mint: PublicKey, pool: PublicKey): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('token_vault'), mint.toBuffer(), pool.toBuffer()],
-    DBC_PROGRAM_ID,
-  )[0];
+  return deriveDbcTokenVaultAddress(pool, mint);
 }
 
 /** @deprecated use deriveDbcVault — kept for the re-export surface. */

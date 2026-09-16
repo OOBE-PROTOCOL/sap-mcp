@@ -126,7 +126,11 @@ describe('dbc-launch', () => {
     expect(payerSig?.signature).toBeNull(); // user wallet signs client-side
   });
 
-  it('pool_authority constant matches PerpsPad live tx', () => {
-    expect(DBC_POOL_AUTHORITY.toBase58()).toBe('9xNYu22Jgocjwrz8ZsyjVHoJcvwBk2AMyc5qoE5sYg8S');
+  it('pool_authority is the official const PDA (on-chain verified)', () => {
+    // The mainline program pins pool_authority to a const PDA
+    // (`address = const_pda::pool_authority::ID` in the source). This account
+    // EXISTS on mainnet (SystemProgram-owned, ~59 SOL of accumulated fees).
+    // PerpsPad's live txs use a fork/legacy interface — not our target.
+    expect(DBC_POOL_AUTHORITY.toBase58()).toBe('FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM');
   });
 });
