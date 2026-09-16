@@ -56,18 +56,18 @@ export function deriveMintMetadata(mint: PublicKey): PublicKey {
   )[0];
 }
 
-/** DBC virtual pool PDA: seeds ["pool", base_mint, config]. */
-export function deriveDbcPool(mint: PublicKey, config: PublicKey): PublicKey {
+/** DBC virtual pool PDA: seeds ["pool", config, base_mint, quote_mint] (max/min ordering collapses to [base, quote] for WSOL-quote launches; verified against PerpsPad's live pool). */
+export function deriveDbcPool(mint: PublicKey, config: PublicKey, quoteMint: PublicKey = WSOL_MINT): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from('pool'), mint.toBuffer(), config.toBuffer()],
+    [Buffer.from('pool'), config.toBuffer(), mint.toBuffer(), quoteMint.toBuffer()],
     DBC_PROGRAM_ID,
   )[0];
 }
 
-/** DBC base vault PDA: seeds ["vault", pool]. */
-export function deriveDbcBaseVault(pool: PublicKey): PublicKey {
+/** DBC base vault PDA: seeds ["token_vault", base_mint, pool] (verified against the live PerpsPad pool). */
+export function deriveDbcBaseVault(baseMint: PublicKey, pool: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from('vault'), pool.toBuffer()],
+    [Buffer.from('token_vault'), baseMint.toBuffer(), pool.toBuffer()],
     DBC_PROGRAM_ID,
   )[0];
 }
@@ -152,7 +152,7 @@ export function buildInitializePoolTx(params: {
   // DBC pool_authority (program-level PDA, pinned from PerpsPad's live tx).
   const poolAuthority = DBC_POOL_AUTHORITY;
   const pool = deriveDbcPool(mintKeypair.publicKey, configAddress);
-  const baseVault = deriveDbcBaseVault(pool);
+  const baseVault = deriveDbcBaseVault(mintKeypair.publicKey, pool);
   const mintMetadata = deriveMintMetadata(mintKeypair.publicKey);
 
   const tx = new Transaction().add({

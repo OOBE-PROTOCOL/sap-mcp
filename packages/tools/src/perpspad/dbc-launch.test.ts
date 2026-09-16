@@ -67,11 +67,11 @@ describe('dbc-launch', () => {
     const mint = Keypair.generate().publicKey;
     const config = Keypair.generate().publicKey;
     const pool = deriveDbcPool(mint, config);
-    const vault = deriveDbcBaseVault(pool);
+    const vault = deriveDbcBaseVault(mint, pool);
     const mintMetadata = deriveMintMetadata(mint);
     // deterministic across calls
     expect(deriveDbcPool(mint, config).toBase58()).toBe(pool.toBase58());
-    expect(deriveDbcBaseVault(pool).toBase58()).toBe(vault.toBase58());
+    expect(deriveDbcBaseVault(mint, pool).toBase58()).toBe(vault.toBase58());
     expect(deriveMintMetadata(mint).toBase58()).toBe(mintMetadata.toBase58());
     // PDAs are off-curve (no private key exists) — structural check: they
     // derive from findProgramAddressSync which never returns on-curve keys.
@@ -109,7 +109,7 @@ describe('dbc-launch', () => {
     });
 
     expect(out.configAddress).toBe(configKeypair.publicKey.toBase58());
-    expect(out.poolAddress).toBe(deriveDbcPool(mintKeypair.publicKey, configKeypair.publicKey).toBase58());
+    expect(out.poolAddress).toBe(deriveDbcPool(mintKeypair.publicKey, configKeypair.publicKey, WSOL_MINT).toBase58());
 
     // The pool tx derives its pool PDA from config + mint — verify.
     expect(out.configAddress).toBe(configKeypair.publicKey.toBase58());
