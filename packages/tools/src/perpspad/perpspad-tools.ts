@@ -13,6 +13,7 @@ import type { SapMcpContext } from '../../../core/src/types.js';
 import { logger } from '../../../core/src/logger.js';
 import { PerpspadApiClient, type PerpspadLaunchBody } from './perpspad-client.js';
 import { deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
+import { registerDbcLaunchTool } from './dbc-launch-tool.js';
 import {
   registerPerpspadPipelineTool,
   perpspadPipelineOk,
@@ -367,5 +368,8 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
     }
   });
 
-  logger.debug('PerpsPad launchpad tools registered', { count: 9 });
+  // Direct DBC launch builder (Option 2) — no PerpsPad API in the critical path.
+  registerDbcLaunchTool(server, context);
+
+  logger.debug('PerpsPad launchpad tools registered', { count: 10 });
 }
