@@ -77,11 +77,11 @@ describe('dbc-launch', () => {
     // derive from findProgramAddressSync which never returns on-curve keys.
   });
 
-  it('encodes InitializePoolParameters as borsh strings with the pinned numeric tail', () => {
-    const tail = Buffer.alloc(40, 0x11);
-    const encoded = encodeInitializePoolParams({ name: 'Test', symbol: 'TST', uri: 'https://x.test/a.json' }, tail);
-    // name: 4 + 4, symbol: 4 + 3, uri: 4 + 21, tail: 40
-    expect(encoded.length).toBe(4 + 4 + 4 + 3 + 4 + 21 + 40);
+  it('encodes InitializePoolParameters as three borsh strings (no numeric tail — verified from a live pool tx)', () => {
+    const encoded = encodeInitializePoolParams({ name: 'Test', symbol: 'TST', uri: 'https://x.test/a.json' });
+    // name: 4 + 4, symbol: 4 + 3, uri: 4 + 21 — that is ALL (114 bytes on the
+    // live PerpsPad pool tx were exactly these three strings).
+    expect(encoded.length).toBe(8 + 7 + 25);
     // name length prefix
     expect(encoded.readUInt32LE(0)).toBe(4);
     expect(encoded.subarray(4, 8).toString('utf8')).toBe('Test');
@@ -106,7 +106,6 @@ describe('dbc-launch', () => {
       payer: payer.publicKey,
       latestBlockhash: '11111111111111111111111111111111',
       metadata: { name: 'Test Coin', symbol: 'TEST', uri: 'https://x.test/a.json' },
-      pinnedNumerics: Buffer.alloc(40, 0),
     });
 
     expect(out.configAddress).toBe(configKeypair.publicKey.toBase58());

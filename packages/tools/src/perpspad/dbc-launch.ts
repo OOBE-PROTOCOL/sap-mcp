@@ -118,12 +118,13 @@ function borshString(value: string): Buffer {
 }
 
 /**
- * Borsh-encodes InitializePoolParameters. The numeric tail is the verbatim
- * numeric region from PerpsPad's live pool tx (curve init constants — same
- * for every launch); the three string fields are the dynamic identity fields.
+ * Borsh-encodes InitializePoolParameters. Decoded from PerpsPad's live pool
+ * tx (2026-09-16): the args are EXACTLY three borsh strings — name, symbol,
+ * uri — 114 bytes total, NO numeric tail (the uri is the token's metadata
+ * JSON endpoint; ours points at our own metadata host).
  */
-export function encodeInitializePoolParams(p: InitializePoolParams, pinnedNumerics: Buffer): Buffer {
-  return Buffer.concat([borshString(p.name), borshString(p.symbol), borshString(p.uri), pinnedNumerics]);
+export function encodeInitializePoolParams(p: InitializePoolParams): Buffer {
+  return Buffer.concat([borshString(p.name), borshString(p.symbol), borshString(p.uri)]);
 }
 
 /**
@@ -143,10 +144,9 @@ export function buildInitializePoolTx(params: {
   escrowPda: PublicKey;
   payer: PublicKey;
   metadata: InitializePoolParams;
-  pinnedNumerics: Buffer;
   creatorAddress?: PublicKey;
 }): { tx: Transaction; poolAddress: PublicKey } {
-  const { configAddress, mintKeypair, payer, metadata, pinnedNumerics, creatorAddress } = params;
+  const { configAddress, mintKeypair, payer, metadata, creatorAddress } = params;
   const creator = creatorAddress ?? payer; // fee_claimer (the split-relevant field) lives in the CONFIG, not here
 
   // DBC pool_authority (program-level PDA, pinned from PerpsPad's live tx).
@@ -175,7 +175,7 @@ export function buildInitializePoolTx(params: {
       { pubkey: DBC_EVENT_AUTHORITY, isSigner: false, isWritable: false },
       { pubkey: DBC_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([DBC_INIT_POOL_DISCRIMINATOR, encodeInitializePoolParams(metadata, pinnedNumerics)]),
+    data: Buffer.concat([DBC_INIT_POOL_DISCRIMINATOR, encodeInitializePoolParams(metadata)]),
   });
   return { tx, poolAddress: pool };
 }
@@ -205,15 +205,13 @@ export function buildDirectDbcLaunch(params: {
   payer: PublicKey;
   latestBlockhash: string;
   metadata: InitializePoolParams;
-  pinnedNumerics: Buffer;
 }): {
   configTxBase64: string;
   poolTxBase64: string;
   configAddress: string;
   poolAddress: string;
 } {
-  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, pinnedNumerics } =
-    params;
+  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata } = params;
 
   const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer });
   configTx.recentBlockhash = latestBlockhash;
@@ -226,7 +224,6 @@ export function buildDirectDbcLaunch(params: {
     escrowPda,
     payer,
     metadata,
-    pinnedNumerics,
   });
   poolTx.recentBlockhash = latestBlockhash;
   poolTx.feePayer = payer;
