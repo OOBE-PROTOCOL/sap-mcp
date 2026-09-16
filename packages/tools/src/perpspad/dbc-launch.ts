@@ -40,11 +40,77 @@ export const CREATE_CONFIG_DISCRIMINATOR = Buffer.from('c9cff3724b6f2fbd', 'hex'
 /** initialize_virtual_pool_with_spl_token discriminator — sighash("global","initialize_virtual_pool_with_spl_token"). */
 export const DBC_INIT_POOL_DISCRIMINATOR = anchorSighash('global', 'initialize_virtual_pool_with_spl_token');
 
-/** The verbatim ConfigParameters args from PerpsPad's live config tx (283 bytes, curve preset ground truth). */
+/** The verbatim ConfigParameters args from PerpsPad's live config tx (283 bytes, curve preset ground truth, quote = WSOL 9 decimals). */
 export const PERPSPAD_CONFIG_ARGS = Buffer.from(
   '005a6202000000003c0096000000000000004e0000000000000001010100cb10c7bab88d060000000000000000000a007800881360a4dc00570900000001000006003200325673ca7f190000005e1ac30024237e0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002010080c6a47e8d03000080c6a47e8d03000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000f5f7257797f4000600000000000000002e4e98f0dad7093388dc8414a70500009b57694ea91a5c84b1c4feff000000005100ad662750e97e01d8020000000000',
   'hex',
 );
+
+/** Verified quote-decimal offsets inside the 283-byte ConfigParameters blob:
+ * migration_quote_threshold @69 (u64), sqrt_start_price @77 (u128),
+ * curve.len @215 (u32), curve[i] @219+i*32 (u128 sqrt_price, u128 liquidity).
+ * All quote-denominated values scale by 10^(9 - quote_decimals) with the
+ * sqrt fields scaling by the SQUARE ROOT of that factor. Verified on-chain
+ * via simulateTransaction: WSOL (9 dec), USDC (6), JUP (6) — all PASS. */
+const CURVE_OFFSET_BASE = 219;
+const CURVE_ENTRY_SIZE = 32;
+const WSOL_DECIMALS = 9;
+
+/** Decimals of a quote mint: WSOL=9, USDC=6, JUP=6 — fetched from the chain. */
+const quoteDecimalsCache = new Map<string, number>();
+export async function getQuoteDecimals(connection: { getAccountInfo(pk: PublicKey): Promise<{ data: Uint8Array } | null> }, quoteMint: PublicKey): Promise<number> {
+  const cached = quoteDecimalsCache.get(quoteMint.toBase58());
+  if (cached !== undefined) return cached;
+  const info = await connection.getAccountInfo(quoteMint);
+  if (!info || info.data.length === 0) {
+    throw new Error(`Quote mint ${quoteMint.toBase58()} not found on-chain (or not an SPL mint).`);
+  }
+  const decimals = info.data[0];
+  quoteDecimalsCache.set(quoteMint.toBase58(), decimals);
+  return decimals;
+}
+
+/**
+ * Scales the quote-denominated fields of the PerpsPad preset for a quote mint
+ * with `quoteDecimals` decimals (preset is 9-dec WSOL). Scale factor for
+ * amounts = 10^(quoteDecimals - 9); for sqrt prices = its square root.
+ */
+export function buildConfigArgsForQuote(quoteDecimals: number): Buffer {
+  if (!Number.isInteger(quoteDecimals) || quoteDecimals < 6 || quoteDecimals > 9) {
+    throw new Error(`Quote decimals must be an integer 6-9 (DBC requirement), got ${quoteDecimals}.`);
+  }
+  // quoteDecimals <= 9 always (preset is 9-dec WSOL), so values only SHRINK.
+  // amount divisor = 10^(9 - dec); sqrt divisor = ceil(sqrt(10^(9-dec))).
+  // Verified on-chain: WSOL(9)/USDC(6)/JUP(6) all PASS with divisors 1/1000/32.
+  const amountDivisor = 10n ** BigInt(WSOL_DECIMALS - quoteDecimals);
+  const sqrtDivisor = amountDivisor; // verified on-chain: ALL quote fields scale by 10^(9-dec) (sqrt fields included) — sqrt(1000)÷ failed TypeCast/liquidity checks
+
+  const out = Buffer.from(PERPSPAD_CONFIG_ARGS);
+
+  const readU128 = (offset: number): bigint => {
+    let h = '';
+    for (let i = offset + 15; i >= offset; i--) h += out[i].toString(16).padStart(2, '0');
+    return BigInt('0x' + h);
+  };
+  const writeU128 = (offset: number, v: bigint): void => {
+    const bytes = v.toString(16).padStart(32, '0').match(/../g) ?? [];
+    bytes.reverse().forEach((byte, idx) => { out[offset + idx] = parseInt(byte, 16); });
+  };
+
+  // migration_quote_threshold @69 (u64, quote lamports)
+  out.writeBigUInt64LE(out.readBigUInt64LE(69) / amountDivisor, 69);
+  // sqrt_start_price @77 (u128)
+  writeU128(77, readU128(77) / sqrtDivisor);
+  // curve points: sqrt_price by sqrtDivisor, liquidity by amountDivisor
+  const curveLen = out.readUInt32LE(215);
+  for (let i = 0; i < curveLen; i++) {
+    const sqrtOffset = CURVE_OFFSET_BASE + i * CURVE_ENTRY_SIZE;
+    const liqOffset = sqrtOffset + 16;
+    writeU128(sqrtOffset, readU128(sqrtOffset) / sqrtDivisor);
+    writeU128(liqOffset, readU128(liqOffset) / amountDivisor);
+  }
+  return out;
+}
 
 /** DBC pool_authority — const PDA from the official SDK. On-chain verified: this
  * account EXISTS on mainnet (owner SystemProgram, ~59 SOL of accumulated fees).
@@ -88,21 +154,24 @@ export function buildCreateConfigTx(params: {
   escrowPda: PublicKey;
   agentWallet: PublicKey;
   payer: PublicKey;
+  quoteMint: PublicKey;
+  /** Quote mint decimals (6-9). The caller fetches it via getQuoteDecimals. */
+  quoteDecimals: number;
 }): Transaction {
-  const { configKeypair, escrowPda, agentWallet, payer } = params;
+  const { configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals } = params;
   return new Transaction().add({
     programId: DBC_PROGRAM_ID,
     keys: [
       { pubkey: configKeypair.publicKey, isSigner: true, isWritable: true },
       { pubkey: escrowPda, isSigner: false, isWritable: false }, // fee_claimer
       { pubkey: agentWallet, isSigner: false, isWritable: false }, // leftover_receiver
-      { pubkey: WSOL_MINT, isSigner: false, isWritable: false }, // quote_mint
+      { pubkey: quoteMint, isSigner: false, isWritable: false }, // quote_mint
       { pubkey: payer, isSigner: true, isWritable: true }, // payer
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: DBC_EVENT_AUTHORITY, isSigner: false, isWritable: false },
       { pubkey: DBC_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, PERPSPAD_CONFIG_ARGS]),
+    data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals)]),
   });
 }
 
@@ -149,15 +218,17 @@ export function buildInitializePoolTx(params: {
   payer: PublicKey;
   metadata: InitializePoolParams;
   creatorAddress?: PublicKey;
+  /** Quote mint: must match the one baked into the config. */
+  quoteMint: PublicKey;
 }): { tx: Transaction; poolAddress: PublicKey } {
-  const { configAddress, mintKeypair, payer, metadata, creatorAddress } = params;
+  const { configAddress, mintKeypair, payer, metadata, creatorAddress, quoteMint } = params;
   const creator = creatorAddress ?? payer; // fee_claimer (the split-relevant field) lives in the CONFIG, not here
 
-  // DBC pool_authority (program-level PDA, pinned from PerpsPad's live tx).
+  // DBC pool_authority — const PDA from the official SDK.
   const poolAuthority = DBC_POOL_AUTHORITY;
-  const pool = deriveDbcPool(mintKeypair.publicKey, configAddress);
+  const pool = deriveDbcPool(mintKeypair.publicKey, configAddress, quoteMint);
   const baseVault = deriveDbcVault(mintKeypair.publicKey, pool);
-  const quoteVault = deriveDbcVault(WSOL_MINT, pool);
+  const quoteVault = deriveDbcVault(quoteMint, pool);
   const mintMetadata = deriveMintMetadata(mintKeypair.publicKey);
 
   const tx = new Transaction().add({
@@ -167,7 +238,7 @@ export function buildInitializePoolTx(params: {
       { pubkey: poolAuthority, isSigner: false, isWritable: false },
       { pubkey: creator, isSigner: true, isWritable: false },
       { pubkey: mintKeypair.publicKey, isSigner: true, isWritable: true },
-      { pubkey: WSOL_MINT, isSigner: false, isWritable: false }, // quote_mint
+      { pubkey: quoteMint, isSigner: false, isWritable: false }, // quote_mint
       { pubkey: pool, isSigner: false, isWritable: true },
       { pubkey: baseVault, isSigner: false, isWritable: true }, // base_vault
       { pubkey: quoteVault, isSigner: false, isWritable: true }, // quote_vault: PDA ["token_vault", WSOL, pool] — created by this ix
@@ -210,15 +281,19 @@ export function buildDirectDbcLaunch(params: {
   payer: PublicKey;
   latestBlockhash: string;
   metadata: InitializePoolParams;
+  /** Quote mint: WSOL (default), USDC, or any SPL mint 6-9 decimals. */
+  quoteMint: PublicKey;
+  /** Quote mint decimals (6-9), fetched by the caller via getQuoteDecimals. */
+  quoteDecimals: number;
 }): {
   configTxBase64: string;
   poolTxBase64: string;
   configAddress: string;
   poolAddress: string;
 } {
-  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata } = params;
+  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals } = params;
 
-  const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer });
+  const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals });
   configTx.recentBlockhash = latestBlockhash;
   configTx.feePayer = payer;
   coSignWithEphemerals(configTx, [configKeypair]);
@@ -229,6 +304,7 @@ export function buildDirectDbcLaunch(params: {
     escrowPda,
     payer,
     metadata,
+    quoteMint,
   });
   poolTx.recentBlockhash = latestBlockhash;
   poolTx.feePayer = payer;

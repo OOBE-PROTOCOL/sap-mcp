@@ -12,8 +12,10 @@ import { logger } from '../../../core/src/logger.js';
 import {
   buildDirectDbcLaunch,
   deriveDbcPool,
+  getQuoteDecimals,
   METADATA_PROGRAM_ID,
   deriveMintMetadata,
+  WSOL_MINT,
 } from './dbc-launch.js';
 import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
 import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
@@ -21,26 +23,102 @@ import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineExcep
 const OOBE_TREASURY = 'BiHdXQqNXTgMrNikZxw4CMnD1z1t6K2tmtwyXgSWSKqR';
 const ESCROW_PROGRAM_ID = 'ENpvWhtTtnveMZ3WHpGKHMEYDrPHHc5v6JjjVUWFNYgA';
 
+/** Perp backing policy attached to a DBC launch (read by the keeper). */
+export interface DbcBackingPolicy {
+  readonly underlying: string;
+  readonly leverage: number;
+  readonly direction: 'long' | 'short';
+  readonly status: 'pending-keeper';
+}
+
+/** inputSchema for `sap_perpspad_launch_dbc` (exported for unit tests). */
+export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    ticker: { type: 'string', description: 'Coin ticker, A-Z 0-9 only (e.g. MOON)' },
+    name: { type: 'string', description: 'Coin display name' },
+    agentWallet: { type: 'string', description: 'Agent wallet: receives 70% of claimed trading fees; also the leftover-token receiver' },
+    payer: { type: 'string', description: 'Transaction payer + pool creator (signs all three txs client-side)' },
+    devBuySol: { type: 'number', description: 'Dev-buy in SOL (0.1-5), spent via swap after pool init' },
+    latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
+    imageUrl: { type: 'string', description: 'Optional coin image URL (embedded in the metadata uri)' },
+    underlying: { type: 'string', description: 'Perp backing: Phoenix market symbol (e.g. SOL, TSLA, OIL). A-Z 0-9, 1-12 chars. REQUIRED together with leverage and direction (all-or-nothing).' },
+    leverage: { type: 'number', description: 'Perp backing: integer leverage 1-10. REQUIRED together with underlying and direction (all-or-nothing).' },
+    direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
+    quote: { type: 'string', description: 'Optional quote token hint (e.g. SOL, USDC). USDC is NOT yet supported by the direct DBC builder and fails fast.' },
+  },
+  required: ['ticker', 'name', 'agentWallet', 'payer', 'devBuySol', 'latestBlockhash'],
+} as const;
+
+/**
+ * Validates the perp backing triple (underlying + leverage + direction).
+ * All-or-nothing: either all three are present (and valid) or none is.
+ * Returns the normalized policy, or an Error describing the violation.
+ */
+export function parseBackingPolicy(
+  input: Record<string, unknown>,
+): { policy: DbcBackingPolicy | undefined; error: Error | undefined } {
+  const hasUnderlying = input.underlying !== undefined && input.underlying !== null && input.underlying !== '';
+  const hasLeverage = input.leverage !== undefined && input.leverage !== null;
+  const hasDirection = input.direction !== undefined && input.direction !== null && input.direction !== '';
+
+  if (!hasUnderlying && !hasLeverage && !hasDirection) {
+    return { policy: undefined, error: undefined }; // clean pure-curve token
+  }
+
+  const missing = [
+    !hasUnderlying && 'underlying',
+    !hasLeverage && 'leverage',
+    !hasDirection && 'direction',
+  ].filter(Boolean).join(', ');
+  if (missing) {
+    return {
+      policy: undefined,
+      error: new Error(`invalid_backingPolicy: perp backing is all-or-nothing — provide ALL of underlying, leverage, direction (missing: ${missing}). Omit all three for a clean pure-curve token.`),
+    };
+  }
+
+  const underlying = typeof input.underlying === 'string' ? input.underlying.trim() : '';
+  if (!/^[A-Z0-9]{1,12}$/.test(underlying)) {
+    return {
+      policy: undefined,
+      error: new Error('invalid_backingPolicy.underlying: must be an uppercase Phoenix market symbol, 1-12 chars, A-Z 0-9 only (e.g. SOL, TSLA, OIL)'),
+    };
+  }
+
+  const leverage = input.leverage;
+  if (typeof leverage !== 'number' || !Number.isInteger(leverage) || leverage < 1 || leverage > 10) {
+    return {
+      policy: undefined,
+      error: new Error('invalid_backingPolicy.leverage: must be an integer between 1 and 10'),
+    };
+  }
+
+  const direction = input.direction;
+  if (direction !== 'long' && direction !== 'short') {
+    return {
+      policy: undefined,
+      error: new Error('invalid_backingPolicy.direction: must be exactly "long" or "short"'),
+    };
+  }
+
+  return {
+    policy: { underlying, leverage, direction, status: 'pending-keeper' },
+    error: undefined,
+  };
+}
+
+/** USDC mainnet mint (quote option). */
+const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
 /** Registers `sap_perpspad_launch_dbc` on the MCP server. */
 export function registerDbcLaunchTool(
   server: Parameters<typeof registerPerpspadPipelineTool>[0],
   context: Parameters<typeof registerPerpspadPipelineTool>[1],
 ): void {
   registerPerpspadPipelineTool(server, context, 'sap_perpspad_launch_dbc', {
-    description: 'Build a DIRECT Meteora DBC token launch (no PerpsPad API): generates the mint+config keypairs, co-signs create_config and initialize_virtual_pool with them, and returns three semi-signed transactions (createConfig, initializePool, initializeEscrow) that the user wallet completes by adding its signature. fee_claimer = escrow PDA → trading fees flow to the escrow, which splits 70% agent / 30% OOBE treasury on-chain. Dev-buy is paid by the payer wallet. Sign order: createConfig → initializePool → initializeEscrow. BUILDER tier.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ticker: { type: 'string', description: 'Coin ticker, A-Z 0-9 only (e.g. MOON)' },
-        name: { type: 'string', description: 'Coin display name' },
-        agentWallet: { type: 'string', description: 'Agent wallet: receives 70% of claimed trading fees; also the leftover-token receiver' },
-        payer: { type: 'string', description: 'Transaction payer + pool creator (signs all three txs client-side)' },
-        devBuySol: { type: 'number', description: 'Dev-buy in SOL (0.1-5), spent via swap after pool init' },
-        latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
-        imageUrl: { type: 'string', description: 'Optional coin image URL (embedded in the metadata uri)' },
-      },
-      required: ['ticker', 'name', 'agentWallet', 'payer', 'devBuySol', 'latestBlockhash'],
-    },
+    description: 'Build a DIRECT Meteora DBC token launch (no PerpsPad API): generates the mint+config keypairs, co-signs create_config and initialize_virtual_pool with them, and returns three semi-signed transactions (createConfig, initializePool, initializeEscrow) that the user wallet completes by adding its signature. fee_claimer = escrow PDA → trading fees flow to the escrow, which splits 70% agent / 30% OOBE treasury on-chain. Dev-buy is paid by the payer wallet. Sign order: createConfig → initializePool → initializeEscrow. Optional perp backing (underlying + leverage + direction, all-or-nothing) attaches a backingPolicy for the keeper; omit all three for a clean pure-curve token. quote="USDC" is NOT yet supported and fails fast. BUILDER tier.',
+    inputSchema: DBC_LAUNCH_INPUT_SCHEMA,
   }, async (input) => {
     try {
       const ticker = String(input.ticker ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -69,6 +147,23 @@ export function registerDbcLaunchTool(
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_latestBlockhash: fetch a fresh blockhash via getLatestBlockhash and pass it here'));
       }
 
+      // Quote: SOL (default) | USDC | custom via quoteMint (SPL 6-9 decimals).
+      const quote = typeof input.quote === 'string' ? input.quote.trim().toUpperCase() : 'SOL';
+      const quoteMintStr = quote === 'USDC'
+        ? USDC_MINT.toBase58()
+        : (typeof input.quoteMint === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(input.quoteMint)
+          ? input.quoteMint
+          : (quote === 'SOL' ? WSOL_MINT.toBase58() : ''));
+      if (!quoteMintStr) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_quote: use quote="SOL"|"USDC", or pass a valid 32-44 char base58 quoteMint (SPL mint, 6-9 decimals, no transfer fee).'));
+      }
+
+      // Perp backing policy: all-or-nothing triple, fail-fast on violations.
+      const { policy: backingPolicy, error: backingError } = parseBackingPolicy(input);
+      if (backingError) {
+        return perpspadPipelineException('Invalid direct DBC launch input', backingError);
+      }
+
       const configKeypair = Keypair.generate();
       const mintKeypair = Keypair.generate();
       const { escrowPda, bump } = deriveEscrowPda(mintKeypair.publicKey);
@@ -83,6 +178,11 @@ export function registerDbcLaunchTool(
       // before signing) — a server-side fetch here produced blockhashes that
       // were stale/invalid on mainnet by the time the client signed.
 
+      // Quote mint decimals from the chain (validates the mint exists).
+      const quoteMint = new PublicKey(quoteMintStr);
+      const { getConnection } = await import('./../phoenix/phoenix-helpers.js');
+      const quoteDecimals = await getQuoteDecimals(getConnection(context), quoteMint);
+
       const built = buildDirectDbcLaunch({
         configKeypair,
         mintKeypair,
@@ -91,6 +191,8 @@ export function registerDbcLaunchTool(
         payer: new PublicKey(payer),
         latestBlockhash,
         metadata: { name: name.trim(), symbol: ticker, uri },
+        quoteMint,
+        quoteDecimals,
       });
 
       // initialize_escrow instruction (third tx) — the existing helper.
@@ -124,6 +226,10 @@ export function registerDbcLaunchTool(
         payer,
         devBuySol,
         split: { agentBps: 7000, oobeBps: 3000, oobeTreasury: OOBE_TREASURY },
+        // Perp backing policy — present ONLY when the caller passed the full
+        // triple; the keeper reads it to open the hedge legs. Absent = clean
+        // pure-curve token.
+        ...(backingPolicy ? { backingPolicy } : {}),
         transactions: {
           createConfig: {
             base64: built.configTxBase64,

@@ -3,6 +3,7 @@
  * PDA derivations, borsh encoding, and ephemeral co-signing.
  */
 import { Keypair, Transaction } from '@solana/web3.js';
+import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
   anchorSighash,
@@ -17,6 +18,7 @@ import {
   deriveDbcPool,
   deriveMintMetadata,
   encodeInitializePoolParams,
+  buildConfigArgsForQuote,
   PERPSPAD_CONFIG_ARGS,
   WSOL_MINT,
 } from './dbc-launch.js';
@@ -45,7 +47,7 @@ describe('dbc-launch', () => {
     const agentWallet = Keypair.generate().publicKey;
     const payer = Keypair.generate().publicKey;
 
-    const tx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer });
+    const tx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint: WSOL_MINT, quoteDecimals: 9 });
     expect(tx.instructions).toHaveLength(1);
     const ix = tx.instructions[0];
     expect(ix.programId.toBase58()).toBe(DBC_PROGRAM_ID.toBase58());
@@ -99,6 +101,8 @@ describe('dbc-launch', () => {
     const payer = Keypair.generate();
 
     const out = buildDirectDbcLaunch({
+    quoteMint: WSOL_MINT,
+    quoteDecimals: 9,
       configKeypair,
       mintKeypair,
       escrowPda,
@@ -134,3 +138,16 @@ describe('dbc-launch', () => {
     expect(DBC_POOL_AUTHORITY.toBase58()).toBe('FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM');
   });
 });
+  it('buildConfigArgsForQuote scales the preset per quote decimals (on-chain verified)', () => {
+    // WSOL (9 dec) = the original verbatim preset
+    expect(buildConfigArgsForQuote(9).toString('hex')).toBe(PERPSPAD_CONFIG_ARGS.toString('hex'));
+    const usdc = buildConfigArgsForQuote(6);
+    expect(usdc.length).toBe(283);
+    // threshold shrank by 10^3: original @69 = 109518156630 -> 109518156
+    expect(usdc.readBigUInt64LE(69)).toBe(109518156n);
+    // same-decimals quotes share the preset
+    expect(buildConfigArgsForQuote(6).toString('hex')).toBe(usdc.toString('hex'));
+    // invalid decimals rejected
+    expect(() => buildConfigArgsForQuote(5)).toThrow(/6-9/);
+    expect(() => buildConfigArgsForQuote(10)).toThrow(/6-9/);
+  });
