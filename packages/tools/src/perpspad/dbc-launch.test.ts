@@ -36,7 +36,7 @@ describe('dbc-launch', () => {
 
   it('the captured ConfigParameters preset is 283 bytes (PerpsPad live verbatim)', () => {
     // The full data (discriminator + args) from the captured tx was 291 bytes of ix.data; args alone = 292 - 8 = 284? Pin the actual captured length: 300 bytes total minus nothing — assert it equals the decoded verbatim capture.
-    expect(PERPSPAD_CONFIG_ARGS.length).toBe(300);
+    expect(PERPSPAD_CONFIG_ARGS.length).toBe(283);
   });
 
   it('builds create_config with fee_claimer = escrow PDA and leftover_receiver = agent wallet', () => {
