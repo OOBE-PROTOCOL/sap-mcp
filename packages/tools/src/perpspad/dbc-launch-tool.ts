@@ -7,7 +7,7 @@
  *   recorded as metadata), plus the escrow split wired in.
  */
 
-import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { logger } from '../../../core/src/logger.js';
 import {
   buildDirectDbcLaunch,
@@ -19,7 +19,6 @@ import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress
 import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
 
 const OOBE_TREASURY = 'BiHdXQqNXTgMrNikZxw4CMnD1z1t6K2tmtwyXgSWSKqR';
-const MAINNET_RPC = 'https://api.mainnet-beta.solana.com';
 const ESCROW_PROGRAM_ID = 'ENpvWhtTtnveMZ3WHpGKHMEYDrPHHc5v6JjjVUWFNYgA';
 
 /** Registers `sap_perpspad_launch_dbc` on the MCP server. */
@@ -37,9 +36,10 @@ export function registerDbcLaunchTool(
         agentWallet: { type: 'string', description: 'Agent wallet: receives 70% of claimed trading fees; also the leftover-token receiver' },
         payer: { type: 'string', description: 'Transaction payer + pool creator (signs all three txs client-side)' },
         devBuySol: { type: 'number', description: 'Dev-buy in SOL (0.1-5), spent via swap after pool init' },
+        latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
         imageUrl: { type: 'string', description: 'Optional coin image URL (embedded in the metadata uri)' },
       },
-      required: ['ticker', 'name', 'agentWallet', 'payer', 'devBuySol'],
+      required: ['ticker', 'name', 'agentWallet', 'payer', 'devBuySol', 'latestBlockhash'],
     },
   }, async (input) => {
     try {
@@ -64,6 +64,10 @@ export function registerDbcLaunchTool(
       if (!(Number.isFinite(devBuySol) && devBuySol >= 0.1 && devBuySol <= 5)) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_devBuySol: must be between 0.1 and 5 SOL'));
       }
+      const latestBlockhash = String(input.latestBlockhash ?? '').trim();
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_latestBlockhash: fetch a fresh blockhash via getLatestBlockhash and pass it here'));
+      }
 
       const configKeypair = Keypair.generate();
       const mintKeypair = Keypair.generate();
@@ -75,8 +79,9 @@ export function registerDbcLaunchTool(
         ? input.imageUrl
         : `https://steve.oobeprotocol.ai/api/launchpad/metadata/${mintKeypair.publicKey.toBase58()}`;
 
-      const connection = new Connection(MAINNET_RPC, 'confirmed');
-      const { blockhash: latestBlockhash } = await connection.getLatestBlockhash('confirmed');
+      // latestBlockhash comes from the CALLER (fetched client-side moments
+      // before signing) — a server-side fetch here produced blockhashes that
+      // were stale/invalid on mainnet by the time the client signed.
 
       const built = buildDirectDbcLaunch({
         configKeypair,
