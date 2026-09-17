@@ -8,6 +8,8 @@
  */
 
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import BN from 'bn.js';
+import { DynamicBondingCurveClient, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { logger } from '../../../core/src/logger.js';
 import {
   buildDirectDbcLaunch,
@@ -16,7 +18,10 @@ import {
   METADATA_PROGRAM_ID,
   deriveMintMetadata,
   WSOL_MINT,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from './dbc-launch.js';
+import { ExtensionType, getExtensionTypes, getMint } from '@solana/spl-token';
 import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
 import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
 
@@ -31,6 +36,15 @@ export interface DbcBackingPolicy {
   readonly status: 'pending-keeper';
 }
 
+export function toQuoteBaseUnits(amount: number, decimals: number): BN {
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(decimals) || decimals < 0 || decimals > 9) {
+    throw new Error('Invalid quote amount or decimals');
+  }
+  const fixed = amount.toFixed(decimals);
+  const [whole, fraction = ''] = fixed.split('.');
+  return new BN(`${whole}${fraction.padEnd(decimals, '0')}`.replace(/^0+(?=\d)/, ''));
+}
+
 /** inputSchema for `sap_perpspad_launch_dbc` (exported for unit tests). */
 export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -39,15 +53,16 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     name: { type: 'string', description: 'Coin display name' },
     agentWallet: { type: 'string', description: 'Agent wallet: receives 70% of claimed trading fees; also the leftover-token receiver' },
     payer: { type: 'string', description: 'Transaction payer + pool creator (signs all three txs client-side)' },
-    devBuySol: { type: 'number', description: 'Dev-buy in SOL (0.1-5), spent via swap after pool init' },
+    devBuyAmount: { type: 'number', description: 'Initial buy amount, denominated in the selected quote token' },
+    devBuySol: { type: 'number', description: 'Deprecated alias for devBuyAmount (SOL launches only)' },
     latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
-    imageUrl: { type: 'string', description: 'Optional coin image URL (embedded in the metadata uri)' },
+    metadataBaseUrl: { type: 'string', description: 'HTTPS base URL used to build the Metaplex JSON URI' },
     underlying: { type: 'string', description: 'Perp backing: Phoenix market symbol (e.g. SOL, TSLA, OIL). A-Z 0-9, 1-12 chars. REQUIRED together with leverage and direction (all-or-nothing).' },
     leverage: { type: 'number', description: 'Perp backing: integer leverage 1-10. REQUIRED together with underlying and direction (all-or-nothing).' },
     direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
     quote: { type: 'string', description: 'Optional quote token hint (e.g. SOL, USDC). USDC is NOT yet supported by the direct DBC builder and fails fast.' },
   },
-  required: ['ticker', 'name', 'agentWallet', 'payer', 'devBuySol', 'latestBlockhash'],
+  required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
 
 /**
@@ -117,7 +132,7 @@ export function registerDbcLaunchTool(
   context: Parameters<typeof registerPerpspadPipelineTool>[1],
 ): void {
   registerPerpspadPipelineTool(server, context, 'sap_perpspad_launch_dbc', {
-    description: 'Build a DIRECT Meteora DBC token launch (no PerpsPad API): generates the mint+config keypairs, co-signs create_config and initialize_virtual_pool with them, and returns three semi-signed transactions (createConfig, initializePool, initializeEscrow) that the user wallet completes by adding its signature. fee_claimer = escrow PDA → trading fees flow to the escrow, which splits 70% agent / 30% OOBE treasury on-chain. Dev-buy is paid by the payer wallet. Sign order: createConfig → initializePool → initializeEscrow. Optional perp backing (underlying + leverage + direction, all-or-nothing) attaches a backingPolicy for the keeper; omit all three for a clean pure-curve token. quote="USDC" is NOT yet supported and fails fast. BUILDER tier.',
+    description: 'Build a direct Meteora DBC launch: create config, initialize pool, transfer creator authority to the 70/30 escrow PDA, then initialize escrow. A requested initial buy is built separately after pool confirmation with sap_perpspad_build_dbc_dev_buy and a fresh blockhash. Supports SOL, USDC, and validated SPL/Token-2022 quote mints.',
     inputSchema: DBC_LAUNCH_INPUT_SCHEMA,
   }, async (input) => {
     try {
@@ -125,7 +140,9 @@ export function registerDbcLaunchTool(
       const name = String(input.name ?? '');
       const agentWallet = String(input.agentWallet ?? '');
       const payer = String(input.payer ?? '');
-      const devBuySol = typeof input.devBuySol === 'number' ? input.devBuySol : Number.NaN;
+      const devBuyAmount = typeof input.devBuyAmount === 'number'
+        ? input.devBuyAmount
+        : typeof input.devBuySol === 'number' ? input.devBuySol : 0;
 
       if (ticker.length < 2 || ticker.length > 10) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_ticker: 2-10 A-Z 0-9 characters'));
@@ -139,8 +156,8 @@ export function registerDbcLaunchTool(
       if (!isValidSolanaAddress(payer)) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_payer: must be a valid Solana address'));
       }
-      if (!(Number.isFinite(devBuySol) && devBuySol >= 0.1 && devBuySol <= 5)) {
-        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_devBuySol: must be between 0.1 and 5 SOL'));
+      if (!(Number.isFinite(devBuyAmount) && devBuyAmount >= 0)) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_devBuyAmount: must be a non-negative quote-token amount'));
       }
       const latestBlockhash = String(input.latestBlockhash ?? '').trim();
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) {
@@ -170,9 +187,13 @@ export function registerDbcLaunchTool(
 
       // Metadata uri: the DBC init_pool stores it in the mint metadata; Steve
       // hosts the JSON (name/symbol/image) at this endpoint.
-      const uri = typeof input.imageUrl === 'string' && input.imageUrl.startsWith('http')
-        ? input.imageUrl
-        : `https://steve.oobeprotocol.ai/api/launchpad/metadata/${mintKeypair.publicKey.toBase58()}`;
+      const metadataBaseUrl = typeof input.metadataBaseUrl === 'string'
+        ? input.metadataBaseUrl.replace(/\/$/, '')
+        : 'https://steve.oobeprotocol.ai/api/launchpad/metadata';
+      if (!metadataBaseUrl.startsWith('https://')) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('metadataBaseUrl must use HTTPS'));
+      }
+      const uri = `${metadataBaseUrl}/${mintKeypair.publicKey.toBase58()}`;
 
       // latestBlockhash comes from the CALLER (fetched client-side moments
       // before signing) — a server-side fetch here produced blockhashes that
@@ -189,6 +210,19 @@ export function registerDbcLaunchTool(
         conn.getAccountInfo(quoteMint),
       ]);
       const quoteMintOwner = quoteMintInfo ? quoteMintInfo.owner : undefined;
+      if (!quoteMintOwner || (!quoteMintOwner.equals(TOKEN_PROGRAM_ID) && !quoteMintOwner.equals(TOKEN_2022_PROGRAM_ID))) {
+        throw new Error('Quote mint must be owned by SPL Token or Token-2022');
+      }
+      const quoteMintState = await getMint(conn, quoteMint, 'confirmed', quoteMintOwner);
+      const unsafeExtensions = new Set([
+        ExtensionType.TransferFeeConfig,
+        ExtensionType.NonTransferable,
+        ExtensionType.PermanentDelegate,
+      ]);
+      const extensionTypes = getExtensionTypes(quoteMintState.tlvData);
+      if (extensionTypes.some((extension) => unsafeExtensions.has(extension))) {
+        throw new Error(`Quote mint uses unsupported Token-2022 extensions: ${extensionTypes.join(',')}`);
+      }
 
       const built = buildDirectDbcLaunch({
         configKeypair,
@@ -232,13 +266,18 @@ export function registerDbcLaunchTool(
         escrowBump: bump,
         agentWallet,
         payer,
-        devBuySol,
+        devBuyAmount,
+        devBuyRequired: devBuyAmount > 0,
         split: { agentBps: 7000, oobeBps: 3000, oobeTreasury: OOBE_TREASURY },
         // Perp backing policy — present ONLY when the caller passed the full
         // triple; the keeper reads it to open the hedge legs. Absent = clean
         // pure-curve token.
         ...(backingPolicy ? { backingPolicy } : {}),
         transactions: {
+          bootstrapLaunch: {
+            base64: built.bootstrapTxBase64,
+            note: 'Atomic createConfig + initializePool, co-signed by both ephemeral keypairs.',
+          },
           createConfig: {
             base64: built.configTxBase64,
             note: 'Co-signed by the config keypair (gateway). The payer wallet adds its signature client-side.',
@@ -265,11 +304,57 @@ export function registerDbcLaunchTool(
           },
         },
         signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
-        nextStep: `Send createConfig FIRST, then initializePool, then transferPoolCreator, then initializeEscrow. The ephemeral signatures are already embedded — the payer wallet (${payer}) only adds its signature to each. transferPoolCreator makes the escrow PDA the pool creator: trading fees (creatorTradingFeePercentage=100) accrue to it and claim_and_split distributes 70/30.`,
+        nextStep: `Send createConfig, initializePool, transferPoolCreator, and initializeEscrow. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
     } catch (err) {
       return perpspadPipelineException('Failed to build direct DBC launch', err);
+    }
+  });
+
+  registerPerpspadPipelineTool(server, context, 'sap_perpspad_build_dbc_dev_buy', {
+    description: 'Build an unsigned exact-in initial buy for an existing Meteora DBC pool. Call only after initializePool confirms; amount is denominated in the pool quote token.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        poolAddress: { type: 'string' }, owner: { type: 'string' }, amount: { type: 'number', exclusiveMinimum: 0 },
+        latestBlockhash: { type: 'string' }, slippageBps: { type: 'number', minimum: 1, maximum: 5000 },
+      },
+      required: ['poolAddress', 'owner', 'amount', 'latestBlockhash'],
+    },
+  }, async (input) => {
+    try {
+      const poolAddress = String(input.poolAddress ?? '');
+      const owner = String(input.owner ?? '');
+      const amount = Number(input.amount);
+      const latestBlockhash = String(input.latestBlockhash ?? '');
+      if (!isValidSolanaAddress(poolAddress) || !isValidSolanaAddress(owner) || !Number.isFinite(amount) || amount <= 0) {
+        throw new Error('poolAddress, owner and a positive amount are required');
+      }
+      const { getConnection } = await import('./../phoenix/phoenix-helpers.js');
+      const connection = getConnection(context);
+      const client = DynamicBondingCurveClient.create(connection, 'confirmed');
+      const pool = await client.state.getPool(poolAddress);
+      if (!pool || pool.poolState.isMigrated) throw new Error(pool ? 'DBC pool already migrated' : 'DBC pool not found');
+      const virtualPool = pool.poolState;
+      const config = await client.state.getPoolConfig(virtualPool.config);
+      if (!config) throw new Error('DBC config not found');
+      const decimals = await getQuoteDecimals(connection, config.quoteMint);
+      const amountIn = toQuoteBaseUnits(amount, decimals);
+      const currentPoint = await getCurrentPoint(connection, config.activationType);
+      const quoteResult = client.pool.swapQuote({
+        virtualPool: pool, config, swapBaseForQuote: false, amountIn,
+        slippageBps: typeof input.slippageBps === 'number' ? input.slippageBps : 300,
+        hasReferral: false, eligibleForFirstSwapWithMinFee: true, currentPoint,
+      });
+      const tx = await client.pool.swap({ owner: new PublicKey(owner), pool: new PublicKey(poolAddress), amountIn,
+        minimumAmountOut: quoteResult.minimumAmountOut, swapBaseForQuote: false, referralTokenAccount: null });
+      tx.recentBlockhash = latestBlockhash;
+      tx.feePayer = new PublicKey(owner);
+      return perpspadPipelineOk({ success: true, poolAddress, amount, quoteMint: config.quoteMint.toBase58(),
+        minimumAmountOut: quoteResult.minimumAmountOut.toString(), transactionBase64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64') });
+    } catch (err) {
+      return perpspadPipelineException('Failed to build DBC dev-buy', err);
     }
   });
 }

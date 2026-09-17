@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DBC_LAUNCH_INPUT_SCHEMA,
   parseBackingPolicy,
+  toQuoteBaseUnits,
 } from './dbc-launch-tool.js';
 
 describe('sap_perpspad_launch_dbc inputSchema', () => {
@@ -27,7 +28,8 @@ describe('sap_perpspad_launch_dbc inputSchema', () => {
     expect(required).toContain('name');
     expect(required).toContain('agentWallet');
     expect(required).toContain('payer');
-    expect(required).toContain('devBuySol');
+    expect(required).not.toContain('devBuySol');
+    expect(required).not.toContain('devBuyAmount');
     expect(required).toContain('latestBlockhash');
     expect(required).not.toContain('underlying');
     expect(required).not.toContain('leverage');
@@ -45,6 +47,17 @@ describe('sap_perpspad_launch_dbc inputSchema', () => {
   it('documents the USDC fail-fast in the quote field description', () => {
     const props = DBC_LAUNCH_INPUT_SCHEMA.properties as Record<string, { description: string }>;
     expect(props.quote.description).toMatch(/USDC/i);
+  });
+});
+
+describe('DBC dev-buy amounts', () => {
+  it('converts SOL and USDC display amounts without float multiplication', () => {
+    expect(toQuoteBaseUnits(0.1, 9).toString()).toBe('100000000');
+    expect(toQuoteBaseUnits(12.345678, 6).toString()).toBe('12345678');
+  });
+  it('rejects zero and invalid decimals', () => {
+    expect(() => toQuoteBaseUnits(0, 9)).toThrow();
+    expect(() => toQuoteBaseUnits(1, 10)).toThrow();
   });
 });
 

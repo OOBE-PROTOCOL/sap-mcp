@@ -131,6 +131,13 @@ describe('dbc-launch', () => {
     expect(out.configAddress).toBe(configKeypair.publicKey.toBase58());
     expect(out.poolAddress).toBe(deriveDbcPool(mintKeypair.publicKey, configKeypair.publicKey, WSOL_MINT).toBase58());
 
+    const bootstrap = Transaction.from(Buffer.from(out.bootstrapTxBase64, 'base64'));
+    expect(Buffer.from(out.bootstrapTxBase64, 'base64').length).toBeLessThanOrEqual(1232);
+    expect(bootstrap.instructions).toHaveLength(2);
+    expect(bootstrap.signatures.find((s) => s.publicKey.equals(configKeypair.publicKey))?.signature).not.toBeNull();
+    expect(bootstrap.signatures.find((s) => s.publicKey.equals(mintKeypair.publicKey))?.signature).not.toBeNull();
+    expect(bootstrap.signatures.find((s) => s.publicKey.equals(payer.publicKey))?.signature).toBeNull();
+
     // The pool tx derives its pool PDA from config + mint — verify.
     expect(out.configAddress).toBe(configKeypair.publicKey.toBase58());
 

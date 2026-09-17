@@ -364,6 +364,7 @@ export function buildDirectDbcLaunch(params: {
   /** Owner program of the quote mint (SPL legacy or Token-2022). Optional — defaults to legacy SPL. */
   quoteMintOwner?: PublicKey;
 }): {
+  bootstrapTxBase64: string;
   configTxBase64: string;
   poolTxBase64: string;
   /** transfer_pool_creator (payer → escrow PDA) — payer-signed, no ephemerals. */
@@ -391,6 +392,13 @@ export function buildDirectDbcLaunch(params: {
   poolTx.feePayer = payer;
   coSignWithEphemerals(poolTx, [mintKeypair]);
 
+  // Atomic bootstrap prevents a confirmed config from becoming orphaned if
+  // the separately signed pool transaction expires in the wallet UI.
+  const bootstrapTx = new Transaction().add(...configTx.instructions, ...poolTx.instructions);
+  bootstrapTx.recentBlockhash = latestBlockhash;
+  bootstrapTx.feePayer = payer;
+  coSignWithEphemerals(bootstrapTx, [configKeypair, mintKeypair]);
+
   // 3rd tx: transfer_pool_creator (payer → escrow PDA). DBC records the
   // initializePool SIGNER as pool.creator; only pool.creator can claim trading
   // fees (access_control::is_pool_creator). Transferring creatorship to the
@@ -408,6 +416,7 @@ export function buildDirectDbcLaunch(params: {
   transferTx.feePayer = payer;
 
   return {
+    bootstrapTxBase64: bootstrapTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     configTxBase64: configTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     poolTxBase64: poolTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     transferCreatorTxBase64: transferTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
