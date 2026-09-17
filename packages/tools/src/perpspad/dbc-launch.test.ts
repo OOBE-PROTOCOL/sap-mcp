@@ -2,7 +2,7 @@
  * Tests for the direct DBC launch builder (dbc-launch.ts): discriminators,
  * PDA derivations, borsh encoding, and ephemeral co-signing.
  */
-import { Keypair, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
@@ -19,6 +19,8 @@ import {
   deriveMintMetadata,
   encodeInitializePoolParams,
   buildConfigArgsForQuote,
+  buildTransferPoolCreatorTx,
+  TRANSFER_POOL_CREATOR_DISCRIMINATOR,
   PERPSPAD_CONFIG_ARGS,
   WSOL_MINT,
 } from './dbc-launch.js';
@@ -62,7 +64,14 @@ describe('dbc-launch', () => {
       DBC_PROGRAM_ID.toBase58(),
     ]);
     expect(ix.data.subarray(0, 8).toString('hex')).toBe(CREATE_CONFIG_DISCRIMINATOR.toString('hex'));
-    expect(ix.data.subarray(8)).toEqual(PERPSPAD_CONFIG_ARGS);
+    // The args equal the PerpsPad verbatim preset EXCEPT the
+    // creator_trading_fee_percentage byte (@151, verified via SDK anchor
+    // coder round-trip diff): ours is 100 (100% of trading fees to the pool
+    // creator = escrow PDA, split 70/30 on claim), the preset's is 0.
+    const args = Buffer.from(ix.data.subarray(8));
+    const expected = Buffer.from(PERPSPAD_CONFIG_ARGS);
+    expected[151] = 100;
+    expect(args.equals(expected)).toBe(true);
   });
 
   it('derives pool/vault/metadata PDAs deterministically', () => {
@@ -128,6 +137,28 @@ describe('dbc-launch', () => {
       (s: { publicKey: PublicKey; signature: Buffer | null }) => s.publicKey.toBase58() === payer.publicKey.toBase58(),
     );
     expect(payerSig?.signature).toBeNull(); // user wallet signs client-side
+
+    // The transferPoolCreator tx: payer is the ONLY signer (no ephemerals),
+    // addressed to the DBC program with the transfer_pool_creator sighash.
+    const transferTx = Transaction.from(Buffer.from(out.transferCreatorTxBase64, 'base64'));
+    expect(transferTx.instructions).toHaveLength(1);
+    const tix = transferTx.instructions[0];
+    expect(tix.programId.toBase58()).toBe(DBC_PROGRAM_ID.toBase58());
+    expect(tix.data.subarray(0, 8).toString('hex')).toBe(TRANSFER_POOL_CREATOR_DISCRIMINATOR.toString('hex'));
+    expect(tix.keys.map((k) => k.pubkey.toBase58())).toEqual([
+      out.poolAddress, // virtual_pool (writable)
+      configKeypair.publicKey.toBase58(), // config
+      payer.publicKey.toBase58(), // creator (signer = initializePool signer)
+      escrowPda.toBase58(), // new_creator = escrow PDA
+      DBC_EVENT_AUTHORITY.toBase58(),
+      DBC_PROGRAM_ID.toBase58(),
+    ]);
+    expect(tix.keys[0].isWritable).toBe(true);
+    expect(tix.keys[2].isSigner).toBe(true);
+    // reject identical creator/new_creator (DBC InvalidNewCreator)
+    expect(() =>
+      buildTransferPoolCreatorTx({ poolAddress: Keypair.generate().publicKey, configAddress: Keypair.generate().publicKey, currentCreator: payer.publicKey, newCreator: payer.publicKey }),
+    ).toThrow(/must differ/);
   });
 
   it('pool_authority is the official const PDA (on-chain verified)', () => {
@@ -139,15 +170,28 @@ describe('dbc-launch', () => {
   });
 });
   it('buildConfigArgsForQuote scales the preset per quote decimals (on-chain verified)', () => {
-    // WSOL (9 dec) = the original verbatim preset
-    expect(buildConfigArgsForQuote(9).toString('hex')).toBe(PERPSPAD_CONFIG_ARGS.toString('hex'));
+    // WSOL (9 dec) = the original verbatim preset + creator fee byte @151 = 100
+    const wsol = buildConfigArgsForQuote(9);
+    expect(wsol.length).toBe(283);
+    expect(wsol[151]).toBe(100); // creator_trading_fee_percentage
+    // every other byte matches the verbatim preset
+    const presetCopy = Buffer.from(PERPSPAD_CONFIG_ARGS);
+    presetCopy[151] = 100;
+    expect(wsol.equals(presetCopy)).toBe(true);
+    // explicit 0 reproduces the verbatim preset byte-for-byte
+    expect(buildConfigArgsForQuote(9, 0).equals(Buffer.from(PERPSPAD_CONFIG_ARGS))).toBe(true);
     const usdc = buildConfigArgsForQuote(6);
     expect(usdc.length).toBe(283);
     // threshold shrank by 10^3: original @69 = 109518156630 -> 109518156
     expect(usdc.readBigUInt64LE(69)).toBe(109518156n);
+    // creator fee byte survives the scaling
+    expect(usdc[151]).toBe(100);
     // same-decimals quotes share the preset
     expect(buildConfigArgsForQuote(6).toString('hex')).toBe(usdc.toString('hex'));
     // invalid decimals rejected
     expect(() => buildConfigArgsForQuote(5)).toThrow(/6-9/);
     expect(() => buildConfigArgsForQuote(10)).toThrow(/6-9/);
+    // invalid fee percentage rejected
+    expect(() => buildConfigArgsForQuote(9, 101)).toThrow(/0-100/);
+    expect(() => buildConfigArgsForQuote(9, -1)).toThrow(/0-100/);
   });

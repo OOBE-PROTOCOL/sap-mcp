@@ -40,6 +40,9 @@ export const CREATE_CONFIG_DISCRIMINATOR = Buffer.from('c9cff3724b6f2fbd', 'hex'
 /** initialize_virtual_pool_with_spl_token discriminator — sighash("global","initialize_virtual_pool_with_spl_token"). */
 export const DBC_INIT_POOL_DISCRIMINATOR = anchorSighash('global', 'initialize_virtual_pool_with_spl_token');
 
+/** Anchor sighash for DBC transfer_pool_creator — sha256("global:transfer_pool_creator")[0..8]. */
+export const TRANSFER_POOL_CREATOR_DISCRIMINATOR = anchorSighash('global', 'transfer_pool_creator');
+
 /** The verbatim ConfigParameters args from PerpsPad's live config tx (283 bytes, curve preset ground truth, quote = WSOL 9 decimals). */
 export const PERPSPAD_CONFIG_ARGS = Buffer.from(
   '005a6202000000003c0096000000000000004e0000000000000001010100cb10c7bab88d060000000000000000000a007800881360a4dc00570900000001000006003200325673ca7f190000005e1ac30024237e0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002010080c6a47e8d03000080c6a47e8d03000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000f5f7257797f4000600000000000000002e4e98f0dad7093388dc8414a70500009b57694ea91a5c84b1c4feff000000005100ad662750e97e01d8020000000000',
@@ -80,9 +83,12 @@ export async function getQuoteDecimals(connection: { getAccountInfo(pk: PublicKe
  * with `quoteDecimals` decimals (preset is 9-dec WSOL). Scale factor for
  * amounts = 10^(quoteDecimals - 9); for sqrt prices = its square root.
  */
-export function buildConfigArgsForQuote(quoteDecimals: number): Buffer {
+export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFeePercentage = 100): Buffer {
   if (!Number.isInteger(quoteDecimals) || quoteDecimals < 6 || quoteDecimals > 9) {
     throw new Error(`Quote decimals must be an integer 6-9 (DBC requirement), got ${quoteDecimals}.`);
+  }
+  if (!Number.isInteger(creatorTradingFeePercentage) || creatorTradingFeePercentage < 0 || creatorTradingFeePercentage > 100) {
+    throw new Error(`creatorTradingFeePercentage must be an integer 0-100, got ${creatorTradingFeePercentage}.`);
   }
   // quoteDecimals <= 9 always (preset is 9-dec WSOL), so values only SHRINK.
   // amount divisor = 10^(9 - dec); sqrt divisor = ceil(sqrt(10^(9-dec))).
@@ -114,6 +120,11 @@ export function buildConfigArgsForQuote(quoteDecimals: number): Buffer {
     writeU128(sqrtOffset, readU128(sqrtOffset) / sqrtDivisor);
     writeU128(liqOffset, readU128(liqOffset) / amountDivisor);
   }
+  // creator_trading_fee_percentage @151 (u8) — offset verified via SDK anchor
+  // coder round-trip diff (decode preset → set 100 → encode → first-diff @151;
+  // identity round-trip byte-identical). 0 = all trading fees to partner
+  // (PerpsPad preset), 100 = all to pool creator (our escrow-driven split).
+  out[151] = creatorTradingFeePercentage;
   return out;
 }
 
@@ -176,7 +187,12 @@ export function buildCreateConfigTx(params: {
       { pubkey: DBC_EVENT_AUTHORITY, isSigner: false, isWritable: false },
       { pubkey: DBC_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
-    data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals)]),
+      // creatorTradingFeePercentage = 100: the pool creator (the escrow PDA,
+      // set by the transferPoolCreator tx) receives 100% of the trading fees;
+      // the escrow program's claim_and_split then splits 70/30. The DBC
+      // config's fee_claimer field is inert (verified in DBC source — only
+      // creator_trading_fee_percentage gates the creator/partner fee split).
+      data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals, 100)]),
   });
 }
 
@@ -274,6 +290,40 @@ export function coSignWithEphemerals(
 }
 
 /**
+ * Builds the DBC `transfer_pool_creator` transaction: moves pool creatorship
+ * from the initializePool signer (payer) to the escrow PDA. Verified from DBC
+ * source (ix_transfer_pool_creator.rs): TransferPoolCreatorCtx = 4 accounts
+ * (virtual_pool mut, config, creator signer, new_creator ≠ creator) and the
+ * #[event_cpi] macro appends event_authority + program → 6 keys total.
+ * Guard: PreBondingCurve (pool not migrated) → always permitted.
+ */
+export function buildTransferPoolCreatorTx(params: {
+  poolAddress: PublicKey;
+  configAddress: PublicKey;
+  /** Current pool creator (the initializePool signer). */
+  currentCreator: PublicKey;
+  /** New creator — our escrow PDA. Must differ from currentCreator. */
+  newCreator: PublicKey;
+}): Transaction {
+  const { poolAddress, configAddress, currentCreator, newCreator } = params;
+  if (newCreator.equals(currentCreator)) {
+    throw new Error('transfer_pool_creator: new_creator must differ from the current creator (DBC InvalidNewCreator).');
+  }
+  return new Transaction().add({
+    programId: DBC_PROGRAM_ID,
+    keys: [
+      { pubkey: poolAddress, isSigner: false, isWritable: true }, // virtual_pool
+      { pubkey: configAddress, isSigner: false, isWritable: false }, // config
+      { pubkey: currentCreator, isSigner: true, isWritable: false }, // creator (signer)
+      { pubkey: newCreator, isSigner: false, isWritable: false }, // new_creator
+      { pubkey: DBC_EVENT_AUTHORITY, isSigner: false, isWritable: false },
+      { pubkey: DBC_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.from(TRANSFER_POOL_CREATOR_DISCRIMINATOR),
+  });
+}
+
+/**
  * End-to-end builder: creates the ephemerals, builds both txs, co-signs them
  * with the ephemerals, and returns everything the client needs. The
  * ephemeral secrets live only in this call frame and are never persisted.
@@ -293,6 +343,8 @@ export function buildDirectDbcLaunch(params: {
 }): {
   configTxBase64: string;
   poolTxBase64: string;
+  /** transfer_pool_creator (payer → escrow PDA) — payer-signed, no ephemerals. */
+  transferCreatorTxBase64: string;
   configAddress: string;
   poolAddress: string;
 } {
@@ -315,9 +367,26 @@ export function buildDirectDbcLaunch(params: {
   poolTx.feePayer = payer;
   coSignWithEphemerals(poolTx, [mintKeypair]);
 
+  // 3rd tx: transfer_pool_creator (payer → escrow PDA). DBC records the
+  // initializePool SIGNER as pool.creator; only pool.creator can claim trading
+  // fees (access_control::is_pool_creator). Transferring creatorship to the
+  // escrow PDA makes the escrow program's claim_and_split CPI the sole claim
+  // path. Verified from DBC source (ix_transfer_pool_creator.rs): 4 ctx
+  // accounts + 2 event_cpi accounts; PreBondingCurve → always permitted;
+  // new_creator must differ from the current creator (escrow ≠ payer ✓).
+  const transferTx = buildTransferPoolCreatorTx({
+    poolAddress,
+    configAddress: configKeypair.publicKey,
+    currentCreator: payer,
+    newCreator: escrowPda,
+  });
+  transferTx.recentBlockhash = latestBlockhash;
+  transferTx.feePayer = payer;
+
   return {
     configTxBase64: configTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     poolTxBase64: poolTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
+    transferCreatorTxBase64: transferTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     configAddress: configKeypair.publicKey.toBase58(),
     poolAddress: poolAddress.toBase58(),
   };

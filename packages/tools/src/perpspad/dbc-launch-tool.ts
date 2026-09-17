@@ -239,6 +239,10 @@ export function registerDbcLaunchTool(
             base64: built.poolTxBase64,
             note: 'Co-signed by the mint keypair (gateway). The payer wallet adds its signature client-side.',
           },
+          transferPoolCreator: {
+            base64: built.transferCreatorTxBase64,
+            note: 'Moves pool creatorship payer → escrow PDA (DBC transfer_pool_creator). Payer-signed only. REQUIRED: only pool.creator can claim trading fees, and the escrow PDA must be the creator for claim_and_split to work.',
+          },
           initializeEscrow: {
             programId: ESCROW_PROGRAM_ID,
             accounts: {
@@ -252,8 +256,8 @@ export function registerDbcLaunchTool(
             note: 'Build with buildInitializeEscrowInstruction client-side; sign with the payer wallet.',
           },
         },
-        signingOrder: ['createConfig', 'initializePool', 'initializeEscrow'],
-        nextStep: `Send createConfig FIRST, then initializePool, then initializeEscrow. The ephemeral signatures are already embedded — the payer wallet (${payer}) only adds its signature to each. After initializeEscrow confirms, the token is live on its curve; trading fees accrue to the escrow PDA (fee_claimer) and split 70/30 on claim.`,
+        signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
+        nextStep: `Send createConfig FIRST, then initializePool, then transferPoolCreator, then initializeEscrow. The ephemeral signatures are already embedded — the payer wallet (${payer}) only adds its signature to each. transferPoolCreator makes the escrow PDA the pool creator: trading fees (creatorTradingFeePercentage=100) accrue to it and claim_and_split distributes 70/30.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
     } catch (err) {
