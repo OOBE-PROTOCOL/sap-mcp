@@ -232,6 +232,22 @@ export function encodeInitializePoolParams(p: InitializePoolParams): Buffer {
  * plan doc). The chosen default swaps creator = payer wallet (fee_claimer
  * stays the escrow PDA — that is the split-relevant field).
  */
+/** SPL Token-2022 program (quote mints like xStocks are Token-2022 mints). */
+export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+
+/**
+ * Which token program owns the quote mint's token accounts. The DBC
+ * initialize_virtual_pool_with_spl_token ctx declares quote_mint with
+ * `mint::token_program = token_quote_program` (source:
+ * ix_initialize_virtual_pool_with_spl_token.rs), so the account we pass as
+ * token_quote_program MUST match the quote mint's owner program. Verified
+ * on-chain: xStocks mints (TSLAx/NVDAx/SPCXx/AAPLx/AMZNx) are owned by
+ * Token-2022.
+ */
+export function tokenProgramForMint(mintOwner: PublicKey): PublicKey {
+  return mintOwner.equals(TOKEN_PROGRAM_ID) ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+}
+
 export function buildInitializePoolTx(params: {
   configAddress: PublicKey;
   mintKeypair: Keypair;
@@ -241,9 +257,14 @@ export function buildInitializePoolTx(params: {
   creatorAddress?: PublicKey;
   /** Quote mint: must match the one baked into the config. */
   quoteMint: PublicKey;
+  /** Owner program of the quote mint (from getAccountInfo). Defaults to legacy SPL. */
+  quoteMintOwner?: PublicKey;
 }): { tx: Transaction; poolAddress: PublicKey } {
-  const { configAddress, mintKeypair, payer, metadata, creatorAddress, quoteMint } = params;
+  const { configAddress, mintKeypair, payer, metadata, creatorAddress, quoteMint, quoteMintOwner } = params;
   const creator = creatorAddress ?? payer; // fee_claimer (the split-relevant field) lives in the CONFIG, not here
+  // token_quote_program must match the quote mint's owner program (SPL legacy
+  // or Token-2022) — the ctx binds quote_mint to it on-chain.
+  const quoteTokenProgram = quoteMintOwner ? tokenProgramForMint(quoteMintOwner) : TOKEN_PROGRAM_ID;
 
   // DBC pool_authority — const PDA from the official SDK.
   const poolAuthority = DBC_POOL_AUTHORITY;
@@ -266,8 +287,8 @@ export function buildInitializePoolTx(params: {
       { pubkey: mintMetadata, isSigner: false, isWritable: true },
       { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token_quote_program
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token_program
+      { pubkey: quoteTokenProgram, isSigner: false, isWritable: false }, // token_quote_program — SPL legacy or Token-2022 to match the quote mint
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }, // token_program (base mint is always legacy SPL)
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       { pubkey: DBC_EVENT_AUTHORITY, isSigner: false, isWritable: false },
       { pubkey: DBC_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -336,10 +357,12 @@ export function buildDirectDbcLaunch(params: {
   payer: PublicKey;
   latestBlockhash: string;
   metadata: InitializePoolParams;
-  /** Quote mint: WSOL (default), USDC, or any SPL mint 6-9 decimals. */
+  /** Quote mint: WSOL (default), USDC, or any SPL/Token-2022 mint 6-9 decimals. */
   quoteMint: PublicKey;
   /** Quote mint decimals (6-9), fetched by the caller via getQuoteDecimals. */
   quoteDecimals: number;
+  /** Owner program of the quote mint (SPL legacy or Token-2022). Optional — defaults to legacy SPL. */
+  quoteMintOwner?: PublicKey;
 }): {
   configTxBase64: string;
   poolTxBase64: string;
@@ -348,7 +371,7 @@ export function buildDirectDbcLaunch(params: {
   configAddress: string;
   poolAddress: string;
 } {
-  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals } = params;
+  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals, quoteMintOwner } = params;
 
   const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals });
   configTx.recentBlockhash = latestBlockhash;
@@ -362,6 +385,7 @@ export function buildDirectDbcLaunch(params: {
     payer,
     metadata,
     quoteMint,
+    quoteMintOwner,
   });
   poolTx.recentBlockhash = latestBlockhash;
   poolTx.feePayer = payer;

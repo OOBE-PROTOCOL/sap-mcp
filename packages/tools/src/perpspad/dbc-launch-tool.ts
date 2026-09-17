@@ -178,10 +178,17 @@ export function registerDbcLaunchTool(
       // before signing) — a server-side fetch here produced blockhashes that
       // were stale/invalid on mainnet by the time the client signed.
 
-      // Quote mint decimals from the chain (validates the mint exists).
+      // Quote mint decimals from the chain (validates the mint exists) plus
+      // the owner program — Token-2022 quote mints (xStocks) need
+      // token_quote_program = Token-2022 in the pool tx.
       const quoteMint = new PublicKey(quoteMintStr);
       const { getConnection } = await import('./../phoenix/phoenix-helpers.js');
-      const quoteDecimals = await getQuoteDecimals(getConnection(context), quoteMint);
+      const conn = getConnection(context);
+      const [quoteDecimals, quoteMintInfo] = await Promise.all([
+        getQuoteDecimals(conn, quoteMint),
+        conn.getAccountInfo(quoteMint),
+      ]);
+      const quoteMintOwner = quoteMintInfo ? quoteMintInfo.owner : undefined;
 
       const built = buildDirectDbcLaunch({
         configKeypair,
@@ -193,6 +200,7 @@ export function registerDbcLaunchTool(
         metadata: { name: name.trim(), symbol: ticker, uri },
         quoteMint,
         quoteDecimals,
+        quoteMintOwner,
       });
 
       // initialize_escrow instruction (third tx) — the existing helper.

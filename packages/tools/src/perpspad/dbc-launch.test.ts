@@ -9,6 +9,7 @@ import {
   anchorSighash,
   buildCreateConfigTx,
   buildDirectDbcLaunch,
+  buildInitializePoolTx,
   CREATE_CONFIG_DISCRIMINATOR,
   DBC_EVENT_AUTHORITY,
   DBC_INIT_POOL_DISCRIMINATOR,
@@ -22,8 +23,14 @@ import {
   buildTransferPoolCreatorTx,
   TRANSFER_POOL_CREATOR_DISCRIMINATOR,
   PERPSPAD_CONFIG_ARGS,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  tokenProgramForMint,
   WSOL_MINT,
 } from './dbc-launch.js';
+
+/** Verified on-chain 17/09/2026 (Token-2022, 8 decimals). */
+const TSLAX_MINT = new PublicKey('XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB');
 
 describe('dbc-launch', () => {
   it('create_config discriminator matches the one captured from a live PerpsPad tx', () => {
@@ -167,6 +174,41 @@ describe('dbc-launch', () => {
     // EXISTS on mainnet (SystemProgram-owned, ~59 SOL of accumulated fees).
     // PerpsPad's live txs use a fork/legacy interface — not our target.
     expect(DBC_POOL_AUTHORITY.toBase58()).toBe('FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM');
+  });
+
+  it('buildInitializePoolTx uses Token-2022 as token_quote_program for Token-2022 quote mints', () => {
+    const mintKeypair = Keypair.generate();
+    const configAddress = Keypair.generate().publicKey;
+    const payer = Keypair.generate().publicKey;
+    const common = {
+      configAddress,
+      mintKeypair,
+      escrowPda: Keypair.generate().publicKey,
+      payer,
+      metadata: { name: 'T', symbol: 'T', uri: 'https://example.com/x.json' },
+      quoteMint: TSLAX_MINT,
+    };
+
+    // Owner Token-2022 (xStocks) → token_quote_program = Token-2022
+    const tx2022 = buildInitializePoolTx({ ...common, quoteMintOwner: TOKEN_2022_PROGRAM_ID }).tx;
+    const ix2022 = tx2022.instructions[0];
+    expect(ix2022.keys[11].pubkey.toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+    // token_program (base mint) stays legacy SPL
+    expect(ix2022.keys[12].pubkey.toBase58()).toBe('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+    // Owner SPL legacy → token_quote_program = legacy SPL (unchanged behaviour)
+    const txSpl = buildInitializePoolTx({ ...common, quoteMintOwner: TOKEN_PROGRAM_ID }).tx;
+    expect(txSpl.instructions[0].keys[11].pubkey.toBase58()).toBe('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+
+    // No owner passed → legacy SPL (back-compat default)
+    const txDefault = buildInitializePoolTx(common).tx;
+    expect(txDefault.instructions[0].keys[11].pubkey.toBase58()).toBe('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+  });
+
+  it('tokenProgramForMint maps owner → program', () => {
+    expect(tokenProgramForMint(TOKEN_PROGRAM_ID).toBase58()).toBe('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    expect(tokenProgramForMint(TOKEN_2022_PROGRAM_ID).toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+    expect(tokenProgramForMint(Keypair.generate().publicKey).toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
   });
 });
   it('buildConfigArgsForQuote scales the preset per quote decimals (on-chain verified)', () => {
