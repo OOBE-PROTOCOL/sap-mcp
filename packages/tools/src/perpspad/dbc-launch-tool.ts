@@ -52,7 +52,7 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     ticker: { type: 'string', description: 'Coin ticker, A-Z 0-9 only (e.g. MOON)' },
     name: { type: 'string', description: 'Coin display name' },
     agentWallet: { type: 'string', description: 'Agent wallet: receives 70% of claimed trading fees; also the leftover-token receiver' },
-    payer: { type: 'string', description: 'Transaction payer + pool creator (signs all three txs client-side)' },
+    payer: { type: 'string', description: 'Transaction payer + initial pool creator (signs the returned transactions client-side)' },
     devBuyAmount: { type: 'number', description: 'Initial buy amount, denominated in the selected quote token' },
     devBuySol: { type: 'number', description: 'Deprecated alias for devBuyAmount (SOL launches only)' },
     latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
@@ -60,7 +60,8 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     underlying: { type: 'string', description: 'Perp backing: Phoenix market symbol (e.g. SOL, TSLA, OIL). A-Z 0-9, 1-12 chars. REQUIRED together with leverage and direction (all-or-nothing).' },
     leverage: { type: 'number', description: 'Perp backing: integer leverage 1-10. REQUIRED together with underlying and direction (all-or-nothing).' },
     direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
-    quote: { type: 'string', description: 'Optional quote token hint (e.g. SOL, USDC). USDC is NOT yet supported by the direct DBC builder and fails fast.' },
+    quote: { type: 'string', description: 'Quote token: SOL, USDC, or CUSTOM with quoteMint. Custom SPL/Token-2022 mints are validated on-chain.' },
+    quoteMint: { type: 'string', description: 'Required when quote=CUSTOM: SPL or Token-2022 mint with 6-9 decimals and no unsupported transfer behavior.' },
   },
   required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
@@ -304,7 +305,7 @@ export function registerDbcLaunchTool(
           },
         },
         signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
-        nextStep: `Send createConfig, initializePool, transferPoolCreator, and initializeEscrow. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
+        nextStep: `Send bootstrapLaunch, transferPoolCreator, and initializeEscrow in order. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
     } catch (err) {
