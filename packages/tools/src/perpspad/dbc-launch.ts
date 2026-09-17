@@ -56,16 +56,21 @@ const CURVE_OFFSET_BASE = 219;
 const CURVE_ENTRY_SIZE = 32;
 const WSOL_DECIMALS = 9;
 
-/** Decimals of a quote mint: WSOL=9, USDC=6, JUP=6 — fetched from the chain. */
+/** Decimals of a quote mint — read from the SPL Mint account at offset 44
+ * (Mint layout: [0..4] COption tag, [4..36] mintAuthority, [36..44] supply
+ * u64, [44] decimals). Verified: USDC data[44]=6, WSOL data[44]=9. */
 const quoteDecimalsCache = new Map<string, number>();
 export async function getQuoteDecimals(connection: { getAccountInfo(pk: PublicKey): Promise<{ data: Uint8Array } | null> }, quoteMint: PublicKey): Promise<number> {
   const cached = quoteDecimalsCache.get(quoteMint.toBase58());
   if (cached !== undefined) return cached;
   const info = await connection.getAccountInfo(quoteMint);
-  if (!info || info.data.length === 0) {
-    throw new Error(`Quote mint ${quoteMint.toBase58()} not found on-chain (or not an SPL mint).`);
+  if (!info || info.data.length < 82) {
+    throw new Error(`Quote mint ${quoteMint.toBase58()} not found on-chain (or not an SPL mint — expected ≥82-byte Mint account).`);
   }
-  const decimals = info.data[0];
+  const decimals = info.data[44];
+  if (decimals < 6 || decimals > 9) {
+    throw new Error(`Quote mint ${quoteMint.toBase58()} has ${decimals} decimals — the DBC requires 6-9 and no transfer fee.`);
+  }
   quoteDecimalsCache.set(quoteMint.toBase58(), decimals);
   return decimals;
 }
