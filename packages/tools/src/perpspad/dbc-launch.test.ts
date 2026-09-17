@@ -3,7 +3,6 @@
  * PDA derivations, borsh encoding, and ephemeral co-signing.
  */
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
-import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
   anchorSighash,
