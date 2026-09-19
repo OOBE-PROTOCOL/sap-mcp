@@ -14,3 +14,17 @@ export {
   DEV_BUY_BOUNDS,
   validateLaunchBody,
 } from './perpspad-client.js';
+export {
+  backfillMarketRewardTransfers,
+  checkpointMaps,
+  discoverMintHolders,
+  prepareMarketRewardEpoch,
+  transfersToBalanceEvents,
+} from './market-rewards-backfill.js';
+export {
+  allocateRewardExact,
+  buildCumulativeRewardTree,
+  computeBalanceSeconds,
+  replayBalanceSeconds,
+  rewardLeafHash,
+} from './market-rewards-indexer.js';

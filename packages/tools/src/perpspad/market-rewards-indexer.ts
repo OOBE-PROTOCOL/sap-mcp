@@ -15,6 +15,11 @@ export interface HolderWeight {
   balanceSeconds: bigint;
 }
 
+export interface BalanceReplay {
+  weights: HolderWeight[];
+  endBalances: Map<string, bigint>;
+}
+
 export interface RewardLeaf {
   owner: string;
   cumulativeAllocation: bigint;
@@ -36,13 +41,13 @@ export function rewardLeafHash(tokenMint: PublicKey, owner: PublicKey, allocatio
   return sha256(LEAF_DOMAIN, tokenMint.toBuffer(), owner.toBuffer(), amount);
 }
 
-export function computeBalanceSeconds(params: {
+export function replayBalanceSeconds(params: {
   events: BalanceEvent[];
   startTimestamp: number;
   endTimestamp: number;
   initialBalances?: ReadonlyMap<string, bigint>;
   excludedOwners?: ReadonlySet<string>;
-}): HolderWeight[] {
+}): BalanceReplay {
   if (!Number.isInteger(params.startTimestamp) || !Number.isInteger(params.endTimestamp) || params.endTimestamp <= params.startTimestamp) {
     throw new Error('invalid snapshot window');
   }
@@ -71,10 +76,15 @@ export function computeBalanceSeconds(params: {
     const previousTime = lastTimestamp.get(owner) ?? params.startTimestamp;
     weights.set(owner, (weights.get(owner) ?? 0n) + balance * BigInt(params.endTimestamp - previousTime));
   }
-  return [...weights]
+  const holderWeights = [...weights]
     .filter(([, value]) => value > 0n)
     .map(([owner, balanceSeconds]) => ({ owner, balanceSeconds }))
     .sort((a, b) => a.owner.localeCompare(b.owner));
+  return { weights: holderWeights, endBalances: balances };
+}
+
+export function computeBalanceSeconds(params: Parameters<typeof replayBalanceSeconds>[0]): HolderWeight[] {
+  return replayBalanceSeconds(params).weights;
 }
 
 export function allocateRewardExact(weights: HolderWeight[], amount: bigint): Map<string, bigint> {
