@@ -11,21 +11,7 @@ export interface MarketRewardsCheckpoint {
   throughTimestamp: number;
   balances: Record<string, string>;
   cumulativeAllocations: Record<string, string>;
-}
-
-export interface HeliusTransfer {
-  signature: string;
-  slot: number;
-  blockTime: number;
-  type: 'transfer' | 'transferFee' | 'mint' | 'burn' | string;
-  fromUserAccount: string | null;
-  toUserAccount: string | null;
-  mint: string;
-  amount: string;
-  confirmationStatus: string;
-  transactionIdx?: number;
-  instructionIdx?: number;
-  innerInstructionIdx?: number;
+  trackedTokenAccounts?: string[];
 }
 
 export interface BackfillResult {
@@ -33,6 +19,11 @@ export interface BackfillResult {
   holdersScanned: number;
   pagesFetched: number;
   throughSlot: number;
+}
+
+export interface MintAccountDiscovery {
+  owners: string[];
+  tokenAccounts: string[];
 }
 
 export interface PreparedMarketRewardEpoch {
@@ -91,62 +82,44 @@ function decodeOwner(base64Data: string): string {
   return new PublicKey(data.subarray(32, 64)).toBase58();
 }
 
-export async function discoverMintHolders(params: {
+export async function discoverMintAccounts(params: {
   rpcUrl: string;
   mint: string;
   checkpointOwners?: Iterable<string>;
   fetchImpl?: FetchLike;
   sleep?: Sleep;
   tokenProgramIds?: string[];
-}): Promise<string[]> {
+}): Promise<MintAccountDiscovery> {
   const fetchImpl = params.fetchImpl ?? fetch;
   const sleep = params.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const mint = new PublicKey(params.mint).toBase58();
   const owners = new Set(params.checkpointOwners ?? []);
+  const tokenAccounts = new Set<string>();
   const programs = params.tokenProgramIds ?? [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID];
   for (const program of programs) {
-    const result = await rpc<Array<{ account: { data: [string, string] } }>>(
+    const result = await rpc<Array<{ pubkey: string; account: { data: [string, string] } }>>(
       params.rpcUrl,
       'getProgramAccounts',
       [program, { commitment: 'finalized', encoding: 'base64', dataSlice: { offset: 0, length: 72 }, filters: [{ memcmp: { offset: 0, bytes: mint } }] }],
       fetchImpl,
       sleep,
     );
-    for (const row of result) owners.add(decodeOwner(row.account.data[0]));
+    for (const row of result) {
+      owners.add(decodeOwner(row.account.data[0]));
+      tokenAccounts.add(new PublicKey(row.pubkey).toBase58());
+    }
   }
-  return [...owners].sort();
+  return { owners: [...owners].sort(), tokenAccounts: [...tokenAccounts].sort() };
 }
 
-function eventIndex(transfer: HeliusTransfer, side: 0 | 1): number {
-  const transaction = transfer.transactionIdx ?? 0;
-  const instruction = transfer.instructionIdx ?? 0;
-  const inner = transfer.innerInstructionIdx ?? 0;
-  return transaction * 2_000_000 + instruction * 2_000 + inner * 2 + side;
-}
-
-export function transfersToBalanceEvents(transfers: HeliusTransfer[], expectedMint: string): BalanceEvent[] {
-  const events: BalanceEvent[] = [];
-  for (const transfer of transfers) {
-    if (transfer.mint !== expectedMint || transfer.confirmationStatus !== 'finalized') continue;
-    if (!/^\d+$/.test(transfer.amount)) throw new Error(`invalid raw transfer amount in ${transfer.signature}`);
-    const amount = BigInt(transfer.amount);
-    if (amount === 0n) continue;
-    if (transfer.fromUserAccount) events.push({
-      signature: transfer.signature, eventIndex: eventIndex(transfer, 0), slot: transfer.slot,
-      timestamp: transfer.blockTime, owner: transfer.fromUserAccount, deltaRaw: -amount,
-    });
-    if (transfer.toUserAccount) events.push({
-      signature: transfer.signature, eventIndex: eventIndex(transfer, 1), slot: transfer.slot,
-      timestamp: transfer.blockTime, owner: transfer.toUserAccount, deltaRaw: amount,
-    });
-  }
-  return events;
+export async function discoverMintHolders(params: Parameters<typeof discoverMintAccounts>[0]): Promise<string[]> {
+  return (await discoverMintAccounts(params)).owners;
 }
 
 export async function backfillMarketRewardTransfers(params: {
-  heliusRpcUrl: string;
+  rpcUrl: string;
   mint: string;
-  holders: string[];
+  tokenAccounts: string[];
   fromSlot: number;
   throughSlot: number;
   pageLimit?: number;
@@ -158,34 +131,56 @@ export async function backfillMarketRewardTransfers(params: {
   }
   const fetchImpl = params.fetchImpl ?? fetch;
   const sleep = params.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
-  const pageLimit = params.pageLimit ?? 100;
-  if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) throw new Error('pageLimit must be between 1 and 100');
-  const transfers = new Map<string, HeliusTransfer>();
+  const pageLimit = params.pageLimit ?? 1_000;
+  if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 1_000) throw new Error('pageLimit must be between 1 and 1000');
+  const signatures = new Map<string, { signature: string; slot: number; blockTime: number | null }>();
   let pagesFetched = 0;
-  for (const holder of [...new Set(params.holders)].sort()) {
-    let paginationToken: string | undefined;
+  for (const tokenAccount of [...new Set(params.tokenAccounts)].sort()) {
+    let before: string | undefined;
     do {
-      const result = await rpc<{ data: HeliusTransfer[]; paginationToken?: string }>(params.heliusRpcUrl, 'getTransfersByAddress', [holder, {
-        mint: params.mint,
-        sortOrder: 'asc',
-        limit: pageLimit,
-        ...(paginationToken ? { paginationToken } : {}),
-        filters: { slot: { gte: params.fromSlot, lte: params.throughSlot }, status: 'succeeded' },
+      const result = await rpc<Array<{ signature: string; slot: number; blockTime: number | null; err: unknown }>>(params.rpcUrl, 'getSignaturesForAddress', [tokenAccount, {
+        commitment: 'finalized', limit: pageLimit, ...(before ? { before } : {}),
       }], fetchImpl, sleep);
       pagesFetched++;
-      for (const transfer of result.data) {
-        const key = [transfer.signature, transfer.transactionIdx ?? 0, transfer.instructionIdx ?? 0, transfer.innerInstructionIdx ?? 0, transfer.type].join(':');
-        transfers.set(key, transfer);
-      }
-      paginationToken = result.paginationToken;
-    } while (paginationToken);
+      for (const item of result) if (!item.err && item.slot >= params.fromSlot && item.slot <= params.throughSlot) signatures.set(item.signature, item);
+      before = result.at(-1)?.signature;
+      if (result.length === 0 || result.length < pageLimit || result.at(-1)!.slot < params.fromSlot) before = undefined;
+    } while (before);
+  }
+  const events: BalanceEvent[] = [];
+  for (const item of [...signatures.values()].sort((a, b) => a.slot - b.slot || a.signature.localeCompare(b.signature))) {
+    const transaction = await rpc<{
+      slot: number; blockTime: number | null;
+      meta: { err: unknown; preTokenBalances?: TokenBalance[]; postTokenBalances?: TokenBalance[] } | null;
+    } | null>(params.rpcUrl, 'getTransaction', [item.signature, {
+      commitment: 'finalized', encoding: 'jsonParsed', maxSupportedTransactionVersion: 0,
+    }], fetchImpl, sleep);
+    if (!transaction?.meta || transaction.meta.err || transaction.blockTime === null) continue;
+    const pre = balancesByOwner(transaction.meta.preTokenBalances ?? [], params.mint);
+    const post = balancesByOwner(transaction.meta.postTokenBalances ?? [], params.mint);
+    const owners = [...new Set([...pre.keys(), ...post.keys()])].sort();
+    owners.forEach((owner, index) => {
+      const deltaRaw = (post.get(owner) ?? 0n) - (pre.get(owner) ?? 0n);
+      if (deltaRaw !== 0n) events.push({ signature: item.signature, eventIndex: index, slot: transaction.slot, timestamp: transaction.blockTime!, owner, deltaRaw });
+    });
   }
   return {
-    events: transfersToBalanceEvents([...transfers.values()], params.mint),
-    holdersScanned: new Set(params.holders).size,
+    events,
+    holdersScanned: new Set(params.tokenAccounts).size,
     pagesFetched,
     throughSlot: params.throughSlot,
   };
+}
+
+interface TokenBalance { mint: string; owner?: string; uiTokenAmount: { amount: string } }
+
+function balancesByOwner(rows: TokenBalance[], mint: string): Map<string, bigint> {
+  const balances = new Map<string, bigint>();
+  for (const row of rows) {
+    if (row.mint !== mint || !row.owner || !/^\d+$/.test(row.uiTokenAmount.amount)) continue;
+    balances.set(row.owner, (balances.get(row.owner) ?? 0n) + BigInt(row.uiTokenAmount.amount));
+  }
+  return balances;
 }
 
 export function checkpointMaps(checkpoint: MarketRewardsCheckpoint): {
@@ -200,7 +195,6 @@ export function checkpointMaps(checkpoint: MarketRewardsCheckpoint): {
 
 export async function prepareMarketRewardEpoch(params: {
   rpcUrl: string;
-  heliusRpcUrl: string;
   checkpoint: MarketRewardsCheckpoint;
   throughSlot: number;
   throughTimestamp: number;
@@ -212,7 +206,7 @@ export async function prepareMarketRewardEpoch(params: {
   if (params.checkpoint.mint !== new PublicKey(params.checkpoint.mint).toBase58()) throw new Error('invalid checkpoint mint');
   if (params.throughTimestamp <= params.checkpoint.throughTimestamp) throw new Error('epoch timestamp must advance');
   const previous = checkpointMaps(params.checkpoint);
-  const holders = await discoverMintHolders({
+  const discovery = await discoverMintAccounts({
     rpcUrl: params.rpcUrl,
     mint: params.checkpoint.mint,
     checkpointOwners: previous.balances.keys(),
@@ -220,14 +214,14 @@ export async function prepareMarketRewardEpoch(params: {
     sleep: params.sleep,
   });
   const backfill = await backfillMarketRewardTransfers({
-    heliusRpcUrl: params.heliusRpcUrl,
+    rpcUrl: params.rpcUrl,
     mint: params.checkpoint.mint,
-    holders,
+    tokenAccounts: [...new Set([...(params.checkpoint.trackedTokenAccounts ?? []), ...discovery.tokenAccounts])],
     fromSlot: params.checkpoint.throughSlot + 1,
     throughSlot: params.throughSlot,
     fetchImpl: params.fetchImpl,
     sleep: params.sleep,
-    pageLimit: Number(process.env.MARKET_REWARDS_BACKFILL_PAGE_LIMIT ?? 100),
+    pageLimit: Number(process.env.MARKET_REWARDS_BACKFILL_PAGE_LIMIT ?? 1_000),
   });
   const replay = replayBalanceSeconds({
     events: backfill.events,
@@ -251,6 +245,7 @@ export async function prepareMarketRewardEpoch(params: {
       throughTimestamp: params.throughTimestamp,
       balances: Object.fromEntries([...replay.endBalances].map(([owner, amount]) => [owner, amount.toString()])),
       cumulativeAllocations: Object.fromEntries(tree.leaves.map((leaf) => [leaf.owner, leaf.cumulativeAllocation.toString()])),
+      trackedTokenAccounts: [...new Set([...(params.checkpoint.trackedTokenAccounts ?? []), ...discovery.tokenAccounts])].sort(),
     },
   };
 }

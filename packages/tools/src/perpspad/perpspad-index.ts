@@ -17,9 +17,9 @@ export {
 export {
   backfillMarketRewardTransfers,
   checkpointMaps,
+  discoverMintAccounts,
   discoverMintHolders,
   prepareMarketRewardEpoch,
-  transfersToBalanceEvents,
 } from './market-rewards-backfill.js';
 export {
   allocateRewardExact,
