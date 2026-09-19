@@ -8,8 +8,11 @@ import { PublicKey } from '@solana/web3.js';
 import {
   CREATOR_SPLIT_ESCROW_PROGRAM_ID,
   ESCROW_SEED,
+  REWARD_VAULT_SEED,
   deriveEscrowPda,
+  deriveRewardVaultPda,
   buildInitializeEscrowInstruction,
+  buildInitializeRewardVaultInstruction,
   isValidSolanaAddress,
 } from './perpspad-escrow.js';
 
@@ -73,6 +76,44 @@ describe('perpspad-escrow', () => {
 
   it('escrow seed constant matches the Rust program', () => {
     expect(ESCROW_SEED).to.equal('creator_escrow');
+  });
+
+  it('builds the immutable Market Rewards vault instruction contract', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { escrowPda } = deriveEscrowPda(mint);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const pool = PublicKey.unique();
+    const quoteMint = PublicKey.unique();
+    const rewardMint = PublicKey.unique();
+    const creator = PublicKey.unique();
+    const payer = PublicKey.unique();
+    const ix = buildInitializeRewardVaultInstruction({
+      rewardVaultPda, escrowPda, tokenMint: mint, dbcPool: pool, quoteMint,
+      rewardMint, creator, payer, maxInputPerSwap: 1_234_567n, maxSlippageBps: 250,
+    });
+
+    expect(REWARD_VAULT_SEED).to.equal('reward_vault');
+    expect(PublicKey.isOnCurve(rewardVaultPda.toBytes())).to.equal(false);
+    expect(ix.keys.map(({ pubkey }) => pubkey.toBase58())).to.deep.equal([
+      rewardVaultPda, escrowPda, mint, pool, quoteMint, rewardMint, creator, payer,
+      new PublicKey('11111111111111111111111111111111'),
+    ].map((key) => key.toBase58()));
+    expect(ix.keys[6]).to.deep.equal({ pubkey: creator, isSigner: true, isWritable: false });
+    expect(ix.keys[7]).to.deep.equal({ pubkey: payer, isSigner: true, isWritable: true });
+    expect(ix.data[0]).to.equal(3);
+    expect(ix.data.readBigUInt64LE(1)).to.equal(1_234_567n);
+    expect(ix.data.readUInt16LE(9)).to.equal(250);
+  });
+
+  it('rejects unsafe Market Rewards limits before building', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { escrowPda } = deriveEscrowPda(mint);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const key = PublicKey.unique();
+    expect(() => buildInitializeRewardVaultInstruction({
+      rewardVaultPda, escrowPda, tokenMint: mint, dbcPool: key, quoteMint: key,
+      rewardMint: key, creator: key, payer: key, maxInputPerSwap: 0n, maxSlippageBps: 250,
+    })).to.throw(/positive u64/);
   });
 
   it('isValidSolanaAddress accepts real addresses and rejects junk', () => {

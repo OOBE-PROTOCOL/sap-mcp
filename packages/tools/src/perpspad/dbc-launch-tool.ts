@@ -22,7 +22,13 @@ import {
   TOKEN_2022_PROGRAM_ID,
 } from './dbc-launch.js';
 import { ExtensionType, getExtensionTypes, getMint } from '@solana/spl-token';
-import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
+import {
+  buildInitializeEscrowInstruction,
+  buildInitializeRewardVaultInstruction,
+  deriveEscrowPda,
+  deriveRewardVaultPda,
+  isValidSolanaAddress,
+} from './perpspad-escrow.js';
 import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
 
 const OOBE_TREASURY = 'BiHdXQqNXTgMrNikZxw4CMnD1z1t6K2tmtwyXgSWSKqR';
@@ -63,6 +69,10 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
     quote: { type: 'string', description: 'Quote token: SOL, USDC, or CUSTOM with quoteMint. Custom SPL/Token-2022 mints are validated on-chain.' },
     quoteMint: { type: 'string', description: 'Required when quote=CUSTOM: SPL or Token-2022 mint with 6-9 decimals and no unsupported transfer behavior.' },
+    feeStrategy: { type: 'string', enum: ['classic', 'perpetual', 'marketRewards'], description: 'Creator 70% routing strategy. Market Rewards routes the creator share into an immutable reward vault.' },
+    rewardMint: { type: 'string', description: 'Market Rewards only: canonical SPL/Token-2022 asset mint bought with the creator share.' },
+    maxRewardSwapAmount: { type: 'number', description: 'Market Rewards only: maximum quote-token units converted by one keeper swap.' },
+    rewardSlippageBps: { type: 'number', minimum: 1, maximum: 2000, description: 'Market Rewards only: maximum swap slippage, in basis points.' },
   },
   required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
@@ -166,6 +176,14 @@ export function registerDbcLaunchTool(
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_latestBlockhash: fetch a fresh blockhash via getLatestBlockhash and pass it here'));
       }
 
+      const feeStrategy = input.feeStrategy === 'marketRewards'
+        ? 'marketRewards'
+        : input.feeStrategy === 'perpetual' ? 'perpetual' : 'classic';
+      const rewardMintInput = typeof input.rewardMint === 'string' ? input.rewardMint.trim() : '';
+      if (feeStrategy === 'marketRewards' && !isValidSolanaAddress(rewardMintInput)) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_rewardMint: Market Rewards requires a valid canonical reward mint'));
+      }
+
       // Quote: SOL (default) | USDC | custom via quoteMint (SPL 6-9 decimals).
       const quote = typeof input.quote === 'string' ? input.quote.trim().toUpperCase() : 'SOL';
       const quoteMintStr = quote === 'USDC'
@@ -186,6 +204,7 @@ export function registerDbcLaunchTool(
       const configKeypair = Keypair.generate();
       const mintKeypair = Keypair.generate();
       const { escrowPda, bump } = deriveEscrowPda(mintKeypair.publicKey);
+      const { rewardVaultPda, bump: rewardVaultBump } = deriveRewardVaultPda(mintKeypair.publicKey);
 
       // Prefer a content-addressed metadata URI uploaded before the launch.
       // metadataBaseUrl remains available for backward-compatible clients.
@@ -232,11 +251,29 @@ export function registerDbcLaunchTool(
         throw new Error(`Quote mint uses unsupported Token-2022 extensions: ${extensionTypes.join(',')}`);
       }
 
+      let rewardMint: PublicKey | undefined;
+      let maxRewardSwapBaseUnits: bigint | undefined;
+      const rewardSlippageBps = typeof input.rewardSlippageBps === 'number' ? input.rewardSlippageBps : 300;
+      if (feeStrategy === 'marketRewards') {
+        rewardMint = new PublicKey(rewardMintInput);
+        const rewardMintInfo = await conn.getAccountInfo(rewardMint);
+        if (!rewardMintInfo || (!rewardMintInfo.owner.equals(TOKEN_PROGRAM_ID) && !rewardMintInfo.owner.equals(TOKEN_2022_PROGRAM_ID))) {
+          throw new Error('Reward mint must be owned by SPL Token or Token-2022');
+        }
+        const rewardMintState = await getMint(conn, rewardMint, 'confirmed', rewardMintInfo.owner);
+        const rewardExtensions = getExtensionTypes(rewardMintState.tlvData);
+        if (rewardExtensions.some((extension) => unsafeExtensions.has(extension))) {
+          throw new Error(`Reward mint uses unsupported Token-2022 extensions: ${rewardExtensions.join(',')}`);
+        }
+        const maxRewardSwapAmount = typeof input.maxRewardSwapAmount === 'number' ? input.maxRewardSwapAmount : 1;
+        maxRewardSwapBaseUnits = BigInt(toQuoteBaseUnits(maxRewardSwapAmount, quoteDecimals).toString());
+      }
+
       const built = buildDirectDbcLaunch({
         configKeypair,
         mintKeypair,
         escrowPda,
-        agentWallet: new PublicKey(agentWallet),
+        agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda : new PublicKey(agentWallet),
         payer: new PublicKey(payer),
         latestBlockhash,
         metadata: { name: name.trim(), symbol: ticker, uri },
@@ -249,7 +286,7 @@ export function registerDbcLaunchTool(
       const initEscrowIx = buildInitializeEscrowInstruction({
         escrowPda,
         tokenMint: mintKeypair.publicKey,
-        agentWallet: new PublicKey(agentWallet),
+        agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda : new PublicKey(agentWallet),
         payer: new PublicKey(payer),
       });
       const escrowTx = new Transaction().add(initEscrowIx);
@@ -264,6 +301,21 @@ export function registerDbcLaunchTool(
         escrowPda: escrowPda.toBase58(),
       });
 
+      const initializeRewardVault = rewardMint && maxRewardSwapBaseUnits
+        ? buildInitializeRewardVaultInstruction({
+          rewardVaultPda,
+          escrowPda,
+          tokenMint: mintKeypair.publicKey,
+          dbcPool: new PublicKey(built.poolAddress),
+          quoteMint,
+          rewardMint,
+          creator: new PublicKey(agentWallet),
+          payer: new PublicKey(payer),
+          maxInputPerSwap: maxRewardSwapBaseUnits,
+          maxSlippageBps: rewardSlippageBps,
+        })
+        : undefined;
+
       return perpspadPipelineOk({
         success: true,
         directDbc: true,
@@ -273,6 +325,7 @@ export function registerDbcLaunchTool(
         escrowPda: escrowPda.toBase58(),
         escrowBump: bump,
         agentWallet,
+        feeStrategy,
         payer,
         devBuyAmount,
         devBuyRequired: devBuyAmount > 0,
@@ -303,15 +356,28 @@ export function registerDbcLaunchTool(
             accounts: {
               escrowPda: escrowPda.toBase58(),
               tokenMint: mintKeypair.publicKey.toBase58(),
-              agentWallet,
+              agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda.toBase58() : agentWallet,
               payer,
               systemProgram: '11111111111111111111111111111111',
             },
             data: [0],
             note: 'Build with buildInitializeEscrowInstruction client-side; sign with the payer wallet.',
           },
+          ...(initializeRewardVault ? {
+            initializeRewardVault: {
+              programId: ESCROW_PROGRAM_ID,
+              accounts: {
+                rewardVaultPda: rewardVaultPda.toBase58(), escrowPda: escrowPda.toBase58(),
+                tokenMint: mintKeypair.publicKey.toBase58(), dbcPool: built.poolAddress,
+                quoteMint: quoteMint.toBase58(), rewardMint: rewardMint!.toBase58(), creator: agentWallet, payer,
+              },
+              data: [...initializeRewardVault.data],
+              rewardVaultBump,
+              note: 'Send after initializeEscrow. The agent and payer sign; reward mint and risk limits become immutable.',
+            },
+          } : {}),
         },
-        signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
+        signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow', ...(initializeRewardVault ? ['initializeRewardVault'] : [])],
         nextStep: `Send bootstrapLaunch, transferPoolCreator, and initializeEscrow in order. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
