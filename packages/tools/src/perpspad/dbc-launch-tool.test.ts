@@ -79,10 +79,14 @@ describe('RewardVault binary contract', () => {
     tokenProgram.toBuffer().copy(data, 232);
     data.writeBigUInt64LE(500_000_000n, 264);
     data.writeUInt16LE(300, 272);
+    data.writeBigUInt64LE(456n, 290);
+    data.writeBigUInt64LE(400n, 298);
+    data.writeUInt32LE(7, 316);
 
     expect(decodeRewardVault(data)).toMatchObject({
       executor, quoteMint, rewardMint, quoteTokenProgram: tokenProgram,
       rewardTokenProgram: tokenProgram, maxInputPerSwap: 500_000_000n, maxSlippageBps: 300,
+      cumulativeRewardReceived: 456n, cumulativeRewardCommitted: 400n, latestEpoch: 7,
     });
     expect(() => decodeRewardVault(Buffer.alloc(319))).toThrow(/length/);
   });

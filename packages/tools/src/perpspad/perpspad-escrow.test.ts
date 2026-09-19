@@ -13,6 +13,10 @@ import {
   deriveRewardVaultPda,
   buildInitializeEscrowInstruction,
   buildInitializeRewardVaultInstruction,
+  buildPublishRewardEpochInstruction,
+  buildClaimRewardInstruction,
+  deriveRewardEpochPda,
+  deriveRewardClaimPda,
   isValidSolanaAddress,
 } from './perpspad-escrow.js';
 
@@ -117,6 +121,37 @@ describe('perpspad-escrow', () => {
       rewardMint: key, creator: key, payer: key, maxInputPerSwap: 0n, maxSlippageBps: 250,
       executor: PublicKey.unique(),
     })).to.throw(/positive u64/);
+  });
+
+  it('builds publish and permissionless claim instructions in Rust account order', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const executor = PublicKey.unique();
+    const payer = PublicKey.unique();
+    const claimant = PublicKey.unique();
+    const rewardMint = PublicKey.unique();
+    const tokenProgram = PublicKey.unique();
+    const publish = buildPublishRewardEpochInstruction({
+      rewardVault: rewardVaultPda, tokenMint: mint, epoch: 1,
+      merkleRoot: Buffer.alloc(32, 1), datasetHash: Buffer.alloc(32, 2),
+      cumulativeTotal: 99n, executor, payer,
+    });
+    expect(publish.data[0]).toBe(5);
+    expect(publish.keys[1]!.pubkey.equals(deriveRewardEpochPda(mint, 1))).toBe(true);
+    expect(publish.keys[2]).toMatchObject({ pubkey: executor, isSigner: true });
+
+    const proof = [Buffer.alloc(32, 3)];
+    const claim = buildClaimRewardInstruction({
+      rewardVault: rewardVaultPda, tokenMint: mint, epoch: 1, claimant, rewardMint,
+      vaultRewardAccount: PublicKey.unique(), claimantRewardAccount: PublicKey.unique(),
+      rewardTokenProgram: tokenProgram, payer, cumulativeAllocation: 42n, proof,
+    });
+    expect(claim.data[0]).toBe(6);
+    expect(claim.data.readBigUInt64LE(1)).toBe(42n);
+    expect(claim.data[9]).toBe(1);
+    expect(claim.keys[2]!.pubkey.equals(deriveRewardClaimPda(mint, claimant))).toBe(true);
+    expect(claim.keys[3]).toMatchObject({ pubkey: claimant, isSigner: false });
+    expect(claim.keys[8]).toMatchObject({ pubkey: payer, isSigner: true });
   });
 
   it('isValidSolanaAddress accepts real addresses and rejects junk', () => {

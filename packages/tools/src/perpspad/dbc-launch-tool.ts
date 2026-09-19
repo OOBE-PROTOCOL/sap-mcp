@@ -49,6 +49,9 @@ interface RewardVaultConfig {
   executor: PublicKey;
   maxInputPerSwap: bigint;
   maxSlippageBps: number;
+  cumulativeRewardReceived: bigint;
+  cumulativeRewardCommitted: bigint;
+  latestEpoch: number;
 }
 
 export function decodeRewardVault(data: Buffer): RewardVaultConfig {
@@ -61,6 +64,9 @@ export function decodeRewardVault(data: Buffer): RewardVaultConfig {
     rewardTokenProgram: new PublicKey(data.subarray(232, 264)),
     maxInputPerSwap: data.readBigUInt64LE(264),
     maxSlippageBps: data.readUInt16LE(272),
+    cumulativeRewardReceived: data.readBigUInt64LE(290),
+    cumulativeRewardCommitted: data.readBigUInt64LE(298),
+    latestEpoch: data.readUInt32LE(316),
   };
 }
 

@@ -54,10 +54,14 @@ export const CREATOR_SPLIT_ESCROW_PROGRAM_ID = new PublicKey(
 /** PDA seed constant — must match the Rust `ESCROW_SEED`. */
 export const ESCROW_SEED = 'creator_escrow';
 export const REWARD_VAULT_SEED = 'reward_vault';
+export const REWARD_EPOCH_SEED = 'reward_epoch';
+export const REWARD_CLAIM_SEED = 'reward_claim';
 
 /** initialize_escrow instruction discriminator (first data byte). */
 export const INITIALIZE_ESCROW_IX = 0;
 export const INITIALIZE_REWARD_VAULT_IX = 3;
+export const PUBLISH_REWARD_EPOCH_IX = 5;
+export const CLAIM_REWARD_IX = 6;
 
 /** System program id (avoids importing SystemProgram for a constant). */
 const SYSTEM_PROGRAM_ID = new PublicKey('11111111111111111111111111111111');
@@ -89,6 +93,92 @@ export function deriveRewardVaultPda(tokenMint: string | PublicKey): {
     CREATOR_SPLIT_ESCROW_PROGRAM_ID,
   );
   return { rewardVaultPda, bump };
+}
+
+export function deriveRewardEpochPda(tokenMint: PublicKey, epoch: number): PublicKey {
+  if (!Number.isInteger(epoch) || epoch < 1 || epoch > 0xffff_ffff) throw new Error('epoch must fit u32');
+  const epochBytes = Buffer.alloc(4);
+  epochBytes.writeUInt32LE(epoch);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(REWARD_EPOCH_SEED), tokenMint.toBuffer(), epochBytes],
+    CREATOR_SPLIT_ESCROW_PROGRAM_ID,
+  )[0];
+}
+
+export function deriveRewardClaimPda(tokenMint: PublicKey, claimant: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(REWARD_CLAIM_SEED), tokenMint.toBuffer(), claimant.toBuffer()],
+    CREATOR_SPLIT_ESCROW_PROGRAM_ID,
+  )[0];
+}
+
+export function buildPublishRewardEpochInstruction(params: {
+  rewardVault: PublicKey;
+  tokenMint: PublicKey;
+  epoch: number;
+  merkleRoot: Buffer;
+  datasetHash: Buffer;
+  cumulativeTotal: bigint;
+  executor: PublicKey;
+  payer: PublicKey;
+}): TransactionInstruction {
+  if (params.merkleRoot.length !== 32 || params.datasetHash.length !== 32) throw new Error('commitments must be 32 bytes');
+  if (params.cumulativeTotal <= 0n || params.cumulativeTotal > 0xffff_ffff_ffff_ffffn) throw new Error('cumulativeTotal must fit u64');
+  const data = Buffer.alloc(77);
+  data[0] = PUBLISH_REWARD_EPOCH_IX;
+  data.writeUInt32LE(params.epoch, 1);
+  params.merkleRoot.copy(data, 5);
+  params.datasetHash.copy(data, 37);
+  data.writeBigUInt64LE(params.cumulativeTotal, 69);
+  return new TransactionInstruction({
+    programId: CREATOR_SPLIT_ESCROW_PROGRAM_ID,
+    keys: [
+      { pubkey: params.rewardVault, isSigner: false, isWritable: true },
+      { pubkey: deriveRewardEpochPda(params.tokenMint, params.epoch), isSigner: false, isWritable: true },
+      { pubkey: params.executor, isSigner: true, isWritable: false },
+      { pubkey: params.payer, isSigner: true, isWritable: true },
+      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
+}
+
+export function buildClaimRewardInstruction(params: {
+  rewardVault: PublicKey;
+  tokenMint: PublicKey;
+  epoch: number;
+  claimant: PublicKey;
+  rewardMint: PublicKey;
+  vaultRewardAccount: PublicKey;
+  claimantRewardAccount: PublicKey;
+  rewardTokenProgram: PublicKey;
+  payer: PublicKey;
+  cumulativeAllocation: bigint;
+  proof: Buffer[];
+}): TransactionInstruction {
+  if (params.cumulativeAllocation <= 0n || params.cumulativeAllocation > 0xffff_ffff_ffff_ffffn) throw new Error('allocation must fit u64');
+  if (params.proof.length > 32 || params.proof.some((node) => node.length !== 32)) throw new Error('invalid Merkle proof');
+  const data = Buffer.alloc(10 + params.proof.length * 32);
+  data[0] = CLAIM_REWARD_IX;
+  data.writeBigUInt64LE(params.cumulativeAllocation, 1);
+  data[9] = params.proof.length;
+  params.proof.forEach((node, index) => node.copy(data, 10 + index * 32));
+  return new TransactionInstruction({
+    programId: CREATOR_SPLIT_ESCROW_PROGRAM_ID,
+    keys: [
+      { pubkey: params.rewardVault, isSigner: false, isWritable: true },
+      { pubkey: deriveRewardEpochPda(params.tokenMint, params.epoch), isSigner: false, isWritable: false },
+      { pubkey: deriveRewardClaimPda(params.tokenMint, params.claimant), isSigner: false, isWritable: true },
+      { pubkey: params.claimant, isSigner: false, isWritable: false },
+      { pubkey: params.rewardMint, isSigner: false, isWritable: false },
+      { pubkey: params.vaultRewardAccount, isSigner: false, isWritable: true },
+      { pubkey: params.claimantRewardAccount, isSigner: false, isWritable: true },
+      { pubkey: params.rewardTokenProgram, isSigner: false, isWritable: false },
+      { pubkey: params.payer, isSigner: true, isWritable: true },
+      { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+    ],
+    data,
+  });
 }
 
 /**
