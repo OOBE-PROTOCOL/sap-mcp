@@ -56,6 +56,7 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     devBuyAmount: { type: 'number', description: 'Initial buy amount, denominated in the selected quote token' },
     devBuySol: { type: 'number', description: 'Deprecated alias for devBuyAmount (SOL launches only)' },
     latestBlockhash: { type: 'string', description: 'FRESH mainnet blockhash fetched by the CALLER (getLatestBlockhash) — guarantees signability from the client. Required.' },
+    metadataUri: { type: 'string', description: 'Exact permanent HTTPS URI of the Metaplex JSON (for example an IPFS/Arweave gateway URL). Preferred for production launches.' },
     metadataBaseUrl: { type: 'string', description: 'HTTPS base URL used to build the Metaplex JSON URI' },
     underlying: { type: 'string', description: 'Perp backing: Phoenix market symbol (e.g. SOL, TSLA, OIL). A-Z 0-9, 1-12 chars. REQUIRED together with leverage and direction (all-or-nothing).' },
     leverage: { type: 'number', description: 'Perp backing: integer leverage 1-10. REQUIRED together with underlying and direction (all-or-nothing).' },
@@ -186,15 +187,21 @@ export function registerDbcLaunchTool(
       const mintKeypair = Keypair.generate();
       const { escrowPda, bump } = deriveEscrowPda(mintKeypair.publicKey);
 
-      // Metadata uri: the DBC init_pool stores it in the mint metadata; Steve
-      // hosts the JSON (name/symbol/image) at this endpoint.
+      // Prefer a content-addressed metadata URI uploaded before the launch.
+      // metadataBaseUrl remains available for backward-compatible clients.
+      const permanentMetadataUri = typeof input.metadataUri === 'string'
+        ? input.metadataUri.trim()
+        : '';
       const metadataBaseUrl = typeof input.metadataBaseUrl === 'string'
         ? input.metadataBaseUrl.replace(/\/$/, '')
         : 'https://steve.oobeprotocol.ai/api/launchpad/metadata';
-      if (!metadataBaseUrl.startsWith('https://')) {
+      if (permanentMetadataUri && !permanentMetadataUri.startsWith('https://')) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('metadataUri must use HTTPS'));
+      }
+      if (!permanentMetadataUri && !metadataBaseUrl.startsWith('https://')) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('metadataBaseUrl must use HTTPS'));
       }
-      const uri = `${metadataBaseUrl}/${mintKeypair.publicKey.toBase58()}`;
+      const uri = permanentMetadataUri || `${metadataBaseUrl}/${mintKeypair.publicKey.toBase58()}`;
 
       // latestBlockhash comes from the CALLER (fetched client-side moments
       // before signing) — a server-side fetch here produced blockhashes that

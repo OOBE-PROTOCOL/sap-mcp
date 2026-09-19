@@ -20,6 +20,8 @@ describe('sap_perpspad_launch_dbc inputSchema', () => {
     expect(props.direction).toBeDefined();
     expect(props.direction.type).toBe('string');
     expect(props.direction.enum).toEqual(['long', 'short']);
+    expect(props.metadataUri.type).toBe('string');
+    expect(props.metadataUri.description).toMatch(/permanent HTTPS URI/i);
   });
 
   it('does NOT require the backing fields (optional → clean pure-curve launch)', () => {
