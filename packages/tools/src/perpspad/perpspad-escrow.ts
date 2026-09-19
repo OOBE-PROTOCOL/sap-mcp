@@ -128,6 +128,7 @@ export function buildInitializeRewardVaultInstruction(params: {
   readonly quoteMint: PublicKey;
   readonly rewardMint: PublicKey;
   readonly creator: PublicKey;
+  readonly executor: PublicKey;
   readonly payer: PublicKey;
   readonly maxInputPerSwap: bigint;
   readonly maxSlippageBps: number;
@@ -152,6 +153,7 @@ export function buildInitializeRewardVaultInstruction(params: {
       { pubkey: params.quoteMint, isSigner: false, isWritable: false },
       { pubkey: params.rewardMint, isSigner: false, isWritable: false },
       { pubkey: params.creator, isSigner: true, isWritable: false },
+      { pubkey: params.executor, isSigner: false, isWritable: false },
       { pubkey: params.payer, isSigner: true, isWritable: true },
       { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
     ],
