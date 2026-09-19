@@ -8,8 +8,15 @@ import { PublicKey } from '@solana/web3.js';
 import {
   CREATOR_SPLIT_ESCROW_PROGRAM_ID,
   ESCROW_SEED,
+  REWARD_VAULT_SEED,
   deriveEscrowPda,
+  deriveRewardVaultPda,
   buildInitializeEscrowInstruction,
+  buildInitializeRewardVaultInstruction,
+  buildPublishRewardEpochInstruction,
+  buildClaimRewardInstruction,
+  deriveRewardEpochPda,
+  deriveRewardClaimPda,
   isValidSolanaAddress,
 } from './perpspad-escrow.js';
 
@@ -73,6 +80,78 @@ describe('perpspad-escrow', () => {
 
   it('escrow seed constant matches the Rust program', () => {
     expect(ESCROW_SEED).to.equal('creator_escrow');
+  });
+
+  it('builds the immutable Market Rewards vault instruction contract', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { escrowPda } = deriveEscrowPda(mint);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const pool = PublicKey.unique();
+    const quoteMint = PublicKey.unique();
+    const rewardMint = PublicKey.unique();
+    const creator = PublicKey.unique();
+    const executor = PublicKey.unique();
+    const payer = PublicKey.unique();
+    const ix = buildInitializeRewardVaultInstruction({
+      rewardVaultPda, escrowPda, tokenMint: mint, dbcPool: pool, quoteMint,
+      rewardMint, creator, payer, maxInputPerSwap: 1_234_567n, maxSlippageBps: 250,
+      executor,
+    });
+
+    expect(REWARD_VAULT_SEED).to.equal('reward_vault');
+    expect(PublicKey.isOnCurve(rewardVaultPda.toBytes())).to.equal(false);
+    expect(ix.keys.map(({ pubkey }) => pubkey.toBase58())).to.deep.equal([
+      rewardVaultPda, escrowPda, mint, pool, quoteMint, rewardMint, creator, executor, payer,
+      new PublicKey('11111111111111111111111111111111'),
+    ].map((key) => key.toBase58()));
+    expect(ix.keys[6]).to.deep.equal({ pubkey: creator, isSigner: true, isWritable: false });
+    expect(ix.keys[8]).to.deep.equal({ pubkey: payer, isSigner: true, isWritable: true });
+    expect(ix.data[0]).to.equal(3);
+    expect(ix.data.readBigUInt64LE(1)).to.equal(1_234_567n);
+    expect(ix.data.readUInt16LE(9)).to.equal(250);
+  });
+
+  it('rejects unsafe Market Rewards limits before building', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { escrowPda } = deriveEscrowPda(mint);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const key = PublicKey.unique();
+    expect(() => buildInitializeRewardVaultInstruction({
+      rewardVaultPda, escrowPda, tokenMint: mint, dbcPool: key, quoteMint: key,
+      rewardMint: key, creator: key, payer: key, maxInputPerSwap: 0n, maxSlippageBps: 250,
+      executor: PublicKey.unique(),
+    })).to.throw(/positive u64/);
+  });
+
+  it('builds publish and permissionless claim instructions in Rust account order', () => {
+    const mint = new PublicKey(TEST_MINT);
+    const { rewardVaultPda } = deriveRewardVaultPda(mint);
+    const executor = PublicKey.unique();
+    const payer = PublicKey.unique();
+    const claimant = PublicKey.unique();
+    const rewardMint = PublicKey.unique();
+    const tokenProgram = PublicKey.unique();
+    const publish = buildPublishRewardEpochInstruction({
+      rewardVault: rewardVaultPda, tokenMint: mint, epoch: 1,
+      merkleRoot: Buffer.alloc(32, 1), datasetHash: Buffer.alloc(32, 2),
+      cumulativeTotal: 99n, executor, payer,
+    });
+    expect(publish.data[0]).toBe(5);
+    expect(publish.keys[1]!.pubkey.equals(deriveRewardEpochPda(mint, 1))).toBe(true);
+    expect(publish.keys[2]).toMatchObject({ pubkey: executor, isSigner: true });
+
+    const proof = [Buffer.alloc(32, 3)];
+    const claim = buildClaimRewardInstruction({
+      rewardVault: rewardVaultPda, tokenMint: mint, epoch: 1, claimant, rewardMint,
+      vaultRewardAccount: PublicKey.unique(), claimantRewardAccount: PublicKey.unique(),
+      rewardTokenProgram: tokenProgram, payer, cumulativeAllocation: 42n, proof,
+    });
+    expect(claim.data[0]).toBe(6);
+    expect(claim.data.readBigUInt64LE(1)).toBe(42n);
+    expect(claim.data[9]).toBe(1);
+    expect(claim.keys[2]!.pubkey.equals(deriveRewardClaimPda(mint, claimant))).toBe(true);
+    expect(claim.keys[3]).toMatchObject({ pubkey: claimant, isSigner: false });
+    expect(claim.keys[8]).toMatchObject({ pubkey: payer, isSigner: true });
   });
 
   it('isValidSolanaAddress accepts real addresses and rejects junk', () => {

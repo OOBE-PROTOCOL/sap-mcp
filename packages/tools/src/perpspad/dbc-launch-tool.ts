@@ -7,7 +7,7 @@
  *   recorded as metadata), plus the escrow split wired in.
  */
 
-import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction, TransactionInstruction } from '@solana/web3.js';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { logger } from '../../../core/src/logger.js';
@@ -21,12 +21,65 @@ import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from './dbc-launch.js';
-import { ExtensionType, getExtensionTypes, getMint } from '@solana/spl-token';
-import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  ExtensionType,
+  getAssociatedTokenAddressSync,
+  getExtensionTypes,
+  getMint,
+} from '@solana/spl-token';
+import {
+  buildInitializeEscrowInstruction,
+  buildInitializeRewardVaultInstruction,
+  deriveEscrowPda,
+  deriveRewardVaultPda,
+  isValidSolanaAddress,
+} from './perpspad-escrow.js';
 import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
 
 const OOBE_TREASURY = 'BiHdXQqNXTgMrNikZxw4CMnD1z1t6K2tmtwyXgSWSKqR';
 const ESCROW_PROGRAM_ID = 'ENpvWhtTtnveMZ3WHpGKHMEYDrPHHc5v6JjjVUWFNYgA';
+const JUPITER_V6_PROGRAM_ID = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4';
+
+interface RewardVaultConfig {
+  quoteMint: PublicKey;
+  rewardMint: PublicKey;
+  quoteTokenProgram: PublicKey;
+  rewardTokenProgram: PublicKey;
+  executor: PublicKey;
+  maxInputPerSwap: bigint;
+  maxSlippageBps: number;
+  cumulativeRewardReceived: bigint;
+  cumulativeRewardCommitted: bigint;
+  latestEpoch: number;
+}
+
+export function decodeRewardVault(data: Buffer): RewardVaultConfig {
+  if (data.length !== 320) throw new Error('Invalid RewardVault account length');
+  return {
+    executor: new PublicKey(data.subarray(104, 136)),
+    quoteMint: new PublicKey(data.subarray(136, 168)),
+    rewardMint: new PublicKey(data.subarray(168, 200)),
+    quoteTokenProgram: new PublicKey(data.subarray(200, 232)),
+    rewardTokenProgram: new PublicKey(data.subarray(232, 264)),
+    maxInputPerSwap: data.readBigUInt64LE(264),
+    maxSlippageBps: data.readUInt16LE(272),
+    cumulativeRewardReceived: data.readBigUInt64LE(290),
+    cumulativeRewardCommitted: data.readBigUInt64LE(298),
+    latestEpoch: data.readUInt32LE(316),
+  };
+}
+
+function jupiterBaseUrl(): string {
+  return (process.env.SAP_MCP_JUPITER_API_BASE_URL || 'https://api.jup.ag')
+    .replace(/\/(swap|ultra)\/v\d+\/?$/, '')
+    .replace(/\/$/, '');
+}
+
+function jupiterHeaders(): Record<string, string> {
+  const apiKey = process.env.SAP_MCP_JUPITER_API_KEY?.trim() || process.env.JUPITER_API_KEY?.trim();
+  return { 'content-type': 'application/json', ...(apiKey ? { 'x-api-key': apiKey } : {}) };
+}
 
 /** Perp backing policy attached to a DBC launch (read by the keeper). */
 export interface DbcBackingPolicy {
@@ -63,6 +116,10 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
     quote: { type: 'string', description: 'Quote token: SOL, USDC, or CUSTOM with quoteMint. Custom SPL/Token-2022 mints are validated on-chain.' },
     quoteMint: { type: 'string', description: 'Required when quote=CUSTOM: SPL or Token-2022 mint with 6-9 decimals and no unsupported transfer behavior.' },
+    feeStrategy: { type: 'string', enum: ['classic', 'perpetual', 'marketRewards'], description: 'Creator 70% routing strategy. Market Rewards routes the creator share into an immutable reward vault.' },
+    rewardMint: { type: 'string', description: 'Market Rewards only: canonical SPL/Token-2022 asset mint bought with the creator share.' },
+    maxRewardSwapAmount: { type: 'number', description: 'Market Rewards only: maximum quote-token units converted by one keeper swap.' },
+    rewardSlippageBps: { type: 'number', minimum: 1, maximum: 2000, description: 'Market Rewards only: maximum swap slippage, in basis points.' },
   },
   required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
@@ -166,6 +223,24 @@ export function registerDbcLaunchTool(
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_latestBlockhash: fetch a fresh blockhash via getLatestBlockhash and pass it here'));
       }
 
+      const feeStrategy = input.feeStrategy === 'marketRewards'
+        ? 'marketRewards'
+        : input.feeStrategy === 'perpetual' ? 'perpetual' : 'classic';
+      if (feeStrategy === 'marketRewards' && process.env.MARKET_REWARDS_ENABLED !== 'true') {
+        return perpspadPipelineException(
+          'Market Rewards is not active',
+          new Error('market_rewards_not_active: program upgrade and keeper readiness must be verified before enabling launches'),
+        );
+      }
+      const rewardMintInput = typeof input.rewardMint === 'string' ? input.rewardMint.trim() : '';
+      if (feeStrategy === 'marketRewards' && !isValidSolanaAddress(rewardMintInput)) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_rewardMint: Market Rewards requires a valid canonical reward mint'));
+      }
+      const marketRewardsExecutor = String(process.env.MARKET_REWARDS_EXECUTOR ?? '').trim();
+      if (feeStrategy === 'marketRewards' && !isValidSolanaAddress(marketRewardsExecutor)) {
+        return perpspadPipelineException('Market Rewards is not configured', new Error('invalid_market_rewards_executor'));
+      }
+
       // Quote: SOL (default) | USDC | custom via quoteMint (SPL 6-9 decimals).
       const quote = typeof input.quote === 'string' ? input.quote.trim().toUpperCase() : 'SOL';
       const quoteMintStr = quote === 'USDC'
@@ -186,6 +261,7 @@ export function registerDbcLaunchTool(
       const configKeypair = Keypair.generate();
       const mintKeypair = Keypair.generate();
       const { escrowPda, bump } = deriveEscrowPda(mintKeypair.publicKey);
+      const { rewardVaultPda, bump: rewardVaultBump } = deriveRewardVaultPda(mintKeypair.publicKey);
 
       // Prefer a content-addressed metadata URI uploaded before the launch.
       // metadataBaseUrl remains available for backward-compatible clients.
@@ -232,11 +308,29 @@ export function registerDbcLaunchTool(
         throw new Error(`Quote mint uses unsupported Token-2022 extensions: ${extensionTypes.join(',')}`);
       }
 
+      let rewardMint: PublicKey | undefined;
+      let maxRewardSwapBaseUnits: bigint | undefined;
+      const rewardSlippageBps = typeof input.rewardSlippageBps === 'number' ? input.rewardSlippageBps : 300;
+      if (feeStrategy === 'marketRewards') {
+        rewardMint = new PublicKey(rewardMintInput);
+        const rewardMintInfo = await conn.getAccountInfo(rewardMint);
+        if (!rewardMintInfo || (!rewardMintInfo.owner.equals(TOKEN_PROGRAM_ID) && !rewardMintInfo.owner.equals(TOKEN_2022_PROGRAM_ID))) {
+          throw new Error('Reward mint must be owned by SPL Token or Token-2022');
+        }
+        const rewardMintState = await getMint(conn, rewardMint, 'confirmed', rewardMintInfo.owner);
+        const rewardExtensions = getExtensionTypes(rewardMintState.tlvData);
+        if (rewardExtensions.some((extension) => unsafeExtensions.has(extension))) {
+          throw new Error(`Reward mint uses unsupported Token-2022 extensions: ${rewardExtensions.join(',')}`);
+        }
+        const maxRewardSwapAmount = typeof input.maxRewardSwapAmount === 'number' ? input.maxRewardSwapAmount : 1;
+        maxRewardSwapBaseUnits = BigInt(toQuoteBaseUnits(maxRewardSwapAmount, quoteDecimals).toString());
+      }
+
       const built = buildDirectDbcLaunch({
         configKeypair,
         mintKeypair,
         escrowPda,
-        agentWallet: new PublicKey(agentWallet),
+        agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda : new PublicKey(agentWallet),
         payer: new PublicKey(payer),
         latestBlockhash,
         metadata: { name: name.trim(), symbol: ticker, uri },
@@ -249,7 +343,7 @@ export function registerDbcLaunchTool(
       const initEscrowIx = buildInitializeEscrowInstruction({
         escrowPda,
         tokenMint: mintKeypair.publicKey,
-        agentWallet: new PublicKey(agentWallet),
+        agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda : new PublicKey(agentWallet),
         payer: new PublicKey(payer),
       });
       const escrowTx = new Transaction().add(initEscrowIx);
@@ -264,6 +358,22 @@ export function registerDbcLaunchTool(
         escrowPda: escrowPda.toBase58(),
       });
 
+      const initializeRewardVault = rewardMint && maxRewardSwapBaseUnits
+        ? buildInitializeRewardVaultInstruction({
+          rewardVaultPda,
+          escrowPda,
+          tokenMint: mintKeypair.publicKey,
+          dbcPool: new PublicKey(built.poolAddress),
+          quoteMint,
+          rewardMint,
+          creator: new PublicKey(agentWallet),
+          executor: new PublicKey(marketRewardsExecutor),
+          payer: new PublicKey(payer),
+          maxInputPerSwap: maxRewardSwapBaseUnits,
+          maxSlippageBps: rewardSlippageBps,
+        })
+        : undefined;
+
       return perpspadPipelineOk({
         success: true,
         directDbc: true,
@@ -273,6 +383,7 @@ export function registerDbcLaunchTool(
         escrowPda: escrowPda.toBase58(),
         escrowBump: bump,
         agentWallet,
+        feeStrategy,
         payer,
         devBuyAmount,
         devBuyRequired: devBuyAmount > 0,
@@ -303,20 +414,171 @@ export function registerDbcLaunchTool(
             accounts: {
               escrowPda: escrowPda.toBase58(),
               tokenMint: mintKeypair.publicKey.toBase58(),
-              agentWallet,
+              agentWallet: feeStrategy === 'marketRewards' ? rewardVaultPda.toBase58() : agentWallet,
               payer,
               systemProgram: '11111111111111111111111111111111',
             },
             data: [0],
             note: 'Build with buildInitializeEscrowInstruction client-side; sign with the payer wallet.',
           },
+          ...(initializeRewardVault ? {
+            initializeRewardVault: {
+              programId: ESCROW_PROGRAM_ID,
+              accounts: {
+                rewardVaultPda: rewardVaultPda.toBase58(), escrowPda: escrowPda.toBase58(),
+                tokenMint: mintKeypair.publicKey.toBase58(), dbcPool: built.poolAddress,
+                quoteMint: quoteMint.toBase58(), rewardMint: rewardMint!.toBase58(), creator: agentWallet,
+                executor: marketRewardsExecutor, payer,
+              },
+              data: [...initializeRewardVault.data],
+              rewardVaultBump,
+              note: 'Send after initializeEscrow. The agent and payer sign; reward mint and risk limits become immutable.',
+            },
+          } : {}),
         },
-        signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
+        signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow', ...(initializeRewardVault ? ['initializeRewardVault'] : [])],
         nextStep: `Send bootstrapLaunch, transferPoolCreator, and initializeEscrow in order. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
     } catch (err) {
       return perpspadPipelineException('Failed to build direct DBC launch', err);
+    }
+  });
+
+  registerPerpspadPipelineTool(server, context, 'sap_perpspad_build_market_reward_swap', {
+    description: 'Build an executor-signed Jupiter conversion of accrued creator quote fees into the immutable Market Rewards asset. Returns an unsigned transaction and never broadcasts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tokenMint: { type: 'string' },
+        amount: { type: 'number', exclusiveMinimum: 0, description: 'Quote-token units to convert.' },
+        latestBlockhash: { type: 'string' },
+      },
+      required: ['tokenMint', 'amount', 'latestBlockhash'],
+    },
+  }, async (input) => {
+    try {
+      if (process.env.MARKET_REWARDS_ENABLED !== 'true') throw new Error('market_rewards_not_active');
+      const tokenMint = new PublicKey(String(input.tokenMint ?? ''));
+      const executor = new PublicKey(String(process.env.MARKET_REWARDS_EXECUTOR ?? ''));
+      const amount = Number(input.amount);
+      const latestBlockhash = String(input.latestBlockhash ?? '');
+      if (!Number.isFinite(amount) || amount <= 0 || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) {
+        throw new Error('A positive amount and fresh blockhash are required');
+      }
+      const { rewardVaultPda } = deriveRewardVaultPda(tokenMint);
+      const { getConnection } = await import('./../phoenix/phoenix-helpers.js');
+      const connection = getConnection(context);
+      const vaultInfo = await connection.getAccountInfo(rewardVaultPda, 'confirmed');
+      if (!vaultInfo || !vaultInfo.owner.equals(new PublicKey(ESCROW_PROGRAM_ID))) throw new Error('RewardVault not found');
+      const vault = decodeRewardVault(vaultInfo.data);
+      if (!vault.executor.equals(executor)) throw new Error('Configured executor does not match immutable RewardVault executor');
+      const quoteMint = await getMint(connection, vault.quoteMint, 'confirmed', vault.quoteTokenProgram);
+      const amountIn = BigInt(toQuoteBaseUnits(amount, quoteMint.decimals).toString());
+      if (amountIn > vault.maxInputPerSwap) throw new Error('Amount exceeds immutable maxInputPerSwap');
+
+      const quoteAta = getAssociatedTokenAddressSync(vault.quoteMint, rewardVaultPda, true, vault.quoteTokenProgram);
+      const rewardAta = getAssociatedTokenAddressSync(vault.rewardMint, rewardVaultPda, true, vault.rewardTokenProgram);
+      const quoteUrl = new URL(`${jupiterBaseUrl()}/swap/v1/quote`);
+      quoteUrl.searchParams.set('inputMint', vault.quoteMint.toBase58());
+      quoteUrl.searchParams.set('outputMint', vault.rewardMint.toBase58());
+      quoteUrl.searchParams.set('amount', amountIn.toString());
+      quoteUrl.searchParams.set('slippageBps', String(vault.maxSlippageBps));
+      quoteUrl.searchParams.set('swapMode', 'ExactIn');
+      quoteUrl.searchParams.set('maxAccounts', '20');
+      const quoteResponse = await fetch(quoteUrl, { headers: jupiterHeaders() }).then(async (response) => {
+        if (!response.ok) throw new Error(`Jupiter quote failed (${response.status})`);
+        return response.json() as Promise<Record<string, unknown>>;
+      });
+      const expectedOut = BigInt(String(quoteResponse.outAmount ?? '0'));
+      const minimumOut = BigInt(String(quoteResponse.otherAmountThreshold ?? '0'));
+      if (expectedOut <= 0n || minimumOut <= 0n) throw new Error('Jupiter returned an empty quote');
+
+      const swapEnvelope = await fetch(`${jupiterBaseUrl()}/swap/v1/swap-instructions`, {
+        method: 'POST', headers: jupiterHeaders(),
+        body: JSON.stringify({
+          userPublicKey: rewardVaultPda.toBase58(), payer: executor.toBase58(), quoteResponse,
+          destinationTokenAccount: rewardAta.toBase58(), wrapAndUnwrapSol: false,
+          useSharedAccounts: true, dynamicComputeUnitLimit: false,
+          skipUserAccountsRpcCalls: true, asLegacyTransaction: true,
+        }),
+      }).then(async (response) => {
+        if (!response.ok) throw new Error(`Jupiter swap-instructions failed (${response.status})`);
+        return response.json() as Promise<Record<string, unknown>>;
+      });
+      const swap = swapEnvelope.swapInstruction as {
+        programId?: string;
+        data?: string;
+        accounts?: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>;
+      } | undefined;
+      if (!swap || swap.programId !== JUPITER_V6_PROGRAM_ID || !swap.data || !Array.isArray(swap.accounts)) {
+        throw new Error('Jupiter returned an unsupported swap instruction');
+      }
+      if (swap.accounts.some((account) => account.isSigner && account.pubkey !== rewardVaultPda.toBase58())) {
+        throw new Error('Jupiter route requested an unexpected signer');
+      }
+      const decodeJupiterIx = (value: unknown): TransactionInstruction => {
+        const ix = value as { programId?: string; data?: string; accounts?: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }> };
+        if (!ix?.programId || typeof ix.data !== 'string' || !Array.isArray(ix.accounts)) {
+          throw new Error('Jupiter returned a malformed setup instruction');
+        }
+        if (ix.accounts.some((account) => account.isSigner && account.pubkey !== executor.toBase58())) {
+          throw new Error('Jupiter setup requested an unexpected signer');
+        }
+        return new TransactionInstruction({
+          programId: new PublicKey(ix.programId), data: Buffer.from(ix.data, 'base64'),
+          keys: ix.accounts.map((account) => ({
+            pubkey: new PublicKey(account.pubkey), isSigner: account.isSigner, isWritable: account.isWritable,
+          })),
+        });
+      };
+      const preInstructions = [
+        ...((swapEnvelope.computeBudgetInstructions as unknown[] | undefined) ?? []),
+        ...((swapEnvelope.setupInstructions as unknown[] | undefined) ?? []),
+        ...((swapEnvelope.otherInstructions as unknown[] | undefined) ?? []),
+      ].map(decodeJupiterIx);
+      if (swapEnvelope.cleanupInstruction) throw new Error('Wrapped SOL cleanup is not allowed for Market Rewards');
+
+      const swapData = Buffer.from(swap.data, 'base64');
+      const wrapperData = Buffer.alloc(25 + swapData.length);
+      wrapperData[0] = 4;
+      wrapperData.writeBigUInt64LE(amountIn, 1);
+      wrapperData.writeBigUInt64LE(minimumOut, 9);
+      wrapperData.writeBigUInt64LE(expectedOut, 17);
+      swapData.copy(wrapperData, 25);
+      const wrapperIx = new TransactionInstruction({
+        programId: new PublicKey(ESCROW_PROGRAM_ID),
+        keys: [
+          { pubkey: rewardVaultPda, isSigner: false, isWritable: true },
+          { pubkey: quoteAta, isSigner: false, isWritable: true },
+          { pubkey: rewardAta, isSigner: false, isWritable: true },
+          { pubkey: executor, isSigner: true, isWritable: true },
+          { pubkey: new PublicKey(JUPITER_V6_PROGRAM_ID), isSigner: false, isWritable: false },
+          ...swap.accounts.map((account) => ({
+            pubkey: new PublicKey(account.pubkey),
+            isSigner: false,
+            isWritable: account.isWritable,
+          })),
+        ],
+        data: wrapperData,
+      });
+      const tx = new Transaction().add(
+        ...preInstructions,
+        createAssociatedTokenAccountIdempotentInstruction(executor, quoteAta, rewardVaultPda, vault.quoteMint, vault.quoteTokenProgram),
+        createAssociatedTokenAccountIdempotentInstruction(executor, rewardAta, rewardVaultPda, vault.rewardMint, vault.rewardTokenProgram),
+        wrapperIx,
+      );
+      tx.feePayer = executor;
+      tx.recentBlockhash = latestBlockhash;
+      return perpspadPipelineOk({
+        success: true, tokenMint: tokenMint.toBase58(), rewardVault: rewardVaultPda.toBase58(),
+        quoteMint: vault.quoteMint.toBase58(), rewardMint: vault.rewardMint.toBase58(),
+        amountIn: amountIn.toString(), expectedOut: expectedOut.toString(), minimumOut: minimumOut.toString(),
+        transactionBase64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
+        safeToApprove: true, approvalBlocked: false,
+      });
+    } catch (err) {
+      return perpspadPipelineException('Failed to build Market Rewards conversion', err);
     }
   });
 

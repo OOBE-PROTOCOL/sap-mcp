@@ -4,7 +4,9 @@
  * normalization, and the USDC fail-fast gate.
  */
 import { describe, expect, it } from 'vitest';
+import { PublicKey } from '@solana/web3.js';
 import {
+  decodeRewardVault,
   DBC_LAUNCH_INPUT_SCHEMA,
   parseBackingPolicy,
   toQuoteBaseUnits,
@@ -60,6 +62,33 @@ describe('DBC dev-buy amounts', () => {
   it('rejects zero and invalid decimals', () => {
     expect(() => toQuoteBaseUnits(0, 9)).toThrow();
     expect(() => toQuoteBaseUnits(1, 10)).toThrow();
+  });
+});
+
+describe('RewardVault binary contract', () => {
+  it('decodes the Pinocchio v1 layout at the pinned offsets', () => {
+    const data = Buffer.alloc(320);
+    const executor = PublicKey.unique();
+    const quoteMint = PublicKey.unique();
+    const rewardMint = PublicKey.unique();
+    const tokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    executor.toBuffer().copy(data, 104);
+    quoteMint.toBuffer().copy(data, 136);
+    rewardMint.toBuffer().copy(data, 168);
+    tokenProgram.toBuffer().copy(data, 200);
+    tokenProgram.toBuffer().copy(data, 232);
+    data.writeBigUInt64LE(500_000_000n, 264);
+    data.writeUInt16LE(300, 272);
+    data.writeBigUInt64LE(456n, 290);
+    data.writeBigUInt64LE(400n, 298);
+    data.writeUInt32LE(7, 316);
+
+    expect(decodeRewardVault(data)).toMatchObject({
+      executor, quoteMint, rewardMint, quoteTokenProgram: tokenProgram,
+      rewardTokenProgram: tokenProgram, maxInputPerSwap: 500_000_000n, maxSlippageBps: 300,
+      cumulativeRewardReceived: 456n, cumulativeRewardCommitted: 400n, latestEpoch: 7,
+    });
+    expect(() => decodeRewardVault(Buffer.alloc(319))).toThrow(/length/);
   });
 });
 
