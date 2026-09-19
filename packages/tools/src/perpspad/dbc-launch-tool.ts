@@ -179,6 +179,12 @@ export function registerDbcLaunchTool(
       const feeStrategy = input.feeStrategy === 'marketRewards'
         ? 'marketRewards'
         : input.feeStrategy === 'perpetual' ? 'perpetual' : 'classic';
+      if (feeStrategy === 'marketRewards' && process.env.MARKET_REWARDS_ENABLED !== 'true') {
+        return perpspadPipelineException(
+          'Market Rewards is not active',
+          new Error('market_rewards_not_active: program upgrade and keeper readiness must be verified before enabling launches'),
+        );
+      }
       const rewardMintInput = typeof input.rewardMint === 'string' ? input.rewardMint.trim() : '';
       if (feeStrategy === 'marketRewards' && !isValidSolanaAddress(rewardMintInput)) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_rewardMint: Market Rewards requires a valid canonical reward mint'));
