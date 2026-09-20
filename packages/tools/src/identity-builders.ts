@@ -84,6 +84,63 @@ async function serializeIdentityTx(
   return Buffer.from(tx.serialize()).toString('base64');
 }
 
+/**
+ * Read the on-chain state of an identity PDA before building a transaction.
+ * Returns the account (owner = SAP program) when the PDA exists, else null.
+ * RPC failures resolve to null (fail-open: the on-chain program remains the
+ * final gate — this guard only prevents a KNOWN-to-fail build).
+ */
+async function identityAccountOnChain(
+  client: SapClient,
+  pda: PublicKey,
+): Promise<{ owner: PublicKey } | null> {
+  const connection = (client as unknown as { connection?: { getAccountInfo(pubkey: PublicKey): Promise<{ owner: PublicKey } | null> } }).connection;
+  if (!connection) return null;
+  try {
+    return await connection.getAccountInfo(pda);
+  } catch {
+    return null;
+  }
+}
+
+/** Solscan evidence link for an account. */
+function solscanAccount(address: PublicKey): string {
+  return `https://solscan.io/account/${address.toBase58()}`;
+}
+
+/**
+ * Guard for REGISTRATION builders: the agent PDA must NOT exist yet.
+ * Throws with the evidence link so the chat can tell the user their agent
+ * is already registered — instead of an opaque "custom program error: 0x0"
+ * from a simulation that was always going to fail.
+ */
+async function assertAgentNotRegistered(client: SapClient, pdas: ReturnType<typeof identityPdas>): Promise<void> {
+  const existing = await identityAccountOnChain(client, pdas.agentPda);
+  if (existing) {
+    throw new Error(
+      `ALREADY_REGISTERED: this wallet already has an active SAP agent on-chain. ` +
+      `Agent PDA ${pdas.agentPda.toBase58()} — evidence: ${solscanAccount(pdas.agentPda)}. ` +
+      `Tell the user their agent is already registered and working (show the Solscan link as evidence): ` +
+      `no new registration is needed. To change identity details, use the agent update builder instead.`,
+    );
+  }
+}
+
+/**
+ * Guard for UPDATE/LIFECYCLE builders: the agent PDA must EXIST. Building an
+ * update for a never-registered wallet fails in simulation the same opaque
+ * way — name the real problem instead.
+ */
+async function assertAgentRegistered(client: SapClient, pdas: ReturnType<typeof identityPdas>): Promise<void> {
+  const existing = await identityAccountOnChain(client, pdas.agentPda);
+  if (!existing) {
+    throw new Error(
+      `NOT_REGISTERED: this wallet has no SAP agent on-chain (PDA ${pdas.agentPda.toBase58()}). ` +
+      `Tell the user the agent is not registered yet and offer the register builder first.`,
+    );
+  }
+}
+
 function identityBuilderResponse(params: {
   action: string;
   transactionBase64: string;
@@ -193,6 +250,7 @@ export async function buildAgentRegisterTransaction(
     protocols: identity.protocols,
   });
   const pdas = identityPdas(client, ownerWallet);
+  await assertAgentNotRegistered(client, pdas);
   const methods = methodsOf(client);
   const anchorBuilder = requireAnchorMethod(methods, 'register_agent', 'registerAgent')(
     identity.name,
@@ -262,6 +320,7 @@ export async function buildAgentUpdateTransaction(
     protocols: updateProtocols,
   });
   const pdas = identityPdas(client, ownerWallet);
+  await assertAgentRegistered(client, pdas);
   const methods = methodsOf(client);
   const instruction = await requireAnchorMethod(methods, 'update_agent', 'updateAgent')(
     updateName,
@@ -298,6 +357,7 @@ export async function buildAgentLifecycleTransaction(
 ): Promise<IdentityBuilderResult> {
   const ownerWallet = ownerWalletOf(input);
   const pdas = identityPdas(client, ownerWallet);
+  await assertAgentRegistered(client, pdas);
   const methods = methodsOf(client);
   const actionMethod = requireAnchorMethod(methods, action, action.replace(/_([a-z0-9])/g, (_match, c) => c.toUpperCase()));
   const builder = actionMethod();
