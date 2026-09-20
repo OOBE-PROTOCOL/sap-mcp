@@ -406,7 +406,7 @@ type QueryParams = Record<string, string | undefined>;
  * 422 tells the model exactly which arguments to fix instead of a truncated
  * "Missing required f..." that forces blind retries.
  */
-function upstreamError(status: number, label: string, text: string): Error {
+export function upstreamError(status: number, label: string, text: string, path?: string): Error {
   let detail = text.slice(0, 400);
   try {
     const parsed = JSON.parse(text) as { error?: { code?: string; message?: string; fields?: unknown; details?: unknown } };
@@ -419,6 +419,22 @@ function upstreamError(status: number, label: string, text: string): Error {
     }
   } catch {
     // Non-JSON body — keep the raw slice.
+  }
+  // MagicBlock swap-module outage (verified live 2026-09-20): the /v1/swap/*
+  // upstream answers 405 {"code":405,"message":"Bad method"} for VALID
+  // requests while edge validation (422) still works, and every OTHER module
+  // (spl/transfer public+private) builds transactions fine. Surface that
+  // precisely so the model reports an upstream outage with working
+  // alternatives instead of telling the user private payments are down.
+  const isSwapModule = path?.startsWith('/v1/swap/') === true;
+  if (isSwapModule && status === 405) {
+    return new Error(
+      `${label} ${status}: MagicBlock swap module upstream outage ("Bad method"). ` +
+      `Confirmed: quote and swap endpoints reject valid requests while the rest of the Private Payments API works. ` +
+      `Tell the user private SWAPS are temporarily unavailable on MagicBlock's side (not an app bug) and offer the working alternatives: ` +
+      `(1) private TRANSFERS via magicblock_transfer with visibility=private (delayed + split delivery) — verified working; ` +
+      `(2) public swaps through the regular Jupiter flow. Do not retry the swap tools until this upstream error changes.`,
+    );
   }
   return new Error(`${label} ${status}: ${detail}`);
 }
@@ -434,7 +450,7 @@ async function apiGet<T>(path: string, query?: QueryParams, authToken?: string):
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const res = await fetch(url.toString(), { method: 'GET', headers });
   const text = await res.text();
-  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text);
+  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text, path);
   return JSON.parse(text) as T;
 }
 
@@ -444,7 +460,7 @@ async function apiPost<T>(path: string, body: object, authToken?: string): Promi
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   const text = await res.text();
-  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text);
+  if (!res.ok) throw upstreamError(res.status, 'MagicBlock API', text, path);
   return JSON.parse(text) as T;
 }
 

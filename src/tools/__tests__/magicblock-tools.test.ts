@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { registerMagicBlockTools, sanitizeSwapQuoteResponse, type SwapQuoteResponse } from '../magicblock-tools.js';
+import { registerMagicBlockTools, sanitizeSwapQuoteResponse, upstreamError, type SwapQuoteResponse } from '../magicblock-tools.js';
 import type { SapMcpContext } from '../../core/types.js';
 
 // ─── Typed interface for the MCP server's internal tool store ─────
@@ -405,5 +405,34 @@ describe('MagicBlock quote sanitization', () => {
       { label: 'A', bps: null },
       { label: 'B', bps: 5000 },
     ]))).toThrow('magicblock_swap_quote_bps_required');
+  });
+});
+
+describe('upstreamError — MagicBlock swap-module 405 outage translation', () => {
+  const swap405Body = JSON.stringify({ jsonrpc: '2.0', error: { code: 405, message: 'Bad method' }, id: null });
+
+  it('translates a 405 on /v1/swap/* into an upstream-outage message with working alternatives', () => {
+    const err = upstreamError(405, 'MagicBlock API', swap405Body, '/v1/swap/quote');
+    expect(err.message).toContain('upstream outage');
+    expect(err.message).toContain('magicblock_transfer');
+    expect(err.message).toContain('visibility=private');
+    expect(err.message).toContain('Do not retry');
+  });
+
+  it('translates a 405 on /v1/swap/swap (POST path) the same way', () => {
+    const err = upstreamError(405, 'MagicBlock API', swap405Body, '/v1/swap/swap');
+    expect(err.message).toContain('upstream outage');
+  });
+
+  it('keeps the plain translation for 405 outside the swap module', () => {
+    const err = upstreamError(405, 'MagicBlock Router', swap405Body);
+    expect(err.message).not.toContain('upstream outage');
+    expect(err.message).toContain('Bad method');
+  });
+
+  it('keeps the plain translation for non-405 swap errors (e.g. 422)', () => {
+    const err = upstreamError(422, 'MagicBlock API', JSON.stringify({ error: { code: 'VALIDATION_ERROR', message: 'Missing required fields' } }), '/v1/swap/quote');
+    expect(err.message).not.toContain('upstream outage');
+    expect(err.message).toContain('VALIDATION_ERROR');
   });
 });
