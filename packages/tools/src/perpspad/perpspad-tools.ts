@@ -14,6 +14,7 @@ import { logger } from '../../../core/src/logger.js';
 import { PerpspadApiClient, type PerpspadLaunchBody } from './perpspad-client.js';
 import { deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
 import { registerDbcLaunchTool } from './dbc-launch-tool.js';
+import { registerPerpspadDbcConfigPreviewTool } from './dbc-config-preview.js';
 import {
   registerPerpspadPipelineTool,
   perpspadPipelineOk,
@@ -370,6 +371,9 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
 
   // Direct DBC launch builder (Option 2) — no PerpsPad API in the critical path.
   registerDbcLaunchTool(server, context);
+  // Pre-launch economics preview — SDK-verified DBC config + dev-buy math
+  // (single source of truth for the Steve Launchpad simulation panel).
+  registerPerpspadDbcConfigPreviewTool(server, context);
 
-  logger.debug('PerpsPad launchpad tools registered', { count: 10 });
+  logger.debug('PerpsPad launchpad tools registered', { count: 11 });
 }
