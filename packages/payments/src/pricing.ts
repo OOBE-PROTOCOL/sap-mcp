@@ -206,6 +206,11 @@ const FREE_TOOLS = new Set([
   'sap_perpspad_get_launch_status',
   'sap_perpspad_get_stock_pairs',
   'sap_perpspad_get_stats',
+  // DBC config preview — pure computation on the config the gateway signs
+  // (one RPC read for the quote decimals). The Steve Launchpad simulation
+  // panel calls it on every keystroke of the dev-buy field; charging x402
+  // for a preview would make the UI unusable.
+  'sap_perpspad_dbc_config_preview',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
