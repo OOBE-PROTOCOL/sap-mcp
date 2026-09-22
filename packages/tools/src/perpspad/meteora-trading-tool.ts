@@ -5,6 +5,8 @@ import {
   DAMM_V2_MIGRATION_FEE_ADDRESS,
   DynamicBondingCurveClient,
   deriveDammV2PoolAddress,
+  derivePositionAddress,
+  derivePositionNftAccount,
   getCurrentPoint,
   SwapMode,
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -331,9 +333,33 @@ export function registerMeteoraTradingTools(
       migration.transaction.feePayer = new PublicKey(payer);
       migration.transaction.partialSign(migration.firstPositionNftKeypair, migration.secondPositionNftKeypair);
 
+      const firstPositionNftMint = migration.firstPositionNftKeypair.publicKey;
+      const secondPositionNftMint = migration.secondPositionNftKeypair.publicKey;
+
       return perpspadPipelineOk({
         success: true,
         market: marketJson(market),
+        migration: {
+          dammPoolAddress: deriveDammV2PoolAddress(
+            dammConfig,
+            market.baseMint,
+            market.quoteMint,
+          ).toBase58(),
+          positions: [
+            {
+              role: 'partner',
+              nftMint: firstPositionNftMint.toBase58(),
+              nftAccount: derivePositionNftAccount(firstPositionNftMint).toBase58(),
+              position: derivePositionAddress(firstPositionNftMint).toBase58(),
+            },
+            {
+              role: 'creator',
+              nftMint: secondPositionNftMint.toBase58(),
+              nftAccount: derivePositionNftAccount(secondPositionNftMint).toBase58(),
+              position: derivePositionAddress(secondPositionNftMint).toBase58(),
+            },
+          ],
+        },
         transactionBase64: migration.transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
         signing: { signer: payer, ephemeralPositionSignersIncluded: 2, broadcasts: false },
       });
