@@ -101,7 +101,8 @@ async function resolveMarket(context: Parameters<typeof registerPerpspadPipeline
   }
 
   const cpAmm = new CpAmm(connection);
-  const derivedPool = deriveDammV2PoolAddress(pool.poolState.config, baseMint, quoteMint);
+  const dammConfig = dammV2ConfigForFeeOption(Number(config.migrationFeeOption));
+  const derivedPool = deriveDammV2PoolAddress(dammConfig, baseMint, quoteMint);
   let tradePool = derivedPool;
   let dammPoolState: Awaited<ReturnType<CpAmm['fetchPoolState']>> | undefined;
   try {
@@ -149,9 +150,14 @@ function marketJson(market: ResolvedMarket) {
   };
 }
 
-export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+export function dammV2ConfigForFeeOption(migrationFeeOption: number): PublicKey {
   const derived = DAMM_V2_MIGRATION_FEE_ADDRESS[migrationFeeOption];
   if (!derived) throw new Error(`unsupported Meteora migration fee option: ${migrationFeeOption}`);
+  return derived;
+}
+
+export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+  const derived = dammV2ConfigForFeeOption(migrationFeeOption);
   if (requested && requested !== derived.toBase58()) {
     throw new Error('dammConfig does not match the DBC pool configuration');
   }
