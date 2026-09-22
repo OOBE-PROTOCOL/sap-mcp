@@ -63,6 +63,8 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     direction: { type: 'string', enum: ['long', 'short'], description: 'Perp backing: long|short. REQUIRED together with underlying and leverage (all-or-nothing).' },
     quote: { type: 'string', description: 'Quote token: SOL, USDC, or CUSTOM with quoteMint. Custom SPL/Token-2022 mints are validated on-chain.' },
     quoteMint: { type: 'string', description: 'Required when quote=CUSTOM: SPL or Token-2022 mint with 6-9 decimals and no unsupported transfer behavior.' },
+    quotePriceUsd: { type: 'number', description: 'Live USD price of one quote token. Required for non-SOL quotes.' },
+    solPriceUsd: { type: 'number', description: 'Live SOL/USD reference. Required for non-SOL quotes.' },
   },
   required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
@@ -231,6 +233,12 @@ export function registerDbcLaunchTool(
       if (extensionTypes.some((extension) => unsafeExtensions.has(extension))) {
         throw new Error(`Quote mint uses unsupported Token-2022 extensions: ${extensionTypes.join(',')}`);
       }
+      const { resolveQuoteUnitsPerSol } = await import('./dbc-config-preview.js');
+      const quoteUnitsPerSol = resolveQuoteUnitsPerSol(
+        quoteMintStr,
+        typeof input.quotePriceUsd === 'number' ? input.quotePriceUsd : undefined,
+        typeof input.solPriceUsd === 'number' ? input.solPriceUsd : undefined,
+      );
 
       const built = buildDirectDbcLaunch({
         configKeypair,
@@ -242,6 +250,7 @@ export function registerDbcLaunchTool(
         metadata: { name: name.trim(), symbol: ticker, uri },
         quoteMint,
         quoteDecimals,
+        quoteUnitsPerSol,
         quoteMintOwner,
       });
 

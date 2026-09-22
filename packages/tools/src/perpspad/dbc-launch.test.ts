@@ -228,14 +228,14 @@ describe('dbc-launch', () => {
     expect(wsol.equals(presetCopy)).toBe(true);
     // explicit 0 reproduces the verbatim preset byte-for-byte
     expect(buildConfigArgsForQuote(9, 0).equals(Buffer.from(PERPSPAD_CONFIG_ARGS))).toBe(true);
-    const usdc = buildConfigArgsForQuote(6);
+    const usdc = buildConfigArgsForQuote(6, 100, 150);
     expect(usdc.length).toBe(283);
-    // threshold shrank by 10^3: original @69 = 109518156630 -> 109518156
-    expect(usdc.readBigUInt64LE(69)).toBe(109518156n);
+    // 109.518 SOL at $150/SOL becomes 16,427.7 USDC.
+    expect(usdc.readBigUInt64LE(69)).toBe(16_427_723_494n);
     // creator fee byte survives the scaling
     expect(usdc[151]).toBe(100);
     // same-decimals quotes share the preset
-    expect(buildConfigArgsForQuote(6).toString('hex')).toBe(usdc.toString('hex'));
+    expect(buildConfigArgsForQuote(6, 100, 150).toString('hex')).toBe(usdc.toString('hex'));
     // invalid decimals rejected
     expect(() => buildConfigArgsForQuote(5)).toThrow(/6-9/);
     expect(() => buildConfigArgsForQuote(10)).toThrow(/6-9/);

@@ -94,6 +94,19 @@ interface DbcConfigPreviewInput {
   devBuyAmount?: number;
   /** Dev-buy slippage in bps as the UI submits (default 300). */
   slippageBps?: number;
+  quotePriceUsd?: number;
+  solPriceUsd?: number;
+}
+
+export function resolveQuoteUnitsPerSol(quoteMint: string, quotePriceUsd?: number, solPriceUsd?: number): number {
+  if (quoteMint === 'So11111111111111111111111111111111111111112') return 1;
+  if (!Number.isFinite(quotePriceUsd) || Number(quotePriceUsd) <= 0) {
+    throw new Error('A live positive quotePriceUsd is required for non-SOL quote mints.');
+  }
+  if (!Number.isFinite(solPriceUsd) || Number(solPriceUsd) <= 0) {
+    throw new Error('A live positive solPriceUsd is required for non-SOL quote mints.');
+  }
+  return Number(solPriceUsd) / Number(quotePriceUsd);
 }
 
 /**
@@ -116,6 +129,8 @@ export function registerPerpspadDbcConfigPreviewTool(
         quoteMint: { type: 'string', description: 'Quote mint address (SOL = wrapped SOL mint, CUSTOM = the verified mint)' },
         devBuyAmount: { type: 'number', description: 'Human dev-buy amount in quote units (e.g. 1 SOL, 1000 OOBE). 0/omitted = curve facts only.' },
         slippageBps: { type: 'number', description: 'Dev-buy slippage in bps (default 300)' },
+        quotePriceUsd: { type: 'number', description: 'Live USD price of one quote token; required for non-SOL quotes.' },
+        solPriceUsd: { type: 'number', description: 'Live SOL/USD reference; required for non-SOL quotes.' },
       },
       required: ['quoteMint'],
     } as const,
@@ -136,7 +151,8 @@ export function registerPerpspadDbcConfigPreviewTool(
       const connection = getConnection(context);
       const quoteMint = new PublicKey(quoteMintStr);
       const decimals = await getQuoteDecimals(connection, quoteMint);
-      const config = buildConfigArgsForQuote(decimals);
+      const quoteUnitsPerSol = resolveQuoteUnitsPerSol(quoteMintStr, input.quotePriceUsd, input.solPriceUsd);
+      const config = buildConfigArgsForQuote(decimals, 100, quoteUnitsPerSol);
 
       // ── Decode the scaled config (BigInt, verified offsets) ────────────
       const migrationThresholdRaw = config.readBigUInt64LE(69);
@@ -173,6 +189,7 @@ export function registerPerpspadDbcConfigPreviewTool(
         success: true,
         quoteMint: quoteMintStr,
         quoteDecimals: decimals,
+        quoteUnitsPerSol,
         tokenSupplyTokens: TOKEN_SUPPLY_TOKENS.toString(),
         migrationThresholdRaw: migrationThresholdRaw.toString(),
         migrationThresholdHuman: Number(migrationThresholdRaw) / 10 ** decimals,
