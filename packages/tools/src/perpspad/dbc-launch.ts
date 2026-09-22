@@ -16,6 +16,7 @@ import {
   deriveDbcPoolAuthority,
   deriveDbcTokenVaultAddress,
   deriveMintMetadata as deriveMintMetadataSdk,
+  MAX_SQRT_PRICE,
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { createHash } from 'crypto';
 
@@ -123,7 +124,16 @@ export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFee
   for (let i = 0; i < curveLen; i++) {
     const sqrtOffset = CURVE_OFFSET_BASE + i * CURVE_ENTRY_SIZE;
     const liqOffset = sqrtOffset + 16;
-    writeU128(sqrtOffset, scale(readU128(sqrtOffset), sqrtRatio));
+    const sqrtPrice = readU128(sqrtOffset);
+    // Meteora uses MAX_SQRT_PRICE as the terminal curve sentinel. Scaling
+    // that sentinel for valuable custom quotes pushes it outside the valid
+    // range and CreateConfig fails with DBC 6021 (InvalidCurve).
+    writeU128(
+      sqrtOffset,
+      sqrtPrice === BigInt(MAX_SQRT_PRICE.toString())
+        ? sqrtPrice
+        : scale(sqrtPrice, sqrtRatio),
+    );
     writeU128(liqOffset, scale(readU128(liqOffset), sqrtRatio));
   }
   // creator_trading_fee_percentage @151 (u8) — offset verified via SDK anchor
