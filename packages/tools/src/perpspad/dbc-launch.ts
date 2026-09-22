@@ -57,6 +57,9 @@ export const PERPSPAD_CONFIG_ARGS = Buffer.from(
 const CURVE_OFFSET_BASE = 219;
 const CURVE_ENTRY_SIZE = 32;
 const WSOL_DECIMALS = 9;
+/** Fixed launch economics: Meteora migration fee is one whole percent. */
+export const MIGRATION_FEE_PERCENTAGE = 1;
+const MIGRATION_FEE_PERCENTAGE_OFFSET = 153;
 
 /** Decimals of a quote mint — read from the SPL Mint account at offset 44
  * (Mint layout: [0..4] COption tag, [4..36] mintAuthority, [36..44] supply
@@ -128,6 +131,11 @@ export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFee
   // identity round-trip byte-identical). 0 = all trading fees to partner
   // (PerpsPad preset), 100 = all to pool creator (our escrow-driven split).
   out[151] = creatorTradingFeePercentage;
+  // migration_fee.fee_percentage @153 (u8). Meteora expresses this as a
+  // whole percentage (1 = 1%), independently from migration_fee_option=2,
+  // which configures the migrated DAMM v2 pool's 100 bps trading fee.
+  // This is a protocol constant and is never accepted from caller input.
+  out[MIGRATION_FEE_PERCENTAGE_OFFSET] = MIGRATION_FEE_PERCENTAGE;
   return out;
 }
 
