@@ -49,15 +49,17 @@ export const PERPSPAD_CONFIG_ARGS = Buffer.from(
   'hex',
 );
 
-/** Verified quote-decimal offsets inside the 283-byte ConfigParameters blob:
+/** Verified quote-value offsets inside the 283-byte ConfigParameters blob:
  * migration_quote_threshold @69 (u64), sqrt_start_price @77 (u128),
  * curve.len @215 (u32), curve[i] @219+i*32 (u128 sqrt_price, u128 liquidity).
- * All quote-denominated values scale by 10^(9 - quote_decimals) with the
- * sqrt fields scaling by the SQUARE ROOT of that factor. Verified on-chain
- * via simulateTransaction: WSOL (9 dec), USDC (6), JUP (6) — all PASS. */
+ * Values are converted from WSOL raw units using mint decimals and the live
+ * quote/SOL value ratio. Sqrt prices and liquidity scale by sqrt(R). */
 const CURVE_OFFSET_BASE = 219;
 const CURVE_ENTRY_SIZE = 32;
 const WSOL_DECIMALS = 9;
+/** Fixed launch economics: Meteora migration fee is one whole percent. */
+export const MIGRATION_FEE_PERCENTAGE = 1;
+const MIGRATION_FEE_PERCENTAGE_OFFSET = 153;
 
 /** Decimals of a quote mint — read from the SPL Mint account at offset 44
  * (Mint layout: [0..4] COption tag, [4..36] mintAuthority, [36..44] supply
@@ -83,18 +85,23 @@ export async function getQuoteDecimals(connection: { getAccountInfo(pk: PublicKe
  * with `quoteDecimals` decimals (preset is 9-dec WSOL). Scale factor for
  * amounts = 10^(quoteDecimals - 9); for sqrt prices = its square root.
  */
-export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFeePercentage = 100): Buffer {
+export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFeePercentage = 100, quoteUnitsPerSol = 1): Buffer {
   if (!Number.isInteger(quoteDecimals) || quoteDecimals < 6 || quoteDecimals > 9) {
     throw new Error(`Quote decimals must be an integer 6-9 (DBC requirement), got ${quoteDecimals}.`);
   }
   if (!Number.isInteger(creatorTradingFeePercentage) || creatorTradingFeePercentage < 0 || creatorTradingFeePercentage > 100) {
     throw new Error(`creatorTradingFeePercentage must be an integer 0-100, got ${creatorTradingFeePercentage}.`);
   }
-  // quoteDecimals <= 9 always (preset is 9-dec WSOL), so values only SHRINK.
-  // amount divisor = 10^(9 - dec); sqrt divisor = ceil(sqrt(10^(9-dec))).
-  // Verified on-chain: WSOL(9)/USDC(6)/JUP(6) all PASS with divisors 1/1000/32.
-  const amountDivisor = 10n ** BigInt(WSOL_DECIMALS - quoteDecimals);
-  const sqrtDivisor = amountDivisor; // verified on-chain: ALL quote fields scale by 10^(9-dec) (sqrt fields included) — sqrt(1000)÷ failed TypeCast/liquidity checks
+  if (!Number.isFinite(quoteUnitsPerSol) || quoteUnitsPerSol <= 0) {
+    throw new Error(`quoteUnitsPerSol must be a positive finite number, got ${quoteUnitsPerSol}.`);
+  }
+  const rawQuoteRatio = quoteUnitsPerSol * 10 ** (quoteDecimals - WSOL_DECIMALS);
+  const sqrtRatio = Math.sqrt(rawQuoteRatio);
+  const SCALE = 1_000_000_000n;
+  const scale = (value: bigint, ratio: number): bigint => {
+    const scaledRatio = BigInt(Math.round(ratio * Number(SCALE)));
+    return value * scaledRatio / SCALE;
+  };
 
   const out = Buffer.from(PERPSPAD_CONFIG_ARGS);
 
@@ -109,22 +116,26 @@ export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFee
   };
 
   // migration_quote_threshold @69 (u64, quote lamports)
-  out.writeBigUInt64LE(out.readBigUInt64LE(69) / amountDivisor, 69);
+  out.writeBigUInt64LE(scale(out.readBigUInt64LE(69), rawQuoteRatio), 69);
   // sqrt_start_price @77 (u128)
-  writeU128(77, readU128(77) / sqrtDivisor);
-  // curve points: sqrt_price by sqrtDivisor, liquidity by amountDivisor
+  writeU128(77, scale(readU128(77), sqrtRatio));
   const curveLen = out.readUInt32LE(215);
   for (let i = 0; i < curveLen; i++) {
     const sqrtOffset = CURVE_OFFSET_BASE + i * CURVE_ENTRY_SIZE;
     const liqOffset = sqrtOffset + 16;
-    writeU128(sqrtOffset, readU128(sqrtOffset) / sqrtDivisor);
-    writeU128(liqOffset, readU128(liqOffset) / amountDivisor);
+    writeU128(sqrtOffset, scale(readU128(sqrtOffset), sqrtRatio));
+    writeU128(liqOffset, scale(readU128(liqOffset), sqrtRatio));
   }
   // creator_trading_fee_percentage @151 (u8) — offset verified via SDK anchor
   // coder round-trip diff (decode preset → set 100 → encode → first-diff @151;
   // identity round-trip byte-identical). 0 = all trading fees to partner
   // (PerpsPad preset), 100 = all to pool creator (our escrow-driven split).
   out[151] = creatorTradingFeePercentage;
+  // migration_fee.fee_percentage @153 (u8). Meteora expresses this as a
+  // whole percentage (1 = 1%), independently from migration_fee_option=2,
+  // which configures the migrated DAMM v2 pool's 100 bps trading fee.
+  // This is a protocol constant and is never accepted from caller input.
+  out[MIGRATION_FEE_PERCENTAGE_OFFSET] = MIGRATION_FEE_PERCENTAGE;
   return out;
 }
 
@@ -173,8 +184,10 @@ export function buildCreateConfigTx(params: {
   quoteMint: PublicKey;
   /** Quote mint decimals (6-9). The caller fetches it via getQuoteDecimals. */
   quoteDecimals: number;
+  /** Human quote units equal in value to one SOL. */
+  quoteUnitsPerSol?: number;
 }): Transaction {
-  const { configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals } = params;
+  const { configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals, quoteUnitsPerSol = 1 } = params;
   return new Transaction().add({
     programId: DBC_PROGRAM_ID,
     keys: [
@@ -192,7 +205,7 @@ export function buildCreateConfigTx(params: {
       // the escrow program's claim_and_split then splits 70/30. The DBC
       // config's fee_claimer field is inert (verified in DBC source — only
       // creator_trading_fee_percentage gates the creator/partner fee split).
-      data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals, 100)]),
+      data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals, 100, quoteUnitsPerSol)]),
   });
 }
 
@@ -361,6 +374,7 @@ export function buildDirectDbcLaunch(params: {
   quoteMint: PublicKey;
   /** Quote mint decimals (6-9), fetched by the caller via getQuoteDecimals. */
   quoteDecimals: number;
+  quoteUnitsPerSol?: number;
   /** Owner program of the quote mint (SPL legacy or Token-2022). Optional — defaults to legacy SPL. */
   quoteMintOwner?: PublicKey;
 }): {
@@ -372,9 +386,9 @@ export function buildDirectDbcLaunch(params: {
   configAddress: string;
   poolAddress: string;
 } {
-  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals, quoteMintOwner } = params;
+  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals, quoteUnitsPerSol = 1, quoteMintOwner } = params;
 
-  const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals });
+  const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals, quoteUnitsPerSol });
   configTx.recentBlockhash = latestBlockhash;
   configTx.feePayer = payer;
   coSignWithEphemerals(configTx, [configKeypair]);

@@ -19,6 +19,7 @@ import {
   deriveMintMetadata,
   encodeInitializePoolParams,
   buildConfigArgsForQuote,
+  MIGRATION_FEE_PERCENTAGE,
   buildTransferPoolCreatorTx,
   TRANSFER_POOL_CREATOR_DISCRIMINATOR,
   PERPSPAD_CONFIG_ARGS,
@@ -77,6 +78,7 @@ describe('dbc-launch', () => {
     const args = Buffer.from(ix.data.subarray(8));
     const expected = Buffer.from(PERPSPAD_CONFIG_ARGS);
     expected[151] = 100;
+    expected[153] = MIGRATION_FEE_PERCENTAGE;
     expect(args.equals(expected)).toBe(true);
   });
 
@@ -222,20 +224,25 @@ describe('dbc-launch', () => {
     const wsol = buildConfigArgsForQuote(9);
     expect(wsol.length).toBe(283);
     expect(wsol[151]).toBe(100); // creator_trading_fee_percentage
-    // every other byte matches the verbatim preset
+    expect(wsol[153]).toBe(MIGRATION_FEE_PERCENTAGE);
+    // every other byte matches the verbatim preset, except our fixed creator
+    // trading share and fixed 1% migration fee.
     const presetCopy = Buffer.from(PERPSPAD_CONFIG_ARGS);
     presetCopy[151] = 100;
+    presetCopy[153] = MIGRATION_FEE_PERCENTAGE;
     expect(wsol.equals(presetCopy)).toBe(true);
-    // explicit 0 reproduces the verbatim preset byte-for-byte
-    expect(buildConfigArgsForQuote(9, 0).equals(Buffer.from(PERPSPAD_CONFIG_ARGS))).toBe(true);
-    const usdc = buildConfigArgsForQuote(6);
+    // Caller-controlled creator trading share never changes the migration fee.
+    const partnerFees = buildConfigArgsForQuote(9, 0);
+    expect(partnerFees[151]).toBe(0);
+    expect(partnerFees[153]).toBe(MIGRATION_FEE_PERCENTAGE);
+    const usdc = buildConfigArgsForQuote(6, 100, 150);
     expect(usdc.length).toBe(283);
-    // threshold shrank by 10^3: original @69 = 109518156630 -> 109518156
-    expect(usdc.readBigUInt64LE(69)).toBe(109518156n);
+    // 109.518 SOL at $150/SOL becomes 16,427.7 USDC.
+    expect(usdc.readBigUInt64LE(69)).toBe(16_427_723_494n);
     // creator fee byte survives the scaling
     expect(usdc[151]).toBe(100);
     // same-decimals quotes share the preset
-    expect(buildConfigArgsForQuote(6).toString('hex')).toBe(usdc.toString('hex'));
+    expect(buildConfigArgsForQuote(6, 100, 150).toString('hex')).toBe(usdc.toString('hex'));
     // invalid decimals rejected
     expect(() => buildConfigArgsForQuote(5)).toThrow(/6-9/);
     expect(() => buildConfigArgsForQuote(10)).toThrow(/6-9/);
