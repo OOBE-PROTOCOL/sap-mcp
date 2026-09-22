@@ -15,6 +15,7 @@ import { PerpspadApiClient, type PerpspadLaunchBody } from './perpspad-client.js
 import { deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
 import { registerDbcLaunchTool } from './dbc-launch-tool.js';
 import { registerPerpspadDbcConfigPreviewTool } from './dbc-config-preview.js';
+import { registerMeteoraTradingTools } from './meteora-trading-tool.js';
 import {
   registerPerpspadPipelineTool,
   perpspadPipelineOk,
@@ -32,6 +33,8 @@ function getClient(): PerpspadApiClient {
 /** Registers every sap_perpspad_* tool on the MCP server. */
 export function registerPerpspadTools(server: Server, context: SapMcpContext): void {
   logger.debug('Registering PerpsPad launchpad tools');
+
+  registerMeteoraTradingTools(server, context);
 
   registerPerpspadPipelineTool(server, context, 'sap_perpspad_get_markets', {
     description: 'List PerpsPad supported underlying perp markets with leverage caps (e.g. BTC 1-40x, SOL 1-25x, OIL 1-20x, memecoins 1-3x). Every PerpsPad coin is backed by a leveraged perp position on one of these markets. Free read.',
@@ -375,5 +378,5 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
   // (single source of truth for the Steve Launchpad simulation panel).
   registerPerpspadDbcConfigPreviewTool(server, context);
 
-  logger.debug('PerpsPad launchpad tools registered', { count: 11 });
+  logger.debug('PerpsPad launchpad tools registered', { count: 14 });
 }
