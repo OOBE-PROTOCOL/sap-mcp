@@ -216,7 +216,7 @@ describe('dbc-launch', () => {
   it('tokenProgramForMint maps owner → program', () => {
     expect(tokenProgramForMint(TOKEN_PROGRAM_ID).toBase58()).toBe('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
     expect(tokenProgramForMint(TOKEN_2022_PROGRAM_ID).toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-    expect(tokenProgramForMint(Keypair.generate().publicKey).toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+    expect(() => tokenProgramForMint(Keypair.generate().publicKey)).toThrow(/Unsupported quote mint owner program/);
   });
 });
   it('buildConfigArgsForQuote scales the preset per quote decimals (on-chain verified)', () => {

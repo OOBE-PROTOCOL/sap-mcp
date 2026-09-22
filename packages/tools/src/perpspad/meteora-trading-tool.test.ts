@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { approvedDammV2Config, formatRawAmount, parseUiAmount } from './meteora-trading-tool.js';
+import {
+  approvedDammV2Config,
+  dammV2ConfigForFeeOption,
+  formatRawAmount,
+  parseUiAmount,
+} from './meteora-trading-tool.js';
 
 describe('Meteora launchpad amount precision', () => {
   it('parses decimal strings without floating-point rounding', () => {
@@ -20,6 +25,11 @@ describe('Meteora launchpad amount precision', () => {
 });
 
 describe('Meteora migration config selection', () => {
+  it('resolves the DAMM config independently of the gateway allowlist', () => {
+    expect(dammV2ConfigForFeeOption(0).toBase58()).toBe('7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd');
+    expect(() => dammV2ConfigForFeeOption(999)).toThrow(/unsupported/);
+  });
+
   it('derives the official config from the on-chain fee option', () => {
     const previous = process.env.METEORA_DAMM_V2_CONFIGS;
     process.env.METEORA_DAMM_V2_CONFIGS = '7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd';

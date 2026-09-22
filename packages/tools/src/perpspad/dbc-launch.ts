@@ -258,7 +258,9 @@ export const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC
  * Token-2022.
  */
 export function tokenProgramForMint(mintOwner: PublicKey): PublicKey {
-  return mintOwner.equals(TOKEN_PROGRAM_ID) ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+  if (mintOwner.equals(TOKEN_PROGRAM_ID)) return TOKEN_PROGRAM_ID;
+  if (mintOwner.equals(TOKEN_2022_PROGRAM_ID)) return TOKEN_2022_PROGRAM_ID;
+  throw new Error(`Unsupported quote mint owner program: ${mintOwner.toBase58()}`);
 }
 
 export function buildInitializePoolTx(params: {

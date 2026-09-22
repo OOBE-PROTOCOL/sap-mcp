@@ -5,6 +5,8 @@ import {
   DAMM_V2_MIGRATION_FEE_ADDRESS,
   DynamicBondingCurveClient,
   deriveDammV2PoolAddress,
+  derivePositionAddress,
+  derivePositionNftAccount,
   getCurrentPoint,
   SwapMode,
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -99,7 +101,8 @@ async function resolveMarket(context: Parameters<typeof registerPerpspadPipeline
   }
 
   const cpAmm = new CpAmm(connection);
-  const derivedPool = deriveDammV2PoolAddress(pool.poolState.config, baseMint, quoteMint);
+  const dammConfig = dammV2ConfigForFeeOption(Number(config.migrationFeeOption));
+  const derivedPool = deriveDammV2PoolAddress(dammConfig, baseMint, quoteMint);
   let tradePool = derivedPool;
   let dammPoolState: Awaited<ReturnType<CpAmm['fetchPoolState']>> | undefined;
   try {
@@ -147,9 +150,14 @@ function marketJson(market: ResolvedMarket) {
   };
 }
 
-export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+export function dammV2ConfigForFeeOption(migrationFeeOption: number): PublicKey {
   const derived = DAMM_V2_MIGRATION_FEE_ADDRESS[migrationFeeOption];
   if (!derived) throw new Error(`unsupported Meteora migration fee option: ${migrationFeeOption}`);
+  return derived;
+}
+
+export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+  const derived = dammV2ConfigForFeeOption(migrationFeeOption);
   if (requested && requested !== derived.toBase58()) {
     throw new Error('dammConfig does not match the DBC pool configuration');
   }
@@ -331,9 +339,33 @@ export function registerMeteoraTradingTools(
       migration.transaction.feePayer = new PublicKey(payer);
       migration.transaction.partialSign(migration.firstPositionNftKeypair, migration.secondPositionNftKeypair);
 
+      const firstPositionNftMint = migration.firstPositionNftKeypair.publicKey;
+      const secondPositionNftMint = migration.secondPositionNftKeypair.publicKey;
+
       return perpspadPipelineOk({
         success: true,
         market: marketJson(market),
+        migration: {
+          dammPoolAddress: deriveDammV2PoolAddress(
+            dammConfig,
+            market.baseMint,
+            market.quoteMint,
+          ).toBase58(),
+          positions: [
+            {
+              role: 'partner',
+              nftMint: firstPositionNftMint.toBase58(),
+              nftAccount: derivePositionNftAccount(firstPositionNftMint).toBase58(),
+              position: derivePositionAddress(firstPositionNftMint).toBase58(),
+            },
+            {
+              role: 'creator',
+              nftMint: secondPositionNftMint.toBase58(),
+              nftAccount: derivePositionNftAccount(secondPositionNftMint).toBase58(),
+              position: derivePositionAddress(secondPositionNftMint).toBase58(),
+            },
+          ],
+        },
         transactionBase64: migration.transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
         signing: { signer: payer, ephemeralPositionSignersIncluded: 2, broadcasts: false },
       });
