@@ -3,6 +3,13 @@
  * PDA derivations, borsh encoding, and ephemeral co-signing.
  */
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { BorshCoder } from '@coral-xyz/anchor';
+import type BN from 'bn.js';
+import {
+  DynamicBondingCurveIdl,
+  MAX_SQRT_PRICE,
+  validateCurve,
+} from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { describe, expect, it } from 'vitest';
 import {
   anchorSighash,
@@ -48,6 +55,24 @@ describe('dbc-launch', () => {
   it('the captured ConfigParameters preset is 283 bytes (PerpsPad live verbatim)', () => {
     // The full data (discriminator + args) from the captured tx was 291 bytes of ix.data; args alone = 292 - 8 = 284? Pin the actual captured length: 300 bytes total minus nothing — assert it equals the decoded verbatim capture.
     expect(PERPSPAD_CONFIG_ARGS.length).toBe(283);
+  });
+
+  it('keeps a high-value custom quote curve valid at the Meteora terminal price', () => {
+    const args = buildConfigArgsForQuote(9, 100, 478_000);
+    const decoded = new BorshCoder(DynamicBondingCurveIdl).types.decode(
+      'ConfigParameters',
+      args,
+    ) as {
+      sqrt_start_price: BN;
+      curve: Array<{ sqrt_price: BN; liquidity: BN }>;
+    };
+    const curve = decoded.curve.map((point) => ({
+      sqrtPrice: point.sqrt_price,
+      liquidity: point.liquidity,
+    }));
+
+    expect(curve.at(-1)?.sqrtPrice.toString()).toBe(MAX_SQRT_PRICE.toString());
+    expect(validateCurve(curve, decoded.sqrt_start_price)).toBe(true);
   });
 
   it('builds create_config with fee_claimer = escrow PDA and leftover_receiver = agent wallet', () => {
