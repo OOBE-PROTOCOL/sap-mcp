@@ -969,7 +969,7 @@ export function registerMagicBlockTools(server: Server, context: SapMcpContext):
   );
 
   registerMagicBlockPipelineTool<TransferInput>('magicblock_transfer',
-    'Build an unsigned SPL token transfer (public or private) through an Ephemeral Rollup. Supports base/ephemeral source and destination, delayed settlement, split transfers, and gasless mode. Private mode defaults: minDelayMs=0, maxDelayMs=0, split=1 — override for delayed or split settlements. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
+    'Build an unsigned SPL token transfer through an Ephemeral Rollup. Use this only when private visibility or an ephemeral balance is explicitly requested. For an ordinary public base-to-base wallet transfer, use sap_build_spl_transfer instead; it detects legacy SPL versus Token-2022 from the mint on-chain. Supports delayed settlement, split transfers, and gasless mode. Then use sap_preview_transaction, sap_sign_transaction, and sap_submit_signed_transaction — or use sap_payments_finalize_transaction for 1-call preview+sign+submit (hosted mode). Builder fee applies.',
     schema({
       from: f.pubkey('Sender wallet pubkey'), to: f.pubkey('Recipient wallet pubkey'), mint: f.string('SPL mint pubkey'),
       amount: f.number('Base-unit amount to transfer (integer, minimum 1)'),

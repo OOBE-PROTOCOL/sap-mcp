@@ -14,7 +14,13 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  createTransferCheckedInstruction,
+  getMint,
+} from '@solana/spl-token';
 import { logger } from '../../core/src/logger.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -1416,7 +1422,7 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         },
         decimals: {
           type: 'number',
-          description: 'Token decimals for the mint. Used for display purposes only — the on-chain amount is in base units.',
+          description: 'Optional expected token decimals. The builder verifies this against the mint account on-chain.',
         },
       },
     },
@@ -1440,32 +1446,48 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
         const destOwnerKey = new PublicKey(destinationOwner);
         const mintKey = new PublicKey(mint);
 
-        // Derive ATA addresses using the shared helper for consistency.
+        const connection = context.connection;
+        const mintAccount = await connection.getAccountInfo(mintKey);
+        if (!mintAccount) {
+          throw new Error(`Mint account ${mint} was not found on the configured cluster.`);
+        }
+        const tokenProgramId = mintAccount.owner;
+        if (!tokenProgramId.equals(TOKEN_PROGRAM_ID) && !tokenProgramId.equals(TOKEN_2022_PROGRAM_ID)) {
+          throw new Error(
+            `Mint ${mint} is owned by unsupported program ${tokenProgramId.toBase58()}; expected SPL Token or Token-2022.`,
+          );
+        }
+        const mintState = await getMint(connection, mintKey, undefined, tokenProgramId);
+        if (decimals !== undefined && decimals !== mintState.decimals) {
+          throw new Error(
+            `Mint decimals mismatch: requested ${decimals}, on-chain mint uses ${mintState.decimals}.`,
+          );
+        }
+
+        // ATA seeds include the token program, so legacy and Token-2022 mints
+        // must use their own program consistently in every instruction.
         const { deriveAtaAddress, createAtaIdempotentIx } = await import('../../solana/src/ata-utils.js');
-        const sourceAta = deriveAtaAddress(sourceOwnerKey, mintKey);
-        const destAta = deriveAtaAddress(destOwnerKey, mintKey);
+        const sourceAta = deriveAtaAddress(sourceOwnerKey, mintKey, tokenProgramId);
+        const destAta = deriveAtaAddress(destOwnerKey, mintKey, tokenProgramId);
 
-        // Use the official @solana/spl-token instruction instead of manual construction.
-        const createAtaInstruction = createAtaIdempotentIx(sourceOwnerKey, destOwnerKey, mintKey);
-
-        // Token Transfer instruction (0x03 + 64-bit amount in little-endian).
-        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const transferData = Buffer.alloc(9);
-        transferData.writeUInt8(3, 0); // Transfer instruction discriminator
-        transferData.writeBigUInt64LE(BigInt(amount), 1);
-
-        const transferInstruction = new TransactionInstruction({
-          programId: TOKEN_PROGRAM_ID,
-          keys: [
-            { pubkey: sourceAta, isSigner: false, isWritable: true },
-            { pubkey: destAta, isSigner: false, isWritable: true },
-            { pubkey: sourceOwnerKey, isSigner: true, isWritable: false },
-          ],
-          data: transferData,
-        });
+        const createAtaInstruction = createAtaIdempotentIx(
+          sourceOwnerKey,
+          destOwnerKey,
+          mintKey,
+          tokenProgramId,
+        );
+        const transferInstruction = createTransferCheckedInstruction(
+          sourceAta,
+          mintKey,
+          destAta,
+          sourceOwnerKey,
+          BigInt(amount),
+          mintState.decimals,
+          [],
+          tokenProgramId,
+        );
 
         // Fetch latest blockhash and build transaction.
-        const connection = context.connection;
         const blockhash = await connection.getLatestBlockhash();
 
         const transaction = new Transaction({
@@ -1487,18 +1509,19 @@ export function registerTransactionTools(server: Server, context: SapMcpContext)
           encoding: 'base64',
           instructions: [
             {
-              program: 'SPL Token',
+              program: tokenProgramId.equals(TOKEN_2022_PROGRAM_ID) ? 'SPL Token-2022' : 'SPL Token',
               type: 'CreateAssociatedTokenAccountIdempotent',
               destinationAta: destAta.toBase58(),
             },
             {
-              program: 'SPL Token',
-              type: 'Transfer',
+              program: tokenProgramId.equals(TOKEN_2022_PROGRAM_ID) ? 'SPL Token-2022' : 'SPL Token',
+              programId: tokenProgramId.toBase58(),
+              type: 'TransferChecked',
               sourceAta: sourceAta.toBase58(),
               destinationAta: destAta.toBase58(),
               mint,
               amount,
-              decimals: decimals ?? undefined,
+              decimals: mintState.decimals,
             },
           ],
           feePayer: sourceOwner,
