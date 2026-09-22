@@ -224,14 +224,17 @@ export function registerDbcLaunchTool(
         throw new Error('Quote mint must be owned by SPL Token or Token-2022');
       }
       const quoteMintState = await getMint(conn, quoteMint, 'confirmed', quoteMintOwner);
-      const unsafeExtensions = new Set([
-        ExtensionType.TransferFeeConfig,
-        ExtensionType.NonTransferable,
-        ExtensionType.PermanentDelegate,
-      ]);
       const extensionTypes = getExtensionTypes(quoteMintState.tlvData);
-      if (extensionTypes.some((extension) => unsafeExtensions.has(extension))) {
-        throw new Error(`Quote mint uses unsupported Token-2022 extensions: ${extensionTypes.join(',')}`);
+      // Passive metadata/display extensions do not change transfer account
+      // requirements. Active extensions need dedicated DBC/escrow builders
+      // (hook slices, memos, fee accounting, thaw/pause policy, etc.).
+      const passiveExtensions = new Set<number>([3, 10, 18, 19, 20, 21, 22, 23, 25]);
+      const unsupportedExtensions = extensionTypes.filter((extension) => !passiveExtensions.has(extension));
+      if (unsupportedExtensions.length > 0) {
+        const labels = unsupportedExtensions.map(
+          (extension) => ExtensionType[extension] ?? `Unknown(${extension})`,
+        );
+        throw new Error(`Quote mint uses unsupported Token-2022 transfer semantics: ${labels.join(', ')}`);
       }
       const { resolveQuoteUnitsPerSol } = await import('./dbc-config-preview.js');
       const quoteUnitsPerSol = resolveQuoteUnitsPerSol(
