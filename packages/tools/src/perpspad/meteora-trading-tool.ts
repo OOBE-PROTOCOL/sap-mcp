@@ -2,9 +2,11 @@ import { getMint } from '@solana/spl-token';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import BN from 'bn.js';
 import {
+  DAMM_V2_MIGRATION_FEE_ADDRESS,
   DynamicBondingCurveClient,
   deriveDammV2PoolAddress,
   getCurrentPoint,
+  SwapMode,
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getTokenProgram as getDammTokenProgram } from '@meteora-ag/cp-amm-sdk';
 import { getConnection } from '../phoenix/phoenix-helpers.js';
@@ -16,7 +18,7 @@ import {
 } from './perpspad-pipeline.js';
 
 type TradeSide = 'buy' | 'sell';
-type MeteoraStage = 'bonding_curve' | 'graduated_damm_v2';
+type MeteoraStage = 'bonding_curve' | 'migration_pending' | 'graduated_damm_v2';
 
 interface ResolvedMarket {
   stage: MeteoraStage;
@@ -86,8 +88,11 @@ async function resolveMarket(context: Parameters<typeof registerPerpspadPipeline
   ]);
 
   if (!pool.poolState.isMigrated) {
+    const stage = pool.poolState.quoteReserve.gte(config.migrationQuoteThreshold)
+      ? 'migration_pending'
+      : 'bonding_curve';
     return {
-      stage: 'bonding_curve', dbcPool, tradePool: dbcPool, baseMint, quoteMint,
+      stage, dbcPool, tradePool: dbcPool, baseMint, quoteMint,
       baseDecimals: baseMintState.decimals, quoteDecimals: quoteMintState.decimals,
       dbcPoolState: pool, dbcConfig: config,
     };
@@ -122,7 +127,7 @@ function marketJson(market: ResolvedMarket) {
   const remaining = BN.max(threshold.sub(state.quoteReserve), new BN(0));
   return {
     stage: market.stage,
-    protocol: market.stage === 'bonding_curve' ? 'meteora_dbc' : 'meteora_damm_v2',
+    protocol: market.stage === 'graduated_damm_v2' ? 'meteora_damm_v2' : 'meteora_dbc',
     dbcPoolAddress: market.dbcPool.toBase58(),
     tradePoolAddress: market.tradePool.toBase58(),
     baseMint: market.baseMint.toBase58(),
@@ -137,8 +142,28 @@ function marketJson(market: ResolvedMarket) {
       quoteThreshold: formatRawAmount(threshold, market.quoteDecimals),
       quoteRemainingRaw: remaining.toString(),
       quoteRemaining: formatRawAmount(remaining, market.quoteDecimals),
+      readyToMigrate: state.quoteReserve.gte(threshold),
     },
   };
+}
+
+export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+  const derived = DAMM_V2_MIGRATION_FEE_ADDRESS[migrationFeeOption];
+  if (!derived) throw new Error(`unsupported Meteora migration fee option: ${migrationFeeOption}`);
+  if (requested && requested !== derived.toBase58()) {
+    throw new Error('dammConfig does not match the DBC pool configuration');
+  }
+  const approved = (process.env.METEORA_DAMM_V2_CONFIGS ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (approved.length === 0) {
+    throw new Error('Meteora migration is not configured on this gateway');
+  }
+  if (!approved.includes(derived.toBase58())) {
+    throw new Error('the DBC pool migration config is not approved by this gateway');
+  }
+  return derived;
 }
 
 async function getQuote(
@@ -149,23 +174,34 @@ async function getQuote(
   slippageBps: number,
 ) {
   const connection = getConnection(context);
+  if (market.stage === 'migration_pending') {
+    throw new Error('bonding curve is complete and migration to Meteora DAMM v2 is being finalized');
+  }
   if (market.stage === 'bonding_curve') {
-    if (side === 'buy') {
-      const remaining = market.dbcConfig.migrationQuoteThreshold.sub(market.dbcPoolState!.poolState.quoteReserve);
-      if (amountIn.gt(remaining)) {
-        throw new Error(`amount exceeds bonding-curve capacity: requested ${formatRawAmount(amountIn, market.quoteDecimals)} quote tokens, remaining ${formatRawAmount(BN.max(remaining, new BN(0)), market.quoteDecimals)}`);
-      }
-    }
     const client = DynamicBondingCurveClient.create(connection, 'confirmed');
     const currentPoint = await getCurrentPoint(connection, market.dbcConfig.activationType);
-    const quote = client.pool.swapQuote({
-      virtualPool: market.dbcPoolState!, config: market.dbcConfig,
-      swapBaseForQuote: side === 'sell', amountIn, slippageBps,
-      hasReferral: false, eligibleForFirstSwapWithMinFee: true, currentPoint,
+    const quote = client.pool.swapQuote2({
+      virtualPool: market.dbcPoolState!,
+      config: market.dbcConfig,
+      swapBaseForQuote: side === 'sell',
+      swapMode: side === 'buy' ? SwapMode.PartialFill : SwapMode.ExactIn,
+      amountIn,
+      slippageBps,
+      hasReferral: false,
+      eligibleForFirstSwapWithMinFee: true,
+      currentPoint,
     });
+    const amountLeft = quote.amountLeft ?? new BN(0);
+    const consumedAmountIn = BN.max(amountIn.sub(amountLeft), new BN(0));
+    if (consumedAmountIn.isZero()) {
+      throw new Error('bonding curve has no executable capacity remaining; migration is being finalized');
+    }
     return {
       amountOut: quote.outputAmount,
-      minimumAmountOut: quote.minimumAmountOut,
+      minimumAmountOut: quote.minimumAmountOut ?? quote.outputAmount,
+      consumedAmountIn,
+      amountLeft,
+      partialFill: amountLeft.gt(new BN(0)),
       priceImpact: null as string | null,
     };
   }
@@ -188,6 +224,9 @@ async function getQuote(
   return {
     amountOut: quote.swapOutAmount,
     minimumAmountOut: quote.minSwapOutAmount,
+    consumedAmountIn: amountIn,
+    amountLeft: new BN(0),
+    partialFill: false,
     priceImpact: quote.priceImpact.toString(),
   };
 }
@@ -238,6 +277,11 @@ export function registerMeteoraTradingTools(
         inputMint: (side === 'buy' ? market.quoteMint : market.baseMint).toBase58(),
         outputMint: (side === 'buy' ? market.baseMint : market.quoteMint).toBase58(),
         amountInRaw: amountIn.toString(), amountIn: formatRawAmount(amountIn, inputDecimals),
+        consumedAmountInRaw: quote.consumedAmountIn.toString(),
+        consumedAmountIn: formatRawAmount(quote.consumedAmountIn, inputDecimals),
+        unusedAmountInRaw: quote.amountLeft.toString(),
+        unusedAmountIn: formatRawAmount(quote.amountLeft, inputDecimals),
+        partialFill: quote.partialFill,
         amountOutRaw: quote.amountOut.toString(), amountOut: formatRawAmount(quote.amountOut, outputDecimals),
         minimumAmountOutRaw: quote.minimumAmountOut.toString(),
         minimumAmountOut: formatRawAmount(quote.minimumAmountOut, outputDecimals),
@@ -245,6 +289,56 @@ export function registerMeteoraTradingTools(
       });
     } catch (error) {
       return perpspadPipelineException('Failed to quote Meteora launchpad trade', error);
+    }
+  });
+
+  registerPerpspadPipelineTool(server, context, 'sap_meteora_build_launchpad_migration', {
+    description: 'Build an unsigned official Meteora DBC to DAMM v2 migration after the curve reaches its threshold. The destination must be server-allowlisted. Position NFT ephemerals are co-signed; the payer remains the only external signer. Never broadcasts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        poolAddress: { type: 'string', description: 'Original Meteora DBC pool address.' },
+        payer: { type: 'string', description: 'Wallet paying for and authorizing migration.' },
+        dammConfig: { type: 'string', description: 'Optional expected DAMM v2 config. The gateway always derives the authoritative address from the DBC pool config.' },
+        latestBlockhash: { type: 'string', description: 'Fresh Solana blockhash supplied by the caller.' },
+      },
+      required: ['poolAddress', 'payer', 'latestBlockhash'],
+    },
+  }, async (input) => {
+    try {
+      const payer = String(input.payer ?? '');
+      const latestBlockhash = String(input.latestBlockhash ?? '');
+      if (!isValidSolanaAddress(payer)) throw new Error('payer must be a valid Solana address');
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) throw new Error('latestBlockhash must be a fresh Solana blockhash');
+      const market = await resolveMarket(context, String(input.poolAddress ?? ''));
+      if (market.stage === 'graduated_damm_v2') {
+        return perpspadPipelineOk({ success: true, alreadyMigrated: true, market: marketJson(market) });
+      }
+      if (market.stage !== 'migration_pending') {
+        throw new Error('bonding curve has not reached its migration threshold');
+      }
+      const migrationFeeOption = Number(market.dbcConfig.migrationFeeOption);
+      const requestedConfig = typeof input.dammConfig === 'string' && input.dammConfig.trim()
+        ? input.dammConfig.trim()
+        : undefined;
+      const dammConfig = approvedDammV2Config(migrationFeeOption, requestedConfig);
+
+      const client = DynamicBondingCurveClient.create(getConnection(context), 'confirmed');
+      const migration = await client.migration.migrateToDammV2({
+        payer: new PublicKey(payer), pool: market.dbcPool, dammConfig,
+      });
+      migration.transaction.recentBlockhash = latestBlockhash;
+      migration.transaction.feePayer = new PublicKey(payer);
+      migration.transaction.partialSign(migration.firstPositionNftKeypair, migration.secondPositionNftKeypair);
+
+      return perpspadPipelineOk({
+        success: true,
+        market: marketJson(market),
+        transactionBase64: migration.transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
+        signing: { signer: payer, ephemeralPositionSignersIncluded: 2, broadcasts: false },
+      });
+    } catch (error) {
+      return perpspadPipelineException('Failed to build Meteora launchpad migration', error);
     }
   });
 
@@ -278,8 +372,10 @@ export function registerMeteoraTradingTools(
 
       if (market.stage === 'bonding_curve') {
         const client = DynamicBondingCurveClient.create(getConnection(context), 'confirmed');
-        tx = await client.pool.swap({
-          owner: payer, pool: market.dbcPool, amountIn,
+        tx = await client.pool.swap2({
+          owner: payer, pool: market.dbcPool,
+          swapMode: side === 'buy' ? SwapMode.PartialFill : SwapMode.ExactIn,
+          amountIn,
           minimumAmountOut: quote.minimumAmountOut,
           swapBaseForQuote: side === 'sell', referralTokenAccount: null,
         });
@@ -303,6 +399,11 @@ export function registerMeteoraTradingTools(
       return perpspadPipelineOk({
         success: true, market: marketJson(market), side, slippageBps,
         amountInRaw: amountIn.toString(), amountIn: formatRawAmount(amountIn, inputDecimals),
+        consumedAmountInRaw: quote.consumedAmountIn.toString(),
+        consumedAmountIn: formatRawAmount(quote.consumedAmountIn, inputDecimals),
+        unusedAmountInRaw: quote.amountLeft.toString(),
+        unusedAmountIn: formatRawAmount(quote.amountLeft, inputDecimals),
+        partialFill: quote.partialFill,
         minimumAmountOutRaw: quote.minimumAmountOut.toString(),
         minimumAmountOut: formatRawAmount(quote.minimumAmountOut, outputDecimals),
         transactionBase64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),

@@ -1,6 +1,6 @@
 {
   "name": "@oobe-protocol-labs/sap-mcp-bin",
-  "version": "0.9.85",
+  "version": "0.9.86",
   "private": true,
   "type": "module",
   "sideEffects": false,
