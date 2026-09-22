@@ -14,13 +14,12 @@
  */
 
 import { PublicKey, type TransactionInstruction } from '@solana/web3.js';
-import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token';
-
-/** Solana Token Program ID. */
-const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-
-/** Solana Associated Token Account Program ID. */
-const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  getAssociatedTokenAddressSync,
+} from '@solana/spl-token';
 
 /**
  * Derive the Associated Token Account address for a wallet and mint.
@@ -33,8 +32,12 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xW
  * @param mint — Token mint public key.
  * @returns ATA public key.
  */
-export function deriveAtaAddress(owner: PublicKey, mint: PublicKey): PublicKey {
-  return getAssociatedTokenAddressSync(mint, owner, true, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+export function deriveAtaAddress(
+  owner: PublicKey,
+  mint: PublicKey,
+  tokenProgramId: PublicKey = TOKEN_PROGRAM_ID,
+): PublicKey {
+  return getAssociatedTokenAddressSync(mint, owner, true, tokenProgramId, ASSOCIATED_TOKEN_PROGRAM_ID);
 }
 
 /**
@@ -51,14 +54,15 @@ export function createAtaIdempotentIx(
   payer: PublicKey,
   owner: PublicKey,
   mint: PublicKey,
+  tokenProgramId: PublicKey = TOKEN_PROGRAM_ID,
 ): TransactionInstruction {
-  const ata = deriveAtaAddress(owner, mint);
+  const ata = deriveAtaAddress(owner, mint, tokenProgramId);
   return createAssociatedTokenAccountIdempotentInstruction(
     payer,
     ata,
     owner,
     mint,
-    TOKEN_PROGRAM_ID,
+    tokenProgramId,
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 }
