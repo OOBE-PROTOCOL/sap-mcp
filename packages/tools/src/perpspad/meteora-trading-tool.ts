@@ -2,6 +2,7 @@ import { getMint } from '@solana/spl-token';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import BN from 'bn.js';
 import {
+  DAMM_V2_MIGRATION_FEE_ADDRESS,
   DynamicBondingCurveClient,
   deriveDammV2PoolAddress,
   getCurrentPoint,
@@ -146,7 +147,12 @@ function marketJson(market: ResolvedMarket) {
   };
 }
 
-function approvedDammV2Config(value: string): PublicKey {
+export function approvedDammV2Config(migrationFeeOption: number, requested?: string): PublicKey {
+  const derived = DAMM_V2_MIGRATION_FEE_ADDRESS[migrationFeeOption];
+  if (!derived) throw new Error(`unsupported Meteora migration fee option: ${migrationFeeOption}`);
+  if (requested && requested !== derived.toBase58()) {
+    throw new Error('dammConfig does not match the DBC pool configuration');
+  }
   const approved = (process.env.METEORA_DAMM_V2_CONFIGS ?? '')
     .split(',')
     .map((entry) => entry.trim())
@@ -154,10 +160,10 @@ function approvedDammV2Config(value: string): PublicKey {
   if (approved.length === 0) {
     throw new Error('Meteora migration is not configured on this gateway');
   }
-  if (!approved.includes(value)) {
-    throw new Error('dammConfig is not approved by this gateway');
+  if (!approved.includes(derived.toBase58())) {
+    throw new Error('the DBC pool migration config is not approved by this gateway');
   }
-  return new PublicKey(value);
+  return derived;
 }
 
 async function getQuote(
@@ -293,10 +299,10 @@ export function registerMeteoraTradingTools(
       properties: {
         poolAddress: { type: 'string', description: 'Original Meteora DBC pool address.' },
         payer: { type: 'string', description: 'Wallet paying for and authorizing migration.' },
-        dammConfig: { type: 'string', description: 'Meteora DAMM v2 config address. Must appear in METEORA_DAMM_V2_CONFIGS.' },
+        dammConfig: { type: 'string', description: 'Optional expected DAMM v2 config. The gateway always derives the authoritative address from the DBC pool config.' },
         latestBlockhash: { type: 'string', description: 'Fresh Solana blockhash supplied by the caller.' },
       },
-      required: ['poolAddress', 'payer', 'dammConfig', 'latestBlockhash'],
+      required: ['poolAddress', 'payer', 'latestBlockhash'],
     },
   }, async (input) => {
     try {
@@ -304,8 +310,6 @@ export function registerMeteoraTradingTools(
       const latestBlockhash = String(input.latestBlockhash ?? '');
       if (!isValidSolanaAddress(payer)) throw new Error('payer must be a valid Solana address');
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) throw new Error('latestBlockhash must be a fresh Solana blockhash');
-      const dammConfig = approvedDammV2Config(String(input.dammConfig ?? ''));
-
       const market = await resolveMarket(context, String(input.poolAddress ?? ''));
       if (market.stage === 'graduated_damm_v2') {
         return perpspadPipelineOk({ success: true, alreadyMigrated: true, market: marketJson(market) });
@@ -313,6 +317,11 @@ export function registerMeteoraTradingTools(
       if (market.stage !== 'migration_pending') {
         throw new Error('bonding curve has not reached its migration threshold');
       }
+      const migrationFeeOption = Number(market.dbcConfig.migrationFeeOption);
+      const requestedConfig = typeof input.dammConfig === 'string' && input.dammConfig.trim()
+        ? input.dammConfig.trim()
+        : undefined;
+      const dammConfig = approvedDammV2Config(migrationFeeOption, requestedConfig);
 
       const client = DynamicBondingCurveClient.create(getConnection(context), 'confirmed');
       const migration = await client.migration.migrateToDammV2({

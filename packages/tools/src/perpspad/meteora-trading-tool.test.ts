@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRawAmount, parseUiAmount } from './meteora-trading-tool.js';
+import { approvedDammV2Config, formatRawAmount, parseUiAmount } from './meteora-trading-tool.js';
 
 describe('Meteora launchpad amount precision', () => {
   it('parses decimal strings without floating-point rounding', () => {
@@ -16,5 +16,19 @@ describe('Meteora launchpad amount precision', () => {
   it('formats raw amounts deterministically', () => {
     expect(formatRawAmount(parseUiAmount('12.340000', 6), 6)).toBe('12.34');
     expect(formatRawAmount(parseUiAmount('0.000001', 6), 6)).toBe('0.000001');
+  });
+});
+
+describe('Meteora migration config selection', () => {
+  it('derives the official config from the on-chain fee option', () => {
+    const previous = process.env.METEORA_DAMM_V2_CONFIGS;
+    process.env.METEORA_DAMM_V2_CONFIGS = '7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd';
+    try {
+      expect(approvedDammV2Config(0).toBase58()).toBe('7F6dnUcRuyM2TwR8myT1dYypFXpPSxqwKNSFNkxyNESd');
+      expect(() => approvedDammV2Config(0, '2nHK1kju6XjphBLbNxpM5XRGFj7p9U8vvNzyZiha1z6k')).toThrow(/does not match/);
+    } finally {
+      if (previous === undefined) delete process.env.METEORA_DAMM_V2_CONFIGS;
+      else process.env.METEORA_DAMM_V2_CONFIGS = previous;
+    }
   });
 });
