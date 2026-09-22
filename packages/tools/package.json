@@ -177,6 +177,7 @@
     }
   },
   "dependencies": {
+    "@meteora-ag/cp-amm-sdk": "^1.4.9",
     "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.12",
     "@oobe-protocol-labs/sap-mcp-config-runtime": "workspace:*",
     "@oobe-protocol-labs/sap-mcp-core": "workspace:*",

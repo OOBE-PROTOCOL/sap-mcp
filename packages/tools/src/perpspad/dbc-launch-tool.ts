@@ -312,7 +312,7 @@ export function registerDbcLaunchTool(
           },
         },
         signingOrder: ['createConfig', 'initializePool', 'transferPoolCreator', 'initializeEscrow'],
-        nextStep: `Send bootstrapLaunch, transferPoolCreator, and initializeEscrow in order. Then call sap_perpspad_build_dbc_dev_buy with this pool and devBuyAmount using a fresh blockhash.`,
+        nextStep: `Send bootstrapLaunch, transferPoolCreator, and initializeEscrow in order. Then call sap_meteora_build_launchpad_trade with side="buy", this DBC pool, devBuyAmount as a decimal string, and a fresh blockhash.`,
         _note: 'Semi-signed transactions only — never broadcasts. The ephemeral keypairs control nothing of value and are discarded.',
       });
     } catch (err) {
@@ -321,7 +321,7 @@ export function registerDbcLaunchTool(
   });
 
   registerPerpspadPipelineTool(server, context, 'sap_perpspad_build_dbc_dev_buy', {
-    description: 'Build an unsigned exact-in initial buy for an existing Meteora DBC pool. Call only after initializePool confirms; amount is denominated in the pool quote token.',
+    description: 'Legacy DBC-only initial-buy builder. New integrations must use sap_meteora_build_launchpad_trade, which supports buy/sell, exact decimal amounts, curve-capacity errors, and automatic routing after DAMM v2 graduation.',
     inputSchema: {
       type: 'object',
       properties: {
