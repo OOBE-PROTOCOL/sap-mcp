@@ -146,6 +146,20 @@ function marketJson(market: ResolvedMarket) {
   };
 }
 
+function approvedDammV2Config(value: string): PublicKey {
+  const approved = (process.env.METEORA_DAMM_V2_CONFIGS ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (approved.length === 0) {
+    throw new Error('Meteora migration is not configured on this gateway');
+  }
+  if (!approved.includes(value)) {
+    throw new Error('dammConfig is not approved by this gateway');
+  }
+  return new PublicKey(value);
+}
+
 async function getQuote(
   context: Parameters<typeof registerPerpspadPipelineTool>[1],
   market: ResolvedMarket,
@@ -269,6 +283,53 @@ export function registerMeteoraTradingTools(
       });
     } catch (error) {
       return perpspadPipelineException('Failed to quote Meteora launchpad trade', error);
+    }
+  });
+
+  registerPerpspadPipelineTool(server, context, 'sap_meteora_build_launchpad_migration', {
+    description: 'Build an unsigned official Meteora DBC to DAMM v2 migration after the curve reaches its threshold. The destination must be server-allowlisted. Position NFT ephemerals are co-signed; the payer remains the only external signer. Never broadcasts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        poolAddress: { type: 'string', description: 'Original Meteora DBC pool address.' },
+        payer: { type: 'string', description: 'Wallet paying for and authorizing migration.' },
+        dammConfig: { type: 'string', description: 'Meteora DAMM v2 config address. Must appear in METEORA_DAMM_V2_CONFIGS.' },
+        latestBlockhash: { type: 'string', description: 'Fresh Solana blockhash supplied by the caller.' },
+      },
+      required: ['poolAddress', 'payer', 'dammConfig', 'latestBlockhash'],
+    },
+  }, async (input) => {
+    try {
+      const payer = String(input.payer ?? '');
+      const latestBlockhash = String(input.latestBlockhash ?? '');
+      if (!isValidSolanaAddress(payer)) throw new Error('payer must be a valid Solana address');
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) throw new Error('latestBlockhash must be a fresh Solana blockhash');
+      const dammConfig = approvedDammV2Config(String(input.dammConfig ?? ''));
+
+      const market = await resolveMarket(context, String(input.poolAddress ?? ''));
+      if (market.stage === 'graduated_damm_v2') {
+        return perpspadPipelineOk({ success: true, alreadyMigrated: true, market: marketJson(market) });
+      }
+      if (market.stage !== 'migration_pending') {
+        throw new Error('bonding curve has not reached its migration threshold');
+      }
+
+      const client = DynamicBondingCurveClient.create(getConnection(context), 'confirmed');
+      const migration = await client.migration.migrateToDammV2({
+        payer: new PublicKey(payer), pool: market.dbcPool, dammConfig,
+      });
+      migration.transaction.recentBlockhash = latestBlockhash;
+      migration.transaction.feePayer = new PublicKey(payer);
+      migration.transaction.partialSign(migration.firstPositionNftKeypair, migration.secondPositionNftKeypair);
+
+      return perpspadPipelineOk({
+        success: true,
+        market: marketJson(market),
+        transactionBase64: migration.transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
+        signing: { signer: payer, ephemeralPositionSignersIncluded: 2, broadcasts: false },
+      });
+    } catch (error) {
+      return perpspadPipelineException('Failed to build Meteora launchpad migration', error);
     }
   });
 

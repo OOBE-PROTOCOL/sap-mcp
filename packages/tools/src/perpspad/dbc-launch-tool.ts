@@ -9,7 +9,7 @@
 
 import { Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import BN from 'bn.js';
-import { DynamicBondingCurveClient, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { DynamicBondingCurveClient, getCurrentPoint, SwapMode } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { logger } from '../../../core/src/logger.js';
 import {
   buildDirectDbcLaunch,
@@ -350,17 +350,26 @@ export function registerDbcLaunchTool(
       const decimals = await getQuoteDecimals(connection, config.quoteMint);
       const amountIn = toQuoteBaseUnits(amount, decimals);
       const currentPoint = await getCurrentPoint(connection, config.activationType);
-      const quoteResult = client.pool.swapQuote({
-        virtualPool: pool, config, swapBaseForQuote: false, amountIn,
+      const quoteResult = client.pool.swapQuote2({
+        virtualPool: pool, config, swapBaseForQuote: false,
+        swapMode: SwapMode.PartialFill, amountIn,
         slippageBps: typeof input.slippageBps === 'number' ? input.slippageBps : 300,
         hasReferral: false, eligibleForFirstSwapWithMinFee: true, currentPoint,
       });
-      const tx = await client.pool.swap({ owner: new PublicKey(owner), pool: new PublicKey(poolAddress), amountIn,
-        minimumAmountOut: quoteResult.minimumAmountOut, swapBaseForQuote: false, referralTokenAccount: null });
+      const amountLeft = quoteResult.amountLeft ?? new BN(0);
+      const consumedAmountIn = BN.max(amountIn.sub(amountLeft), new BN(0));
+      if (consumedAmountIn.isZero()) throw new Error('bonding curve is complete and migration is being finalized');
+      const minimumAmountOut = quoteResult.minimumAmountOut ?? quoteResult.outputAmount;
+      const tx = await client.pool.swap2({ owner: new PublicKey(owner), pool: new PublicKey(poolAddress),
+        swapMode: SwapMode.PartialFill, amountIn, minimumAmountOut,
+        swapBaseForQuote: false, referralTokenAccount: null });
       tx.recentBlockhash = latestBlockhash;
       tx.feePayer = new PublicKey(owner);
       return perpspadPipelineOk({ success: true, poolAddress, amount, quoteMint: config.quoteMint.toBase58(),
-        minimumAmountOut: quoteResult.minimumAmountOut.toString(), transactionBase64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64') });
+        requestedAmountInRaw: amountIn.toString(), consumedAmountInRaw: consumedAmountIn.toString(),
+        unusedAmountInRaw: amountLeft.toString(), partialFill: amountLeft.gt(new BN(0)),
+        minimumAmountOut: minimumAmountOut.toString(),
+        transactionBase64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64') });
     } catch (err) {
       return perpspadPipelineException('Failed to build DBC dev-buy', err);
     }
