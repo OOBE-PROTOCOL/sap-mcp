@@ -1,5 +1,5 @@
 /**
- * @name tools/perpspad/perpspad-escrow
+ * @name tools/oobe-launchpad/escrow
  * @description Creator-split escrow (Option B) integration for PerpsPad
  *   launches. Derives the escrow PDA for a token mint, builds the
  *   initialize_escrow instruction for the deployed mainnet program, and
@@ -42,7 +42,7 @@
  *   passes escrowPda as creatorAddress, and later signs the config tx that
  *   materializes that exact mint. Everything lines up deterministically.
  *
- * @module tools/perpspad/perpspad-escrow
+ * @module tools/oobe-launchpad/escrow
  */
 import { PublicKey } from '@solana/web3.js';
 

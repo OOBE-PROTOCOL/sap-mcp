@@ -1,5 +1,5 @@
 /**
- * @name tools/perpspad/dbc-launch-tool
+ * @name tools/oobe-launchpad/dbc-launch-tool
  * @description Registers `sap_steve_launch_build_dbc` — the Steve-native Meteora DBC
  *   launch builder (Option 2). Replaces PerpsPad's unsignable /api/v1/launch
  *   response with locally-built, co-signed transactions. Feature parity with
@@ -22,8 +22,8 @@ import {
   TOKEN_2022_PROGRAM_ID,
 } from './dbc-launch.js';
 import { ExtensionType, getExtensionTypes, getMint } from '@solana/spl-token';
-import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
-import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from './perpspad-pipeline.js';
+import { buildInitializeEscrowInstruction, deriveEscrowPda, isValidSolanaAddress } from './escrow.js';
+import { registerPerpspadPipelineTool, perpspadPipelineOk, perpspadPipelineException } from '../perpspad/perpspad-pipeline.js';
 
 const OOBE_TREASURY = 'BiHdXQqNXTgMrNikZxw4CMnD1z1t6K2tmtwyXgSWSKqR';
 const ESCROW_PROGRAM_ID = 'ENpvWhtTtnveMZ3WHpGKHMEYDrPHHc5v6JjjVUWFNYgA';

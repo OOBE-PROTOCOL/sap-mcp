@@ -12,10 +12,10 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../../core/src/types.js';
 import { logger } from '../../../core/src/logger.js';
 import { PerpspadApiClient, type PerpspadLaunchBody } from './perpspad-client.js';
-import { deriveEscrowPda, isValidSolanaAddress } from './perpspad-escrow.js';
-import { registerDbcLaunchTool } from './dbc-launch-tool.js';
-import { registerPerpspadDbcConfigPreviewTool } from './dbc-config-preview.js';
-import { registerMeteoraTradingTools } from './meteora-trading-tool.js';
+import { deriveEscrowPda, isValidSolanaAddress } from '../oobe-launchpad/escrow.js';
+import { registerDbcLaunchTool } from '../oobe-launchpad/dbc-launch-tool.js';
+import { registerPerpspadDbcConfigPreviewTool } from '../oobe-launchpad/dbc-config-preview.js';
+import { registerMeteoraTradingTools } from '../oobe-launchpad/meteora-trading-tool.js';
 import {
   registerPerpspadPipelineTool,
   perpspadPipelineOk,
@@ -358,7 +358,7 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
               systemProgram: '11111111111111111111111111111111',
             },
             data: [0],
-            note: 'Build with buildInitializeEscrowInstruction (perpspad-escrow.ts) client-side; sign with the payer wallet.',
+            note: 'Build with buildInitializeEscrowInstruction (oobe-launchpad/escrow.ts) client-side; sign with the payer wallet.',
           },
           config: configTx,
           pool: poolTx,

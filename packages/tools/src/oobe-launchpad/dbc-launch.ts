@@ -1,5 +1,5 @@
 /**
- * @name tools/perpspad/dbc-launch
+ * @name tools/oobe-launchpad/dbc-launch
  * @description Direct Meteora DBC launch builder (Option 2): bypasses the
  *   PerpsPad API in the critical path by building create_config +
  *   initialize_virtual_pool_with_spl_token with caller-visible ephemeral
@@ -7,7 +7,7 @@
  *   escrow program's future claim_and_split CPI). The ephemeral secrets
  *   never leave the gateway process and control nothing of value.
  *
- * @module tools/perpspad/dbc-launch
+ * @module tools/oobe-launchpad/dbc-launch
  */
 
 import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';

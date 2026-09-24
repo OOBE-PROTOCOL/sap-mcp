@@ -11,7 +11,7 @@ import {
   deriveEscrowPda,
   buildInitializeEscrowInstruction,
   isValidSolanaAddress,
-} from './perpspad-escrow.js';
+} from './escrow.js';
 
 // Cross-verified with the derivation script: the SAME mint under the
 // MAINNET program yields 6phMHCwjTK2ep7QgR3S3uk8kgQ1b2teZcT3WWTXnaNEC
@@ -22,7 +22,7 @@ const MAINNET_PROGRAM_ID = 'ENpvWhtTtnveMZ3WHpGKHMEYDrPHHc5v6JjjVUWFNYgA';
 const TEST_MINT = 'BCaPswCY66X8ih1KL3EAMetxE87brGxcgN8jbbAHAsna';
 const EXPECTED_MAINNET_ESCROW = '6phMHCwjTK2ep7QgR3S3uk8kgQ1b2teZcT3WWTXnaNEC';
 
-describe('perpspad-escrow', () => {
+describe('oobe-launchpad escrow', () => {
   it('derives the escrow PDA exactly as the deployed mainnet program does', () => {
     const { escrowPda, bump } = deriveEscrowPda(TEST_MINT);
     expect(escrowPda.toBase58()).to.equal(EXPECTED_MAINNET_ESCROW);
