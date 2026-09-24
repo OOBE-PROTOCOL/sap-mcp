@@ -403,8 +403,8 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
   }),
   createToolModule({
     id: 'perpspad',
-    title: 'PerpsPad Launchpad',
-    description: 'PerpsPad permissionless launchpad: perp markets with leverage caps, launched tokens with their backing perp positions, buyback/burn events, launch status polling, platform stats, stock pairs, and the unsigned launch-transaction builder.',
+    title: 'PerpsPad Adapter and Steve Launch',
+    description: 'External PerpsPad reads/builders plus Steve-native Meteora DBC launch, preview, escrow split, and compatibility aliases.',
     category: 'integration',
     order: 255,
     expectedTools: [
@@ -416,6 +416,12 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_perpspad_get_stock_pairs',
       'sap_perpspad_get_stats',
       'sap_perpspad_build_launch',
+      'sap_steve_launch_build_dbc',
+      'sap_steve_launch_preview_dbc',
+      'sap_steve_launch_build_dbc_dev_buy',
+      'sap_perpspad_launch_dbc',
+      'sap_perpspad_dbc_config_preview',
+      'sap_perpspad_build_dbc_dev_buy',
     ],
     register: registerPerpspadTools,
   }),

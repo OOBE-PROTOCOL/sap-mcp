@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Added
+
+- Canonical Steve-native launch contracts: `sap_steve_launch_build_dbc`,
+  `sap_steve_launch_preview_dbc`, and
+  `sap_steve_launch_build_dbc_dev_buy`.
+- In-repo `sap-steve-launch-tools` skill separating Steve-owned launch policy
+  from the external PerpsPad adapter and the Phoenix execution venue.
+
+### Deprecated
+
+- `sap_perpspad_launch_dbc`, `sap_perpspad_dbc_config_preview`, and
+  `sap_perpspad_build_dbc_dev_buy` remain behavior-identical aliases during
+  migration. Genuine PerpsPad API tools keep their existing names.
+
 ## 0.9.85 - 2026-09-14
 
 ### Added

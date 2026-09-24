@@ -1,5 +1,5 @@
 /**
- * sap_perpspad_dbc_config_preview — contract + SDK-math ground truth.
+ * sap_steve_launch_preview_dbc — contract + SDK-math ground truth.
  *
  * Reference values verified LIVE against the real tool handler (mainnet RPC,
  * official SDK swap formulas): WSOL 1 SOL → 28,621,980.98 tokens,
@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { buildConfigArgsForQuote } from './dbc-launch.js';
 import { resolveQuoteUnitsPerSol, simulateDevBuy } from './dbc-config-preview.js';
 
-describe('sap_perpspad_dbc_config_preview — simulateDevBuy', () => {
+describe('sap_steve_launch_preview_dbc — simulateDevBuy', () => {
   it('WSOL (9-dec): 1 SOL buys ≈28.6M tokens (SDK-exact swap math)', () => {
     const config = buildConfigArgsForQuote(9);
     const buy = simulateDevBuy(config, 1_000_000_000n); // 1 SOL in raw lamports

@@ -372,7 +372,7 @@ export function registerPerpspadTools(server: Server, context: SapMcpContext): v
     }
   });
 
-  // Direct DBC launch builder (Option 2) — no PerpsPad API in the critical path.
+  // Steve-native DBC launch builder. Legacy sap_perpspad_* IDs remain aliases.
   registerDbcLaunchTool(server, context);
   // Pre-launch economics preview — SDK-verified DBC config + dev-buy math
   // (single source of truth for the Steve Launchpad simulation panel).

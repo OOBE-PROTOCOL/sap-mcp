@@ -1,16 +1,27 @@
 /**
- * Unit tests for the perp backing policy on `sap_perpspad_launch_dbc`
+ * Unit tests for the perp backing policy on `sap_steve_launch_build_dbc`
  * (dbc-launch-tool.ts): inputSchema contract, all-or-nothing validation,
  * normalization, and the USDC fail-fast gate.
  */
 import { describe, expect, it } from 'vitest';
 import {
   DBC_LAUNCH_INPUT_SCHEMA,
+  LEGACY_DBC_DEV_BUY_TOOL,
+  LEGACY_DBC_LAUNCH_TOOL,
   parseBackingPolicy,
+  STEVE_DBC_DEV_BUY_TOOL,
+  STEVE_DBC_LAUNCH_TOOL,
   toQuoteBaseUnits,
 } from './dbc-launch-tool.js';
 
-describe('sap_perpspad_launch_dbc inputSchema', () => {
+describe('Steve DBC tool contracts', () => {
+  it('publishes canonical names while preserving explicit legacy aliases', () => {
+    expect(STEVE_DBC_LAUNCH_TOOL).toBe('sap_steve_launch_build_dbc');
+    expect(STEVE_DBC_DEV_BUY_TOOL).toBe('sap_steve_launch_build_dbc_dev_buy');
+    expect(LEGACY_DBC_LAUNCH_TOOL).toBe('sap_perpspad_launch_dbc');
+    expect(LEGACY_DBC_DEV_BUY_TOOL).toBe('sap_perpspad_build_dbc_dev_buy');
+  });
+
   it('exposes the three optional backing fields as primitives', () => {
     const props = DBC_LAUNCH_INPUT_SCHEMA.properties as Record<string, { type: string; enum?: string[] }>;
     expect(props.underlying).toBeDefined();

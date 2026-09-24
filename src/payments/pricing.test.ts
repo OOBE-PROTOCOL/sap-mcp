@@ -129,6 +129,10 @@ describe('SAP MCP monetization pricing', () => {
     }
     expect(classifyTool('sap_perpspad_build_launch')).toBe('builder');
     expect(classifyTool('sap_perpspad_build_launch', { strictTools: true })).toBe('builder');
+    expect(classifyTool('sap_steve_launch_preview_dbc')).toBe('free');
+    expect(classifyTool('sap_steve_launch_preview_dbc', { strictTools: true })).toBe('free');
+    expect(classifyTool('sap_steve_launch_build_dbc')).toBe('builder');
+    expect(classifyTool('sap_steve_launch_build_dbc_dev_buy')).toBe('builder');
   });
 
   it('applies the configured minimum price to micro-read estimates and challenges', () => {
