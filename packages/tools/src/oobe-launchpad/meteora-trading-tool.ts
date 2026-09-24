@@ -12,12 +12,12 @@ import {
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getTokenProgram as getDammTokenProgram } from '@meteora-ag/cp-amm-sdk';
 import { getConnection } from '../phoenix/phoenix-helpers.js';
-import { isValidSolanaAddress } from './perpspad-escrow.js';
+import { isValidSolanaAddress } from './escrow.js';
 import {
   perpspadPipelineException,
   perpspadPipelineOk,
   registerPerpspadPipelineTool,
-} from './perpspad-pipeline.js';
+} from '../perpspad/perpspad-pipeline.js';
 
 type TradeSide = 'buy' | 'sell';
 type MeteoraStage = 'bonding_curve' | 'migration_pending' | 'graduated_damm_v2';

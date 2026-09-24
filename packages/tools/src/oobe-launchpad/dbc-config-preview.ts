@@ -24,7 +24,7 @@ import {
   registerPerpspadPipelineTool,
   perpspadPipelineOk,
   perpspadPipelineException,
-} from './perpspad-pipeline.js';
+} from '../perpspad/perpspad-pipeline.js';
 
 /** 283-byte ConfigParameters: curve.len @215 (u32), curve[i] @219+i*32 (u128 sqrt_price, u128 liquidity). */
 const CURVE_OFFSET_BASE = 219;
