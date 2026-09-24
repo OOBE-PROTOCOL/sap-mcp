@@ -55,6 +55,7 @@ or wants to compare this bundled MCP skill pack with the source SDK skills:
 | `sap-backpack-tools` | Backpack Exchange CeFi: markets, depth, klines, collateral, securities, signed account/trading with API keys |
 | `sap-sunrise-tools` | Sunrise asset gateway: canonical token discovery, swap quotes, user-signed swap execution |
 | `sap-perpspad-tools` | PerpsPad launchpad: perp-backed token launches, markets, tokens, buyback events, stats, launch builder |
+| `sap-steve-launch-tools` | Steve-native Meteora DBC launches, escrow fee split, and optional agent-owned perpetual strategy metadata |
 
 ## Agent Behavior
 

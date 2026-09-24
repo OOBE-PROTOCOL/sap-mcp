@@ -1,6 +1,6 @@
 /**
  * @name tools/perpspad/dbc-launch-tool
- * @description Registers `sap_perpspad_launch_dbc` — the DIRECT Meteora DBC
+ * @description Registers `sap_steve_launch_build_dbc` — the Steve-native Meteora DBC
  *   launch builder (Option 2). Replaces PerpsPad's unsignable /api/v1/launch
  *   response with locally-built, co-signed transactions. Feature parity with
  *   the legacy build_launch: same inputs (ticker, name, dev-buy, perp backing
@@ -45,7 +45,7 @@ export function toQuoteBaseUnits(amount: number, decimals: number): BN {
   return new BN(`${whole}${fraction.padEnd(decimals, '0')}`.replace(/^0+(?=\d)/, ''));
 }
 
-/** inputSchema for `sap_perpspad_launch_dbc` (exported for unit tests). */
+/** Shared input schema for the canonical Steve DBC builder and its legacy alias. */
 export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
@@ -130,13 +130,19 @@ export function parseBackingPolicy(
 /** USDC mainnet mint (quote option). */
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
-/** Registers `sap_perpspad_launch_dbc` on the MCP server. */
+export const STEVE_DBC_LAUNCH_TOOL = 'sap_steve_launch_build_dbc';
+export const LEGACY_DBC_LAUNCH_TOOL = 'sap_perpspad_launch_dbc';
+export const STEVE_DBC_DEV_BUY_TOOL = 'sap_steve_launch_build_dbc_dev_buy';
+export const LEGACY_DBC_DEV_BUY_TOOL = 'sap_perpspad_build_dbc_dev_buy';
+
+/** Registers the canonical Steve DBC builder and compatibility aliases. */
 export function registerDbcLaunchTool(
   server: Parameters<typeof registerPerpspadPipelineTool>[0],
   context: Parameters<typeof registerPerpspadPipelineTool>[1],
 ): void {
-  registerPerpspadPipelineTool(server, context, 'sap_perpspad_launch_dbc', {
-    description: 'Build a direct Meteora DBC launch: create config, initialize pool, transfer creator authority to the 70/30 escrow PDA, then initialize escrow. A requested initial buy is built separately after pool confirmation with sap_perpspad_build_dbc_dev_buy and a fresh blockhash. Supports SOL, USDC, and validated SPL/Token-2022 quote mints.',
+  for (const toolName of [STEVE_DBC_LAUNCH_TOOL, LEGACY_DBC_LAUNCH_TOOL] as const) {
+  registerPerpspadPipelineTool(server, context, toolName, {
+    description: `${toolName === LEGACY_DBC_LAUNCH_TOOL ? 'DEPRECATED alias; use sap_steve_launch_build_dbc. ' : ''}Build a Steve-native direct Meteora DBC launch: create config, initialize pool, transfer creator authority to the 70/30 escrow PDA, then initialize escrow. A requested initial buy is built separately after pool confirmation with sap_steve_launch_build_dbc_dev_buy and a fresh blockhash. Supports SOL, USDC, and validated SPL/Token-2022 quote mints.`,
     inputSchema: DBC_LAUNCH_INPUT_SCHEMA,
   }, async (input) => {
     try {
@@ -331,9 +337,11 @@ export function registerDbcLaunchTool(
       return perpspadPipelineException('Failed to build direct DBC launch', err);
     }
   });
+  }
 
-  registerPerpspadPipelineTool(server, context, 'sap_perpspad_build_dbc_dev_buy', {
-    description: 'Legacy DBC-only initial-buy builder. New integrations must use sap_meteora_build_launchpad_trade, which supports buy/sell, exact decimal amounts, curve-capacity errors, and automatic routing after DAMM v2 graduation.',
+  for (const toolName of [STEVE_DBC_DEV_BUY_TOOL, LEGACY_DBC_DEV_BUY_TOOL] as const) {
+  registerPerpspadPipelineTool(server, context, toolName, {
+    description: `${toolName === LEGACY_DBC_DEV_BUY_TOOL ? 'DEPRECATED alias; use sap_steve_launch_build_dbc_dev_buy. ' : ''}Legacy DBC-only initial-buy builder. New integrations must use sap_meteora_build_launchpad_trade, which supports buy/sell, exact decimal amounts, curve-capacity errors, and automatic routing after DAMM v2 graduation.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -386,6 +394,7 @@ export function registerDbcLaunchTool(
       return perpspadPipelineException('Failed to build DBC dev-buy', err);
     }
   });
+  }
 }
 
 // Registry-derivation helpers re-exported for the metadata endpoint + tests.

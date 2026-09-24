@@ -211,6 +211,7 @@ const FREE_TOOLS = new Set([
   // panel calls it on every keystroke of the dev-buy field; charging x402
   // for a preview would make the UI unusable.
   'sap_perpspad_dbc_config_preview',
+  'sap_steve_launch_preview_dbc',
 ]);
 
 const STRICT_FREE_TOOLS = new Set([
@@ -330,6 +331,9 @@ const STRICT_FREE_TOOLS = new Set([
   'sap_perpspad_get_launch_status',
   'sap_perpspad_get_stock_pairs',
   'sap_perpspad_get_stats',
+  // Steve launch preview and its migration alias stay free in strict mode.
+  'sap_steve_launch_preview_dbc',
+  'sap_perpspad_dbc_config_preview',
 ]);
 
 const MICRO_READ_TOOLS = new Set([

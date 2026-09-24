@@ -1,5 +1,5 @@
 /**
- * sap_perpspad_dbc_config_preview — DBC launch economics straight from the
+ * sap_steve_launch_preview_dbc — DBC launch economics straight from the
  * exact config the gateway bakes on-chain (PERPSPAD_CONFIG_ARGS scaled per
  * quote decimals by buildConfigArgsForQuote), with the dev-buy output
  * computed by the OFFICIAL @meteora-ag/dynamic-bonding-curve-sdk swap math
@@ -110,7 +110,7 @@ export function resolveQuoteUnitsPerSol(quoteMint: string, quotePriceUsd?: numbe
 }
 
 /**
- * Registers `sap_perpspad_dbc_config_preview` — the pre-launch economics
+ * Registers `sap_steve_launch_preview_dbc` — the pre-launch economics
  * readout the Steve Launchpad UI renders in its simulation panel. Every
  * number is derived from the config bytes the gateway actually signs, and
  * the dev-buy output uses the official SDK swap formulas (program-identical
@@ -120,9 +120,10 @@ export function registerPerpspadDbcConfigPreviewTool(
   server: Parameters<typeof registerPerpspadPipelineTool>[0],
   context: Parameters<typeof registerPerpspadPipelineTool>[1],
 ): void {
-  registerPerpspadPipelineTool(server, context, 'sap_perpspad_dbc_config_preview', {
+  for (const toolName of ['sap_steve_launch_preview_dbc', 'sap_perpspad_dbc_config_preview'] as const) {
+  registerPerpspadPipelineTool(server, context, toolName, {
     description:
-      'PRE-LAUNCH DBC economics readout: decodes the exact Meteora DBC config the gateway will sign (scaled per quote decimals) and simulates the dev-buy with the official SDK swap math. Returns migration threshold, start price, curve breakdown, tokens out (supply-capped) and min-out after slippage. Call this instead of estimating locally — the frontend renders these values verbatim.',
+      `${toolName === 'sap_perpspad_dbc_config_preview' ? 'DEPRECATED alias; use sap_steve_launch_preview_dbc. ' : ''}PRE-LAUNCH DBC economics readout: decodes the exact Meteora DBC config the gateway will sign (scaled per quote decimals) and simulates the dev-buy with the official SDK swap math. Returns migration threshold, start price, curve breakdown, tokens out (supply-capped) and min-out after slippage. Call this instead of estimating locally — the frontend renders these values verbatim.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -213,4 +214,5 @@ export function registerPerpspadDbcConfigPreviewTool(
       return perpspadPipelineException('DBC config preview failed', err);
     }
   });
+  }
 }
