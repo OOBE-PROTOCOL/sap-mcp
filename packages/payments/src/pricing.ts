@@ -383,6 +383,8 @@ const READ_PREMIUM_TOOLS = new Set([
   'sap_list_all_agents',
   'sap_discover_agents',
   'sap_network_stats',
+  'web_search',
+  'web_extract',
   'sap_fetch_tool',
   'sap_sns_resolve_domain',
   'sap_sns_resolve_wallet',
