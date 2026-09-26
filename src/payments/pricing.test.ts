@@ -199,6 +199,27 @@ describe('SAP MCP monetization pricing', () => {
     }
   });
 
+  it('prices hosted web search and extract as micro-reads: 0.001 USD per call (1 USD per 1000 requests)', () => {
+    for (const toolName of ['web_search', 'web_extract']) {
+      expect(classifyTool(toolName)).toBe('micro-read');
+      expect(classifyTool(toolName, { strictTools: true })).toBe('micro-read');
+    }
+
+    const parsed = parseJsonRpcBody({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'web_search', arguments: { query: 'solana news' } },
+    });
+
+    const decision = resolvePaymentDecision(parsed, monetizationConfig);
+    expect(decision.required).toBe(true);
+    if (decision.required) {
+      expect(decision.tier).toBe('micro-read');
+      expect(decision.price).toBe('$0.001');
+    }
+  });
+
   it('prices exact SAP agent orientation reads as micro-reads in default and strict mode', () => {
     for (const toolName of [
       'sap_get_agent',

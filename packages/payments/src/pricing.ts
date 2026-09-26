@@ -337,6 +337,8 @@ const STRICT_FREE_TOOLS = new Set([
 ]);
 
 const MICRO_READ_TOOLS = new Set([
+  'web_search',
+  'web_extract',
   'sap_agent_context',
   'sap_get_agent',
   'sap_get_agent_profile',
@@ -383,8 +385,6 @@ const READ_PREMIUM_TOOLS = new Set([
   'sap_list_all_agents',
   'sap_discover_agents',
   'sap_network_stats',
-  'web_search',
-  'web_extract',
   'sap_fetch_tool',
   'sap_sns_resolve_domain',
   'sap_sns_resolve_wallet',
@@ -603,8 +603,10 @@ export function buildPricingCatalog(config: SapMcpMonetizationConfig): PricingCa
       'micro-read': {
         paymentRequired: true,
         priceUsd: clampPrice(config.prices.microReadUsd, config),
-        pricingRule: 'Flat micro-read fee for fresh lightweight hosted data beyond readiness. Use these for exact agent/profile reads, compact directory pages, SNS availability checks, escrow state, and lightweight trader context.',
+        pricingRule: 'Flat micro-read fee for fresh lightweight hosted data beyond readiness. Use these for hosted web search/extract calls (external lane: 0.001 USD per call, i.e. 1 USD per 1000 requests), exact agent/profile reads, compact directory pages, SNS availability checks, escrow state, and lightweight trader context.',
         examples: [
+          'web_search',
+          'web_extract',
           'sap_agent_context',
           'sap_get_agent_profile',
           'sap_list_agents limit<=20 view=compact',

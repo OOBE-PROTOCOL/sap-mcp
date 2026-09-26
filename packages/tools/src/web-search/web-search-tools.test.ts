@@ -33,12 +33,13 @@ describe('web search module registration', () => {
 });
 
 describe('web search pricing tier', () => {
-  it('prices both tools as premium reads so an operator can sponsor them', () => {
-    // read-premium is the operator-sponsorable tier: a hosted operator covers
-    // the call for its own agents, while external callers settle the x402
-    // challenge. Neither tool may ever fall back to the free tier by accident.
-    expect(classifyTool('web_search')).toBe('read-premium');
-    expect(classifyTool('web_extract')).toBe('read-premium');
+  it('prices both tools as micro-reads at 1 USD per 1000 requests', () => {
+    // micro-read is the operator-sponsorable tier: a hosted operator covers the
+    // call for its own agents, while external callers settle the x402 challenge.
+    // The default micro-read price is 0.001 USD, i.e. 1 USD per 1000 requests.
+    // Neither tool may ever fall back to the free tier by accident.
+    expect(classifyTool('web_search')).toBe('micro-read');
+    expect(classifyTool('web_extract')).toBe('micro-read');
   });
 });
 
