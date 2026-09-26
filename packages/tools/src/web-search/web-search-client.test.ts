@@ -11,9 +11,11 @@ import {
   WEB_UNTRUSTED_NOTICE,
   authorityForUrl,
   blockedAddressReason,
+  embeddedIpv4,
   extractUrls,
   hashContent,
   htmlToText,
+  ipv6ToBigInt,
   isContentTypeAllowed,
   mapSearxngResult,
   provenanceForUrl,
@@ -105,6 +107,49 @@ describe('blockedAddressReason (resolved-address blocklist)', () => {
     for (const address of ['::1', '::', 'fd00::1', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1']) {
       expect(blockedAddressReason(address), address).not.toBeNull();
     }
+  });
+
+  // Regression: the notation of a blocked address must not matter. The decimal
+  // `::ffff:a.b.c.d` form was covered while the equivalent hex, NAT64, 6to4 and
+  // Teredo encodings passed the blocklist and reached loopback/private targets.
+  it('blocks IPv4 addresses hidden in every IPv6 notation', () => {
+    for (const address of [
+      '::ffff:7f00:1', // 127.0.0.1 in hex
+      '::ffff:0a00:0001', // 10.0.0.1 in hex
+      '::ffff:a9fe:a9fe', // 169.254.169.254, the cloud metadata endpoint
+      '::7f00:1', // IPv4-compatible loopback
+      '64:ff9b::7f00:1', // NAT64-wrapped loopback
+      '64:ff9b::a00:1', // NAT64-wrapped 10.0.0.1
+      '64:ff9b::a9fe:a9fe', // NAT64-wrapped metadata endpoint
+      '2002:7f00:1::', // 6to4 carrying 127.0.0.1
+      '2002:a9fe:a9fe::', // 6to4 carrying the metadata endpoint
+      '2001:0:0:0:0:0:ffff:fffe', // Teredo, de-obfuscates to 0.0.0.1
+    ]) {
+      expect(blockedAddressReason(address), address).not.toBeNull();
+    }
+  });
+
+  it('still allows public addresses written in translated IPv6 notation', () => {
+    // 93.184.216.34 is public: DNS64 on an IPv6-only host legitimately answers
+    // with this NAT64 form, so the prefix alone cannot be refused.
+    expect(blockedAddressReason('::ffff:5db8:d822')).toBeNull();
+    expect(blockedAddressReason('64:ff9b::5db8:d822')).toBeNull();
+    expect(blockedAddressReason('2002:5db8:d822::')).toBeNull();
+  });
+
+  it('normalizes equivalent IPv6 notations to the same numeric value', () => {
+    expect(ipv6ToBigInt('::ffff:7f00:1')).toBe(ipv6ToBigInt('::ffff:127.0.0.1'));
+    expect(ipv6ToBigInt('::1')).toBe(1n);
+    expect(ipv6ToBigInt('2606:2800:220:1:248:1893:25c8:1946')).toBe(ipv6ToBigInt('2606:2800:0220:0001:0248:1893:25c8:1946'));
+    expect(ipv6ToBigInt('not-an-address')).toBeNull();
+    expect(ipv6ToBigInt('93.184.216.34')).toBeNull();
+  });
+
+  it('reports the embedded IPv4 of translated and tunnelled forms', () => {
+    expect(embeddedIpv4('::ffff:7f00:1')).toBe('127.0.0.1');
+    expect(embeddedIpv4('64:ff9b::a00:1')).toBe('10.0.0.1');
+    expect(embeddedIpv4('2001:0:0:0:0:0:ffff:fffe')).toBe('0.0.0.1');
+    expect(embeddedIpv4('2606:2800:220:1:248:1893:25c8:1946')).toBeNull();
   });
 
   it('allows public addresses', () => {
@@ -254,6 +299,24 @@ describe('searchWeb', () => {
     const response = await searchWeb({ query: 'markets', sources: 'trusted' });
     expect(response.results).toHaveLength(1);
     expect(response.results[0]?.url).toBe('https://www.reuters.com/a');
+    // Ids are assigned after filtering: the surviving entry is citation 1.
+    expect(response.results[0]?.citationId).toBe('1');
+  });
+
+  it('numbers citations contiguously after the trusted filter drops entries', async () => {
+    process.env.SAP_MCP_SEARXNG_URL = 'http://searxng.local:8888';
+    process.env.SAP_MCP_WEB_TRUSTED_DOMAINS = 'reuters.com';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      results: [
+        { url: 'https://blog-one.example/a', title: 'A' },
+        { url: 'https://www.reuters.com/b', title: 'B' },
+        { url: 'https://blog-two.example/c', title: 'C' },
+        { url: 'https://www.reuters.com/d', title: 'D' },
+      ],
+    }), { status: 200 })));
+
+    const response = await searchWeb({ query: 'markets', sources: 'trusted' });
+    expect(response.results.map((entry) => entry.citationId)).toEqual(['1', '2']);
   });
 
   it('reports upstream HTTP failures without throwing', async () => {
@@ -262,6 +325,8 @@ describe('searchWeb', () => {
 
     const response = await searchWeb({ query: 'markets' });
     expect(response.error).toContain('403');
+    // The most common misconfiguration must be self-diagnosable from the error.
+    expect(response.error).toContain('search.formats');
   });
 
   it('never reflects backend credentials into the tool result', async () => {

@@ -290,10 +290,97 @@ export function validateEgressUrl(raw: string): string | null {
 }
 
 /**
+ * @name ipv6ToBigInt
+ * @description Numeric value of an IPv6 literal, so every notation of the same
+ *   address (compressed, expanded, hex-mapped, dotted tail) compares equal.
+ *   Returns `null` when the input is not a valid IPv6 address.
+ */
+export function ipv6ToBigInt(address: string): bigint | null {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0] ?? '';
+  if (isIP(normalized) !== 6) return null;
+
+  const [head = '', tail, ...rest] = normalized.split('::');
+  if (rest.length > 0) return null;
+
+  const parseGroups = (part: string): number[] | null => {
+    if (part === '') return [];
+    const groups: number[] = [];
+    for (const group of part.split(':')) {
+      const dotted = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(group);
+      if (dotted) {
+        const octets = dotted.slice(1, 5).map(Number);
+        if (octets.some((octet) => octet > 255)) return null;
+        groups.push(((octets[0] ?? 0) << 8) | (octets[1] ?? 0), ((octets[2] ?? 0) << 8) | (octets[3] ?? 0));
+        continue;
+      }
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      groups.push(Number.parseInt(group, 16));
+    }
+    return groups;
+  };
+
+  const headGroups = parseGroups(head);
+  const tailGroups = tail === undefined ? [] : parseGroups(tail);
+  if (!headGroups || !tailGroups) return null;
+
+  const written = headGroups.length + tailGroups.length;
+  if (tail === undefined) {
+    if (written !== 8) return null;
+  } else if (written > 7) {
+    return null;
+  }
+
+  const groups = tail === undefined
+    ? headGroups
+    : [...headGroups, ...new Array<number>(8 - written).fill(0), ...tailGroups];
+
+  let value = 0n;
+  for (const group of groups) value = (value << 16n) | BigInt(group);
+  return value;
+}
+
+/**
+ * @name embeddedIpv4
+ * @description IPv4 address carried inside a translated or tunnelled IPv6 form:
+ *   IPv4-mapped `::ffff:0:0/96`, IPv4-compatible `::/96`, NAT64 well-known
+ *   `64:ff9b::/96`, 6to4 `2002::/16`, and Teredo `2001::/32`. Returns the dotted
+ *   quad so the IPv4 blocklist applies to `::ffff:7f00:1` exactly as it does to
+ *   `127.0.0.1`.
+ */
+export function embeddedIpv4(address: string): string | null {
+  const value = ipv6ToBigInt(address);
+  if (value === null) return null;
+
+  const dotted = (packed: number) =>
+    `${(packed >>> 24) & 0xff}.${(packed >>> 16) & 0xff}.${(packed >>> 8) & 0xff}.${packed & 0xff}`;
+
+  // `value >> 32n` is the high 96 bits, which is what each translatable prefix
+  // occupies; the low 32 bits carry the IPv4 address.
+  const high96 = value >> 32n;
+  if (high96 === 0xffffn || high96 === 0n) {
+    // ::ffff:0:0/96 (IPv4-mapped) and ::/96 (IPv4-compatible, deprecated)
+    return dotted(Number(value & 0xffffffffn));
+  }
+  if (high96 === (0x64ff9bn << 64n)) {
+    // 64:ff9b::/96 (NAT64 well-known prefix)
+    return dotted(Number(value & 0xffffffffn));
+  }
+  if (value >> 112n === 0x2002n) {
+    // 2002::/16 (6to4) carries the IPv4 address in bits 16..47
+    return dotted(Number((value >> 80n) & 0xffffffffn));
+  }
+  if (value >> 96n === 0x20010000n) {
+    // 2001::/32 (Teredo) carries the client IPv4 obfuscated (XOR 0xffffffff)
+    return dotted(~Number(value & 0xffffffffn) >>> 0);
+  }
+  return null;
+}
+
+/**
  * @name blockedAddressReason
  * @description Blocklist for a resolved or literal address: loopback, private
- *   ranges, carrier-grade NAT, link-local, unique-local, multicast, and the
- *   cloud metadata endpoint.
+ *   ranges, carrier-grade NAT, link-local, unique-local, multicast, the cloud
+ *   metadata endpoint, and any such address smuggled inside an IPv6 notation.
  */
 export function blockedAddressReason(address: string): string | null {
   const normalized = address.toLowerCase().replace(/^\[|\]$/g, '').split('%')[0] ?? '';
@@ -302,8 +389,14 @@ export function blockedAddressReason(address: string): string | null {
     if (normalized === '::' || normalized === '::1') return 'Refusing to fetch a loopback address';
     if (/^f[cd][0-9a-f]{2}:/.test(normalized)) return 'Refusing to fetch a unique-local IPv6 range';
     if (/^fe[89ab][0-9a-f]:/.test(normalized)) return 'Refusing to fetch a link-local IPv6 range';
-    const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(normalized);
-    if (mapped?.[1]) return blockedAddressReason(mapped[1]);
+    if (/^ff[0-9a-f]{2}:/.test(normalized)) return 'Refusing to fetch a multicast IPv6 address';
+    // Notation-independent check: `::ffff:7f00:1` and `64:ff9b::7f00:1` carry the
+    // same target as `127.0.0.1`, so the IPv4 rules decide.
+    const embedded = embeddedIpv4(normalized);
+    if (embedded) {
+      const reason = blockedAddressReason(embedded);
+      if (reason) return `${reason} (embedded in ${normalized})`;
+    }
     return null;
   }
 
@@ -390,9 +483,11 @@ async function fetchPinned(target: ResolvedTarget, url: URL): Promise<PageFetchR
 
   return await new Promise<PageFetchResult | string>((resolve) => {
     let settled = false;
+    let bodyTimer: NodeJS.Timeout | undefined;
     const finish = (value: PageFetchResult | string) => {
       if (settled) return;
       settled = true;
+      if (bodyTimer) clearTimeout(bodyTimer);
       resolve(value);
     };
 
@@ -420,6 +515,17 @@ async function fetchPinned(target: ResolvedTarget, url: URL): Promise<PageFetchR
         finish(`Unsupported content encoding "${String(res.headers['content-encoding'])}"`);
         return;
       }
+
+      // The socket timeout above is an idle-socket timeout: a response that
+      // trickles one byte per interval resets it forever. Bound the whole body
+      // phase with an explicit deadline so a slow-loris cannot hold the tool open.
+      const bodyTimeoutMs = webBodyTimeoutMs();
+      bodyTimer = setTimeout(() => {
+        decompressor?.destroy();
+        res.destroy();
+        finish(`Timed out after ${bodyTimeoutMs} ms while reading the response body`);
+      }, bodyTimeoutMs);
+      bodyTimer.unref?.();
 
       const chunks: Buffer[] = [];
       let decodedBytes = 0;
@@ -487,6 +593,12 @@ export async function fetchPageSafely(rawUrl: string): Promise<PageFetchResult |
       const location = result.headers.location;
       if (!location) return `Redirect without a Location header (HTTP ${result.status})`;
       const next = new URL(location, current).toString();
+      // A secure origin must not be able to drop the connection to cleartext:
+      // the body would be unauthenticated, and provenance/authority downstream
+      // would still record it as if it came from the https source.
+      if (url.protocol === 'https:' && new URL(next).protocol === 'http:') {
+        return `Refusing insecure redirect from ${current} to ${next}: https to http downgrade`;
+      }
       const nextRejection = validateEgressUrl(next);
       if (nextRejection) return `Refusing unsafe redirect to ${next}: ${nextRejection}`;
       const nextTarget = await resolveAndValidate(new URL(next).hostname);
@@ -595,13 +707,16 @@ export async function searchWeb(request: WebSearchRequest): Promise<WebSearchRes
       signal: AbortSignal.timeout(webSearchTimeoutMs()),
     });
     if (!response.ok) {
+      const hint = response.status === 403
+        ? ' If this persists, verify the backend exposes the JSON API (search.formats must include "json" in the SearXNG settings).'
+        : '';
       return {
         query,
         backend: safeBackendLabel(base),
         results: [],
         allowlistedDomainCount: allowlist.size,
         notice: WEB_UNTRUSTED_NOTICE,
-        error: `SearXNG responded with HTTP ${response.status}.`,
+        error: `SearXNG responded with HTTP ${response.status}.${hint}`,
       };
     }
 
@@ -618,14 +733,21 @@ export async function searchWeb(request: WebSearchRequest): Promise<WebSearchRes
       if (evidence) mapped.push(evidence);
     }
 
-    const limited = request.sources === 'trusted'
+    const filtered = request.sources === 'trusted'
       ? mapped.filter((entry) => entry.provenance === 'allowlisted')
       : mapped;
+
+    // Ids are re-assigned after filtering and truncation so the caller always
+    // receives a contiguous 1..n sequence, whatever was dropped along the way.
+    const limited = filtered.slice(0, clampMaxResults(request.maxResults)).map((entry, index) => ({
+      ...entry,
+      citationId: String(index + 1),
+    }));
 
     return {
       query,
       backend: safeBackendLabel(base),
-      results: limited.slice(0, clampMaxResults(request.maxResults)),
+      results: limited,
       allowlistedDomainCount: allowlist.size,
       notice: WEB_UNTRUSTED_NOTICE,
     };

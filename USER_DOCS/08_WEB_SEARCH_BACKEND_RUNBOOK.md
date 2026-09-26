@@ -106,12 +106,16 @@ Pages share the per-call budget: later pages get whatever remains.
 Every fetch goes through the same guard, in this order:
 
 1. **Syntactic check** — http/https only, no credentials in the URL, no `localhost`/`.local`/`.internal` suffixes, no single-label hostnames, ports 80/443 only.
-2. **DNS validation before connecting** — every resolved address (A and AAAA) is checked against the blocklist: loopback, private ranges, carrier-grade NAT (`100.64.0.0/10`), link-local, unique-local IPv6, multicast/reserved, and the cloud metadata endpoint (`169.254.169.254`).
+2. **DNS validation before connecting** — every resolved address (A and AAAA) is checked against the blocklist: loopback, private ranges, carrier-grade NAT (`100.64.0.0/10`), link-local, unique-local IPv6, multicast/reserved, and the cloud metadata endpoint (`169.254.169.254`). IPv6 addresses are normalized to their numeric value first, so an address is refused in **every** notation: `::ffff:127.0.0.1`, `::ffff:7f00:1`, `64:ff9b::7f00:1` (NAT64), `2002:7f00:1::` (6to4) and Teredo forms are all treated as `127.0.0.1`. The embedded IPv4 is what gets checked, so DNS64 on an IPv6-only host still reaches public IPv4 hosts.
 3. **Address pinning (anti-rebinding)** — the validated address is used for the connection, with `Host` and TLS SNI still set to the hostname, so a name cannot be re-resolved to a private address between validation and connect.
-4. **Redirects** — at most 3, and each hop is re-validated *and* re-resolved before it is requested.
-5. **Body handling** — connect and body timeouts are separate; `gzip`, `deflate` and `br` are decompressed inside the size budget; any other content encoding is refused rather than decompressed.
+4. **Redirects** — at most 3, and each hop is re-validated *and* re-resolved before it is requested. An `https` origin may not redirect to `http`: the downgrade is refused, so content is never silently read in cleartext.
+5. **Body handling** — connect and body timeouts are separate, and the body phase has a **hard deadline** (`SAP_MCP_WEB_BODY_TIMEOUT_MS`) that destroys the response and the decompressor on expiry, so a response that trickles bytes can neither hold the socket open nor stall the tool call; `gzip`, `deflate` and `br` are decompressed inside the size budget; any other content encoding is refused rather than decompressed.
 
-## 7. Operational Notes
+## 7. Pricing
+
+`web_search` and `web_extract` are **micro-read** tools: `$0.001` per call (`1 USD per 1000 requests`) on the external x402 lane. Agents hosted on the OOBE platform run the same calls on the sponsored lane and are not charged.
+
+## 8. Operational Notes
 
 - **Blocked publishers**: sites behind aggressive bot protection (for example Cloudflare-fronted financial sites) may answer `403` to the server's fetch fingerprint even with browser-like headers. Those URLs return a clear refusal, and the agent falls back to the search snippet or another source.
 - **JavaScript-only pages**: extraction reports that no readable text was found instead of returning empty content, so the agent knows to change source rather than retry.
