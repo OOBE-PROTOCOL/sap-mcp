@@ -80,8 +80,8 @@ describe('tool catalog', () => {
 
     expect(catalog.profileId).toBe('local-stdio-wallet');
     expect(catalog.runtimeMode).toBe('readonly');
-    expect(catalog.moduleCount).toBe(24);
-    expect(catalog.toolCount).toBe(216);
+    expect(catalog.moduleCount).toBe(25);
+    expect(catalog.toolCount).toBe(218);
     expect(catalog.modules.map((module) => module.id)).toContain('x402-local-helper');
     expect(catalog.modules.map((module) => module.id)).not.toContain('hosted-prepaid');
     expect(catalog.categories).toContainEqual(expect.objectContaining({
@@ -168,8 +168,8 @@ describe('tool catalog', () => {
     expect(summary).toMatchObject({
       profileId: 'hosted-accountless',
       runtimeMode: 'hosted-api',
-      moduleCount: 24,
-      toolCount: 203,
+      moduleCount: 25,
+      toolCount: 205,
     });
     expect(summary.modules.map((module) => module.id)).toContain('hosted-prepaid');
     expect(summary.modules[0]).not.toHaveProperty('register');
@@ -250,7 +250,7 @@ describe('tool catalog', () => {
       'hosted-accountless',
       'payments-bridge-only',
     ]);
-    expect(catalogs.map((catalog) => catalog.moduleCount)).toEqual([24, 24, 1]);
+    expect(catalogs.map((catalog) => catalog.moduleCount)).toEqual([25, 25, 1]);
     expect(catalogs.every((catalog) => catalog.toolCount > 0)).toBe(true);
   });
 });

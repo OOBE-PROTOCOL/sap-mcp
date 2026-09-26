@@ -255,3 +255,4 @@ npm exec --yes --package @oobe-protocol-labs/sap-mcp-server -- sap-mcp-config au
 | `05_AGENT_SKILLS_TOOL_ROUTING.md` | Skills, tool selection, and security behavior |
 | `06_DESKTOP_WIZARD_INSTALL_RUNBOOK.md` | Desktop GUI wizard install, hosted setup, local payment bridge, and runtime behavior |
 | `07_SMITHERY_MARKETPLACE_INTEGRATION.md` | Smithery setup schema, marketplace usage, native x402 clients, and local bridge guidance |
+| `08_WEB_SEARCH_BACKEND_RUNBOOK.md` | SearXNG backend setup for `web_search` / `web_extract`, backend variables, and the trusted-domain allowlist |

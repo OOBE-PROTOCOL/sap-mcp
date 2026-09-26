@@ -11,7 +11,7 @@ The server does not charge for connecting. Payment is evaluated per MCP request,
 | Tier | Examples | Price |
 | --- | --- | --- |
 | Free | `tools/list`, `prompts/list`, `resources/list`, `sap_profile_current`, `sap_agent_start`, `sap_agent_runtime_status`, `sap_prepare_action`, `sap_agent_next_action`, `sap_pricing_catalog`, `sap_estimate_tool_cost`, repair/status tools, local payment bridge control, SOL/SPL/x402 balance readiness, single-asset price snapshots, memory/audit helpers, and transaction preview/finalize helpers | Free |
-| Micro read | exact SAP agent/profile reads, compact `sap_list_agents` pages with `limit <= 20`, SNS availability checks, escrow state, lightweight trader/perps context | `$0.001` default |
+| Micro read | hosted web research (`web_search` / `web_extract`, `$1 per 1000 requests`), exact SAP agent/profile reads, compact `sap_list_agents` pages with `limit <= 20`, SNS availability checks, escrow state, lightweight trader/perps context | `$0.001` default |
 | Premium read | `sap_discover_agents`, `sap_list_all_agents`, full/enriched/large `sap_list_agents` pages, enriched holdings, DAS reads, token lists, quotes/routes, OHLCV/history, analytics | `$0.002` default |
 | Builder or batch | complex builders, SNS/domain batch checks, unsigned transaction builders, routing preparation | `$0.006` default, batch = sum of paid calls |
 | Value action | settlement-like or value-linked operations where appropriate | `$0.06` standard, `$0.035` for selected heavy execution paths |

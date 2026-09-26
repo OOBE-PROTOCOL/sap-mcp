@@ -757,6 +757,16 @@
       "toolName": "sap_skills_self_update",
       "file": "packages/tools/src/skills-tools.ts",
       "moduleId": "skills"
+    },
+    {
+      "toolName": "web_search",
+      "file": "packages/tools/src/web-search/web-search-tools.ts",
+      "moduleId": "web-search"
+    },
+    {
+      "toolName": "web_extract",
+      "file": "packages/tools/src/web-search/web-search-tools.ts",
+      "moduleId": "web-search"
     }
   ],
   "minimumPipelineToolFiles": 26,

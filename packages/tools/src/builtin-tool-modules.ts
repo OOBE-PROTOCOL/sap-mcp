@@ -31,6 +31,7 @@ import { registerSapSdkTools } from './sap-sdk-tools.js';
 import { registerSapSnsTools } from './sap-sns-tools.js';
 import { registerSkillsTools } from './skills-tools.js';
 import { registerTransactionTools } from './transaction-tools.js';
+import { registerWebSearchTools } from './web-search/web-search-index.js';
 import { registerFearGreedTool } from '../../perps/src/market-intelligence.js';
 import { registerPortfolioRiskTool, registerRiskCheckTool } from '../../perps/src/risk-engine.js';
 import { registerSignalScoreTool } from '../../perps/src/signal-engine.js';
@@ -511,6 +512,18 @@ export const BUILTIN_TOOL_MODULES: readonly ToolModuleDefinition[] = [
       'sap_trade_journal_query',
     ],
     register: registerMemoryTools,
+  }),
+  createToolModule({
+    id: 'web-search',
+    title: 'Web Search',
+    description: 'Self-hosted web search and page extraction for research, news, and current information.',
+    category: 'integration',
+    order: 290,
+    expectedTools: [
+      'web_search',
+      'web_extract',
+    ],
+    register: registerWebSearchTools,
   }),
   createToolModule({
     id: 'tool-search',

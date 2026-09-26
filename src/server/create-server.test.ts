@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { Keypair, SystemProgram, Transaction } from '@solana/web3.js';
 import { createTransferInstruction } from '@solana/spl-token';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createSapMcpServer } from './create-server.js';
 import type { SapMcpConfig } from '../core/types.js';
 import { getPermissionMappedTools, getRequiredPermission } from '../security/tool-permissions.js';
@@ -257,16 +259,16 @@ describe('createSapMcpServer', () => {
     expect(quickContextPayload.toolCatalog).toMatchObject({
       profileId: 'readonly',
       runtimeMode: 'readonly',
-      moduleCount: 24,
-      toolCount: 216,
+      moduleCount: 25,
+      toolCount: 218,
     });
     expect(JSON.stringify(quickContextPayload.toolCatalog)).toContain('sap_payments_call_paid_tool');
-    expect(quickContextPayload.summary).toContain('modules:24');
-    expect(quickContextPayload.summary).toContain('catalogTools:216');
+    expect(quickContextPayload.summary).toContain('modules:25');
+    expect(quickContextPayload.summary).toContain('catalogTools:218');
     expect(runtimeStatusPayload.toolCatalog).toMatchObject({
       profileId: 'readonly',
-      moduleCount: 24,
-      toolCount: 216,
+      moduleCount: 25,
+      toolCount: 218,
     });
     expect(runtimeStatusPayload.runtimeDoctor).toMatchObject({
       status: 'warning',
@@ -1250,6 +1252,58 @@ describe('createSapMcpServer', () => {
         expect.objectContaining({ tool: 'sap_agent_identity_plan' }),
       ]),
     );
+  });
+
+  it('returns schema-valid structured content for the web search tools through a real MCP client', async () => {
+    // Regression: a strict MCP client validates structuredContent against the
+    // tool's advertised outputSchema. Pipeline tools that declare neither an
+    // outputSchema nor a UI card inherit the adapter's generic { content }
+    // schema, so every call fails with -32602
+    // ("data must have required property 'content'"). Driving a real client is
+    // what catches it — the internal request handler skips client validation.
+    // SAP_MCP_SEARXNG_URL stays unset so the assertions are offline and
+    // deterministic: this pins the envelope, not the search itself.
+    const previousSearxngUrl = process.env.SAP_MCP_SEARXNG_URL;
+    delete process.env.SAP_MCP_SEARXNG_URL;
+
+    const client = new Client({ name: 'web-search-envelope-test', version: '1.0.0' });
+    try {
+      const server = await createSapMcpServer(baseConfig());
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([
+        client.connect(clientTransport),
+        server.connect(serverTransport),
+      ]);
+
+      // The client only validates structuredContent for tools it has listed:
+      // listTools populates its output-schema cache. Skipping this step makes the
+      // regression invisible, so it is part of the contract under test.
+      await client.listTools();
+
+      const search = await client.callTool({
+        name: 'web_search',
+        arguments: { query: 'solana news', maxResults: 2 },
+      }) as { isError?: boolean; content?: unknown[]; structuredContent?: Record<string, unknown> };
+
+      expect(Array.isArray(search.content)).toBe(true);
+      expect((search.content ?? []).length).toBeGreaterThan(0);
+      expect(search.isError).toBe(true);
+      expect(JSON.stringify(search.structuredContent)).toContain('SAP_MCP_SEARXNG_URL');
+
+      const extract = await client.callTool({
+        name: 'web_extract',
+        arguments: { urls: ['http://169.254.169.254/latest/meta-data/'] },
+      }) as { isError?: boolean; content?: unknown[]; structuredContent?: Record<string, unknown> };
+
+      expect(Array.isArray(extract.content)).toBe(true);
+      expect((extract.content ?? []).length).toBeGreaterThan(0);
+      expect(extract.isError).toBe(true);
+      expect(JSON.stringify(extract.structuredContent)).toContain('cloud metadata');
+    } finally {
+      await client.close();
+      if (previousSearxngUrl === undefined) delete process.env.SAP_MCP_SEARXNG_URL;
+      else process.env.SAP_MCP_SEARXNG_URL = previousSearxngUrl;
+    }
   });
 
   it('classifies pricing menu Anchor 3012 as an on-chain registry lifecycle issue', async () => {
