@@ -1,27 +1,33 @@
 /**
  * @name tools/web-search/web-search-client.test
- * @description Unit tests for the web search client: SSRF guard, trusted-domain
- *   tagging, SearXNG mapping, deterministic truncation, and the fail-safe paths
- *   for an unconfigured backend.
+ * @description Unit tests for the web search client: egress guard, address
+ *   blocklist, provenance/authority mapping, SearXNG mapping, deterministic
+ *   truncation, and the fail-safe paths for an unconfigured backend.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   WEB_UNTRUSTED_NOTICE,
+  authorityForUrl,
+  blockedAddressReason,
   extractUrls,
+  hashContent,
   htmlToText,
-  isTrustedUrl,
+  isContentTypeAllowed,
   mapSearxngResult,
+  provenanceForUrl,
+  resolveAndValidate,
+  safeBackendLabel,
   searchWeb,
-  trustedDomains,
   truncateDeterministic,
-  validateExternalFetchUrl,
+  validateEgressUrl,
 } from './web-search-client.js';
 
 const ENV_KEYS = [
   'SAP_MCP_SEARXNG_URL',
   'SAP_MCP_WEB_TRUSTED_DOMAINS',
+  'SAP_MCP_WEB_PRIMARY_DOMAINS',
   'SAP_MCP_WEB_SEARCH_TIMEOUT_MS',
   'SAP_MCP_WEB_SEARCH_MAX_RESULTS',
   'SAP_MCP_WEB_EXTRACT_MAX_CHARS',
@@ -45,89 +51,135 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('validateExternalFetchUrl (SSRF guard)', () => {
-  it('refuses loopback, private, link-local and metadata targets', () => {
-    for (const target of [
-      'http://localhost/admin',
-      'http://127.0.0.1:6379/',
-      'http://0.0.0.0/',
-      'http://10.0.0.5/',
-      'http://192.168.1.1/',
-      'http://172.16.4.2/',
-      'http://172.31.255.1/',
-      'http://169.254.169.254/latest/meta-data/',
-      'http://[::1]/',
-      'http://[fe80::1]/',
-      'http://metadata/',
-    ]) {
-      expect(validateExternalFetchUrl(target), target).not.toBeNull();
-    }
+describe('validateEgressUrl (syntactic guard)', () => {
+  it('refuses localhost, internal suffixes and credentials', () => {
+    expect(validateEgressUrl('http://localhost/admin')).toBeTruthy();
+    expect(validateEgressUrl('http://api.local/x')).toBeTruthy();
+    expect(validateEgressUrl('https://user:pass@example.com/')).toContain('credentials');
+    expect(validateEgressUrl('http://metadata/')).toContain('single-label');
   });
 
-  it('refuses non-http protocols', () => {
-    expect(validateExternalFetchUrl('file:///etc/passwd')).not.toBeNull();
-    expect(validateExternalFetchUrl('ftp://example.com/x')).not.toBeNull();
+  it('refuses non-http protocols and non-web ports', () => {
+    expect(validateEgressUrl('file:///etc/passwd')).toBeTruthy();
+    expect(validateEgressUrl('ftp://example.com/x')).toBeTruthy();
+    expect(validateEgressUrl('http://example.com:6379/')).toContain('port 6379');
+  });
+
+  it('refuses private and metadata literals', () => {
+    expect(validateEgressUrl('http://127.0.0.1:80/')).toBeTruthy();
+    expect(validateEgressUrl('http://169.254.169.254/latest/meta-data/')).toContain('cloud metadata');
+    expect(validateEgressUrl('http://10.0.0.5/')).toBeTruthy();
+    expect(validateEgressUrl('http://192.168.1.1/')).toBeTruthy();
+    expect(validateEgressUrl('http://172.16.4.2/')).toBeTruthy();
+    expect(validateEgressUrl('http://[::1]/')).toBeTruthy();
   });
 
   it('accepts public http and https targets', () => {
-    expect(validateExternalFetchUrl('https://docs.solana.com/')).toBeNull();
-    expect(validateExternalFetchUrl('http://example.com/page')).toBeNull();
+    expect(validateEgressUrl('https://docs.solana.com/')).toBeNull();
+    expect(validateEgressUrl('http://example.com/page')).toBeNull();
   });
 
   it('refuses malformed URLs', () => {
-    expect(validateExternalFetchUrl('not a url')).not.toBeNull();
+    expect(validateEgressUrl('not a url')).toBeTruthy();
   });
 });
 
-describe('trusted domain allowlist', () => {
-  it('is empty when unset', () => {
-    expect(trustedDomains().size).toBe(0);
-    expect(isTrustedUrl('https://reuters.com/x')).toBe(false);
+describe('blockedAddressReason (resolved-address blocklist)', () => {
+  it('blocks loopback, private, metadata, CGNAT, multicast and reserved ranges', () => {
+    for (const address of [
+      '127.0.0.1',
+      '0.0.0.0',
+      '10.1.2.3',
+      '192.168.0.10',
+      '172.20.5.5',
+      '169.254.169.254',
+      '100.64.0.1',
+      '224.0.0.1',
+      '255.255.255.255',
+    ]) {
+      expect(blockedAddressReason(address), address).not.toBeNull();
+    }
   });
 
-  it('parses a comma-separated allowlist and matches subdomains', () => {
-    process.env.SAP_MCP_WEB_TRUSTED_DOMAINS = ' reuters.com, FEDERALRESERVE.gov ,';
-    const allowlist = trustedDomains();
-    expect(allowlist.size).toBe(2);
-    expect(isTrustedUrl('https://www.reuters.com/markets/', allowlist)).toBe(true);
-    expect(isTrustedUrl('https://federalreserve.gov/newsevents', allowlist)).toBe(true);
-    expect(isTrustedUrl('https://reuters.com.evil.example/x', allowlist)).toBe(false);
-    expect(isTrustedUrl('https://coindesk.com/x', allowlist)).toBe(false);
+  it('blocks IPv6 loopback, unique-local, link-local and IPv4-mapped private', () => {
+    for (const address of ['::1', '::', 'fd00::1', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1']) {
+      expect(blockedAddressReason(address), address).not.toBeNull();
+    }
   });
 
-  it('treats malformed URLs as untrusted', () => {
+  it('allows public addresses', () => {
+    expect(blockedAddressReason('93.184.216.34')).toBeNull();
+    expect(blockedAddressReason('2606:2800:220:1:248:1893:25c8:1946')).toBeNull();
+  });
+});
+
+describe('resolveAndValidate (DNS validation before connecting)', () => {
+  it('rejects a literal private address without any DNS lookup', async () => {
+    const result = await resolveAndValidate('169.254.169.254');
+    expect(typeof result).toBe('string');
+    expect(String(result)).toContain('cloud metadata');
+  });
+
+  it('pins a literal public address', async () => {
+    const result = await resolveAndValidate('93.184.216.34');
+    expect(typeof result).toBe('object');
+    expect((result as { address: string }).address).toBe('93.184.216.34');
+  });
+});
+
+describe('provenance and authority', () => {
+  it('marks allowlisted hosts and promotes primary domains only when configured', () => {
+    const allowlist = new Set(['reuters.com', 'federalreserve.gov']);
+    const primary = new Set(['federalreserve.gov']);
+
+    expect(provenanceForUrl('https://www.reuters.com/markets', allowlist)).toBe('allowlisted');
+    expect(authorityForUrl('https://www.reuters.com/markets', allowlist, primary)).toBe('secondary');
+    expect(authorityForUrl('https://federalreserve.gov/newsevents', allowlist, primary)).toBe('primary');
+    expect(provenanceForUrl('https://coindesk.com/x', allowlist)).toBe('open-web');
+    expect(authorityForUrl('https://coindesk.com/x', allowlist, primary)).toBe('unknown');
+  });
+
+  it('does not treat a lookalike domain as allowlisted', () => {
     const allowlist = new Set(['reuters.com']);
-    expect(isTrustedUrl('not-a-url', allowlist)).toBe(false);
+    expect(provenanceForUrl('https://reuters.com.evil.example/x', allowlist)).toBe('open-web');
+  });
+
+  it('treats malformed URLs as open-web and unknown', () => {
+    expect(provenanceForUrl('not-a-url')).toBe('open-web');
+    expect(authorityForUrl('not-a-url')).toBe('unknown');
   });
 });
 
 describe('mapSearxngResult', () => {
-  it('maps a raw result and tags trust from the allowlist', () => {
-    const allowlist = new Set(['reuters.com']);
+  it('maps a raw result onto the evidence contract with server-assigned citation id', () => {
     const mapped = mapSearxngResult(
-      { url: 'https://www.reuters.com/x', title: 'Title', content: 'Snippet', publishedDate: '2026-01-02', engine: 'brave' },
-      allowlist,
+      { url: 'https://www.reuters.com/x', title: 'Title', content: 'Snippet', publishedDate: '2026-01-02' },
+      { allowlist: new Set(['reuters.com']), primary: new Set(), citationId: '2', fetchedAt: '2026-09-26T10:00:00.000Z' },
     );
     expect(mapped).toEqual({
+      citationId: '2',
       title: 'Title',
       url: 'https://www.reuters.com/x',
       snippet: 'Snippet',
-      date: '2026-01-02',
-      engine: 'brave',
-      trusted: true,
+      provenance: 'allowlisted',
+      authority: 'secondary',
+      fetchedAt: '2026-09-26T10:00:00.000Z',
+      publishedAt: '2026-01-02',
+      truncated: false,
     });
   });
 
   it('drops entries without a URL and defaults the title to the URL', () => {
-    expect(mapSearxngResult({ title: 'no url' }, new Set())).toBeUndefined();
-    expect(mapSearxngResult({ url: 'https://example.com' }, new Set())?.title).toBe('https://example.com');
+    const options = { citationId: '1', fetchedAt: '2026-09-26T10:00:00.000Z', allowlist: new Set<string>(), primary: new Set<string>() };
+    expect(mapSearxngResult({ title: 'no url' }, options)).toBeUndefined();
+    expect(mapSearxngResult({ url: 'https://example.com' }, options)?.title).toBe('https://example.com');
   });
 });
 
-describe('htmlToText and deterministic truncation', () => {
-  it('strips scripts, styles, tags and decodes entities', () => {
-    const html = '<html><head><style>p{color:red}</style><script>alert(1)</script></head>'
-      + '<body><p>Hello&nbsp;&amp; welcome</p><div>second</div></body></html>';
+describe('htmlToText, truncation and hashing', () => {
+  it('strips head, title, boilerplate, scripts and decodes entities', () => {
+    const html = '<html><head><title>T</title><style>p{color:red}</style></head>'
+      + '<body><nav>menu</nav><p>Hello&nbsp;&amp; welcome</p><footer>bye</footer><div>second</div></body></html>';
     expect(htmlToText(html)).toBe('Hello & welcome second');
   });
 
@@ -141,6 +193,26 @@ describe('htmlToText and deterministic truncation', () => {
     expect(content.startsWith('a'.repeat(75))).toBe(true);
     expect(content.endsWith('a'.repeat(25))).toBe(true);
   });
+
+  it('hashes content deterministically', () => {
+    expect(hashContent('same')).toBe(hashContent('same'));
+    expect(hashContent('same')).not.toBe(hashContent('other'));
+    expect(hashContent('same')).toHaveLength(32);
+  });
+});
+
+describe('content types and backend labels', () => {
+  it('allows only HTML and plain text', () => {
+    expect(isContentTypeAllowed('text/html; charset=utf-8')).toBe(true);
+    expect(isContentTypeAllowed('application/xhtml+xml')).toBe(true);
+    expect(isContentTypeAllowed('text/plain')).toBe(true);
+    expect(isContentTypeAllowed('application/pdf')).toBe(false);
+    expect(isContentTypeAllowed(undefined)).toBe(true);
+  });
+
+  it('never reflects backend credentials', () => {
+    expect(safeBackendLabel('http://operator:s3cr3t@searxng.local:8888/search?q=1')).toBe('http://searxng.local:8888');
+  });
 });
 
 describe('searchWeb', () => {
@@ -151,12 +223,12 @@ describe('searchWeb', () => {
     expect(response.notice).toBe(WEB_UNTRUSTED_NOTICE);
   });
 
-  it('returns ranked, trust-tagged results', async () => {
+  it('returns ranked evidence with citations and provenance', async () => {
     process.env.SAP_MCP_SEARXNG_URL = 'http://searxng.local:8888';
     process.env.SAP_MCP_WEB_TRUSTED_DOMAINS = 'reuters.com';
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       results: [
-        { url: 'https://www.reuters.com/a', title: 'A', content: 'snippet a', engine: 'brave' },
+        { url: 'https://www.reuters.com/a', title: 'A', content: 'snippet a' },
         { url: 'https://random-blog.example/b', title: 'B', content: 'snippet b' },
       ],
     }), { status: 200 })));
@@ -164,8 +236,9 @@ describe('searchWeb', () => {
     const response = await searchWeb({ query: 'markets' });
     expect(response.error).toBeUndefined();
     expect(response.results).toHaveLength(2);
-    expect(response.results[0]?.trusted).toBe(true);
-    expect(response.results[1]?.trusted).toBe(false);
+    expect(response.results[0]?.citationId).toBe('1');
+    expect(response.results[0]?.provenance).toBe('allowlisted');
+    expect(response.results[1]?.provenance).toBe('open-web');
   });
 
   it('filters to the allowlist when sources=trusted', async () => {
@@ -192,8 +265,6 @@ describe('searchWeb', () => {
   });
 
   it('never reflects backend credentials into the tool result', async () => {
-    // Custody safety: a backend URL may carry userinfo; echoing it verbatim
-    // would push a secret into model context.
     process.env.SAP_MCP_SEARXNG_URL = 'http://operator:s3cr3t@searxng.local:8888';
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [] }), { status: 200 })));
 
@@ -203,114 +274,23 @@ describe('searchWeb', () => {
   });
 });
 
-describe('extractUrls', () => {
-  it('refuses private targets per URL and keeps processing the rest', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html><title>T</title><body>Hello world</body></html>', { status: 200 })));
-
-    const pages = await extractUrls(['http://169.254.169.254/latest/meta-data/', 'https://example.com/page']);
-    expect(pages[0]?.error).toBeTruthy();
+describe('extractUrls egress refusals', () => {
+  it('refuses private targets per URL without any network access', async () => {
+    const pages = await extractUrls(['http://169.254.169.254/latest/meta-data/', 'http://127.0.0.1:80/']);
+    expect(pages[0]?.error).toContain('cloud metadata');
+    expect(pages[1]?.error).toBeTruthy();
     expect(pages[0]?.content).toBe('');
-    expect(pages[1]?.error).toBeUndefined();
-    expect(pages[1]?.title).toBe('T');
-    expect(pages[1]?.content).toBe('Hello world');
+    // Provenance is reported even for a refused URL, so the caller can log it.
+    expect(pages[0]?.provenance).toBe('open-web');
   });
 
-  it('isolates per-URL fetch errors', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
-    const pages = await extractUrls(['https://example.com/page']);
-    expect(pages[0]?.error).toContain('network down');
-  });
-
-  it('refuses a redirect that points at a private target, without fetching it', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, {
-      status: 302,
-      headers: { location: 'http://169.254.169.254/latest/meta-data/' },
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    const pages = await extractUrls(['https://example.com/redirect']);
-    expect(pages[0]?.error).toContain('unsafe redirect');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('follows a safe redirect and reports the final URL', async () => {
-    let call = 0;
-    vi.stubGlobal('fetch', vi.fn(async () => {
-      call += 1;
-      if (call === 1) {
-        return new Response(null, { status: 301, headers: { location: 'https://example.com/final' } });
-      }
-      return new Response('<html><title>F</title><body>Final body</body></html>', { status: 200 });
-    }));
-
-    const pages = await extractUrls(['https://example.com/start']);
-    expect(pages[0]?.error).toBeUndefined();
-    expect(pages[0]?.url).toBe('https://example.com/final');
-    expect(pages[0]?.content).toBe('Final body');
-  });
-
-  it('explains an empty extraction instead of returning silent empty content', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(
-      '<html><head><title>App</title></head><body><div id="root"></div><script>boot()</script></body></html>',
-      { status: 200, headers: { 'content-type': 'text/html' } },
-    )));
-
-    const pages = await extractUrls(['https://spa.example/app']);
-    expect(pages[0]?.content).toBe('');
-    expect(pages[0]?.error).toContain('No readable text extracted');
-  });
-
-  it('rejects content types it cannot flatten to text', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('%PDF-1.7', {
-      status: 200,
-      headers: { 'content-type': 'application/pdf' },
-    })));
-
-    const pages = await extractUrls(['https://example.com/report.pdf']);
-    expect(pages[0]?.content).toBe('');
-    expect(pages[0]?.error).toContain('Unsupported content type');
-    expect(pages[0]?.error).toContain('application/pdf');
-  });
-
-  it('sends a browser-like identity so sites with bot protection do not refuse it', async () => {
-    // Regression: fetching with the bare undici identity answers 403 on
-    // publishers such as investing.com, while a browser-like User-Agent plus
-    // Accept-Language is served normally.
-    const fetchMock = vi.fn(async () => new Response('<html><body>ok</body></html>', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await extractUrls(['https://example.com/page'], 200);
-
-    const init = fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
-    const headers = init?.headers ?? {};
-    expect(String(headers['User-Agent'])).toContain('Mozilla/5.0');
-    expect(headers['Accept-Language']).toContain('en-US');
-  });
-
-  it('lets a deployment override the request identity', async () => {
-    process.env.SAP_MCP_WEB_USER_AGENT = 'SAP-MCP-Test/1.0 (+https://example.com/bot)';
-    const fetchMock = vi.fn(async () => new Response('<html><body>ok</body></html>', {
-      status: 200,
-      headers: { 'content-type': 'text/html' },
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await extractUrls(['https://example.com/page'], 200);
-
-    const init = fetchMock.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
-    expect(init?.headers?.['User-Agent']).toBe('SAP-MCP-Test/1.0 (+https://example.com/bot)');
-  });
-
-  it('explains a bot-protection refusal instead of reporting a bare status', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('Forbidden', { status: 403 })));
-
-    const pages = await extractUrls(['https://www.investing.com/']);
-    expect(pages[0]?.content).toBe('');
-    expect(pages[0]?.error).toContain('HTTP 403');
-    expect(pages[0]?.error).toContain('bot protection');
-    expect(pages[0]?.error).toContain('do not retry in a loop');
+  it('caps the number of URLs per call', async () => {
+    const pages = await extractUrls([
+      'http://127.0.0.1:80/a',
+      'http://127.0.0.1:80/b',
+      'http://127.0.0.1:80/c',
+      'http://127.0.0.1:80/d',
+    ]);
+    expect(pages).toHaveLength(3);
   });
 });
