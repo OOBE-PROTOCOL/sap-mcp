@@ -12,6 +12,19 @@ import { getPhoenixTraderSubaccountAddress, PhoenixHttpClient, PhoenixHttpError 
 
 import { PHOENIX_DATA_API_BASE_URL } from './phoenix-constants.js';
 
+export function requirePhoenixMarketSymbol(symbol: unknown): string {
+  if (typeof symbol !== 'string') {
+    throw new TypeError('Phoenix market symbol is required. List Phoenix markets first, then retry with an exact symbol.');
+  }
+
+  const normalized = symbol.trim();
+  if (!normalized || /^(undefined|null)$/i.test(normalized)) {
+    throw new TypeError('Phoenix market symbol is required. List Phoenix markets first, then retry with an exact symbol.');
+  }
+
+  return normalized;
+}
+
 /**
  * Phoenix data API client.
  * Wraps PhoenixHttpClient sub-clients for typed access to Phoenix perp data.
@@ -45,7 +58,7 @@ export class PhoenixDataApiClient {
    * @returns Market config object.
    */
   async getMarket(symbol: string) {
-    return this.client.exchange().getMarket(symbol);
+    return this.client.exchange().getMarket(requirePhoenixMarketSymbol(symbol));
   }
 
   /**
@@ -71,7 +84,7 @@ export class PhoenixDataApiClient {
    * @returns Orderbook view.
    */
   async getOrderbook(symbol: string, params?: { depth?: number }) {
-    return this.client.orderbook().getOrderbook(symbol, params as never);
+    return this.client.orderbook().getOrderbook(requirePhoenixMarketSymbol(symbol), params as never);
   }
 
   /**
@@ -81,7 +94,7 @@ export class PhoenixDataApiClient {
    * @returns Latest market stats including mark price.
    */
   async getMarkPrice(symbol: string) {
-    return this.client.markets().getLatestMarketStats(symbol);
+    return this.client.markets().getLatestMarketStats(requirePhoenixMarketSymbol(symbol));
   }
 
   /**
@@ -94,7 +107,7 @@ export class PhoenixDataApiClient {
     symbol: string,
     params?: { timeframe?: string; start_time?: string; end_time?: string; limit?: number },
   ) {
-    return this.client.markets().getMarketStatsHistory(symbol, params);
+    return this.client.markets().getMarketStatsHistory(requirePhoenixMarketSymbol(symbol), params);
   }
 
   /**
@@ -155,7 +168,7 @@ export class PhoenixDataApiClient {
     symbol: string,
     params?: { startTime?: number; endTime?: number; limit?: number },
   ) {
-    return this.client.funding().getFundingRateHistory(symbol, params);
+    return this.client.funding().getFundingRateHistory(requirePhoenixMarketSymbol(symbol), params);
   }
 
   /**
@@ -168,7 +181,7 @@ export class PhoenixDataApiClient {
     symbol: string,
     params?: { limit?: number; cursor?: string; startTime?: number; endTime?: number },
   ) {
-    return this.client.trades().getMarketFills(symbol, params);
+    return this.client.trades().getMarketFills(requirePhoenixMarketSymbol(symbol), params);
   }
 
   /**
@@ -181,7 +194,7 @@ export class PhoenixDataApiClient {
     symbol: string,
     params: { timeframe: string; startTime?: number; endTime?: number; limit?: number },
   ) {
-    return this.client.candles().getCandles(symbol, params);
+    return this.client.candles().getCandles(requirePhoenixMarketSymbol(symbol), params);
   }
 }
 
