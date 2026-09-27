@@ -96,6 +96,8 @@ interface DbcConfigPreviewInput {
   slippageBps?: number;
   quotePriceUsd?: number;
   solPriceUsd?: number;
+  /** Optional DBC graduation target in human quote-token units. */
+  migrationQuoteThreshold?: number | string;
 }
 
 export function resolveQuoteUnitsPerSol(quoteMint: string, quotePriceUsd?: number, solPriceUsd?: number): number {
@@ -132,6 +134,13 @@ export function registerPerpspadDbcConfigPreviewTool(
         slippageBps: { type: 'number', description: 'Dev-buy slippage in bps (default 300)' },
         quotePriceUsd: { type: 'number', description: 'Live USD price of one quote token; required for non-SOL quotes.' },
         solPriceUsd: { type: 'number', description: 'Live SOL/USD reference; required for non-SOL quotes.' },
+        migrationQuoteThreshold: {
+          oneOf: [
+            { type: 'number', exclusiveMinimum: 0 },
+            { type: 'string', pattern: '^\\d+(?:\\.\\d*)?$' },
+          ],
+          description: 'Optional positive quote reserve target that graduates the bonding curve to DAMM v2, in human quote-token units. Decimal strings preserve exact large custom-quote amounts.',
+        },
       },
       required: ['quoteMint'],
     } as const,
@@ -153,7 +162,12 @@ export function registerPerpspadDbcConfigPreviewTool(
       const quoteMint = new PublicKey(quoteMintStr);
       const decimals = await getQuoteDecimals(connection, quoteMint);
       const quoteUnitsPerSol = resolveQuoteUnitsPerSol(quoteMintStr, input.quotePriceUsd, input.solPriceUsd);
-      const config = buildConfigArgsForQuote(decimals, 100, quoteUnitsPerSol);
+      const config = buildConfigArgsForQuote(
+        decimals,
+        100,
+        quoteUnitsPerSol,
+        input.migrationQuoteThreshold,
+      );
 
       // ── Decode the scaled config (BigInt, verified offsets) ────────────
       const migrationThresholdRaw = config.readBigUInt64LE(69);

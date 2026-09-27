@@ -58,6 +58,39 @@ export const PERPSPAD_CONFIG_ARGS = Buffer.from(
 const CURVE_OFFSET_BASE = 219;
 const CURVE_ENTRY_SIZE = 32;
 const WSOL_DECIMALS = 9;
+const MIGRATION_QUOTE_THRESHOLD_OFFSET = 69;
+const U64_MAX = (1n << 64n) - 1n;
+type MigrationQuoteThreshold = number | string;
+export const DEFAULT_MIGRATION_QUOTE_THRESHOLD_SOL = Number(
+  PERPSPAD_CONFIG_ARGS.readBigUInt64LE(MIGRATION_QUOTE_THRESHOLD_OFFSET),
+) / 10 ** WSOL_DECIMALS;
+
+function migrationThresholdToRaw(amount: MigrationQuoteThreshold, quoteDecimals: number): bigint {
+  if (typeof amount === 'number' && (!Number.isFinite(amount) || amount <= 0)) {
+    throw new Error(`migrationQuoteThreshold must be a positive finite quote-token amount, got ${amount}.`);
+  }
+
+  let normalized = typeof amount === 'number' ? amount.toFixed(quoteDecimals) : amount.trim();
+  if (normalized.startsWith('.')) normalized = `0${normalized}`;
+  if (!/^\d+(?:\.\d*)?$/.test(normalized)) {
+    throw new Error(`migrationQuoteThreshold must be a positive decimal quote-token amount, got ${amount}.`);
+  }
+
+  const [whole = '0', fraction = ''] = normalized.split('.');
+  const excessFraction = fraction.slice(quoteDecimals);
+  if (excessFraction && /[1-9]/.test(excessFraction)) {
+    throw new Error(`migrationQuoteThreshold supports at most ${quoteDecimals} decimal places for this quote mint.`);
+  }
+  const atomicFraction = fraction.slice(0, quoteDecimals).padEnd(quoteDecimals, '0');
+  const raw = BigInt(whole) * 10n ** BigInt(quoteDecimals) + BigInt(atomicFraction || '0');
+  if (raw <= 0n) {
+    throw new Error(`migrationQuoteThreshold must be at least one atomic quote unit (10^-${quoteDecimals}).`);
+  }
+  if (raw > U64_MAX) {
+    throw new Error('migrationQuoteThreshold exceeds the maximum u64 quote reserve supported by Meteora DBC.');
+  }
+  return raw;
+}
 /** Fixed launch economics: Meteora migration fee is one whole percent. */
 export const MIGRATION_FEE_PERCENTAGE = 1;
 const MIGRATION_FEE_PERCENTAGE_OFFSET = 153;
@@ -86,7 +119,12 @@ export async function getQuoteDecimals(connection: { getAccountInfo(pk: PublicKe
  * with `quoteDecimals` decimals (preset is 9-dec WSOL). Scale factor for
  * amounts = 10^(quoteDecimals - 9); for sqrt prices = its square root.
  */
-export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFeePercentage = 100, quoteUnitsPerSol = 1): Buffer {
+export function buildConfigArgsForQuote(
+  quoteDecimals: number,
+  creatorTradingFeePercentage = 100,
+  quoteUnitsPerSol = 1,
+  migrationQuoteThreshold?: MigrationQuoteThreshold,
+): Buffer {
   if (!Number.isInteger(quoteDecimals) || quoteDecimals < 6 || quoteDecimals > 9) {
     throw new Error(`Quote decimals must be an integer 6-9 (DBC requirement), got ${quoteDecimals}.`);
   }
@@ -96,7 +134,13 @@ export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFee
   if (!Number.isFinite(quoteUnitsPerSol) || quoteUnitsPerSol <= 0) {
     throw new Error(`quoteUnitsPerSol must be a positive finite number, got ${quoteUnitsPerSol}.`);
   }
-  const rawQuoteRatio = quoteUnitsPerSol * 10 ** (quoteDecimals - WSOL_DECIMALS);
+  const presetMigrationThresholdRaw = PERPSPAD_CONFIG_ARGS.readBigUInt64LE(MIGRATION_QUOTE_THRESHOLD_OFFSET);
+  const configuredMigrationThresholdRaw = migrationQuoteThreshold === undefined
+    ? undefined
+    : migrationThresholdToRaw(migrationQuoteThreshold, quoteDecimals);
+  const rawQuoteRatio = configuredMigrationThresholdRaw === undefined
+    ? quoteUnitsPerSol * 10 ** (quoteDecimals - WSOL_DECIMALS)
+    : Number(configuredMigrationThresholdRaw) / Number(presetMigrationThresholdRaw);
   const sqrtRatio = Math.sqrt(rawQuoteRatio);
   const SCALE = 1_000_000_000n;
   const scale = (value: bigint, ratio: number): bigint => {
@@ -116,8 +160,13 @@ export function buildConfigArgsForQuote(quoteDecimals: number, creatorTradingFee
     bytes.reverse().forEach((byte, idx) => { out[offset + idx] = parseInt(byte, 16); });
   };
 
-  // migration_quote_threshold @69 (u64, quote lamports)
-  out.writeBigUInt64LE(scale(out.readBigUInt64LE(69), rawQuoteRatio), 69);
+  // Reprice the entire curve around the selected quote-denominated
+  // graduation target. Scaling threshold, sqrt prices and liquidity together
+  // preserves the preset token distribution and DAMM v2 migration supply.
+  out.writeBigUInt64LE(
+    configuredMigrationThresholdRaw ?? scale(presetMigrationThresholdRaw, rawQuoteRatio),
+    MIGRATION_QUOTE_THRESHOLD_OFFSET,
+  );
   // sqrt_start_price @77 (u128)
   writeU128(77, scale(readU128(77), sqrtRatio));
   const curveLen = out.readUInt32LE(215);
@@ -196,8 +245,19 @@ export function buildCreateConfigTx(params: {
   quoteDecimals: number;
   /** Human quote units equal in value to one SOL. */
   quoteUnitsPerSol?: number;
+  /** Optional quote reserve at which the DBC graduates to DAMM v2. */
+  migrationQuoteThreshold?: MigrationQuoteThreshold;
 }): Transaction {
-  const { configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals, quoteUnitsPerSol = 1 } = params;
+  const {
+    configKeypair,
+    escrowPda,
+    agentWallet,
+    payer,
+    quoteMint,
+    quoteDecimals,
+    quoteUnitsPerSol = 1,
+    migrationQuoteThreshold,
+  } = params;
   return new Transaction().add({
     programId: DBC_PROGRAM_ID,
     keys: [
@@ -215,7 +275,10 @@ export function buildCreateConfigTx(params: {
       // the escrow program's claim_and_split then splits 70/30. The DBC
       // config's fee_claimer field is inert (verified in DBC source — only
       // creator_trading_fee_percentage gates the creator/partner fee split).
-      data: Buffer.concat([CREATE_CONFIG_DISCRIMINATOR, buildConfigArgsForQuote(quoteDecimals, 100, quoteUnitsPerSol)]),
+      data: Buffer.concat([
+        CREATE_CONFIG_DISCRIMINATOR,
+        buildConfigArgsForQuote(quoteDecimals, 100, quoteUnitsPerSol, migrationQuoteThreshold),
+      ]),
   });
 }
 
@@ -387,6 +450,8 @@ export function buildDirectDbcLaunch(params: {
   /** Quote mint decimals (6-9), fetched by the caller via getQuoteDecimals. */
   quoteDecimals: number;
   quoteUnitsPerSol?: number;
+  /** Optional quote reserve at which the DBC graduates to DAMM v2. */
+  migrationQuoteThreshold?: MigrationQuoteThreshold;
   /** Owner program of the quote mint (SPL legacy or Token-2022). Optional — defaults to legacy SPL. */
   quoteMintOwner?: PublicKey;
 }): {
@@ -397,10 +462,37 @@ export function buildDirectDbcLaunch(params: {
   transferCreatorTxBase64: string;
   configAddress: string;
   poolAddress: string;
+  migrationQuoteThresholdRaw: string;
+  migrationQuoteThresholdHuman: number;
 } {
-  const { configKeypair, mintKeypair, escrowPda, agentWallet, payer, latestBlockhash, metadata, quoteMint, quoteDecimals, quoteUnitsPerSol = 1, quoteMintOwner } = params;
+  const {
+    configKeypair,
+    mintKeypair,
+    escrowPda,
+    agentWallet,
+    payer,
+    latestBlockhash,
+    metadata,
+    quoteMint,
+    quoteDecimals,
+    quoteUnitsPerSol = 1,
+    migrationQuoteThreshold,
+    quoteMintOwner,
+  } = params;
 
-  const configTx = buildCreateConfigTx({ configKeypair, escrowPda, agentWallet, payer, quoteMint, quoteDecimals, quoteUnitsPerSol });
+  const configTx = buildCreateConfigTx({
+    configKeypair,
+    escrowPda,
+    agentWallet,
+    payer,
+    quoteMint,
+    quoteDecimals,
+    quoteUnitsPerSol,
+    migrationQuoteThreshold,
+  });
+  const migrationQuoteThresholdRaw = configTx.instructions[0].data.readBigUInt64LE(
+    CREATE_CONFIG_DISCRIMINATOR.length + MIGRATION_QUOTE_THRESHOLD_OFFSET,
+  );
   configTx.recentBlockhash = latestBlockhash;
   configTx.feePayer = payer;
   coSignWithEphemerals(configTx, [configKeypair]);
@@ -448,5 +540,7 @@ export function buildDirectDbcLaunch(params: {
     transferCreatorTxBase64: transferTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
     configAddress: configKeypair.publicKey.toBase58(),
     poolAddress: poolAddress.toBase58(),
+    migrationQuoteThresholdRaw: migrationQuoteThresholdRaw.toString(),
+    migrationQuoteThresholdHuman: Number(migrationQuoteThresholdRaw) / 10 ** quoteDecimals,
   };
 }

@@ -26,6 +26,7 @@ import {
   deriveMintMetadata,
   encodeInitializePoolParams,
   buildConfigArgsForQuote,
+  DEFAULT_MIGRATION_QUOTE_THRESHOLD_SOL,
   MIGRATION_FEE_PERCENTAGE,
   buildTransferPoolCreatorTx,
   TRANSFER_POOL_CREATOR_DISCRIMINATOR,
@@ -274,4 +275,38 @@ describe('dbc-launch', () => {
     // invalid fee percentage rejected
     expect(() => buildConfigArgsForQuote(9, 101)).toThrow(/0-100/);
     expect(() => buildConfigArgsForQuote(9, -1)).toThrow(/0-100/);
+  });
+
+  it('rebuilds the complete curve around a custom DAMM v2 graduation target', () => {
+    const customTarget = 25;
+    const args = buildConfigArgsForQuote(9, 100, 1, customTarget);
+    const decoded = new BorshCoder(DynamicBondingCurveIdl).types.decode(
+      'ConfigParameters',
+      args,
+    ) as {
+      migration_quote_threshold: BN;
+      sqrt_start_price: BN;
+      curve: Array<{ sqrt_price: BN; liquidity: BN }>;
+    };
+    const curve = decoded.curve.map((point) => ({
+      sqrtPrice: point.sqrt_price,
+      liquidity: point.liquidity,
+    }));
+
+    expect(DEFAULT_MIGRATION_QUOTE_THRESHOLD_SOL).toBeCloseTo(109.51815663, 8);
+    expect(decoded.migration_quote_threshold.toString()).toBe('25000000000');
+    expect(validateCurve(curve, decoded.sqrt_start_price)).toBe(true);
+  });
+
+  it('uses native custom-quote units and rejects unsafe cap values', () => {
+    const args = buildConfigArgsForQuote(6, 100, 600_000, '250000');
+    expect(args.readBigUInt64LE(69)).toBe(250_000_000_000n);
+    expect(() => buildConfigArgsForQuote(9, 100, 1, 0)).toThrow(/positive/);
+    expect(() => buildConfigArgsForQuote(6, 100, 1, '1.0000001')).toThrow(/at most 6 decimal places/);
+    expect(() => buildConfigArgsForQuote(9, 100, 1, '18446744073.709551616')).toThrow(/maximum u64/);
+  });
+
+  it('preserves large 9-decimal custom-quote caps beyond Number safe atomic units', () => {
+    const args = buildConfigArgsForQuote(9, 100, 150_000_000, '16427723494');
+    expect(args.readBigUInt64LE(69)).toBe(16_427_723_494_000_000_000n);
   });
