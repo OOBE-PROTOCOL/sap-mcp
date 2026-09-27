@@ -65,6 +65,13 @@ export const DBC_LAUNCH_INPUT_SCHEMA: Record<string, unknown> = {
     quoteMint: { type: 'string', description: 'Required when quote=CUSTOM: SPL or Token-2022 mint with 6-9 decimals and no unsupported transfer behavior.' },
     quotePriceUsd: { type: 'number', description: 'Live USD price of one quote token. Required for non-SOL quotes.' },
     solPriceUsd: { type: 'number', description: 'Live SOL/USD reference. Required for non-SOL quotes.' },
+    migrationQuoteThreshold: {
+      oneOf: [
+        { type: 'number', exclusiveMinimum: 0 },
+        { type: 'string', pattern: '^\\d+(?:\\.\\d*)?$' },
+      ],
+      description: 'Optional positive quote reserve target that graduates the bonding curve to DAMM v2, in human quote-token units. Decimal strings preserve exact large custom-quote amounts.',
+    },
   },
   required: ['ticker', 'name', 'agentWallet', 'payer', 'latestBlockhash'],
 } as const;
@@ -153,6 +160,11 @@ export function registerDbcLaunchTool(
       const devBuyAmount = typeof input.devBuyAmount === 'number'
         ? input.devBuyAmount
         : typeof input.devBuySol === 'number' ? input.devBuySol : 0;
+      const migrationQuoteThreshold = input.migrationQuoteThreshold === undefined
+        ? undefined
+        : typeof input.migrationQuoteThreshold === 'string' || typeof input.migrationQuoteThreshold === 'number'
+          ? input.migrationQuoteThreshold
+          : Number.NaN;
 
       if (ticker.length < 2 || ticker.length > 10) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_ticker: 2-10 A-Z 0-9 characters'));
@@ -168,6 +180,10 @@ export function registerDbcLaunchTool(
       }
       if (!(Number.isFinite(devBuyAmount) && devBuyAmount >= 0)) {
         return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_devBuyAmount: must be a non-negative quote-token amount'));
+      }
+      if (typeof migrationQuoteThreshold === 'number'
+        && (!Number.isFinite(migrationQuoteThreshold) || migrationQuoteThreshold <= 0)) {
+        return perpspadPipelineException('Invalid direct DBC launch input', new Error('invalid_migrationQuoteThreshold: must be a positive quote-token amount'));
       }
       const latestBlockhash = String(input.latestBlockhash ?? '').trim();
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(latestBlockhash)) {
@@ -260,6 +276,7 @@ export function registerDbcLaunchTool(
         quoteMint,
         quoteDecimals,
         quoteUnitsPerSol,
+        migrationQuoteThreshold,
         quoteMintOwner,
       });
 
@@ -294,6 +311,8 @@ export function registerDbcLaunchTool(
         payer,
         devBuyAmount,
         devBuyRequired: devBuyAmount > 0,
+        migrationQuoteThresholdRaw: built.migrationQuoteThresholdRaw,
+        migrationQuoteThresholdHuman: built.migrationQuoteThresholdHuman,
         split: { agentBps: 7000, oobeBps: 3000, oobeTreasury: OOBE_TREASURY },
         // Perp backing policy — present ONLY when the caller passed the full
         // triple; the keeper reads it to open the hedge legs. Absent = clean

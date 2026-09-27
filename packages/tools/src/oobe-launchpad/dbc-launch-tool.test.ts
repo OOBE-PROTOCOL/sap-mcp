@@ -33,6 +33,11 @@ describe('Steve DBC tool contracts', () => {
     expect(props.direction.enum).toEqual(['long', 'short']);
     expect(props.metadataUri.type).toBe('string');
     expect(props.metadataUri.description).toMatch(/permanent HTTPS URI/i);
+    expect(props.migrationQuoteThreshold.oneOf).toEqual([
+      { type: 'number', exclusiveMinimum: 0 },
+      { type: 'string', pattern: '^\\d+(?:\\.\\d*)?$' },
+    ]);
+    expect(props.migrationQuoteThreshold.description).toMatch(/graduates.*DAMM v2/i);
   });
 
   it('does NOT require the backing fields (optional → clean pure-curve launch)', () => {
