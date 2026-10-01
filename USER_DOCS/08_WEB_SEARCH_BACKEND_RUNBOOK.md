@@ -135,8 +135,8 @@ Steps 1–3 (and the env wiring of section 3) are scripted and idempotent. On th
 host, as root:
 
 ```bash
-sudo ./scripts/setup-searxng-backend.sh            # env file default: /home/sapgateway/sap-mcp-private/sap-mcp.env
-sudo ./scripts/setup-searxng-backend.sh /path/to/gateway.env   # or pass it explicitly
+sudo ./setup-searxng-backend.sh            # env file default: ~/sap-mcp-private/sap-mcp.env
+sudo ./setup-searxng-backend.sh /path/to/gateway.env   # or pass it explicitly
 ```
 
 What it does, in order: copies this repo's `deploy/searxng/settings.yml` (the

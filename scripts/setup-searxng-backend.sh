@@ -23,7 +23,7 @@
 set -euo pipefail
 
 SEARXNG_DIR="${SEARXNG_DIR:-/opt/searxng}"
-GATEWAY_ENV_FILE="${2:-${GATEWAY_ENV_FILE:-/home/sapgateway/sap-mcp-private/sap-mcp.env}}"
+GATEWAY_ENV_FILE="${2:-${GATEWAY_ENV_FILE:-${HOME}/sap-mcp-private/sap-mcp.env}}"
 COMPOSE_PROJECT="sap-searxng"
 
 settings_src="$(cd "$(dirname "$0")/.." && pwd)/deploy/searxng/settings.yml"
