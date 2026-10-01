@@ -77,22 +77,57 @@ engines:
     disabled: false
 ```
 
-Start it and verify:
+Start it and verify with a **canary that asserts results**, not with an eyeball:
 
 ```bash
 docker compose up -d searxng
-curl -s "http://127.0.0.1:8888/search?q=test&format=json" | head -c 200
-curl -s "http://127.0.0.1:8888/config" | grep -o '"name": "[^"]*"' | head -20
+
+# The JSON API must answer, and it must answer *with results*: a 200 carrying an
+# empty `results` array passes every weaker check, `head -c 200` included.
+curl -fsS "http://127.0.0.1:8888/search?q=searxng+documentation&format=json" \
+  | jq -e '.results | length > 0' > /dev/null \
+  || echo "FAIL: no results — check /stats and the container log before blaming the query"
+
+# Who is enabled, and how they are doing.
+curl -fsS "http://127.0.0.1:8888/config" | jq -r '.engines[] | select(.enabled) | .name' | sort
+curl -fsS "http://127.0.0.1:8888/stats"  | jq '.engines'   # per-engine counters: look for errors/suspensions
+docker compose logs --tail=50 searxng | grep -Ei "suspended|captcha|too many requests"
+
+# Once is not stability: repeat with distinct queries, so the result cache cannot
+# answer on the backend's behalf, and fail if any run comes back empty.
+for i in 1 2 3 4 5; do
+  curl -fsS "http://127.0.0.1:8888/search?q=searxng+canary+$i&format=json" \
+    | jq -e '.results | length > 0' > /dev/null || echo "FAIL: run $i came back empty"
+done
 ```
 
-A JSON body containing a `results` array means the backend is ready. A `403` means `json` is still missing from `search.formats`.
+A `403` means `json` is still missing from `search.formats`.
 
-**An empty `results` array is not proof that the web has nothing.** SearXNG takes an
-engine out of rotation after it is rate-limited, and it answers `200` either way, so the
-two cases are indistinguishable in the tool output. Before concluding that a query has no
-answer, check which engines are enabled and how they are doing — `/config` for the enabled
-set, `/stats` for per-engine errors, and the container log for `Suspended`/`CAPTCHA`
-lines. This is a backend problem, not an empty web.
+### Two failures that look alike, and are not
+
+| Symptom | What it is | Where to look |
+| --- | --- | --- |
+| `200` with `"results": []` | the backend answered; its engines did not | `/config` (who is enabled), `/stats` (per-engine errors), the container log (`Suspended`, `CAPTCHA`), then the `engines:` list above |
+| `Web search failed: fetch failed` | the request never reached a usable backend | `SAP_MCP_SEARXNG_URL`, DNS, egress/TLS, and whether the container is up — checked **from the gateway host**, not from a workstation |
+
+The `engines:` block above addresses the first branch only. It does nothing for a
+`fetch failed`, and neither branch is evidence for the other.
+
+### Applying this to the instance that serves users
+
+Merging this document reconfigures nothing: the instance behind `web_search` reads the
+`settings.yml` mounted into **its own** SearXNG container. The rollout is
+
+1. apply the settings to that deployment's file or config map — done by the operator who
+   owns the MCP deployment, not by the author of this runbook;
+2. recreate the service so the file is re-read:
+   `docker compose up -d --force-recreate searxng`;
+3. run the canary above **from the same network and identity the gateway uses**;
+4. record what is now active: `/config` lists the enabled engines, and the image tag or
+   digest identifies the build.
+
+Until 1–3 have happened, the `engines:` block in this document is a **proposal, not a
+state** — and the production instance is still on its defaults.
 
 ## 3. Point SAP MCP At The Backend
 
@@ -162,3 +197,5 @@ Every fetch goes through the same guard, in this order:
 - **Non-text content**: PDFs and other non-HTML responses are refused with the detected content type.
 - **Backend credentials**: if the backend URL ever carries userinfo, it is stripped from tool output, so a credential cannot reach model context.
 - **`web_search` is not a market-data tool**: prices, on-chain state, balances and holdings have dedicated tools. Search results are evidence for general research.
+- **The gateway's HTTP rate limiter is a different control**: `SAP_MCP_REMOTE_RATE_LIMIT_*` limits requests per forwarded IP at the gateway. It is neither a `web_search`-specific limit nor a per-agent budget, and it cannot protect the search backend from a caller that stays under it. Rate limiting on the kernel research lane (issue #92, criterion 16) is a separate question on a separate lane — do not read one as evidence for the other.
+- **`web_extract` does not use SearXNG**: it fetches the public URL directly through the egress guard, so the engines above have no effect on it, and its failures (publisher anti-bot, timeouts) have their own branch.
