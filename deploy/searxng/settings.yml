@@ -1,0 +1,48 @@
+# SearXNG configuration for Steve local development.
+#
+# Mounted read-only at /etc/searxng/settings.yml by docker-compose.dev.yml.
+# It backs the `web_search` tool: the tool talks to the JSON API
+# (GET /search?q=...&format=json), which SearXNG disables by default — the
+# `search.formats` override below is the whole point of this file.
+#
+# Dev-only: the secret below is not used for anything but the local container.
+
+use_default_settings: true
+
+server:
+  secret_key: "steve-local-dev-searxng-secret"
+  # The bot limiter rejects the bursty request pattern of an agent loop.
+  limiter: false
+  image_proxy: false
+
+search:
+  formats:
+    - html
+    - json
+  # Agents read the first page only; a smaller payload keeps tool results cheap.
+  max_page: 1
+
+# The engines SearXNG enables by default (brave, duckduckgo, google cse) are the
+# ones that rate-limit a datacenter IP within a handful of queries. Measured on
+# 2026-09-30 from the dev host, right after the backend answered a couple of
+# searches and then went silent:
+#
+#   brave       → Suspended: too many requests
+#   duckduckgo  → CAPTCHA
+#   google cse  → Suspended: too many requests
+#   bing / yep / yahoo → answered (10, 20 and 7 results)
+#
+# With all three defaults down, the JSON API answers 200 with zero results —
+# which reads as "the web has nothing" to whoever asked. The agent fell back to
+# a market feed for a question web search should have answered.
+#
+# Additive on purpose: nothing is disabled, so a host whose IP the defaults
+# accept keeps them too. The same rate-limiting applies to the VPS, which is a
+# datacenter IP as well.
+engines:
+  - name: bing
+    disabled: false
+  - name: yep
+    disabled: false
+  - name: yahoo
+    disabled: false

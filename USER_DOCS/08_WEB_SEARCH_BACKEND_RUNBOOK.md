@@ -129,6 +129,28 @@ Merging this document reconfigures nothing: the instance behind `web_search` rea
 Until 1–3 have happened, the `engines:` block in this document is a **proposal, not a
 state** — and the production instance is still on its defaults.
 
+### One-command rollout: `scripts/setup-searxng-backend.sh`
+
+Steps 1–3 (and the env wiring of section 3) are scripted and idempotent. On the gateway
+host, as root:
+
+```bash
+sudo ./scripts/setup-searxng-backend.sh            # env file default: /home/sapgateway/sap-mcp-private/sap-mcp.env
+sudo ./scripts/setup-searxng-backend.sh /path/to/gateway.env   # or pass it explicitly
+```
+
+What it does, in order: copies this repo's `deploy/searxng/settings.yml` (the
+datacenter-IP engine set) into `/opt/searxng/searxng/`, writes the runbook compose file
+**only when none exists** (operator edits win), brings the container up with
+`--force-recreate`, runs the **five-query canary with the results assertion** (fails on
+`results: []`, not just on a non-200), checks `SAP_MCP_SEARXNG_URL` in the gateway env
+file (appends the runbook default if missing, keeps yours otherwise), and prints the one
+step it cannot do: restarting the gateway process so the env is re-read
+(`pm2 restart sap-mcp --update-env` or your supervisor's equivalent).
+
+Overrides: `SEARXNG_DIR=/path` moves the SearXNG home; `GATEWAY_ENV_FILE=/path/env`
+overrides the env file for both the default invocation and the argument form.
+
 ## 3. Point SAP MCP At The Backend
 
 | Variable | Required | Purpose |
