@@ -26,7 +26,7 @@ SEARXNG_DIR="${SEARXNG_DIR:-/opt/searxng}"
 GATEWAY_ENV_FILE="${2:-${GATEWAY_ENV_FILE:-/home/sapgateway/sap-mcp-private/sap-mcp.env}}"
 COMPOSE_PROJECT="sap-searxng"
 
-settings_src="$(cd "$(dirname "$0")" && pwd)/searxng/settings.yml"
+settings_src="$(cd "$(dirname "$0")/.." && pwd)/deploy/searxng/settings.yml"
 
 log()  { printf '\n==> %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
