@@ -50,6 +50,31 @@ search:
     - html
     - json        # mandatory: without it the JSON API answers 403
   max_page: 1     # agents read the first page only
+
+# SearXNG's own default general engines (brave, duckduckgo, google cse) are the
+# ones that rate-limit a datacenter IP within a handful of queries. Measured
+# from a datacenter host right after the backend had answered a few searches:
+#
+#   brave       -> Suspended: too many requests
+#   duckduckgo  -> CAPTCHA
+#   google cse  -> Suspended: too many requests
+#   bing / yep / yahoo -> answered (10, 20 and 7 results)
+#
+# With every default engine down, the JSON API still answers 200 — with an empty
+# `results` array, which reads as "the web has nothing on this" to whoever
+# asked. Emitting a few engines the host can actually reach is the difference
+# between an empty web and a working backend.
+#
+# Additive on purpose: nothing is disabled, so a host whose IP the defaults
+# accept keeps them too. Operator instances live on datacenter IPs, so this
+# belongs here rather than in a per-developer override.
+engines:
+  - name: bing
+    disabled: false
+  - name: yep
+    disabled: false
+  - name: yahoo
+    disabled: false
 ```
 
 Start it and verify:
@@ -57,9 +82,17 @@ Start it and verify:
 ```bash
 docker compose up -d searxng
 curl -s "http://127.0.0.1:8888/search?q=test&format=json" | head -c 200
+curl -s "http://127.0.0.1:8888/config" | grep -o '"name": "[^"]*"' | head -20
 ```
 
 A JSON body containing a `results` array means the backend is ready. A `403` means `json` is still missing from `search.formats`.
+
+**An empty `results` array is not proof that the web has nothing.** SearXNG takes an
+engine out of rotation after it is rate-limited, and it answers `200` either way, so the
+two cases are indistinguishable in the tool output. Before concluding that a query has no
+answer, check which engines are enabled and how they are doing — `/config` for the enabled
+set, `/stats` for per-engine errors, and the container log for `Suspended`/`CAPTCHA`
+lines. This is a backend problem, not an empty web.
 
 ## 3. Point SAP MCP At The Backend
 
@@ -116,6 +149,13 @@ Every fetch goes through the same guard, in this order:
 `web_search` and `web_extract` are **micro-read** tools: `$0.001` per call (`1 USD per 1000 requests`) on the external x402 lane. Agents hosted on the OOBE platform run the same calls on the sponsored lane and are not charged.
 
 ## 8. Operational Notes
+
+- **Monitor the backend, not only the tool**: a starved backend and a genuinely empty web
+  look identical in the tool output — `results: []` — so a dashboard that watches
+  `web_search` latency and errors will not see the failure that matters. The signals are on
+  the SearXNG side: `/stats` for per-engine error counts, `/config` for the enabled set,
+  and the container log for `Suspended`/`CAPTCHA` lines. Alert on engines suspended or
+  failing, not on tool errors.
 
 - **Blocked publishers**: sites behind aggressive bot protection (for example Cloudflare-fronted financial sites) may answer `403` to the server's fetch fingerprint even with browser-like headers. Those URLs return a clear refusal, and the agent falls back to the search snippet or another source.
 - **JavaScript-only pages**: extraction reports that no readable text was found instead of returning empty content, so the agent knows to change source rather than retry.
