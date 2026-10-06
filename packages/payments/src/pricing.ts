@@ -6,6 +6,7 @@
 import type { SapMcpMonetizationConfig } from '../../config-runtime/src/env.js';
 import type { McpToolCall, ParsedMcpRequest } from './json-rpc.js';
 import { isRecord } from './json-rpc.js';
+import { getToolPricingRegistry, type PricingTier as ModulePricingTier } from '../../tools/src/tool-pricing/registry.js';
 
 /**
  * @name PaymentTier
@@ -847,8 +848,22 @@ function isHeavyValueActionTool(toolName: string): boolean {
 /**
  * @name classifyTool
  * @description Maps a tool name to the default hosted monetization tier.
+ *
+ * Resolution order:
+ *   1. Tool-module pricing policies (registered from manifests at module
+ *      registration time — the per-protocol source of truth, e.g. Phoenix).
+ *   2. The platform-level explicit sets below (control plane, kernel
+ *      families, payments bridge — intentionally NOT module-owned).
+ *   3. Keyword fallback (build/swap/market/...) — a WARN is emitted the
+ *      first time an unlisted tool is resolved this way, so silent drift
+ *      shows up in gateway logs.
  */
 export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationConfig, 'strictTools'>): PaymentTier {
+  const moduleTier = getToolPricingRegistry().resolve(toolName);
+  if (moduleTier) {
+    return toolPricingRegistryTierToPaymentTier(moduleTier.tier);
+  }
+
   const freeTools = config?.strictTools ? STRICT_FREE_TOOLS : FREE_TOOLS;
   if (freeTools.has(toolName)) {
     return 'free';
@@ -880,14 +895,39 @@ export function classifyTool(toolName: string, config?: Pick<SapMcpMonetizationC
 
   const normalized = toolName.toLowerCase();
   if (BUILDER_KEYWORDS.some(keyword => normalized.includes(keyword))) {
+    warnOnceFallbackPricing(toolName, 'builder');
     return 'builder';
   }
 
   if (READ_PREMIUM_KEYWORDS.some(keyword => normalized.includes(keyword))) {
+    warnOnceFallbackPricing(toolName, 'read-premium');
     return 'read-premium';
   }
 
+  warnOnceFallbackPricing(toolName, 'read-premium');
   return 'read-premium';
+}
+
+/**
+ * keyword-fallback tiers reported once per tool so mispriced modules surface
+ * in gateway logs instead of staying silent (pricing-drift tripwire).
+ */
+const FALLBACK_PRICING_WARNED = new Set<string>();
+
+function warnOnceFallbackPricing(toolName: string, tier: PaymentTier): void {
+  if (FALLBACK_PRICING_WARNED.has(toolName)) {
+    return;
+  }
+  FALLBACK_PRICING_WARNED.add(toolName);
+  // Structured, greppable: pricing coverage audits filter on this prefix.
+  console.warn(
+    `[pricing-fallback] tool "${toolName}" has no explicit pricing entry (module policy or platform set) — defaulted to "${tier}". Add a pricing policy to its tool module.`,
+  );
+}
+
+/** Tools module tiers use the payments tier vocabulary (no 'batch' from modules — batch is request-level). */
+function toolPricingRegistryTierToPaymentTier(tier: ModulePricingTier): PaymentTier {
+  return tier;
 }
 
 function isConditionalMicroReadToolCall(toolCall: McpToolCall): boolean {
