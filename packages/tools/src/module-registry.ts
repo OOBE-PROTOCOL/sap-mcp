@@ -13,6 +13,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { SapMcpContext } from '../../core/src/types.js';
 import { getRegisteredTools } from '../../mcp-adapter/src/sdk-compat.js';
 import { ToolModuleIdSchema, parseToolModuleManifest, type ToolModuleCategory, type ToolModuleManifest, type ToolModuleMode, type ToolModuleDefinition } from './tool-module-manifest.js';
+import { getToolPricingRegistry } from './tool-pricing/registry.js';
 export type { ToolModuleCategory, ToolModuleMode, ToolModuleRegister, ToolModuleLifecycleEvent, ToolModuleLifecycleHooks, ToolModuleDefinition } from './tool-module-manifest.js';
 
 export const PLUGIN_TOOL_MODULE_ORDER_MIN = 5_000;
@@ -76,6 +77,7 @@ function parseDefinitionManifest(definition: ToolModuleDefinition): ToolModuleMa
     namespace: definition.namespace,
     packageName: definition.packageName,
     version: definition.version,
+    pricing: definition.pricing,
   });
 }
 
@@ -121,6 +123,20 @@ export function createToolModule(definition: ToolModuleDefinition): ToolModuleDe
     when: definition.when,
     lifecycle: definition.lifecycle,
   };
+}
+
+/**
+ * Registers a module's pricing policy into the tool-pricing registry.
+ * Called during registerToolModules BEFORE the module's tools register, so
+ * pricing lookup is warm by the time any resolver runs. Modules without a
+ * pricing policy are platform-fallback priced (payments/pricing keyword
+ * classifier) and are reported by the pricing-coverage test.
+ */
+function registerModulePricingPolicy(manifest: ToolModuleManifest): void {
+  if (!manifest.pricing) {
+    return;
+  }
+  getToolPricingRegistry().registerModule(manifest.id, manifest.pricing, manifest.expectedTools ?? []);
 }
 
 export function createPluginToolModule(
@@ -241,6 +257,7 @@ export async function registerToolModules(
 
     const beforeCount = getRegisteredTools(server).length;
     const manifest = parseDefinitionManifest(module);
+    registerModulePricingPolicy(manifest);
     await module.lifecycle?.beforeRegister?.({ module: manifest, context, beforeCount });
 
     try {

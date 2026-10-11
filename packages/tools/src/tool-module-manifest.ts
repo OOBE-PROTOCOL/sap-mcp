@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { ModulePricingPolicySchema } from './tool-pricing/policy.js';
 
 export const TOOL_MODULE_CATEGORIES = [
   'sap-protocol',
@@ -51,6 +52,7 @@ export const ToolModuleManifestSchema = z.object({
   namespace: z.string().trim().min(2).max(80).optional(),
   packageName: z.string().trim().min(1).max(160).optional(),
   version: z.string().trim().min(1).max(80).optional(),
+  pricing: ModulePricingPolicySchema.optional(),
 }).strict();
 
 export type ToolModuleCategory = z.infer<typeof ToolModuleCategorySchema>;
