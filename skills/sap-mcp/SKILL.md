@@ -347,7 +347,7 @@ For agent identity work, load the matching focused skills before acting:
   `sap-agent-registry`
 - NFT-backed identity, MPL Core, Metaplex metadata, creator/collection flows:
   `sap-nft-metaplex`
-- `.sol` domain ownership, records, or primary identity:
+- `.sns` domain ownership, records, or primary identity:
   `sap-sns`
 
 The canonical field and pipeline reference is
